@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-} from './entities.js?v=1.5.28';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.28';
-import { sfx } from './audio.js?v=1.5.28';
+} from './entities.js?v=1.5.29';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.29';
+import { sfx } from './audio.js?v=1.5.29';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -1101,6 +1101,8 @@ export class Game {
     B.y += B.moveVel * dt;
     B.y = Math.max(0.07, Math.min(0.93, B.y));
 
+    const enemyPressure = B.enemies.filter((e) => e.x < fw * 0.7).length;
+
     // Fore-aft (X): push in when pressuring, pull back when dodging / crowded
     if (B.x == null) B.x = 48;
     if (B.preferredX == null) B.preferredX = 48;
@@ -1311,7 +1313,6 @@ export class Game {
     // --- Smart item / power usage ---
     B.powerCd -= dt;
     const playerHp = this.state.player.hp;
-    const enemyPressure = B.enemies.filter((e) => e.x < fw * 0.7).length;
     const pickBestItem = () => {
       if (!B.items.length) return null;
       // Priority rules
