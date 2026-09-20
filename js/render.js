@@ -1,10 +1,10 @@
 /** Canvas rendering for 3-pane portrait shmup
- *  TOP ~30% opponent | MIDDLE ~45% own | BOTTOM ~25% control (操作画面)
+ *  TOP / MIDDLE / BOTTOM — equal height (1/3 each) (操作画面)
  */
 
-export const OPP_RATIO = 0.30;
-export const OWN_RATIO = 0.45;
-export const CTRL_RATIO = 0.25;
+export const OPP_RATIO = 1 / 3;
+export const OWN_RATIO = 1 / 3;
+export const CTRL_RATIO = 1 / 3;
 
 export function layout(canvas) {
   const W = canvas.width;

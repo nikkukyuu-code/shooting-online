@@ -1,8 +1,8 @@
 import {
   POWERUPS, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.2.0';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.2.0';
-import { sfx } from './audio.js?v=1.2.0';
+} from './entities.js?v=1.2.1';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.2.1';
+import { sfx } from './audio.js?v=1.2.1';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -162,7 +162,7 @@ export class Game {
       const relX = (clientX - rect.left) / rect.width;
 
       const ownTop = OPP_RATIO;
-      const ownBot = OPP_RATIO + OWN_RATIO; // CTRL starts here (~0.75)
+      const ownBot = OPP_RATIO + OWN_RATIO; // CTRL starts here (~2/3)
       const isDown = e.type === 'pointerdown' || e.type === 'touchstart' || e.type === 'mousedown';
       const isMove = e.type === 'pointermove' || e.type === 'touchmove' || e.type === 'mousemove';
 
