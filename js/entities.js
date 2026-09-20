@@ -7,10 +7,10 @@ export const POWERUPS = [
   { id: 'direct',     label: '直接攻撃',      effect: '相手のHPを直接削る',         color: '#ff3333', icon: '※' },
   { id: 'heal',       label: 'HP回復',        effect: '自分のHPを+25',              color: '#44ff88', icon: '+' },
   { id: 'heal_big',   label: '大回復',        effect: '自分のHPを+50',              color: '#22ff66', icon: '++' },
-  { id: 'send_mech',  label: '巨大メカ送信',  effect: '相手に巨大メカを送る',       color: '#55ff99', icon: '機' },
-  { id: 'send_golem', label: 'ゴーレム送信',  effect: '相手に硬いゴーレムを送る',   color: '#ffbb55', icon: '岩' },
-  { id: 'send_tank',  label: '戦車ロボ送信',  effect: '相手に重戦車ロボを送る',     color: '#66aaff', icon: '戦' },
-  { id: 'send_drone', label: 'ドローン群送信', effect: '相手にドローンを4体送る',   color: '#33ffff', icon: '群' },
+  { id: 'send_mech',  label: '戦艦送信',      effect: '相手に宇宙戦艦を送る',       color: '#88aaff', icon: '艦' },
+  { id: 'send_golem', label: '要塞送信',      effect: '相手に軌道要塞を送る',       color: '#cc88ff', icon: '塞' },
+  { id: 'send_tank',  label: 'ガンシップ送信', effect: '相手に重ガンシップを送る',   color: '#66ddff', icon: '砲' },
+  { id: 'send_drone', label: '無人機群送信',  effect: '相手に宇宙ドローンを4機送る', color: '#33ffff', icon: '群' },
 ];
 
 export function powerupMeta(id) {
@@ -50,13 +50,13 @@ export function createPlayer(side = 'self') {
 
 export function spawnEnemy(fieldW, fieldH, kind = 'basic') {
   const types = {
-    basic:  { w: 34, h: 28, hp: 8,  speed: 100 + Math.random() * 50, score: 10,  color: '#ff3b3b' },
-    elite:  { w: 46, h: 38, hp: 18, speed: 75 + Math.random() * 35,  score: 30,  color: '#ff66ee' },
-    swarm:  { w: 26, h: 20, hp: 3,  speed: 150 + Math.random() * 55, score: 5,   color: '#ffaa33' },
-    boss:   { w: 80, h: 64, hp: 120, speed: 34, score: 200, color: '#dde2ea' },
-    mech:   { w: 72, h: 60, hp: 55, speed: 42, score: 80,  color: '#55ff99' },
-    golem:  { w: 78, h: 70, hp: 70, speed: 28, score: 100, color: '#ffbb55' },
-    tank:   { w: 86, h: 52, hp: 85, speed: 32, score: 110, color: '#66ccff' },
+    basic:  { w: 34, h: 28, hp: 8,  speed: 100 + Math.random() * 50, score: 10,  color: '#ff5566' },
+    elite:  { w: 46, h: 38, hp: 18, speed: 75 + Math.random() * 35,  score: 30,  color: '#ff66ff' },
+    swarm:  { w: 26, h: 20, hp: 3,  speed: 150 + Math.random() * 55, score: 5,   color: '#66ffcc' },
+    boss:   { w: 92, h: 58, hp: 120, speed: 34, score: 200, color: '#c0d0ff' },
+    mech:   { w: 88, h: 48, hp: 55, speed: 42, score: 80,  color: '#8899ff' },
+    golem:  { w: 84, h: 70, hp: 70, speed: 28, score: 100, color: '#bb77ff' },
+    tank:   { w: 90, h: 44, hp: 85, speed: 32, score: 110, color: '#55ccee' },
     drone:  { w: 28, h: 22, hp: 10, speed: 130 + Math.random() * 40, score: 20, color: '#33ffff' },
   };
   const t = types[kind] || types.basic;
