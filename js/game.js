@@ -1,8 +1,8 @@
 import {
   POWERUPS, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.4.2';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.4.2';
-import { sfx } from './audio.js?v=1.4.2';
+} from './entities.js?v=1.4.3';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.4.3';
+import { sfx } from './audio.js?v=1.4.3';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -314,6 +314,22 @@ export class Game {
       this.sendToOpponent('tank', meta?.label);
     } else if (id === 'send_drone') {
       this.sendToOpponent(['drone', 'drone', 'drone', 'drone'], meta?.label);
+    } else if (id === 'heal') {
+      const before = p.hp;
+      p.hp = Math.min(p.maxHp || 100, p.hp + 25);
+      this.setStatus(`HP回復 +${p.hp - before}`);
+      p.activePower = null;
+      p.activeTimer = 0;
+      this.state.fx.push(spawnExplosion(p.x + 8, p.y * this.L.own.h, false));
+      setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1200);
+    } else if (id === 'heal_big') {
+      const before = p.hp;
+      p.hp = Math.min(p.maxHp || 100, p.hp + 50);
+      this.setStatus(`大回復 +${p.hp - before}`);
+      p.activePower = null;
+      p.activeTimer = 0;
+      this.state.fx.push(spawnExplosion(p.x + 8, p.y * this.L.own.h, true));
+      setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1200);
     } else if (id === 'direct') {
       // Direct attack opponent HP
       const dmg = 8;

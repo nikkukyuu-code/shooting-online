@@ -5,6 +5,8 @@ export const POWERUPS = [
   { id: 'laser',      label: 'レーザー' },
   { id: 'send',       label: '対戦相手へ敵キャラを送信' },
   { id: 'direct',     label: '対戦相手を直接攻撃' },
+  { id: 'heal',       label: 'HP回復' },
+  { id: 'heal_big',   label: '大回復' },
   { id: 'send_mech',  label: '巨大メカを送信' },
   { id: 'send_golem', label: '装甲ゴーレムを送信' },
   { id: 'send_tank',  label: '重戦車ロボを送信' },
@@ -14,6 +16,7 @@ export const POWERUPS = [
 export function pickPowerupId() {
   const weighted = [
     ['homing', 2], ['laser', 2], ['send', 2], ['direct', 2],
+    ['heal', 4], ['heal_big', 2],
     ['send_mech', 3], ['send_golem', 3], ['send_tank', 3], ['send_drone', 3],
   ];
   let r = Math.random() * weighted.reduce((s, [, w]) => s + w, 0);
