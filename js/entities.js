@@ -34,8 +34,8 @@ export function createPlayer(side = 'self') {
     side,
     x: 48,
     y: 0.5, // normalized within own field (0..1)
-    w: 28,
-    h: 18,
+    w: 34,
+    h: 22,
     hp: 100,
     maxHp: 100,
     fireCd: 0,
@@ -50,9 +50,9 @@ export function createPlayer(side = 'self') {
 
 export function spawnEnemy(fieldW, fieldH, kind = 'basic') {
   const types = {
-    basic:  { w: 30, h: 26, hp: 8,  speed: 100 + Math.random() * 50, score: 10,  color: '#ff3b3b' },
-    elite:  { w: 40, h: 34, hp: 18, speed: 75 + Math.random() * 35,  score: 30,  color: '#ff66ee' },
-    swarm:  { w: 22, h: 18, hp: 3,  speed: 150 + Math.random() * 55, score: 5,   color: '#ffaa33' },
+    basic:  { w: 34, h: 28, hp: 8,  speed: 100 + Math.random() * 50, score: 10,  color: '#ff3b3b' },
+    elite:  { w: 46, h: 38, hp: 18, speed: 75 + Math.random() * 35,  score: 30,  color: '#ff66ee' },
+    swarm:  { w: 26, h: 20, hp: 3,  speed: 150 + Math.random() * 55, score: 5,   color: '#ffaa33' },
     boss:   { w: 80, h: 64, hp: 120, speed: 34, score: 200, color: '#dde2ea' },
     mech:   { w: 72, h: 60, hp: 55, speed: 42, score: 80,  color: '#55ff99' },
     golem:  { w: 78, h: 70, hp: 70, speed: 28, score: 100, color: '#ffbb55' },
