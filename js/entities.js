@@ -76,6 +76,9 @@ export function spawnEnemy(fieldW, fieldH, kind = 'basic') {
     score: t.score,
     color: t.color,
     phase: Math.random() * Math.PI * 2,
+    surgePhase: Math.random() * Math.PI * 2,
+    surgeAmp: 28 + Math.random() * 36,   // forward/back weave in px
+    surgeFreq: 1.1 + Math.random() * 1.4,
     fireCd: 1.2 + Math.random() * 0.8,
     sent: false, // was sent by opponent
   };

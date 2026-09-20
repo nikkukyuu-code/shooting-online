@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.5.13';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.13';
-import { sfx } from './audio.js?v=1.5.13';
+} from './entities.js?v=1.5.14';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.14';
+import { sfx } from './audio.js?v=1.5.14';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -756,23 +756,31 @@ export class Game {
       S.enemies.push(spawnEnemy(fw, fh, 'boss'));
     }
 
-    // Update enemies
+    // Update enemies (vertical weave + forward/back surge)
     for (const e of S.enemies) {
       e.phase += dt * 2;
+      e.surgePhase = (e.surgePhase || 0) + dt * (e.surgeFreq || 1.4);
+      const surge = Math.sin(e.surgePhase) * (e.surgeAmp || 32);
       if (e.sent) {
         if (e.holdX == null) e.holdX = fw * (0.72 + Math.random() * 0.14);
         if (e.holdY == null) e.holdY = e.y;
-        // Approach right-side hold point, then park and weave
-        if (e.x > e.holdX + 2) {
+        // Approach right-side hold, then weave forward/back + up/down
+        if (e.x > e.holdX + (e.surgeAmp || 32) + 8) {
           e.x -= Math.max(60, e.speed) * dt;
         } else {
-          e.x += (e.holdX - e.x) * Math.min(1, 8 * dt);
+          const targetX = e.holdX + surge * 0.85;
+          e.x += (targetX - e.x) * Math.min(1, 5 * dt);
           e.y = e.holdY + Math.sin(e.phase) * (e.kind === 'swarm' || e.kind === 'drone' ? 28 : 18);
         }
       } else {
-        e.x -= e.speed * dt;
+        // Drift left, but surge forward/back so they don't only slide one way
+        const advance = e.speed + Math.cos(e.surgePhase) * (e.speed * 0.55);
+        e.x -= advance * dt;
         if (e.kind !== 'boss' && e.kind !== 'mech' && e.kind !== 'golem' && e.kind !== 'tank') {
           e.y += Math.sin(e.phase) * 18 * dt;
+        } else {
+          // Heavy units also nudge forward/back a bit
+          e.x += Math.sin(e.surgePhase * 0.7) * 22 * dt;
         }
       }
       e.y = Math.max(16, Math.min(fh - 16, e.y));
@@ -1102,18 +1110,25 @@ export class Game {
 
     for (const e of B.enemies) {
       e.phase += dt * 2;
+      e.surgePhase = (e.surgePhase || 0) + dt * (e.surgeFreq || 1.4);
+      const surge = Math.sin(e.surgePhase) * (e.surgeAmp || 32);
       if (e.sent) {
         if (e.holdX == null) e.holdX = fw * (0.72 + Math.random() * 0.14);
         if (e.holdY == null) e.holdY = e.y;
-        if (e.x > e.holdX + 2) {
+        if (e.x > e.holdX + (e.surgeAmp || 32) + 8) {
           e.x -= Math.max(60, e.speed) * dt;
         } else {
-          e.x += (e.holdX - e.x) * Math.min(1, 8 * dt);
+          const targetX = e.holdX + surge * 0.85;
+          e.x += (targetX - e.x) * Math.min(1, 5 * dt);
           e.y = e.holdY + Math.sin(e.phase) * (e.kind === 'swarm' || e.kind === 'drone' ? 28 : 18);
         }
       } else {
-        e.x -= e.speed * dt;
+        const advance = e.speed + Math.cos(e.surgePhase) * (e.speed * 0.55);
+        e.x -= advance * dt;
         e.y += Math.sin(e.phase) * 12 * dt;
+        if (e.kind === 'boss' || e.kind === 'mech' || e.kind === 'golem' || e.kind === 'tank') {
+          e.x += Math.sin(e.surgePhase * 0.7) * 22 * dt;
+        }
       }
       e.y = Math.max(20, Math.min(fh - 20, e.y));
       e.fireCd -= dt;
