@@ -186,3 +186,32 @@ html, body {
   min-width: 160px;
   pointer-events: auto;
 }
+
+
+.app-meta {
+  position: absolute;
+  bottom: 4px;
+  left: 12px;
+  right: 12px;
+  text-align: center;
+  font-size: 0.7rem;
+  color: rgba(20,40,60,0.7);
+  letter-spacing: 0.04em;
+  z-index: 2;
+}
+.app-meta .meta-sep { margin: 0 0.35em; opacity: 0.5; }
+#app-version { font-weight: 700; }
+.menu-hint { bottom: 28px; }
+
+.game-version {
+  pointer-events: none;
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top));
+  right: 10px;
+  z-index: 5;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.75);
+  text-shadow: 0 1px 2px #000;
+  letter-spacing: 0.06em;
+}

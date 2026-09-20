@@ -2,6 +2,8 @@
 
 ブラウザで遊べる横スクロール・シューティングのオンライン対戦ゲームです。
 
+**バージョン:** メニュー下部に `vX.Y.Z` とアクセス数を表示
+
 **Play:** https://nikkukyuu-code.github.io/shooting-online/
 
 ## 遊び方

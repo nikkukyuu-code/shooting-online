@@ -1,5 +1,6 @@
-import { Net } from './net.js';
-import { Game } from './game.js';
+import { VERSION_LABEL } from './version.js?v=1.1.0';
+import { Net } from './net.js?v=1.1.0';
+import { Game } from './game.js?v=1.1.0';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -192,3 +193,30 @@ document.addEventListener('touchmove', (e) => {
 window.addEventListener('load', () => {
   show('menu');
 });
+
+
+async function loadVisits() {
+  const verEl = document.getElementById('app-version');
+  const gameVer = document.getElementById('game-version');
+  if (verEl) verEl.textContent = VERSION_LABEL;
+  if (gameVer) gameVer.textContent = VERSION_LABEL;
+  const el = document.getElementById('app-visits');
+  if (!el) return;
+  try {
+    const r = await fetch('https://abacus.jasoncameron.dev/hit/nikkukyuu/shooting-online', { cache: 'no-store' });
+    if (!r.ok) throw new Error('counter ' + r.status);
+    const d = await r.json();
+    const n = typeof d.value === 'number' ? d.value : Number(d.value);
+    el.textContent = 'アクセス ' + (Number.isFinite(n) ? n.toLocaleString('ja-JP') : '—');
+  } catch (e) {
+    try {
+      const key = 'shooting-online-local-visits';
+      const n = (Number(localStorage.getItem(key)) || 0) + 1;
+      localStorage.setItem(key, String(n));
+      el.textContent = 'アクセス(端末) ' + n.toLocaleString('ja-JP');
+    } catch (_) {
+      el.textContent = 'アクセス —';
+    }
+  }
+}
+loadVisits();
