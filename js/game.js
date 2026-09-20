@@ -1,8 +1,8 @@
 import {
   POWERUPS, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.2.1';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.2.1';
-import { sfx } from './audio.js?v=1.2.1';
+} from './entities.js?v=1.2.2';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.2.2';
+import { sfx } from './audio.js?v=1.2.2';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -450,11 +450,11 @@ export class Game {
 
     // Spawn enemies
     this._spawnAcc += dt;
-    const spawnEvery = Math.max(0.45, 1.1 - S.time * 0.01);
+    const spawnEvery = Math.max(0.28, 0.75 - S.time * 0.012);
     if (this._spawnAcc >= spawnEvery) {
       this._spawnAcc = 0;
       const roll = Math.random();
-      const kind = roll > 0.92 ? 'elite' : roll > 0.55 ? 'swarm' : 'basic';
+      const kind = roll > 0.78 ? 'elite' : roll > 0.45 ? 'swarm' : 'basic';
       S.enemies.push(spawnEnemy(fw, fh, kind));
     }
     this._bossAcc += dt;
@@ -472,7 +472,7 @@ export class Game {
       e.fireCd -= dt;
       if (e.fireCd <= 0 && e.x < fw) {
         e.fireCd = e.kind === 'boss' ? 0.55 : 1.4 + Math.random();
-        S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y, -140 - Math.random() * 60, (Math.random() - 0.5) * 40, 'enemy', false, 1));
+        S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y, -200 - Math.random() * 80, (Math.random() - 0.5) * 55, 'enemy', false, 2));
       }
     }
 
@@ -642,7 +642,7 @@ export class Game {
       e.fireCd -= dt;
       if (e.fireCd <= 0) {
         e.fireCd = 1.6;
-        B.bullets.push(spawnBullet(e.x, e.y, -150, 0, 'enemy', false, 1));
+        B.bullets.push(spawnBullet(e.x, e.y, -210, 0, 'enemy', false, 2));
       }
     }
     for (const b of B.bullets) {
@@ -694,7 +694,7 @@ export class Game {
       }
       // small direct hit
       if (Math.random() > 0.4) {
-        this.state.player.hp = Math.max(0, this.state.player.hp - 6);
+        this.state.player.hp = Math.max(0, this.state.player.hp - 10);
         this.state.fx.push(spawnExplosion(this.state.player.x, this.state.player.y * fh, false));
       }
     }

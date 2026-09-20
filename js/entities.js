@@ -28,10 +28,10 @@ export function createPlayer(side = 'self') {
 
 export function spawnEnemy(fieldW, fieldH, kind = 'basic') {
   const types = {
-    basic:  { w: 22, h: 18, hp: 2, speed: 70 + Math.random() * 40, score: 10, color: '#c44' },
-    elite:  { w: 30, h: 24, hp: 6, speed: 45 + Math.random() * 25, score: 30, color: '#a28' },
-    swarm:  { w: 14, h: 12, hp: 1, speed: 110 + Math.random() * 50, score: 5,  color: '#e85' },
-    boss:   { w: 70, h: 56, hp: 80, speed: 28, score: 200, color: '#888' },
+    basic:  { w: 24, h: 20, hp: 5, speed: 95 + Math.random() * 55, score: 10, color: '#c44' },
+    elite:  { w: 34, h: 28, hp: 14, speed: 70 + Math.random() * 35, score: 30, color: '#a28' },
+    swarm:  { w: 16, h: 14, hp: 2, speed: 140 + Math.random() * 60, score: 5,  color: '#e85' },
+    boss:   { w: 78, h: 62, hp: 140, speed: 36, score: 200, color: '#888' },
   };
   const t = types[kind] || types.basic;
   return {

@@ -1,6 +1,6 @@
-import { VERSION_LABEL } from './version.js?v=1.2.1';
-import { Net } from './net.js?v=1.2.1';
-import { Game } from './game.js?v=1.2.1';
+import { VERSION_LABEL } from './version.js?v=1.2.2';
+import { Net } from './net.js?v=1.2.2';
+import { Game } from './game.js?v=1.2.2';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -84,7 +84,7 @@ els.btnFind.addEventListener('click', async () => {
   });
   try {
     const result = await net.findOpponent({
-      waitMs: 14000,
+      waitMs: 3000,
       onTick: (left) => {
         els.fieldFind.value = `待機中 ${Math.ceil(left / 1000)}秒`;
       },
