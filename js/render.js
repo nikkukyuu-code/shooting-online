@@ -70,7 +70,7 @@ export function itemSlotRects(ctrl, count = MAX_ITEM_SLOTS) {
   for (let i = 0; i < n; i++) {
     const y = ctrl.y + padTop + i * (slotH + gap);
     // button body ~68% of slot, description under it
-    const btnH = Math.max(34, slotH * 0.62);
+    const btnH = Math.max(32, slotH * 0.52);
     rects.push({
       x, y, w: colW, h: slotH,
       btnX: x, btnY: y, btnW: colW, btnH,
@@ -716,12 +716,19 @@ function drawControlPanel(ctx, area, localState) {
     }
     ctx.shadowBlur = 0;
 
-    // Description under button
-    const descFs = Math.max(9, Math.min(13, r.w * 0.09));
-    ctx.font = `600 ${descFs}px "Hiragino Sans","Noto Sans JP",sans-serif`;
-    ctx.fillStyle = filled ? 'rgba(255,248,220,0.9)' : 'rgba(180,190,220,0.45)';
-    ctx.textBaseline = 'top';
-    ctx.fillText(filled ? (st.effect || '') : '空', r.btnX + r.btnW * 0.5, r.descY, r.btnW * 0.96);
+    // Description under button — large + high-contrast
+    const descFs = Math.max(14, Math.min(20, r.w * 0.125));
+    const descH = Math.max(descFs + 10, r.h - r.btnH - 4);
+    ctx.fillStyle = filled ? 'rgba(0, 0, 0, 0.55)' : 'rgba(0, 0, 0, 0.28)';
+    roundRect(ctx, r.btnX, r.descY - 2, r.btnW, descH, 8);
+    ctx.fill();
+    ctx.font = `700 ${descFs}px "Hiragino Sans","Noto Sans JP",sans-serif`;
+    ctx.fillStyle = filled ? '#fff8d0' : 'rgba(200,210,240,0.65)';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 2;
+    ctx.fillText(filled ? (st.effect || '') : '空', r.btnX + r.btnW * 0.5, r.descY - 2 + descH * 0.5, r.btnW * 0.94);
+    ctx.shadowBlur = 0;
   }
 
   // Status strip at bottom of control pane
