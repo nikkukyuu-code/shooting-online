@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-} from './entities.js?v=1.5.20';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.20';
-import { sfx } from './audio.js?v=1.5.20';
+} from './entities.js?v=1.5.21';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.21';
+import { sfx } from './audio.js?v=1.5.21';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -201,7 +201,7 @@ export class Game {
       }
 
       this.pointerY = Math.max(0.06, Math.min(0.94, localY));
-      this.pointerX = Math.max(0.06, Math.min(0.88, localX));
+      this.pointerX = Math.max(0.06, Math.min(0.55, localX)); // keep clear of right item column
       this.pointerDown = true;
       this.ctrlTouch = { active: true, x: this.pointerX, y: this.pointerY };
       return true;
@@ -216,66 +216,88 @@ export class Game {
       }
     };
 
+    // Item taps: only fire on UP if press started on that slot (prevents swipe/mis-tap)
+    this._itemPress = null; // { id, slot, x, y }
+
+    const beginItemPress = (id, canvasX, canvasY) => {
+      const slot = slotIndexAt(canvasX, canvasY);
+      if (slot < 0) return false;
+      this._itemPress = { id, slot, x: canvasX, y: canvasY };
+      return true;
+    };
+    const endItemPress = (id, canvasX, canvasY) => {
+      const press = this._itemPress;
+      if (!press || press.id !== id) return false;
+      this._itemPress = null;
+      const slot = slotIndexAt(canvasX, canvasY);
+      // Must release on the same slot, and not drag far
+      if (slot !== press.slot) return true;
+      const dist = Math.hypot(canvasX - press.x, canvasY - press.y);
+      if (dist > 36) return true; // treated as cancel swipe
+      this.tryUsePower(slot);
+      return true;
+    };
+    const cancelItemPress = (id) => {
+      if (this._itemPress && this._itemPress.id === id) this._itemPress = null;
+    };
+
     // Pointer events (mouse / pen / one finger with pointer events)
     this._onPointerDown = (e) => {
       e.preventDefault();
       const p = mapPoint(e.clientX, e.clientY);
-      // Item slot: one use only (debounce inside tryUsePower)
-      {
-        const slot = slotIndexAt(p.canvasX, p.canvasY);
-        if (slot >= 0) {
-          this._itemPointerHandled = true;
-          this.tryUsePower(slot);
-          return;
-        }
-      }
+      if (beginItemPress(e.pointerId, p.canvasX, p.canvasY)) return;
       if (p.relY < OPP_RATIO) return;
       tryGrabOrMoveShip(e.pointerId, p.relX, p.relY, true);
     };
     this._onPointerMove = (e) => {
+      // Cancel pending item if finger slides away a lot
+      if (this._itemPress && this._itemPress.id === e.pointerId) {
+        const p = mapPoint(e.clientX, e.clientY);
+        const dist = Math.hypot(p.canvasX - this._itemPress.x, p.canvasY - this._itemPress.y);
+        if (dist > 36) cancelItemPress(e.pointerId);
+        return;
+      }
       if (!this.draggingShip || this.shipPointerId !== e.pointerId) return;
       e.preventDefault();
       const p = mapPoint(e.clientX, e.clientY);
-      // Keep dragging even if finger slides over the item button
       tryGrabOrMoveShip(e.pointerId, p.relX, p.relY, false);
     };
     this._onPointerUp = (e) => {
+      const p = mapPoint(e.clientX, e.clientY);
+      if (endItemPress(e.pointerId, p.canvasX, p.canvasY)) return;
       releaseShipPointer(e.pointerId);
     };
 
     // Multi-touch: ship finger + item finger at once
     this._onTouchStart = (e) => {
       e.preventDefault();
-      // If pointer events already handled the item tap, skip duplicate touch fire
-      if (this._itemPointerHandled) {
-        this._itemPointerHandled = false;
-        // Still allow other fingers to grab the ship
-      }
       for (const touch of e.changedTouches) {
         const p = mapPoint(touch.clientX, touch.clientY);
-        const slot = slotIndexAt(p.canvasX, p.canvasY);
-        if (slot >= 0) {
-          // Only use via touch when this is a pure-touch path (no recent pointer item)
-          if (!this._itemUseAt || performance.now() - this._itemUseAt > 280) {
-            this.tryUsePower(slot);
-          }
-          continue;
-        }
+        if (beginItemPress('t' + touch.identifier, p.canvasX, p.canvasY)) continue;
         if (p.relY < OPP_RATIO) continue;
         tryGrabOrMoveShip(touch.identifier, p.relX, p.relY, true);
       }
     };
     this._onTouchMove = (e) => {
       e.preventDefault();
-      for (const t of e.changedTouches) {
-        if (!this.draggingShip || this.shipPointerId !== t.identifier) continue;
-        const p = mapPoint(t.clientX, t.clientY);
-        tryGrabOrMoveShip(t.identifier, p.relX, p.relY, false);
+      for (const touch of e.changedTouches) {
+        const id = 't' + touch.identifier;
+        if (this._itemPress && this._itemPress.id === id) {
+          const p = mapPoint(touch.clientX, touch.clientY);
+          const dist = Math.hypot(p.canvasX - this._itemPress.x, p.canvasY - this._itemPress.y);
+          if (dist > 36) cancelItemPress(id);
+          continue;
+        }
+        if (!this.draggingShip || this.shipPointerId !== touch.identifier) continue;
+        const p = mapPoint(touch.clientX, touch.clientY);
+        tryGrabOrMoveShip(touch.identifier, p.relX, p.relY, false);
       }
     };
     this._onTouchEnd = (e) => {
-      for (const t of e.changedTouches) {
-        releaseShipPointer(t.identifier);
+      for (const touch of e.changedTouches) {
+        const p = mapPoint(touch.clientX, touch.clientY);
+        if (endItemPress('t' + touch.identifier, p.canvasX, p.canvasY)) continue;
+        releaseShipPointer(touch.identifier);
       }
     };
 
@@ -295,7 +317,7 @@ export class Game {
     this._onKeyDown = (e) => {
       this._keys.add(e.key);
       if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','W','s','S','a','A','d','D',' ','Enter'].includes(e.key)) e.preventDefault();
-      if (e.key === ' ' || e.key === 'Enter') this.tryUsePower();
+      if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) this.tryUsePower(0);
     };
     this._onKeyUp = (e) => { this._keys.delete(e.key); };
     window.addEventListener('keydown', this._onKeyDown);
@@ -1277,7 +1299,7 @@ export class Game {
         if (l >= 0) return l;
       }
       if (playerHp > 55) {
-        const heavy = B.items.findIndex((id) => id === 'send_mech' || id === 'send_golem' || id === 'send_tank' || id === 'send_drone' || id === 'send' || id === 'direct' || id === 'meteor');
+        const heavy = B.items.findIndex((id) => id === 'send_mech' || id === 'send_golem' || id === 'send_tank' || id === 'send_drone' || id === 'send' || id === 'meteor');
         if (heavy >= 0) return heavy;
       }
       // default: first offensive
@@ -1289,7 +1311,7 @@ export class Game {
       if (B.powerCd > 0 && !force) return;
       // Seed inventory so COM always has something to think with
       if (!B.items.length) {
-        const pool = ['homing', 'laser', 'spread', 'bomb', 'shock', 'rapid', 'meteor', 'send', 'direct', 'send_mech', 'send_golem', 'send_tank', 'send_drone', 'heal'];
+        const pool = ['homing', 'laser', 'spread', 'bomb', 'shock', 'rapid', 'meteor', 'send', 'send_mech', 'send_golem', 'send_tank', 'send_drone', 'heal'];
         B.items.push(pool[(Math.random() * pool.length) | 0]);
         if (Math.random() < 0.5) B.items.push(pool[(Math.random() * pool.length) | 0]);
       }

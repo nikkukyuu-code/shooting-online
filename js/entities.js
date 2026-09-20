@@ -26,7 +26,7 @@ export function powerupMeta(id) {
 export function pickPowerupId() {
   const weighted = [
     ['homing', 2], ['laser', 2], ['spread', 3], ['bomb', 2], ['shock', 3], ['rapid', 3],
-    ['meteor', 2], ['send', 2], ['direct', 2],
+    ['meteor', 2], ['send', 2], ['direct', 1],
     ['heal', 3], ['heal_big', 2],
     ['send_mech', 2], ['send_golem', 2], ['send_tank', 2], ['send_drone', 2],
   ];
