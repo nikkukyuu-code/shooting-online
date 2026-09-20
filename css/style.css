@@ -1,0 +1,190 @@
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0a0608;
+  font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic", Meiryo, sans-serif;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  position: relative;
+  background: #111;
+}
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: none;
+}
+.screen.active { display: block; }
+
+/* ---- MENU ---- */
+#screen-menu {
+  overflow: hidden;
+}
+.sky {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.55) 0%, transparent 40%),
+    radial-gradient(ellipse at 70% 40%, rgba(255,255,255,0.35) 0%, transparent 45%),
+    linear-gradient(180deg, #7ec8f0 0%, #b8dff5 45%, #d6ebf8 100%);
+}
+.sky::before,
+.sky::after {
+  content: "";
+  position: absolute;
+  background: rgba(255,255,255,0.7);
+  border-radius: 50%;
+  filter: blur(8px);
+}
+.sky::before { width: 120px; height: 50px; top: 18%; left: 12%; }
+.sky::after  { width: 160px; height: 60px; top: 28%; right: 8%; opacity: 0.6; }
+
+.menu-panel {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(78vw, 300px);
+  padding: 22px 18px 18px;
+  background: rgba(210, 210, 210, 0.72);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.18);
+  backdrop-filter: blur(2px);
+}
+
+.menu-btn {
+  appearance: none;
+  border: 1px solid rgba(120,120,120,0.55);
+  background: rgba(235, 235, 235, 0.95);
+  color: #222;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 12px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.8) inset, 0 2px 4px rgba(0,0,0,0.12);
+}
+.menu-btn:active { transform: translateY(1px); background: #ddd; }
+.menu-btn:disabled { opacity: 0.55; cursor: default; }
+
+.menu-field {
+  width: 100%;
+  height: 28px;
+  border: 1px solid rgba(140,140,140,0.7);
+  background: #fff;
+  border-radius: 2px;
+  padding: 0 8px;
+  font-size: 0.95rem;
+  text-align: center;
+  color: #222;
+}
+.menu-field.room-name {
+  height: 32px;
+  margin-top: 2px;
+}
+.menu-field:focus { outline: 2px solid #6aa8d8; }
+
+.menu-hint {
+  position: absolute;
+  bottom: 18px;
+  left: 12px;
+  right: 12px;
+  text-align: center;
+  font-size: 0.72rem;
+  color: rgba(30,50,70,0.75);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+}
+
+/* ---- GAME ---- */
+#screen-game {
+  background: #1a0a08;
+}
+#game {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+#ui-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.stop-btn {
+  pointer-events: auto;
+  position: absolute;
+  top: max(8px, env(safe-area-inset-top));
+  left: 8px;
+  z-index: 5;
+  appearance: none;
+  border: 1.5px solid rgba(255,255,255,0.85);
+  background: rgba(40, 20, 15, 0.45);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 6px 12px;
+  border-radius: 3px;
+  text-shadow: 0 1px 2px #000;
+  cursor: pointer;
+}
+.stop-btn:active { background: rgba(80,40,30,0.65); }
+
+.status-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  background: rgba(0,0,0,0.72);
+  color: #fff;
+  text-align: center;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 2px #000;
+  pointer-events: none;
+}
+
+.end-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: rgba(0,0,0,0.62);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  padding: 24px;
+}
+.end-overlay.hidden { display: none; }
+#end-message {
+  color: #fff;
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-shadow: 0 2px 8px #000;
+  text-align: center;
+}
+.end-overlay .menu-btn {
+  min-width: 160px;
+  pointer-events: auto;
+}
