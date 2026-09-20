@@ -1,8 +1,8 @@
 import {
   POWERUPS, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.1.0';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js?v=1.1.0';
-import { sfx } from './audio.js?v=1.1.0';
+} from './entities.js?v=1.2.0';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.2.0';
+import { sfx } from './audio.js?v=1.2.0';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -22,6 +22,7 @@ export class Game {
     this.pointerY = 0.5;
     this.pointerX = 0.14; // normalized 0..1 within own field width (left=back, right=forward)
     this.pointerDown = false;
+    this.ctrlTouch = { active: false, x: 0.5, y: 0.5 }; // finger pos in ctrl pane (0..1)
     this._lastTs = 0;
     this._spawnAcc = 0;
     this._bossAcc = 0;
@@ -51,6 +52,7 @@ export class Game {
     this.remoteSnap = null;
     this.pointerY = 0.5;
     this.pointerX = 0.14;
+    this.ctrlTouch = { active: false, x: 0.5, y: 0.5 };
     this.ui.endOverlay.classList.add('hidden');
     this.setStatus(WAIT);
   }
@@ -151,28 +153,70 @@ export class Game {
       if (!touch && (e.type === 'touchend' || e.type === 'touchcancel')) return;
       const clientY = touch ? touch.clientY : e.clientY;
       const clientX = touch ? touch.clientX : e.clientX;
+      // CSS-pixel coords → canvas buffer coords for button hit-test
+      const scaleX = c.width / rect.width;
+      const scaleY = c.height / rect.height;
+      const canvasX = (clientX - rect.left) * scaleX;
+      const canvasY = (clientY - rect.top) * scaleY;
       const relY = (clientY - rect.top) / rect.height;
       const relX = (clientX - rect.left) / rect.width;
 
       const ownTop = OPP_RATIO;
       const ownBot = OPP_RATIO + OWN_RATIO; // CTRL starts here (~0.75)
       const isDown = e.type === 'pointerdown' || e.type === 'touchstart' || e.type === 'mousedown';
+      const isMove = e.type === 'pointermove' || e.type === 'touchmove' || e.type === 'mousemove';
 
-      // Middle pane (~45%): drag sets ship X+Y (free 2D in own field)
+      // Top opponent pane: ignore for movement / items
+      if (relY < ownTop) {
+        void CTRL_RATIO;
+        return;
+      }
+
+      // 「アイテム」 button in control pane (primary power activation)
+      const btn = itemButtonRect(this.L.ctrl);
+      const onBtn =
+        canvasX >= btn.x && canvasX <= btn.x + btn.w &&
+        canvasY >= btn.y && canvasY <= btn.y + btn.h;
+      if (onBtn && isDown) {
+        this.tryUsePower();
+        this.ctrlTouch.active = false;
+        return;
+      }
+
+      // PRIMARY: bottom control pane drag → ship X/Y in own field
+      if (relY >= ownBot) {
+        if (onBtn && isMove) return; // don't steer while over button during move-from-btn
+        const localY = (relY - ownBot) / CTRL_RATIO;
+        // Leave a little margin so status strip / button feel less sticky
+        this.pointerY = Math.max(0.06, Math.min(0.94, localY));
+        this.pointerX = Math.max(0.06, Math.min(0.88, relX));
+        this.pointerDown = true;
+        this.ctrlTouch = {
+          active: true,
+          x: Math.max(0.02, Math.min(0.98, relX)),
+          y: Math.max(0.02, Math.min(0.98, localY)),
+        };
+        return;
+      }
+
+      // OPTIONAL convenience: middle pane drag also moves ship
       if (relY >= ownTop && relY < ownBot) {
         const localY = (relY - ownTop) / OWN_RATIO;
         this.pointerY = Math.max(0.06, Math.min(0.94, localY));
-        // X: left = retreat, right = advance toward enemies
         this.pointerX = Math.max(0.06, Math.min(0.88, relX));
         this.pointerDown = true;
-      } else if (relY >= ownBot) {
-        // Bottom control pane: tap activates next power-up
-        if (isDown) this.tryUsePower();
+        // Mirror indicator into ctrl pane so user sees where control maps
+        this.ctrlTouch = {
+          active: true,
+          x: Math.max(0.02, Math.min(0.98, relX)),
+          y: Math.max(0.02, Math.min(0.98, localY)),
+        };
       }
-      // Top opponent pane: ignore for movement / items
-      void CTRL_RATIO;
     };
-    this._onPointerUp = () => { this.pointerDown = false; };
+    this._onPointerUp = () => {
+      this.pointerDown = false;
+      if (this.ctrlTouch) this.ctrlTouch.active = false;
+    };
     c.addEventListener('pointerdown', this._onPointer, { passive: false });
     c.addEventListener('pointermove', this._onPointer, { passive: false });
     c.addEventListener('pointerup', this._onPointerUp);
@@ -328,6 +372,7 @@ export class Game {
       this.state.scroll += 20 * dt;
     }
 
+    this.state.ctrlTouch = this.ctrlTouch;
     renderFrame(this.ctx, this.L, this.state, this.remoteSnap, this.waiting);
     this._raf = requestAnimationFrame((t) => this.frame(t));
   }

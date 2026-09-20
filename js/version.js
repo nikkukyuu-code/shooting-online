@@ -1,4 +1,4 @@
 /** App version — bump on every user-facing release so cache vs fresh is obvious. */
-export const VERSION = '1.1.0';
-export const VERSION_LABEL = 'v1.1.0';
-export const BUILD_NOTE = '3段レイアウト + 前後移動';
+export const VERSION = '1.2.0';
+export const VERSION_LABEL = 'v1.2.0';
+export const BUILD_NOTE = '下段操作タッチ面 + アイテムボタン';

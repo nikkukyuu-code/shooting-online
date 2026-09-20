@@ -1,5 +1,5 @@
 /** Canvas rendering for 3-pane portrait shmup
- *  TOP ~30% opponent | MIDDLE ~45% own | BOTTOM ~25% control
+ *  TOP ~30% opponent | MIDDLE ~45% own | BOTTOM ~25% control (操作画面)
  */
 
 export const OPP_RATIO = 0.30;
@@ -33,6 +33,20 @@ export function resizeCanvas(canvas) {
   return layout(canvas);
 }
 
+/** Hit zone for 「アイテム」 button inside control pane (canvas pixels). */
+export function itemButtonRect(ctrl) {
+  const bw = Math.max(64, Math.min(110, ctrl.w * 0.24));
+  const bh = Math.max(30, Math.min(44, ctrl.h * 0.30));
+  const pad = Math.max(8, ctrl.w * 0.02);
+  return {
+    x: ctrl.x + ctrl.w - bw - pad,
+    y: ctrl.y + pad,
+    w: bw,
+    h: bh,
+  };
+}
+
+/** Fiery orange/red nebula (play / opponent views). */
 function nebula(ctx, w, h, scroll, seed = 0) {
   const g = ctx.createLinearGradient(0, 0, w, h);
   g.addColorStop(0, '#2a0c08');
@@ -65,6 +79,42 @@ function nebula(ctx, w, h, scroll, seed = 0) {
     const x = ((n * 23 + scroll * 0.5) % (w + 10));
     const y = (n * 41) % h;
     ctx.fillRect(x, y, 1.5, 1.5);
+  }
+  ctx.restore();
+}
+
+/** Cooler purple/blue nebula for the control surface (操作画面). */
+function ctrlNebula(ctx, w, h, scroll, seed = 3) {
+  const g = ctx.createLinearGradient(0, 0, w, h);
+  g.addColorStop(0, '#1a1030');
+  g.addColorStop(0.35, '#2a1a55');
+  g.addColorStop(0.65, '#3a2a78');
+  g.addColorStop(1, '#121828');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.save();
+  ctx.globalAlpha = 0.4;
+  for (let i = 0; i < 16; i++) {
+    const n = (i * 89 + seed * 17) % 200;
+    const x = ((n * 19 + scroll * (0.1 + (i % 4) * 0.03)) % (w + 80)) - 40;
+    const y = ((n * 29) % (h - 16)) + 8;
+    const r = 28 + (n % 45);
+    const rg = ctx.createRadialGradient(x, y, 0, x, y, r);
+    rg.addColorStop(0, i % 2 ? 'rgba(140,120,255,0.5)' : 'rgba(60,140,220,0.4)');
+    rg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = rg;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 0.55;
+  ctx.fillStyle = '#d8e0ff';
+  for (let i = 0; i < 28; i++) {
+    const n = (i * 47 + seed * 3) % 300;
+    const x = ((n * 21 + scroll * 0.35) % (w + 10));
+    const y = (n * 37) % h;
+    ctx.fillRect(x, y, 1.4, 1.4);
   }
   ctx.restore();
 }
@@ -235,7 +285,10 @@ function drawLaser(ctx, player, fieldH) {
   ctx.restore();
 }
 
-/** Cooler purple-blue-grey control panel (not a play field). */
+/**
+ * Bottom control surface (操作画面): purple/blue nebula pad — not a full playfield.
+ * Shows status text, item pips, アイテム button, and optional touch crosshair.
+ */
 function drawControlPanel(ctx, area, localState) {
   ctx.save();
   ctx.beginPath();
@@ -243,28 +296,54 @@ function drawControlPanel(ctx, area, localState) {
   ctx.clip();
   ctx.translate(area.x, area.y);
 
-  const g = ctx.createLinearGradient(0, 0, 0, area.h);
-  g.addColorStop(0, '#3a3a55');
-  g.addColorStop(0.4, '#2c2c48');
-  g.addColorStop(1, '#1a1a30');
-  ctx.fillStyle = g;
+  ctrlNebula(ctx, area.w, area.h, (localState.scroll || 0) * 0.4, 5);
+
+  // Soft darkening so it reads as a pad, not another playfield
+  ctx.fillStyle = 'rgba(10, 8, 28, 0.22)';
   ctx.fillRect(0, 0, area.w, area.h);
 
-  // subtle panel sheen
-  ctx.fillStyle = 'rgba(120, 130, 180, 0.08)';
-  ctx.fillRect(0, 0, area.w, area.h * 0.35);
-
-  // top edge highlight
-  ctx.fillStyle = 'rgba(180, 190, 220, 0.22)';
+  // Top edge highlight (divider feel)
+  ctx.fillStyle = 'rgba(180, 190, 255, 0.28)';
   ctx.fillRect(0, 0, area.w, 2);
 
-  // Queued item icons / pips (center-upper of panel)
+  // Touch / finger indicator (subtle crosshair + ring)
+  const touch = localState.ctrlTouch;
+  if (touch && touch.active) {
+    const tx = touch.x * area.w;
+    const ty = touch.y * area.h;
+    const r = Math.min(area.w, area.h) * 0.14;
+    ctx.strokeStyle = 'rgba(200, 210, 255, 0.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(tx, ty, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(220, 230, 255, 0.45)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(tx - r * 0.7, ty);
+    ctx.lineTo(tx + r * 0.7, ty);
+    ctx.moveTo(tx, ty - r * 0.7);
+    ctx.lineTo(tx, ty + r * 0.7);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath();
+    ctx.arc(tx, ty, 3, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    // Idle pad hint ring
+    ctx.strokeStyle = 'rgba(160, 170, 220, 0.16)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(area.w * 0.42, area.h * 0.42, Math.min(area.w, area.h) * 0.16, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Queued item pips (left-center of pad)
   const items = (localState.player && localState.player.items) || [];
-  const pipR = Math.max(5, Math.min(9, area.h * 0.06));
-  const pipGap = pipR * 2.4;
-  const totalW = items.length ? (items.length - 1) * pipGap : 0;
-  const startX = area.w * 0.5 - totalW * 0.5;
-  const pipY = area.h * 0.32;
+  const pipR = Math.max(5, Math.min(9, area.h * 0.055));
+  const pipGap = pipR * 2.5;
+  const pipY = area.h * 0.28;
+  const startX = area.w * 0.12;
   for (let i = 0; i < items.length; i++) {
     const ix = startX + i * pipGap;
     ctx.fillStyle = i === 0 ? '#ffd24a' : '#c8a84a';
@@ -276,30 +355,54 @@ function drawControlPanel(ctx, area, localState) {
     ctx.stroke();
   }
 
-  // Soft virtual-pad hint ring in center when no items
-  if (!items.length) {
-    ctx.strokeStyle = 'rgba(160, 170, 210, 0.18)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(area.w * 0.5, area.h * 0.38, Math.min(area.w, area.h) * 0.18, 0, Math.PI * 2);
-    ctx.stroke();
-  }
+  // 「アイテム」 tap button (top-right of control pane)
+  const btn = itemButtonRect({ x: 0, y: 0, w: area.w, h: area.h });
+  const hasItem = items.length > 0;
+  ctx.fillStyle = hasItem ? 'rgba(255, 210, 74, 0.28)' : 'rgba(80, 90, 140, 0.35)';
+  ctx.strokeStyle = hasItem ? 'rgba(255, 230, 140, 0.9)' : 'rgba(180, 190, 230, 0.55)';
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, btn.x, btn.y, btn.w, btn.h, 6);
+  ctx.fill();
+  ctx.stroke();
+  const btnFont = Math.max(11, Math.min(15, btn.w * 0.28));
+  ctx.font = `700 ${btnFont}px "Hiragino Sans","Noto Sans JP","Yu Gothic",Meiryo,sans-serif`;
+  ctx.fillStyle = hasItem ? '#fff8e0' : 'rgba(220,225,255,0.7)';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = '#000';
+  ctx.shadowBlur = 3;
+  ctx.fillText('アイテム', btn.x + btn.w * 0.5, btn.y + btn.h * 0.5);
+  ctx.shadowBlur = 0;
 
-  // Status / instruction text (DOM also mirrors this; canvas copy for offline/embed)
+  // Status strip at bottom of control pane
+  const stripH = Math.max(22, area.h * 0.22);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.fillRect(0, area.h - stripH, area.w, stripH);
   const text = localState.statusText || '';
   if (text) {
-    const fontSize = Math.max(12, Math.min(18, area.w * 0.045));
+    const fontSize = Math.max(11, Math.min(16, area.w * 0.042));
     ctx.font = `600 ${fontSize}px "Hiragino Sans","Noto Sans JP","Yu Gothic",Meiryo,sans-serif`;
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.shadowColor = '#000';
     ctx.shadowBlur = 4;
-    ctx.fillText(text, area.w * 0.5, area.h * 0.72, area.w * 0.92);
+    ctx.fillText(text, area.w * 0.5, area.h - stripH * 0.5, area.w * 0.92);
     ctx.shadowBlur = 0;
   }
 
   ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, w * 0.5, h * 0.5);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
 }
 
 /** Draw one field into a clipped region. `snap` is local state or remote snapshot. */
@@ -318,8 +421,9 @@ export function drawField(ctx, area, snap, opts = {}) {
 
   nebula(ctx, fw, fh, (snap.scroll || 0) * (darkened ? 0.7 : 1), darkened ? 7 : 0);
 
+  // Opponent view: same fiery nebula, ~20% darker — NOT a purple starfield
   if (darkened) {
-    ctx.fillStyle = 'rgba(20, 10, 40, 0.55)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
     ctx.fillRect(0, 0, fw, fh);
   }
 
@@ -367,7 +471,7 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
     alive: localState.alive,
   };
 
-  // 1) TOP — opponent live view (darkened)
+  // 1) TOP — opponent live view (same fiery nebula, slightly dimmer)
   let oppDraw;
   if (remoteSnap) {
     const sx = L.opp.w / (remoteSnap._fw || L.own.w);
@@ -389,7 +493,7 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
   }
   drawField(ctx, L.opp, oppDraw, { darkened: true });
 
-  // 2) MIDDLE — player's own gameplay field
+  // 2) MIDDLE — player's own gameplay field (display)
   drawField(ctx, L.own, localSnap, { darkened: false });
 
   // HP bars near boundary between top and middle
@@ -402,7 +506,7 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
   ctx.fillStyle = 'rgba(255,200,150,0.25)';
   ctx.fillRect(0, L.oppH - 1, L.W, 1);
 
-  // 3) BOTTOM — control panel (cooler tone; not a play field)
+  // 3) BOTTOM — 操作画面 (purple/blue nebula control pad)
   drawControlPanel(ctx, L.ctrl, localState);
 
   // Divider between own and control

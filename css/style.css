@@ -190,18 +190,27 @@ html, body {
 
 .app-meta {
   position: absolute;
-  bottom: 4px;
-  left: 12px;
-  right: 12px;
+  bottom: max(14px, calc(env(safe-area-inset-bottom, 0px) + 10px));
+  left: 50%;
+  transform: translateX(-50%);
   text-align: center;
-  font-size: 0.7rem;
-  color: rgba(20,40,60,0.7);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgba(12, 28, 48, 0.92);
   letter-spacing: 0.04em;
-  z-index: 2;
+  z-index: 3;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.65);
+  padding: 5px 12px;
+  background: rgba(255,255,255,0.35);
+  border-radius: 4px;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  box-sizing: border-box;
+  white-space: nowrap;
 }
-.app-meta .meta-sep { margin: 0 0.35em; opacity: 0.5; }
-#app-version { font-weight: 700; }
-.menu-hint { bottom: 28px; }
+.app-meta .meta-sep { margin: 0 0.35em; opacity: 0.55; }
+#app-version { font-weight: 800; color: #0a1a30; }
+.menu-hint { bottom: max(48px, calc(env(safe-area-inset-bottom, 0px) + 42px)); }
 
 .game-version {
   pointer-events: none;
