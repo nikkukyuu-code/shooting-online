@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-} from './entities.js?v=1.5.19';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.19';
-import { sfx } from './audio.js?v=1.5.19';
+} from './entities.js?v=1.5.20';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.20';
+import { sfx } from './audio.js?v=1.5.20';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -414,13 +414,19 @@ export class Game {
 
 
   /** Spawn visible falling meteors into a field's meteor list. */
-  rainMeteors(list, fw, fh, aimY, count = 4) {
+  /**
+   * Meteors fall straight onto the opponent ship only (fixed X column).
+   * aimX: ship x in field pixels; aimY: ship y (0..1 or pixels).
+   */
+  rainMeteors(list, fw, fh, aimY, count = 4, aimX = null) {
+    const shipX = aimX != null ? aimX : fw * 0.22;
+    const shipY = aimY <= 1 ? aimY * fh : aimY;
     for (let i = 0; i < count; i++) {
-      const x = fw * (0.25 + Math.random() * 0.55);
-      const y = -30 - Math.random() * 80 - i * 28;
-      const tx = fw * (0.2 + Math.random() * 0.6);
-      const ty = (aimY <= 1 ? aimY * fh : aimY) + (Math.random() - 0.5) * 40;
-      list.push(spawnMeteor(x, y, tx, ty));
+      const y = -40 - Math.random() * 70 - i * 36;
+      // Tiny X spread still on the ship column — not across the whole field
+      const tx = shipX + (Math.random() - 0.5) * 18;
+      const ty = shipY + (Math.random() - 0.5) * 12;
+      list.push(spawnMeteor(tx, y, tx, ty));
     }
   }
 
@@ -505,13 +511,13 @@ export class Game {
         this._bot.hp = Math.max(0, this._bot.hp - dmg);
         this.state.botHp = this._bot.hp;
         if (!this._bot.meteors) this._bot.meteors = [];
-        this.rainMeteors(this._bot.meteors, fw, fh, this._bot.y, 5);
+        this.rainMeteors(this._bot.meteors, fw, fh, this._bot.y, 5, 48);
       } else if (this.net) {
         this.net.send({ type: 'meteorHit', dmg });
         // Local preview on own field too so the player sees rocks falling away
-        this.rainMeteors(this.state.meteors, fw, fh, 0.35, 3);
+        this.rainMeteors(this.state.meteors, fw, fh, 0.35, 3, 48);
       } else {
-        this.rainMeteors(this.state.meteors, fw, fh, p.y, 4);
+        this.rainMeteors(this.state.meteors, fw, fh, p.y, 4, p.x);
       }
       this.showItemBanner(meta);
       p.activePower = null;
@@ -589,7 +595,7 @@ export class Game {
       const dmg = msg.dmg || 14;
       this.applyPlayerDamage(dmg, 'direct');
       if (!this.state.meteors) this.state.meteors = [];
-      this.rainMeteors(this.state.meteors, this.L.own.w, this.L.own.h, this.state.player.y, 5);
+      this.rainMeteors(this.state.meteors, this.L.own.w, this.L.own.h, this.state.player.y, 5, this.state.player.x);
       this.setStatus('対戦相手の隕石攻撃！');
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1400);
       return;
@@ -941,14 +947,15 @@ export class Game {
     // Falling meteors (visible rocks)
     if (!S.meteors) S.meteors = [];
     for (const m of S.meteors) {
-      m.vy += 220 * dt;
-      m.x += m.vx * dt;
+      m.vx = 0; // never drift into enemy lanes
+      m.vy += 260 * dt;
       m.y += m.vy * dt;
       m.rot = (m.rot || 0) + (m.spin || 0) * dt;
       m.life -= dt;
-      if (!m.hit && m.y >= (m.targetY != null ? m.targetY : fh * 0.7)) {
+      // Impact only near target ship Y — visual only (HP already applied to opponent)
+      if (!m.hit && m.y >= (m.targetY != null ? m.targetY : fh * 0.55)) {
         m.hit = true;
-        m.life = Math.min(m.life, 0.25);
+        m.life = Math.min(m.life, 0.2);
         S.fx.push(spawnExplosion(m.x, m.y, true));
       }
     }
@@ -1334,7 +1341,7 @@ export class Game {
       } else if (id === 'meteor') {
         this.applyPlayerDamage(14, 'direct');
         if (!this.state.meteors) this.state.meteors = [];
-        this.rainMeteors(this.state.meteors, fw, fh, this.state.player.y, 5);
+        this.rainMeteors(this.state.meteors, fw, fh, this.state.player.y, 5, this.state.player.x);
       } else if (id === 'send' || id === 'send_mech' || id === 'send_golem' || id === 'send_tank' || id === 'send_drone') {
         const map = {
           send: ['swarm', 'swarm', 'elite'],
@@ -1372,14 +1379,14 @@ export class Game {
 
     if (!B.meteors) B.meteors = [];
     for (const m of B.meteors) {
-      m.vy += 220 * dt;
-      m.x += m.vx * dt;
+      m.vx = 0;
+      m.vy += 260 * dt;
       m.y += m.vy * dt;
       m.rot = (m.rot || 0) + (m.spin || 0) * dt;
       m.life -= dt;
-      if (!m.hit && m.y >= (m.targetY != null ? m.targetY : fh * 0.7)) {
+      if (!m.hit && m.y >= (m.targetY != null ? m.targetY : fh * 0.55)) {
         m.hit = true;
-        m.life = Math.min(m.life, 0.25);
+        m.life = Math.min(m.life, 0.2);
         B.fx.push(spawnExplosion(m.x, m.y, true));
       }
     }

@@ -667,17 +667,15 @@ function drawDamageNumbers(ctx, L, nums) {
 }
 
 function drawDirectBeam(ctx, x0, y0, x1, y1, lifeRatio = 1) {
-  // Staccato micro-lasers: many short bolts along the path, flickering rapidly
+  // Straight-line staccato bolts only (no sideways jitter = no "homing" look)
   const now = performance.now();
   const dx = x1 - x0;
   const dy = y1 - y0;
   const len = Math.hypot(dx, dy) || 1;
   const ux = dx / len;
   const uy = dy / len;
-  const px = -uy;
-  const py = ux;
-  const boltLen = Math.max(18, Math.min(36, len * 0.12));
-  const gap = boltLen * 0.55;
+  const boltLen = Math.max(16, Math.min(30, len * 0.1));
+  const gap = boltLen * 0.5;
   const n = Math.max(4, Math.floor(len / (boltLen + gap)));
   const baseA = Math.max(0.3, Math.min(1, lifeRatio));
 
@@ -686,17 +684,15 @@ function drawDirectBeam(ctx, x0, y0, x1, y1, lifeRatio = 1) {
   ctx.shadowColor = '#ff2040';
 
   for (let i = 0; i < n; i++) {
-    // Each bolt flickers on/off on its own cadence
     const phase = (now / 28 + i * 1.7) % 1;
-    if (phase > 0.62) continue; // off most of the time → short pulses
-    const jitter = Math.sin(now / 40 + i * 2.3) * 5;
-    const t0 = (i / n) + (phase * 0.04);
+    if (phase > 0.58) continue;
+    const t0 = i / n;
     const t1 = Math.min(1, t0 + boltLen / len);
-    const ax = x0 + ux * len * t0 + px * jitter;
-    const ay = y0 + uy * len * t0 + py * jitter;
-    const bx = x0 + ux * len * t1 + px * jitter * 0.4;
-    const by = y0 + uy * len * t1 + py * jitter * 0.4;
-    const a = baseA * (0.55 + 0.45 * (1 - phase / 0.62));
+    const ax = x0 + ux * len * t0;
+    const ay = y0 + uy * len * t0;
+    const bx = x0 + ux * len * t1;
+    const by = y0 + uy * len * t1;
+    const a = baseA * (0.55 + 0.45 * (1 - phase / 0.58));
 
     ctx.globalAlpha = a * 0.85;
     ctx.strokeStyle = '#ff3355';
@@ -717,7 +713,6 @@ function drawDirectBeam(ctx, x0, y0, x1, y1, lifeRatio = 1) {
     ctx.stroke();
   }
 
-  // Small impact sparks at the tip (also stutter)
   if ((now / 50) % 1 < 0.7) {
     const spark = 10 + 8 * Math.sin(now / 30);
     const g = ctx.createRadialGradient(x1, y1, 0, x1, y1, spark);
@@ -1020,20 +1015,17 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
     const px = L.own.x + (pl.x || 48);
     const py = L.own.y + (pl.y <= 1 ? pl.y * L.own.h : pl.y);
     const lr = Math.min(1, pl.activeTimer / 0.85);
-    // Continue from top of own pane into opp pane toward opponent ship
-    const opp = oppDraw;
-    const ox = L.opp.x + ((opp.px != null ? opp.px : (opp.player && opp.player.x) || 48) * (opp._sx || 1));
-    const oy = L.opp.y + ((opp.py != null ? opp.py : 0.5) * L.opp.h);
-    drawDirectBeam(ctx, px, L.own.y + 4, ox, oy, lr);
+    // Straight UP only (same X) — never slant toward opponent ship
+    drawDirectBeam(ctx, px, L.own.y + 4, px, L.opp.y + L.opp.h * 0.45, lr);
   }
-  // Incoming beam when opponent/COM fires direct at us
+  // Incoming: straight DOWN on our ship column (fixed at fire) — no chase
   if (localState.incomingDirect && localState.incomingDirect > 0) {
     const lr = Math.min(1, localState.incomingDirect / 0.85);
     const px = L.own.x + (pl.x || 48);
     const py = L.own.y + (pl.y <= 1 ? pl.y * L.own.h : pl.y);
     const ox = L.opp.x + ((oppDraw.px != null ? oppDraw.px : 48) * (oppDraw._sx || 1));
-    const oy = L.opp.y + ((oppDraw.py != null ? oppDraw.py : 0.5) * L.opp.h);
-    drawDirectBeam(ctx, ox, oy, px, py, lr);
+    // Fall straight down from opp ship X to our Y, but keep X = our ship (column hit)
+    drawDirectBeam(ctx, px, L.opp.y + 8, px, py, lr);
   }
 
 
