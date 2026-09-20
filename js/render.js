@@ -53,12 +53,13 @@ export function resizeCanvas(canvas) {
 
 /** Hit zone for 「アイテム」 button inside control pane (canvas pixels). */
 export function itemButtonRect(ctrl) {
-  const bw = Math.max(64, Math.min(110, ctrl.w * 0.24));
-  const bh = Math.max(30, Math.min(44, ctrl.h * 0.30));
-  const pad = Math.max(8, ctrl.w * 0.02);
+  // Large tap target on the right of the control pane
+  const bw = Math.max(120, Math.min(200, ctrl.w * 0.42));
+  const bh = Math.max(72, Math.min(130, ctrl.h * 0.52));
+  const pad = Math.max(10, ctrl.w * 0.025);
   return {
     x: ctrl.x + ctrl.w - bw - pad,
-    y: ctrl.y + pad,
+    y: ctrl.y + (ctrl.h - bh) * 0.28,
     w: bw,
     h: bh,
   };
@@ -685,11 +686,11 @@ function drawControlPanel(ctx, area, localState) {
   const hasItem = items.length > 0;
   ctx.fillStyle = hasItem ? 'rgba(255, 210, 74, 0.28)' : 'rgba(80, 90, 140, 0.35)';
   ctx.strokeStyle = hasItem ? 'rgba(255, 230, 140, 0.9)' : 'rgba(180, 190, 230, 0.55)';
-  ctx.lineWidth = 1.5;
-  roundRect(ctx, btn.x, btn.y, btn.w, btn.h, 6);
+  ctx.lineWidth = 2.5;
+  roundRect(ctx, btn.x, btn.y, btn.w, btn.h, 14);
   ctx.fill();
   ctx.stroke();
-  const btnFont = Math.max(11, Math.min(15, btn.w * 0.28));
+  const btnFont = Math.max(16, Math.min(28, btn.w * 0.18));
   ctx.font = `700 ${btnFont}px "Hiragino Sans","Noto Sans JP","Yu Gothic",Meiryo,sans-serif`;
   ctx.fillStyle = hasItem ? '#fff8e0' : 'rgba(220,225,255,0.7)';
   ctx.textAlign = 'center';
