@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-} from './entities.js?v=1.5.25';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.25';
-import { sfx } from './audio.js?v=1.5.25';
+} from './entities.js?v=1.5.26';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.26';
+import { sfx } from './audio.js?v=1.5.26';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -988,6 +988,7 @@ export class Game {
 
   updateBot(dt) {
     const B = this._bot;
+    if (!B) return;
     const fw = this.L.own.w;
     const fh = this.L.own.h;
     const shipX = 48;
@@ -1224,7 +1225,7 @@ export class Game {
       if (e.hp <= 0) {
         B.fx.push(spawnExplosion(e.x, e.y, e.kind === 'boss'));
         if (B.items.length < MAX_ITEM_SLOTS && Math.random() < (e.kind === 'boss' ? 1 : 0.4)) {
-          const dropId = pickPowerupId();
+          let dropId = pickPowerupId();
           // COM never gets direct (looks like player's own upward laser)
           if (dropId === 'direct') dropId = 'laser';
           if (dropId === 'heal' || dropId === 'heal_big') {
@@ -1260,6 +1261,9 @@ export class Game {
     }
 
     B.bullets = B.bullets.filter((b) => b.life > 0 && b.x > -40 && b.x < fw + 80);
+    if (B.enemies.length > 36) B.enemies.length = 36;
+    if (B.bullets.length > 100) B.bullets.length = 100;
+    if (B.fx.length > 40) B.fx.length = 40;
     for (const f of B.fx) f.life -= dt;
     B.fx = B.fx.filter((f) => f.life > 0);
 
