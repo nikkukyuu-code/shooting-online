@@ -2,6 +2,8 @@
 
 ブラウザで遊べる横スクロール・シューティングのオンライン対戦ゲームです。
 
+**Play:** https://nikkukyuu-code.github.io/shooting-online/
+
 ## 遊び方
 
 1. スマホを縦向きにしてページを開く
@@ -29,6 +31,8 @@
 
 勝敗表示: **あなたの勝ちです** / **あなたの負けです**
 
+待機中表示: **対戦相手を待っています**
+
 ## 画面レイアウト
 
 - 上部 約 65% … 自分のフィールド
@@ -38,7 +42,8 @@
 
 - HTML5 Canvas + ES Modules
 - 通信: [PeerJS](https://peerjs.com/)（ブラウザ間 P2P）
-- 静的ホスト（GitHub Pages など）で動作
+- 効果音: Web Audio API
+- 静的ホスト（GitHub Pages）で動作
 
 ## ローカル確認
 
