@@ -1,8 +1,8 @@
 import {
   POWERUPS, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.4.0';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.4.0';
-import { sfx } from './audio.js?v=1.4.0';
+} from './entities.js?v=1.4.1';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.4.1';
+import { sfx } from './audio.js?v=1.4.1';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -316,7 +316,7 @@ export class Game {
       this.sendToOpponent(['drone', 'drone', 'drone', 'drone'], meta?.label);
     } else if (id === 'direct') {
       // Direct attack opponent HP
-      const dmg = 12;
+      const dmg = 8;
       if (this.useBot) {
         this._bot.hp = Math.max(0, this._bot.hp - dmg);
         this.state.botHp = this._bot.hp;
@@ -364,7 +364,7 @@ export class Game {
       return;
     }
     if (msg.type === 'directHit') {
-      const dmg = msg.dmg || 12;
+      const dmg = msg.dmg || 8;
       this.state.player.hp = Math.max(0, this.state.player.hp - dmg);
       this.state.player.invuln = 0.6;
       this.state.fx.push(spawnExplosion(this.state.player.x + 10, this.state.player.y * this.L.own.h, true));
@@ -503,10 +503,10 @@ export class Game {
           : (e.kind === 'mech' || e.kind === 'golem') ? 1.3 + Math.random() * 0.4
           : e.kind === 'elite' ? 1.6 + Math.random() * 0.5
           : 2.2 + Math.random() * 0.8;
-        S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y, -180 - Math.random() * 40, (Math.random() - 0.5) * 30, 'enemy', false, 4));
+        S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y, -160 - Math.random() * 30, (Math.random() - 0.5) * 24, 'enemy', false, 2));
         if (e.kind === 'boss' || e.kind === 'tank' || e.kind === 'mech') {
-          S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y - 12, -170, -35, 'enemy', false, 3));
-          S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y + 12, -170, 35, 'enemy', false, 3));
+          S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y - 12, -160, -30, 'enemy', false, 1));
+          S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y + 12, -160, 30, 'enemy', false, 1));
         }
       }
     }
@@ -577,8 +577,8 @@ export class Game {
       if (b.owner !== 'enemy') continue;
       const py = P.y * fh;
       if (P.invuln <= 0 && Math.abs(b.x - P.x) < 14 && Math.abs(b.y - py) < 12) {
-        P.hp = Math.max(0, P.hp - 18);
-        P.invuln = 0.45;
+        P.hp = Math.max(0, P.hp - 6);
+        P.invuln = 0.75;
         b.life = 0;
         S.fx.push(spawnExplosion(P.x, py, false));
         sfx.hit();
@@ -589,8 +589,8 @@ export class Game {
     for (const e of S.enemies) {
       const py = P.y * fh;
       if (P.invuln <= 0 && Math.abs(e.x - P.x) < e.w * 0.4 + 10 && Math.abs(e.y - py) < e.h * 0.4 + 8) {
-        P.hp = Math.max(0, P.hp - 28);
-        P.invuln = 0.55;
+        P.hp = Math.max(0, P.hp - 10);
+        P.invuln = 0.9;
         e.hp -= 1;
         S.fx.push(spawnExplosion(P.x, py, true));
       }
@@ -677,7 +677,7 @@ export class Game {
       e.fireCd -= dt;
       if (e.fireCd <= 0) {
         e.fireCd = 1.8;
-        B.bullets.push(spawnBullet(e.x, e.y, -180, 0, 'enemy', false, 4));
+        B.bullets.push(spawnBullet(e.x, e.y, -160, 0, 'enemy', false, 2));
       }
     }
     for (const b of B.bullets) {
@@ -729,7 +729,7 @@ export class Game {
       }
       // small direct hit
       if (Math.random() > 0.4) {
-        this.state.player.hp = Math.max(0, this.state.player.hp - 20);
+        this.state.player.hp = Math.max(0, this.state.player.hp - 8);
         this.state.fx.push(spawnExplosion(this.state.player.x, this.state.player.y * fh, false));
       }
     }
