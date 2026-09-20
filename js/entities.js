@@ -94,6 +94,21 @@ export function spawnItem(x, y) {
   return { x, y, w: 18, h: 18, id: p.id, label: p.label, vy: 20, life: 8 };
 }
 
+export function spawnMeteor(x, y, tx, ty) {
+  return {
+    x, y,
+    vx: (tx - x) * 0.55,
+    vy: 180 + Math.random() * 120,
+    r: 14 + Math.random() * 10,
+    rot: Math.random() * Math.PI * 2,
+    spin: (Math.random() - 0.5) * 6,
+    life: 2.2,
+    max: 2.2,
+    hit: false,
+    targetY: ty,
+  };
+}
+
 export function spawnExplosion(x, y, big = false) {
   return {
     x, y,

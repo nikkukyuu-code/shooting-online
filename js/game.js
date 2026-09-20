@@ -1,8 +1,8 @@
 import {
-  POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.5.14';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.14';
-import { sfx } from './audio.js?v=1.5.14';
+  POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
+} from './entities.js?v=1.5.15';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.15';
+import { sfx } from './audio.js?v=1.5.15';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -42,6 +42,7 @@ export class Game {
       bullets: [],
       items: [],
       fx: [],
+      meteors: [],
       scroll: 0,
       alive: true,
       statusText: WAIT,
@@ -126,6 +127,7 @@ export class Game {
       enemies: [],
       bullets: [],
       fx: [],
+      meteors: [],
       scroll: 0,
       items: [],
       time: 0,
@@ -410,6 +412,18 @@ export class Game {
     };
   }
 
+
+  /** Spawn visible falling meteors into a field's meteor list. */
+  rainMeteors(list, fw, fh, aimY, count = 4) {
+    for (let i = 0; i < count; i++) {
+      const x = fw * (0.25 + Math.random() * 0.55);
+      const y = -30 - Math.random() * 80 - i * 28;
+      const tx = fw * (0.2 + Math.random() * 0.6);
+      const ty = (aimY <= 1 ? aimY * fh : aimY) + (Math.random() - 0.5) * 40;
+      list.push(spawnMeteor(x, y, tx, ty));
+    }
+  }
+
   activatePower(id) {
     const p = this.state.player;
     const meta = powerupMeta(id);
@@ -484,25 +498,25 @@ export class Game {
       p.activePower = 'rapid';
       p.activeTimer = 5.5;
     } else if (id === 'meteor') {
-      // Meteor strike on opponent HP + visual
+      // Visible meteor rain on opponent field + damage
       const dmg = 14;
+      const fw = this.L.own.w, fh = this.L.own.h;
       if (this.useBot) {
         this._bot.hp = Math.max(0, this._bot.hp - dmg);
         this.state.botHp = this._bot.hp;
-        for (let i = 0; i < 3; i++) {
-          this._bot.fx.push(spawnExplosion(
-            this.L.own.w * (0.35 + Math.random() * 0.4),
-            this._bot.y * this.L.own.h + (Math.random() - 0.5) * 40,
-            true,
-          ));
-        }
+        if (!this._bot.meteors) this._bot.meteors = [];
+        this.rainMeteors(this._bot.meteors, fw, fh, this._bot.y, 5);
       } else if (this.net) {
-        this.net.send({ type: 'directHit', dmg });
+        this.net.send({ type: 'meteorHit', dmg });
+        // Local preview on own field too so the player sees rocks falling away
+        this.rainMeteors(this.state.meteors, fw, fh, 0.35, 3);
+      } else {
+        this.rainMeteors(this.state.meteors, fw, fh, p.y, 4);
       }
-      this.state.fx.push(spawnExplosion(this.L.own.w * 0.7, p.y * this.L.own.h, true));
+      this.showItemBanner(meta);
       p.activePower = null;
       p.activeTimer = 0;
-      setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1400);
+      setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
     } else if (id === 'heal') {
       const before = p.hp;
       p.hp = Math.min(p.maxHp || 100, p.hp + 25);
@@ -567,6 +581,15 @@ export class Game {
         }
       }
       this.setStatus('対戦相手から敵が送られてきた！');
+      setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1400);
+      return;
+    }
+    if (msg.type === 'meteorHit') {
+      const dmg = msg.dmg || 14;
+      this.applyPlayerDamage(dmg, 'direct');
+      if (!this.state.meteors) this.state.meteors = [];
+      this.rainMeteors(this.state.meteors, this.L.own.w, this.L.own.h, this.state.player.y, 5);
+      this.setStatus('対戦相手の隕石攻撃！');
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1400);
       return;
     }
@@ -907,6 +930,23 @@ export class Game {
       }
     }
     S.items = leftItems;
+
+
+    // Falling meteors (visible rocks)
+    if (!S.meteors) S.meteors = [];
+    for (const m of S.meteors) {
+      m.vy += 220 * dt;
+      m.x += m.vx * dt;
+      m.y += m.vy * dt;
+      m.rot = (m.rot || 0) + (m.spin || 0) * dt;
+      m.life -= dt;
+      if (!m.hit && m.y >= (m.targetY != null ? m.targetY : fh * 0.7)) {
+        m.hit = true;
+        m.life = Math.min(m.life, 0.25);
+        S.fx.push(spawnExplosion(m.x, m.y, true));
+      }
+    }
+    S.meteors = S.meteors.filter((m) => m.life > 0 && m.y < fh + 60);
 
     // Cleanup
     S.bullets = S.bullets.filter((b) => b.life > 0 && b.x > -30 && b.x < fw + 80 && b.y > -30 && b.y < fh + 30);
@@ -1284,8 +1324,8 @@ export class Game {
         B.activeTimer = 5.5;
       } else if (id === 'meteor') {
         this.applyPlayerDamage(14, 'direct');
-        this.state.fx.push(spawnExplosion(this.state.player.x, this.state.player.y * fh, true));
-        this.state.fx.push(spawnExplosion(this.state.player.x + 20, this.state.player.y * fh - 20, false));
+        if (!this.state.meteors) this.state.meteors = [];
+        this.rainMeteors(this.state.meteors, fw, fh, this.state.player.y, 5);
       } else if (id === 'send' || id === 'send_mech' || id === 'send_golem' || id === 'send_tank' || id === 'send_drone') {
         const map = {
           send: ['swarm', 'swarm', 'elite'],
@@ -1320,12 +1360,29 @@ export class Game {
       tryUse(true);
     }
 
+
+    if (!B.meteors) B.meteors = [];
+    for (const m of B.meteors) {
+      m.vy += 220 * dt;
+      m.x += m.vx * dt;
+      m.y += m.vy * dt;
+      m.rot = (m.rot || 0) + (m.spin || 0) * dt;
+      m.life -= dt;
+      if (!m.hit && m.y >= (m.targetY != null ? m.targetY : fh * 0.7)) {
+        m.hit = true;
+        m.life = Math.min(m.life, 0.25);
+        B.fx.push(spawnExplosion(m.x, m.y, true));
+      }
+    }
+    B.meteors = B.meteors.filter((m) => m.life > 0 && m.y < fh + 60);
+
     this.state.botHp = B.hp;
     this.state.botSnap = {
       scroll: B.scroll,
       enemies: B.enemies,
       bullets: B.bullets,
       fx: B.fx,
+      meteors: B.meteors,
       px: shipX,
       py: B.y,
       php: B.hp,

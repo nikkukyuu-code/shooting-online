@@ -516,6 +516,53 @@ function drawItem(ctx, it) {
   ctx.restore();
 }
 
+function drawMeteor(ctx, m) {
+  ctx.save();
+  ctx.translate(m.x, m.y);
+  ctx.rotate(m.rot || 0);
+  // fire trail
+  ctx.globalAlpha = 0.75;
+  const trail = ctx.createLinearGradient(0, -m.r * 2.8, 0, m.r);
+  trail.addColorStop(0, 'rgba(255,220,80,0)');
+  trail.addColorStop(0.45, 'rgba(255,140,40,0.55)');
+  trail.addColorStop(1, 'rgba(255,60,0,0.15)');
+  ctx.fillStyle = trail;
+  ctx.beginPath();
+  ctx.moveTo(-m.r * 0.45, 0);
+  ctx.lineTo(0, -m.r * 3.2);
+  ctx.lineTo(m.r * 0.45, 0);
+  ctx.closePath();
+  ctx.fill();
+  // rock body
+  ctx.globalAlpha = 1;
+  const g = ctx.createRadialGradient(-m.r * 0.25, -m.r * 0.2, 1, 0, 0, m.r);
+  g.addColorStop(0, '#f0d0a0');
+  g.addColorStop(0.45, '#b87333');
+  g.addColorStop(1, '#4a2810');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(0, -m.r);
+  ctx.lineTo(m.r * 0.85, -m.r * 0.35);
+  ctx.lineTo(m.r * 0.7, m.r * 0.65);
+  ctx.lineTo(-m.r * 0.55, m.r * 0.75);
+  ctx.lineTo(-m.r * 0.9, -m.r * 0.2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,200,120,0.7)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // hot cracks
+  ctx.strokeStyle = 'rgba(255,120,40,0.8)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(-m.r * 0.2, -m.r * 0.3);
+  ctx.lineTo(m.r * 0.15, m.r * 0.2);
+  ctx.moveTo(m.r * 0.1, -m.r * 0.5);
+  ctx.lineTo(-m.r * 0.05, m.r * 0.4);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawFx(ctx, f) {
   const t = 1 - f.life / f.max;
   ctx.save();
@@ -801,6 +848,16 @@ export function drawField(ctx, area, snap, opts = {}) {
   const items = snap.worldItems || [];
   for (const it of items) drawItem(ctx, { x: it.x * sx, y: it.y * sy, id: it.id });
 
+  const meteors = snap.meteors || [];
+  for (const m of meteors) {
+    drawMeteor(ctx, {
+      x: m.x * sx,
+      y: m.y * sy,
+      r: (m.r || 16) * Math.min(sx, sy),
+      rot: m.rot || 0,
+    });
+  }
+
   const fx = snap.fx || [];
   for (const f of fx) drawFx(ctx, { x: f.x * sx, y: f.y * sy, life: f.l ?? f.life, max: f.m ?? f.max, r: (f.r || 14) * sx });
 
@@ -827,6 +884,7 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
     bullets: localState.bullets,
     worldItems: localState.items,
     fx: localState.fx,
+    meteors: localState.meteors,
     scroll: localState.scroll,
     alive: localState.alive,
   };
