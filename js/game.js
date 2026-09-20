@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.5.10';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.10';
-import { sfx } from './audio.js?v=1.5.10';
+} from './entities.js?v=1.5.12';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.12';
+import { sfx } from './audio.js?v=1.5.12';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -130,6 +130,11 @@ export class Game {
       items: [],
       time: 0,
       powerCd: 2.5,
+      reactDelay: 0,
+      dodgeDir: 0,
+      aimNoise: 0,
+      humanPanic: 0,
+      moveVel: 0,
       invuln: 0,
       activePower: null,
       activeTimer: 0,
@@ -917,88 +922,106 @@ export class Game {
       if (B.activeTimer <= 0) B.activePower = null;
     }
 
-    // --- Threat model: score every Y lane (0..1) ---
-    const lanes = 17;
-    const scores = new Array(lanes).fill(0);
-    const laneY = (i) => 0.06 + (i / (lanes - 1)) * 0.88;
-    const threatAt = (yN, lookAhead = 0.55) => {
-      let thr = 0;
-      for (const b of B.bullets) {
-        if (b.owner !== 'enemy' || b.vx >= 0) continue;
-        // Only react to nearby bullets (shorter foresight = weaker dodge)
-        const dist = b.x - shipX;
-        if (dist < -20 || dist > fw * 0.45) continue;
-        const eta = dist / Math.max(40, -b.vx);
-        if (eta < 0 || eta > lookAhead) continue;
-        const predY = (b.y + b.vy * eta) / fh;
-        const lane = Math.abs(predY - yN);
-        const near = 1 - Math.min(1, dist / (fw * 0.45));
-        if (lane < 0.07) thr += (1 - lane / 0.07) * (0.35 + near * 0.9) * (eta < 0.2 ? 1.3 : 1);
-      }
-      for (const e of B.enemies) {
-        const ey = e.y / fh;
-        // Only dodge near rams
-        if (e.x < shipX + 70 && Math.abs(ey - yN) < 0.1) {
-          thr += (1 - Math.abs(ey - yN) / 0.1) * (e.x < 70 ? 1.4 : 0.6);
-        }
-      }
-      thr += Math.abs(yN - B.preferredY) * 0.2;
-      if (yN < 0.1 || yN > 0.9) thr += 0.2;
-      return thr;
-    };
+    // --- Balanced human-like COM (capable but not perfect) ---
+    if (B.reactDelay == null) B.reactDelay = 0;
+    if (B.dodgeDir == null) B.dodgeDir = 0;
+    if (B.aimNoise == null) B.aimNoise = 0;
+    if (B.humanPanic == null) B.humanPanic = 0;
+    if (B.moveVel == null) B.moveVel = 0;
+    if (B.preferredY == null) B.preferredY = 0.5;
 
-    for (let i = 0; i < lanes; i++) scores[i] = threatAt(laneY(i));
-    let bestI = 0;
-    let bestScore = 1e9;
-    for (let i = 0; i < lanes; i++) {
-      // Prefer lanes reachable soon (distance cost)
-      const reach = Math.abs(laneY(i) - B.y) * 0.9;
-      const s = scores[i] + reach;
-      if (s < bestScore) { bestScore = s; bestI = i; }
+    // Urgent threat: react a bit earlier than "weak" AI, still not machine-perfect
+    let urgent = null;
+    let urgentScore = 0;
+    for (const b of B.bullets) {
+      if (b.owner !== 'enemy' || b.vx >= 0) continue;
+      const dist = b.x - shipX;
+      if (dist < 0 || dist > fw * 0.62) continue;
+      const eta = dist / Math.max(50, -b.vx);
+      if (eta > 0.7) continue;
+      const yN = b.y / fh;
+      const lane = Math.abs(yN - B.y);
+      if (lane > 0.15) continue;
+      const score = (1 - eta / 0.7) * (1 - lane / 0.15) + (eta < 0.28 ? 0.55 : 0);
+      if (score > urgentScore) {
+        urgentScore = score;
+        urgent = { yN, eta };
+      }
     }
-    const safest = laneY(bestI);
-    const currentThreat = threatAt(B.y, 0.85);
-    const mustDodge = currentThreat > 1.35 || (scores[bestI] + 0.85 < currentThreat);
+    for (const e of B.enemies) {
+      if (e.x > shipX + 110) continue;
+      const yN = e.y / fh;
+      if (Math.abs(yN - B.y) > 0.13) continue;
+      const eta = (e.x - shipX) / Math.max(40, e.speed || 80);
+      const score = 0.85 + (1 - Math.min(1, eta)) * 0.9;
+      if (score > urgentScore) {
+        urgentScore = score;
+        urgent = { yN, eta };
+      }
+    }
 
-    // --- Target selection: value = closeness + HP + kind weight, penalize off-lane if dodging ---
+    if (urgent && urgentScore > 0.4) B.reactDelay += dt;
+    else B.reactDelay = Math.max(0, B.reactDelay - dt * 2.2);
+    const reacted = B.reactDelay > 0.14; // ~140ms — skilled human
+
+    // Rare wrong-way panic (keeps it human, not a wall)
+    if (reacted && urgent && B.humanPanic <= 0 && Math.random() < 0.006) {
+      B.humanPanic = 0.18 + Math.random() * 0.15;
+      B.dodgeDir = urgent.yN >= B.y ? -1 : 1;
+    }
+    if (B.humanPanic > 0) B.humanPanic -= dt;
+
+    let wantY = B.preferredY;
+    let dodging = false;
+    if (reacted && urgent && B.humanPanic <= 0) {
+      dodging = true;
+      const upSpace = urgent.yN;
+      const downSpace = 1 - urgent.yN;
+      let dir = upSpace >= downSpace ? -1 : 1;
+      if (Math.random() < 0.008) dir *= -1;
+      B.dodgeDir = dir;
+      wantY = Math.max(0.08, Math.min(0.92, urgent.yN + dir * (0.18 + Math.random() * 0.06)));
+    } else if (B.humanPanic > 0) {
+      dodging = true;
+      wantY = Math.max(0.08, Math.min(0.92, B.y + B.dodgeDir * 0.18));
+    }
+
     let focus = null;
     let focusVal = -1e9;
     for (const e of B.enemies) {
       if (e.x < shipX - 10) continue;
       const kindW = ({ boss: 5, mech: 4, golem: 4, tank: 4, elite: 3, drone: 2, basic: 1.5, swarm: 1 })[e.kind] || 1;
       const dist = Math.max(20, e.x - shipX);
-      const align = 1 - Math.min(1, Math.abs(e.y / fh - B.y) / 0.25);
-      const danger = e.x < 140 ? 2.2 : 1;
-      let val = kindW * 18 / Math.sqrt(dist) + align * 6 + danger + (e.maxHp ? e.hp / e.maxHp : 0.5);
-      if (mustDodge) val -= Math.abs(e.y / fh - safest) * 8;
+      const align = 1 - Math.min(1, Math.abs(e.y / fh - B.y) / 0.28);
+      let val = kindW * 16 / Math.sqrt(dist) + align * 5 + (e.x < 160 ? 1.8 : 0);
+      if (dodging) val -= Math.abs(e.y / fh - wantY) * 4;
       if (val > focusVal) { focusVal = val; focus = e; }
     }
 
-    // Update preferred lane toward focus when safe
-    if (!mustDodge && focus) {
-      B.preferredY += ((focus.y / fh) - B.preferredY) * Math.min(1, 3 * dt);
-    } else if (mustDodge) {
-      B.preferredY = safest;
+    if (!dodging && focus) {
+      B.preferredY += ((focus.y / fh) - B.preferredY) * Math.min(1, 2.2 * dt);
+      wantY = B.preferredY + Math.sin(B.time * 1.2) * 0.025;
+    } else if (!dodging && !focus) {
+      wantY = 0.5 + Math.sin(B.time * 1.0) * 0.14;
+      B.preferredY = wantY;
     }
 
-    let target = mustDodge ? safest : (focus ? focus.y / fh : B.preferredY);
-    // Micro weave when idle-safe
-    if (!mustDodge && !focus) {
-      target = 0.5 + Math.sin(B.time * 1.4) * 0.18;
-    }
-    // If dodging, commit past the threat rather than grazing it
-    if (mustDodge) {
-      const dir = safest >= B.y ? 1 : -1;
-      B.lastDodgeDir = dir;
-      target = Math.max(0.07, Math.min(0.93, safest + dir * 0.02));
-    }
-    target = Math.max(0.07, Math.min(0.93, target));
-    const chase = mustDodge ? 10 : (focus && Math.abs(focus.y / fh - B.y) < 0.12 ? 9 : 7);
-    B.y += (target - B.y) * Math.min(1, chase * dt);
+    wantY = Math.max(0.07, Math.min(0.93, wantY));
+
+    // Snappy enough to feel skilled, not teleporty
+    const maxSpeed = dodging ? 2.1 : 1.15;
+    const accel = dodging ? 11 : 4.5;
+    const desiredVel = Math.max(-maxSpeed, Math.min(maxSpeed, (wantY - B.y) * (dodging ? 7.5 : 3.8)));
+    B.moveVel += (desiredVel - B.moveVel) * Math.min(1, accel * dt);
+    B.moveVel += (Math.random() - 0.5) * 0.015;
+    B.y += B.moveVel * dt;
+    B.y = Math.max(0.07, Math.min(0.93, B.y));
+
+    B.aimNoise += ((Math.random() - 0.5) * 0.06 - B.aimNoise) * Math.min(1, 2.2 * dt);
 
     // --- Fire control: lead aim, burst when aligned, powers ---
     B.fireCd -= dt;
-    const aligned = focus && Math.abs(focus.y / fh - B.y) < (mustDodge ? 0.07 : 0.11);
+    const aligned = focus && Math.abs(focus.y / fh - (B.y + (B.aimNoise || 0))) < (dodging ? 0.1 : 0.12);
     const fireRate = B.activePower === 'homing' ? 0.12 : B.activePower === 'rapid' ? 0.09 : (aligned ? 0.14 : 0.2);
     if (B.fireCd <= 0) {
       B.fireCd = fireRate;
@@ -1129,20 +1152,20 @@ export class Game {
     }
     B.enemies = kept;
 
-    // Hits on bot — larger hurtbox, shorter i-frames so HP actually drops
+    // Hits on bot — fair hurtbox (gets hit, not glass)
     for (const b of B.bullets) {
       if (b.owner !== 'enemy') continue;
-      if (B.invuln <= 0 && Math.abs(b.x - shipX) < 16 && Math.abs(b.y - B.y * fh) < 14) {
-        B.hp = Math.max(0, B.hp - 8);
-        B.invuln = 0.28;
+      if (B.invuln <= 0 && Math.abs(b.x - shipX) < 13 && Math.abs(b.y - B.y * fh) < 12) {
+        B.hp = Math.max(0, B.hp - 7);
+        B.invuln = 0.38;
         b.life = 0;
         B.fx.push(spawnExplosion(shipX, B.y * fh, false));
       }
     }
     for (const e of B.enemies) {
-      if (B.invuln <= 0 && Math.abs(e.x - shipX) < e.w * 0.45 + 10 && Math.abs(e.y - B.y * fh) < e.h * 0.45 + 10) {
-        B.hp = Math.max(0, B.hp - 12);
-        B.invuln = 0.35;
+      if (B.invuln <= 0 && Math.abs(e.x - shipX) < e.w * 0.4 + 8 && Math.abs(e.y - B.y * fh) < e.h * 0.4 + 8) {
+        B.hp = Math.max(0, B.hp - 10);
+        B.invuln = 0.45;
         e.hp = 0;
         B.fx.push(spawnExplosion(shipX, B.y * fh, true));
       }
@@ -1159,11 +1182,11 @@ export class Game {
     const pickBestItem = () => {
       if (!B.items.length) return null;
       // Priority rules
-      if (B.hp <= 28) {
+      if (B.hp <= 35) {
         const h = B.items.findIndex((id) => id === 'heal_big' || id === 'heal');
         if (h >= 0) return h;
       }
-      if (B.hp <= 40) {
+      if (B.hp <= 50) {
         const h = B.items.findIndex((id) => id === 'heal_big');
         if (h >= 0) return h;
       }
@@ -1258,13 +1281,13 @@ export class Game {
 
     // Use when: cooldown ready AND (low HP heal / many enemies / mid-fight pressure)
     if (B.powerCd <= 0) {
-      const wantHeal = B.hp <= 30 && B.items.some((id) => id === 'heal' || id === 'heal_big');
+      const wantHeal = B.hp <= 38 && B.items.some((id) => id === 'heal' || id === 'heal_big');
       const wantClear = enemyPressure >= 3;
       const wantPressure = playerHp >= 40 && B.time > 4;
       if (wantHeal || wantClear || wantPressure || B.items.length >= 3) tryUse();
     }
     // Emergency heal even if cooldown almost ready
-    if (B.hp <= 18 && B.powerCd < 0.8 && B.items.some((id) => id === 'heal' || id === 'heal_big')) {
+    if (B.hp <= 22 && B.powerCd < 1.0 && B.items.some((id) => id === 'heal' || id === 'heal_big')) {
       B.powerCd = 0;
       tryUse(true);
     }
