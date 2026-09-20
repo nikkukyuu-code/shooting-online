@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.5.4';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.5.4';
-import { sfx } from './audio.js?v=1.5.4';
+} from './entities.js?v=1.5.5';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.5.5';
+import { sfx } from './audio.js?v=1.5.5';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -689,7 +689,7 @@ export class Game {
       P.fireCd = fireRate;
       const by = P.y * fh;
       if (P.activePower === 'homing') {
-        S.bullets.push(spawnBullet(P.x + 16, by, 320, 0, 'player', true, 3));
+        S.bullets.push(spawnBullet(P.x + 16, by, 320, 0, 'player', true, 4));
         sfx.shot();
       } else if (P.activePower === 'rapid') {
         S.bullets.push(spawnBullet(P.x + 16, by, 520, 0, 'player', false, 3));
@@ -697,7 +697,7 @@ export class Game {
         S.bullets.push(spawnBullet(P.x + 16, by + 6, 500, 30, 'player', false, 2));
         sfx.shot();
       } else {
-        S.bullets.push(spawnBullet(P.x + 16, by, 420, 0, 'player', false, 2));
+        S.bullets.push(spawnBullet(P.x + 16, by, 420, 0, 'player', false, 3));
         sfx.shot();
       }
     }
@@ -710,7 +710,7 @@ export class Game {
         const ly = P.y * fh;
         for (const e of S.enemies) {
           if (Math.abs(e.y - ly) < e.h * 0.55 + 8 && e.x > P.x) {
-            e.hp -= 0.4;
+            e.hp -= 0.75;
           }
         }
       }
@@ -1003,7 +1003,7 @@ export class Game {
       B.fireCd = fireRate;
       const by = B.y * fh;
       if (B.activePower === 'homing') {
-        B.bullets.push(spawnBullet(shipX + 16, by, 360, 0, 'player', true, 3));
+        B.bullets.push(spawnBullet(shipX + 16, by, 360, 0, 'player', true, 4));
       } else if (B.activePower === 'rapid') {
         B.bullets.push(spawnBullet(shipX + 16, by, 520, 0, 'player', false, 3));
         B.bullets.push(spawnBullet(shipX + 16, by - 6, 500, -30, 'player', false, 2));
@@ -1015,7 +1015,7 @@ export class Game {
           const lead = Math.sin(focus.phase || 0) * 4;
           vy = lead;
         }
-        B.bullets.push(spawnBullet(shipX + 16, by, 430, vy, 'player', false, aligned ? 2 : 1));
+        B.bullets.push(spawnBullet(shipX + 16, by, 430, vy, 'player', false, aligned ? 3 : 2));
         if (aligned && focus && (focus.kind === 'boss' || focus.kind === 'mech' || focus.kind === 'tank' || focus.kind === 'golem')) {
           B.bullets.push(spawnBullet(shipX + 16, by - 7, 400, -8, 'player', false, 1));
           B.bullets.push(spawnBullet(shipX + 16, by + 7, 400, 8, 'player', false, 1));
