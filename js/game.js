@@ -1,8 +1,8 @@
 import {
   POWERUPS, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.3.1';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.3.1';
-import { sfx } from './audio.js?v=1.3.1';
+} from './entities.js?v=1.4.0';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.4.0';
+import { sfx } from './audio.js?v=1.4.0';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -268,6 +268,30 @@ export class Game {
     this.activatePower(id);
   }
 
+
+  /** Push sent enemies into bot field or net. kinds: string | string[] */
+  sendToOpponent(kinds, statusLabel) {
+    const list = Array.isArray(kinds) ? kinds : [kinds];
+    if (this.useBot) {
+      for (const kind of list) {
+        const e = spawnEnemy(this.L.own.w, this.L.own.h, kind);
+        e.sent = true;
+        this._bot.enemies.push({
+          ...e,
+          x: this.L.own.w + 20,
+          y: 40 + Math.random() * (this.L.own.h - 80),
+        });
+      }
+    } else if (this.net) {
+      this.net.send({ type: 'sendEnemies', kinds: list });
+    }
+    if (statusLabel) this.setStatus(statusLabel);
+    const p = this.state.player;
+    p.activePower = null;
+    p.activeTimer = 0;
+    setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
+  }
+
   activatePower(id) {
     const p = this.state.player;
     const meta = POWERUPS.find((x) => x.id === id);
@@ -281,23 +305,15 @@ export class Game {
       p.activePower = 'laser';
       p.activeTimer = 4;
     } else if (id === 'send') {
-      // Send enemies to opponent
-      if (this.useBot) {
-        for (let i = 0; i < 3; i++) {
-          const e = spawnEnemy(this.L.own.w, this.L.own.h, i === 2 ? 'elite' : 'swarm');
-          e.sent = true;
-          this._bot.enemies.push({
-            ...e,
-            x: this.L.own.w + 20,
-            y: 40 + Math.random() * (this.L.own.h - 80),
-          });
-        }
-      } else if (this.net) {
-        this.net.send({ type: 'sendEnemies', count: 3 });
-      }
-      p.activePower = null;
-      p.activeTimer = 0;
-      setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
+      this.sendToOpponent(['swarm', 'swarm', 'elite'], meta?.label);
+    } else if (id === 'send_mech') {
+      this.sendToOpponent('mech', meta?.label);
+    } else if (id === 'send_golem') {
+      this.sendToOpponent('golem', meta?.label);
+    } else if (id === 'send_tank') {
+      this.sendToOpponent('tank', meta?.label);
+    } else if (id === 'send_drone') {
+      this.sendToOpponent(['drone', 'drone', 'drone', 'drone'], meta?.label);
     } else if (id === 'direct') {
       // Direct attack opponent HP
       const dmg = 12;
@@ -328,13 +344,22 @@ export class Game {
       return;
     }
     if (msg.type === 'sendEnemies') {
-      const n = msg.count || 3;
-      for (let i = 0; i < n; i++) {
-        const e = spawnEnemy(this.L.own.w, this.L.own.h, i === n - 1 ? 'elite' : 'swarm');
-        e.sent = true;
-        this.state.enemies.push(e);
+      const kinds = msg.kinds || null;
+      if (kinds && kinds.length) {
+        for (const kind of kinds) {
+          const e = spawnEnemy(this.L.own.w, this.L.own.h, kind);
+          e.sent = true;
+          this.state.enemies.push(e);
+        }
+      } else {
+        const n = msg.count || 3;
+        for (let i = 0; i < n; i++) {
+          const e = spawnEnemy(this.L.own.w, this.L.own.h, i === n - 1 ? 'elite' : 'swarm');
+          e.sent = true;
+          this.state.enemies.push(e);
+        }
       }
-      this.setStatus('対戦相手へ敵キャラを送信');
+      this.setStatus('対戦相手から敵が送られてきた！');
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1400);
       return;
     }
@@ -470,13 +495,16 @@ export class Game {
     for (const e of S.enemies) {
       e.phase += dt * 2;
       e.x -= e.speed * dt;
-      if (e.kind !== 'boss') e.y += Math.sin(e.phase) * 18 * dt;
+      if (e.kind !== 'boss' && e.kind !== 'mech' && e.kind !== 'golem' && e.kind !== 'tank') e.y += Math.sin(e.phase) * 18 * dt;
       e.y = Math.max(16, Math.min(fh - 16, e.y));
       e.fireCd -= dt;
       if (e.fireCd <= 0 && e.x < fw) {
-        e.fireCd = e.kind === 'boss' ? 1.1 : e.kind === 'elite' ? 1.6 + Math.random() * 0.5 : 2.2 + Math.random() * 0.8;
+        e.fireCd = (e.kind === 'boss' || e.kind === 'tank') ? 1.0
+          : (e.kind === 'mech' || e.kind === 'golem') ? 1.3 + Math.random() * 0.4
+          : e.kind === 'elite' ? 1.6 + Math.random() * 0.5
+          : 2.2 + Math.random() * 0.8;
         S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y, -180 - Math.random() * 40, (Math.random() - 0.5) * 30, 'enemy', false, 4));
-        if (e.kind === 'boss') {
+        if (e.kind === 'boss' || e.kind === 'tank' || e.kind === 'mech') {
           S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y - 12, -170, -35, 'enemy', false, 3));
           S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y + 12, -170, 35, 'enemy', false, 3));
         }

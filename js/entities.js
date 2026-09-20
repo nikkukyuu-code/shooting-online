@@ -1,11 +1,25 @@
 /** Game entities: player, enemies, bullets, items, effects */
 
 export const POWERUPS = [
-  { id: 'homing',  label: '追尾ミサイル' },
-  { id: 'laser',   label: 'レーザー' },
-  { id: 'send',    label: '対戦相手へ敵キャラを送信' },
-  { id: 'direct',  label: '対戦相手を直接攻撃' },
+  { id: 'homing',     label: '追尾ミサイル' },
+  { id: 'laser',      label: 'レーザー' },
+  { id: 'send',       label: '対戦相手へ敵キャラを送信' },
+  { id: 'direct',     label: '対戦相手を直接攻撃' },
+  { id: 'send_mech',  label: '巨大メカを送信' },
+  { id: 'send_golem', label: '装甲ゴーレムを送信' },
+  { id: 'send_tank',  label: '重戦車ロボを送信' },
+  { id: 'send_drone', label: '破壊ドローン群を送信' },
 ];
+
+export function pickPowerupId() {
+  const weighted = [
+    ['homing', 2], ['laser', 2], ['send', 2], ['direct', 2],
+    ['send_mech', 3], ['send_golem', 3], ['send_tank', 3], ['send_drone', 3],
+  ];
+  let r = Math.random() * weighted.reduce((s, [, w]) => s + w, 0);
+  for (const [id, w] of weighted) { r -= w; if (r <= 0) return id; }
+  return 'homing';
+}
 
 export function createPlayer(side = 'self') {
   return {
@@ -28,10 +42,14 @@ export function createPlayer(side = 'self') {
 
 export function spawnEnemy(fieldW, fieldH, kind = 'basic') {
   const types = {
-    basic:  { w: 24, h: 20, hp: 8, speed: 100 + Math.random() * 50, score: 10, color: '#c44' },
-    elite:  { w: 34, h: 28, hp: 18, speed: 75 + Math.random() * 35, score: 30, color: '#a28' },
-    swarm:  { w: 16, h: 14, hp: 3, speed: 150 + Math.random() * 55, score: 5,  color: '#e85' },
+    basic:  { w: 24, h: 20, hp: 8,  speed: 100 + Math.random() * 50, score: 10,  color: '#c44' },
+    elite:  { w: 34, h: 28, hp: 18, speed: 75 + Math.random() * 35,  score: 30,  color: '#a28' },
+    swarm:  { w: 16, h: 14, hp: 3,  speed: 150 + Math.random() * 55, score: 5,   color: '#e85' },
     boss:   { w: 80, h: 64, hp: 120, speed: 34, score: 200, color: '#888' },
+    mech:   { w: 72, h: 60, hp: 55, speed: 42, score: 80,  color: '#6a8' },
+    golem:  { w: 78, h: 70, hp: 70, speed: 28, score: 100, color: '#975' },
+    tank:   { w: 86, h: 52, hp: 85, speed: 32, score: 110, color: '#579' },
+    drone:  { w: 28, h: 22, hp: 10, speed: 130 + Math.random() * 40, score: 20, color: '#4cf' },
   };
   const t = types[kind] || types.basic;
   return {
@@ -54,7 +72,8 @@ export function spawnBullet(x, y, vx, vy, owner = 'player', homing = false, dmg 
 }
 
 export function spawnItem(x, y) {
-  const p = POWERUPS[Math.floor(Math.random() * POWERUPS.length)];
+  const id = pickPowerupId();
+  const p = POWERUPS.find((x) => x.id === id) || POWERUPS[0];
   return { x, y, w: 18, h: 18, id: p.id, label: p.label, vy: 20, life: 8 };
 }
 
