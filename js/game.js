@@ -1,8 +1,8 @@
 import {
   POWERUPS, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.3.0';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.3.0';
-import { sfx } from './audio.js?v=1.3.0';
+} from './entities.js?v=1.3.1';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.3.1';
+import { sfx } from './audio.js?v=1.3.1';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -426,10 +426,10 @@ export class Game {
       P.fireCd = fireRate;
       const by = P.y * fh;
       if (P.activePower === 'homing') {
-        S.bullets.push(spawnBullet(P.x + 16, by, 320, 0, 'player', true, 2));
+        S.bullets.push(spawnBullet(P.x + 16, by, 320, 0, 'player', true, 3));
         sfx.shot();
       } else {
-        S.bullets.push(spawnBullet(P.x + 16, by, 420, 0, 'player', false, 1));
+        S.bullets.push(spawnBullet(P.x + 16, by, 420, 0, 'player', false, 2));
         sfx.shot();
       }
     }
@@ -442,7 +442,7 @@ export class Game {
         const ly = P.y * fh;
         for (const e of S.enemies) {
           if (Math.abs(e.y - ly) < e.h * 0.55 + 8 && e.x > P.x) {
-            e.hp -= 0.12;
+            e.hp -= 0.4;
           }
         }
       }
@@ -450,13 +450,13 @@ export class Game {
 
     // Spawn enemies
     this._spawnAcc += dt;
-    const spawnEvery = Math.max(0.12, 0.38 - S.time * 0.015);
+    const spawnEvery = Math.max(0.35, 0.85 - S.time * 0.01);
     if (this._spawnAcc >= spawnEvery) {
       this._spawnAcc = 0;
-      const n = 2 + (Math.random() > 0.55 ? 1 : 0) + (S.time > 20 ? 1 : 0);
+      const n = 1 + (Math.random() > 0.65 ? 1 : 0);
       for (let i = 0; i < n; i++) {
         const roll = Math.random();
-        const kind = roll > 0.62 ? 'elite' : roll > 0.32 ? 'swarm' : 'basic';
+        const kind = roll > 0.85 ? 'elite' : roll > 0.5 ? 'swarm' : 'basic';
         S.enemies.push(spawnEnemy(fw, fh, kind));
       }
     }
@@ -474,11 +474,11 @@ export class Game {
       e.y = Math.max(16, Math.min(fh - 16, e.y));
       e.fireCd -= dt;
       if (e.fireCd <= 0 && e.x < fw) {
-        e.fireCd = e.kind === 'boss' ? 0.28 : e.kind === 'elite' ? 0.45 + Math.random() * 0.25 : 0.7 + Math.random() * 0.35;
-        S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y, -260 - Math.random() * 100, (Math.random() - 0.5) * 80, 'enemy', false, 6));
-        if (e.kind === 'elite' || e.kind === 'boss') {
-          S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y - 10, -240, -40, 'enemy', false, 5));
-          S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y + 10, -240, 40, 'enemy', false, 5));
+        e.fireCd = e.kind === 'boss' ? 1.1 : e.kind === 'elite' ? 1.6 + Math.random() * 0.5 : 2.2 + Math.random() * 0.8;
+        S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y, -180 - Math.random() * 40, (Math.random() - 0.5) * 30, 'enemy', false, 4));
+        if (e.kind === 'boss') {
+          S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y - 12, -170, -35, 'enemy', false, 3));
+          S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y + 12, -170, 35, 'enemy', false, 3));
         }
       }
     }
@@ -648,8 +648,8 @@ export class Game {
       e.y += Math.sin(e.phase) * 12 * dt;
       e.fireCd -= dt;
       if (e.fireCd <= 0) {
-        e.fireCd = 0.55;
-        B.bullets.push(spawnBullet(e.x, e.y, -260, 0, 'enemy', false, 6));
+        e.fireCd = 1.8;
+        B.bullets.push(spawnBullet(e.x, e.y, -180, 0, 'enemy', false, 4));
       }
     }
     for (const b of B.bullets) {

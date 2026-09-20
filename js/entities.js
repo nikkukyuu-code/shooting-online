@@ -28,10 +28,10 @@ export function createPlayer(side = 'self') {
 
 export function spawnEnemy(fieldW, fieldH, kind = 'basic') {
   const types = {
-    basic:  { w: 26, h: 22, hp: 18, speed: 120 + Math.random() * 70, score: 10, color: '#c44' },
-    elite:  { w: 38, h: 32, hp: 45, speed: 95 + Math.random() * 45, score: 30, color: '#a28' },
-    swarm:  { w: 18, h: 16, hp: 8, speed: 180 + Math.random() * 80, score: 5,  color: '#e85' },
-    boss:   { w: 90, h: 70, hp: 400, speed: 48, score: 200, color: '#888' },
+    basic:  { w: 24, h: 20, hp: 8, speed: 100 + Math.random() * 50, score: 10, color: '#c44' },
+    elite:  { w: 34, h: 28, hp: 18, speed: 75 + Math.random() * 35, score: 30, color: '#a28' },
+    swarm:  { w: 16, h: 14, hp: 3, speed: 150 + Math.random() * 55, score: 5,  color: '#e85' },
+    boss:   { w: 80, h: 64, hp: 120, speed: 34, score: 200, color: '#888' },
   };
   const t = types[kind] || types.basic;
   return {
@@ -44,7 +44,7 @@ export function spawnEnemy(fieldW, fieldH, kind = 'basic') {
     score: t.score,
     color: t.color,
     phase: Math.random() * Math.PI * 2,
-    fireCd: 0.25 + Math.random() * 0.4,
+    fireCd: 1.2 + Math.random() * 0.8,
     sent: false, // was sent by opponent
   };
 }
