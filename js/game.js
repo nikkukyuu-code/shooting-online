@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-} from './entities.js?v=1.5.24';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.24';
-import { sfx } from './audio.js?v=1.5.24';
+} from './entities.js?v=1.5.25';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.25';
+import { sfx } from './audio.js?v=1.5.25';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -412,11 +412,11 @@ export class Game {
    * aimX: ship x in field pixels; aimY: ship y (0..1 or pixels).
    */
   rainMeteors(list, fw, fh, aimY, count = 4, aimX = null) {
+    if (!list) return;
     const shipX = aimX != null ? aimX : fw * 0.22;
     const shipY = aimY <= 1 ? aimY * fh : aimY;
     for (let i = 0; i < count; i++) {
       const y = -40 - Math.random() * 70 - i * 36;
-      // Tiny X spread still on the ship column — not across the whole field
       const tx = shipX + (Math.random() - 0.5) * 18;
       const ty = shipY + (Math.random() - 0.5) * 12;
       list.push(spawnMeteor(tx, y, tx, ty));
@@ -618,28 +618,34 @@ export class Game {
 
   frame(ts) {
     if (!this.running) return;
-    const dt = Math.min(0.05, (ts - this._lastTs) / 1000) || 0.016;
-    this._lastTs = ts;
+    try {
+      const dt = Math.min(0.05, (ts - (this._lastTs || ts)) / 1000) || 0.016;
+      this._lastTs = ts;
 
-    if (!this.waiting && !this.ended) {
-      this.update(dt);
-      if (this.useBot) this.updateBot(dt);
-      this._syncAcc += dt;
-      if (this._syncAcc > 0.05) {
-        this._syncAcc = 0;
-        this.syncOut();
+      if (!this.waiting && !this.ended) {
+        this.update(dt);
+        if (this.useBot) this.updateBot(dt);
+        this._syncAcc += dt;
+        if (this._syncAcc > 0.05) {
+          this._syncAcc = 0;
+          this.syncOut();
+        }
+      } else {
+        this.state.scroll += 20 * dt;
       }
-    } else {
-      this.state.scroll += 20 * dt;
-    }
 
-    this.state.ctrlTouch = this.ctrlTouch;
-    const ni = this.state.player.items[0];
-    if (ni) {
-      const m = powerupMeta(ni);
-      this.state.nextItemLabel = `${m.icon} ${m.label}：${m.effect}`;
-    } else this.state.nextItemLabel = "";
-    renderFrame(this.ctx, this.L, this.state, this.remoteSnap, this.waiting);
+      this.state.ctrlTouch = this.ctrlTouch;
+      const items = (this.state.player && this.state.player.items) || [];
+      const ni = items[0];
+      if (ni) {
+        const m = powerupMeta(ni) || {};
+        this.state.nextItemLabel = `${m.icon || ''} ${m.label || ''}：${m.effect || ''}`;
+      } else this.state.nextItemLabel = '';
+      renderFrame(this.ctx, this.L, this.state, this.remoteSnap, this.waiting);
+    } catch (err) {
+      console.error('frame error', err);
+      this.setStatus('一時エラー（継続中）');
+    }
     this._raf = requestAnimationFrame((t) => this.frame(t));
   }
 

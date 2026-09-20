@@ -89,7 +89,7 @@ export class Net {
   }
 
   /** Quick match: try shared lobby host, else become host and wait, then bot. */
-  async findOpponent({ waitMs = 3000, onTick } = {}) {
+  async findOpponent({ waitMs = 2000, onTick } = {}) {
     this.destroy();
     this._ensurePeerLib();
     const lobby = 'quick';
@@ -102,7 +102,7 @@ export class Net {
       const c = this.peer.connect(roomPeerId(lobby), { reliable: true });
       const opened = await Promise.race([
         this._waitConnOpen(c).then(() => true),
-        sleep(2500).then(() => false),
+        sleep(1500).then(() => false),
       ]);
       if (opened) {
         this._bindConn(c);
@@ -188,7 +188,7 @@ export class Net {
 
   _waitOpen(peer) {
     return new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error('Peer 接続タイムアウト')), 12000);
+      const t = setTimeout(() => reject(new Error('Peer 接続タイムアウト')), 4000);
       peer.on('open', (id) => { clearTimeout(t); resolve(id); });
       peer.on('error', (e) => { clearTimeout(t); reject(e); });
     });
@@ -196,7 +196,7 @@ export class Net {
 
   _waitConnOpen(conn) {
     return new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error('相手への接続タイムアウト')), 10000);
+      const t = setTimeout(() => reject(new Error('相手への接続タイムアウト')), 3000);
       conn.on('open', () => { clearTimeout(t); resolve(); });
       conn.on('error', (e) => { clearTimeout(t); reject(e); });
     });

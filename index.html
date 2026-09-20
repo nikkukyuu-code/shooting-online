@@ -10,13 +10,14 @@
   <title>横スクロール シューティング オンライン対戦</title>
   <meta name="description" content="横スクロールシューティングのオンライン対戦ゲーム。敵を倒してアイテムを取得し、対戦相手と勝負しよう。" />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=1.5.24" />
+  <link rel="stylesheet" href="css/style.css?v=1.5.25" />
 </head>
 <body>
   <div id="app">
     <section id="screen-menu" class="screen active">
       <div class="sky"></div>
       <div class="menu-panel">
+        <button type="button" id="btn-cpu" class="menu-btn primary">CPU対戦</button>
         <button type="button" id="btn-find" class="menu-btn">対戦相手を探す</button>
         <input type="text" id="field-find-status" class="menu-field" readonly placeholder="" />
         <button type="button" id="btn-create" class="menu-btn">部屋を作る</button>
@@ -26,7 +27,7 @@
       </div>
       <p class="menu-hint">部屋名を入れて「スタート」で入室 / 「部屋を作る」でホスト</p>
       <div id="app-meta" class="app-meta">
-        <span id="app-version">v1.5.24</span>
+        <span id="app-version">v1.5.25</span>
         <span class="meta-sep">·</span>
         <span id="app-visits">アクセス …</span>
       </div>
@@ -36,7 +37,7 @@
       <canvas id="game" width="390" height="700"></canvas>
       <div id="ui-overlay">
         <button type="button" id="btn-stop" class="stop-btn">ストップ</button>
-        <div id="game-version" class="game-version">v1.5.24</div>
+        <div id="game-version" class="game-version">v1.5.25</div>
         <div id="status-bar" class="status-bar">対戦相手を待っています</div>
       </div>
       <div id="end-overlay" class="end-overlay hidden">
@@ -47,6 +48,6 @@
   </div>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script type="module" src="js/main.js?v=1.5.24"></script>
+  <script type="module" src="js/main.js?v=1.5.25"></script>
 </body>
 </html>

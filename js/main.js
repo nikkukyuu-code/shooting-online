@@ -1,6 +1,6 @@
-import { VERSION_LABEL } from './version.js?v=1.5.24';
-import { Net } from './net.js?v=1.5.24';
-import { Game } from './game.js?v=1.5.24';
+import { VERSION_LABEL } from './version.js?v=1.5.25';
+import { Net } from './net.js?v=1.5.25';
+import { Game } from './game.js?v=1.5.25';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -10,6 +10,7 @@ const screens = {
 };
 
 const els = {
+  btnCpu: $('#btn-cpu'),
   btnFind: $('#btn-find'),
   btnCreate: $('#btn-create'),
   btnStart: $('#btn-start'),
@@ -35,6 +36,7 @@ function show(screen) {
 
 function setBusy(v) {
   busy = v;
+  if (els.btnCpu) els.btnCpu.disabled = v;
   els.btnFind.disabled = v;
   els.btnCreate.disabled = v;
   els.btnStart.disabled = v;
@@ -69,6 +71,27 @@ function startGameSession({ bot = false } = {}) {
   });
   game.start({ net, bot });
 }
+
+
+els.btnCpu?.addEventListener('click', () => {
+  if (busy) return;
+  setBusy(true);
+  cleanupGame();
+  net = new Net();
+  net.usingBot = true;
+  els.fieldFind.value = 'CPU対戦';
+  try {
+    startGameSession({ bot: true });
+    game.beginMatch();
+  } catch (e) {
+    console.error(e);
+    els.fieldFind.value = '開始失敗';
+    cleanupGame();
+    show('menu');
+  } finally {
+    setBusy(false);
+  }
+});
 
 els.btnFind.addEventListener('click', async () => {
   if (busy) return;
