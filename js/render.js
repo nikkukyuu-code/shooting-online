@@ -6,7 +6,7 @@ export const OPP_RATIO = 1 / 3;
 export const OWN_RATIO = 1 / 3;
 const ITEM_STYLE = {
   homing:     { color: '#ff66ff', icon: '◆',  label: '追尾',   effect: '追尾弾を連射' },
-  laser:      { color: '#66ccff', icon: '═',  label: 'レーザー', effect: '前方レーザー' },
+  laser:      { color: '#66ccff', icon: '═',  label: 'レーザー', effect: '小刻み前方レーザー' },
   spread:     { color: '#ffaa33', icon: '※※', label: '散弾',   effect: '扇状弾幕' },
   bomb:       { color: '#ff5522', icon: '◎',  label: 'ボム',   effect: '画面全体攻撃' },
   shock:      { color: '#88ddff', icon: '⚡',  label: '電撃',   effect: '近距離感電' },
@@ -735,23 +735,58 @@ function drawDirectBeam(ctx, x0, y0, x1, y1, lifeRatio = 1) {
 
 function drawLaser(ctx, player, fieldH) {
   if (player.activePower !== 'laser' || player.activeTimer <= 0) return;
-  const y = player.y * fieldH;
+  // Staccato forward micro-lasers (same idea as direct attack)
+  const now = performance.now();
+  const x0 = player.x + 16;
+  const y0 = player.y * fieldH;
+  const x1 = fieldH * 3; // long reach — clipped by field
+  const y1 = y0;
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  const px = -uy;
+  const py = ux;
+  const boltLen = 26;
+  const gap = 14;
+  const n = Math.max(5, Math.floor(len / (boltLen + gap)));
+  const life = Math.min(1, player.activeTimer / 0.5);
+
   ctx.save();
-  ctx.globalAlpha = 0.55 + 0.25 * Math.sin(performance.now() / 40);
-  ctx.strokeStyle = '#8cf';
-  ctx.lineWidth = 10;
+  ctx.lineCap = 'round';
   ctx.shadowColor = '#4af';
-  ctx.shadowBlur = 16;
-  ctx.beginPath();
-  ctx.moveTo(player.x + 14, y);
-  ctx.lineTo(fieldH * 3, y); // long beam — clipped by field
-  ctx.stroke();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = '#fff';
-  ctx.beginPath();
-  ctx.moveTo(player.x + 14, y);
-  ctx.lineTo(fieldH * 3, y);
-  ctx.stroke();
+
+  for (let i = 0; i < n; i++) {
+    const phase = (now / 26 + i * 1.55) % 1;
+    if (phase > 0.58) continue;
+    const jitter = Math.sin(now / 35 + i * 2.1) * 4;
+    const t0 = i / n + phase * 0.03;
+    const t1 = Math.min(1, t0 + boltLen / len);
+    const ax = x0 + ux * len * t0 + px * jitter;
+    const ay = y0 + uy * len * t0 + py * jitter;
+    const bx = x0 + ux * len * t1 + px * jitter * 0.35;
+    const by = y0 + uy * len * t1 + py * jitter * 0.35;
+    const a = (0.5 + 0.5 * (1 - phase / 0.58)) * (0.65 + 0.35 * life);
+
+    ctx.globalAlpha = a * 0.9;
+    ctx.strokeStyle = '#66ddff';
+    ctx.lineWidth = 8;
+    ctx.shadowBlur = 16;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+
+    ctx.globalAlpha = a;
+    ctx.strokeStyle = '#eefcff';
+    ctx.lineWidth = 2.5;
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 

@@ -2,7 +2,7 @@
 
 export const POWERUPS = [
   { id: 'homing',     label: '追尾ミサイル',  effect: '敵を追う弾を連射',           color: '#ff66ff', icon: '◆' },
-  { id: 'laser',      label: 'レーザー',      effect: '太いレーザーで前方攻撃',     color: '#66ccff', icon: '═' },
+  { id: 'laser',      label: 'レーザー',      effect: '小刻みレーザーで前方攻撃',   color: '#66ccff', icon: '═' },
   { id: 'spread',     label: 'ショットガン',  effect: '扇状の弾幕を一斉射撃',       color: '#ffaa33', icon: '※※' },
   { id: 'bomb',       label: 'ボム',          effect: '画面内の敵をまとめて攻撃',   color: '#ff5522', icon: '◎' },
   { id: 'shock',      label: '電撃',          effect: '近くの敵をまとめて感電',     color: '#88ddff', icon: '⚡' },

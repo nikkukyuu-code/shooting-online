@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-} from './entities.js?v=1.5.17';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.17';
-import { sfx } from './audio.js?v=1.5.17';
+} from './entities.js?v=1.5.18';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.18';
+import { sfx } from './audio.js?v=1.5.18';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -757,11 +757,11 @@ export class Game {
     if (P.activePower === 'laser' && P.activeTimer > 0) {
       P.laserCd = (P.laserCd || 0) - dt;
       if (P.laserCd <= 0) {
-        P.laserCd = 0.05;
+        P.laserCd = 0.07;
         const ly = P.y * fh;
         for (const e of S.enemies) {
           if (Math.abs(e.y - ly) < e.h * 0.55 + 8 && e.x > P.x) {
-            e.hp -= 0.75;
+            e.hp -= 1.05; // staccato ticks a bit harder, slightly slower
           }
         }
       }
@@ -1119,7 +1119,7 @@ export class Game {
     if (B.activePower === 'laser' && B.activeTimer > 0) {
       B.laserCd = (B.laserCd || 0) - dt;
       if (B.laserCd <= 0) {
-        B.laserCd = 0.05;
+        B.laserCd = 0.07;
         const by = B.y * fh;
         for (const e of B.enemies) {
           if (e.x > shipX && Math.abs(e.y - by) < 16) {
