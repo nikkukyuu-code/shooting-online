@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.5.7';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.5.7';
-import { sfx } from './audio.js?v=1.5.7';
+} from './entities.js?v=1.5.8';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.8';
+import { sfx } from './audio.js?v=1.5.8';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -169,12 +169,9 @@ export class Game {
       };
     };
 
-    const onItemButton = (canvasX, canvasY) => {
-      const btn = itemButtonRect(this.L.ctrl);
-      return (
-        canvasX >= btn.x && canvasX <= btn.x + btn.w &&
-        canvasY >= btn.y && canvasY <= btn.y + btn.h
-      );
+    const slotIndexAt = (canvasX, canvasY) => {
+      const filled = (this.state.player && this.state.player.items) ? this.state.player.items.length : 0;
+      return hitItemSlot(this.L.ctrl, canvasX, canvasY, filled);
     };
 
     const ownBot = () => OPP_RATIO + OWN_RATIO;
@@ -217,9 +214,12 @@ export class Game {
       e.preventDefault();
       const p = mapPoint(e.clientX, e.clientY);
       // Item button: fire without releasing ship drag
-      if (onItemButton(p.canvasX, p.canvasY)) {
-        this.tryUsePower();
-        return;
+      {
+        const slot = slotIndexAt(p.canvasX, p.canvasY);
+        if (slot >= 0) {
+          this.tryUsePower(slot);
+          return;
+        }
       }
       if (p.relY < OPP_RATIO) return;
       tryGrabOrMoveShip(e.pointerId, p.relX, p.relY, true);
@@ -240,9 +240,12 @@ export class Game {
       e.preventDefault();
       for (const t of e.changedTouches) {
         const p = mapPoint(t.clientX, t.clientY);
-        if (onItemButton(p.canvasX, p.canvasY)) {
-          this.tryUsePower();
-          continue;
+        {
+          const slot = slotIndexAt(p.canvasX, p.canvasY);
+          if (slot >= 0) {
+            this.tryUsePower(slot);
+            continue;
+          }
         }
         if (p.relY < OPP_RATIO) continue;
         tryGrabOrMoveShip(t.identifier, p.relX, p.relY, true);
@@ -330,7 +333,7 @@ export class Game {
     return dmg;
   }
 
-  tryUsePower() {
+  tryUsePower(index = 0) {
     if (this.waiting || this.ended || !this.state.alive) return;
     const p = this.state.player;
     if (p.activeTimer > 0) return;
@@ -338,7 +341,8 @@ export class Game {
       this.setStatus(HINT);
       return;
     }
-    const id = p.items.shift();
+    const i = Math.max(0, Math.min(p.items.length - 1, index | 0));
+    const id = p.items.splice(i, 1)[0];
     this.activatePower(id);
   }
 
@@ -868,7 +872,7 @@ export class Game {
         if (it.id === 'heal' || it.id === 'heal_big') {
           this.activatePower(it.id);
         } else {
-          if (P.items.length < 5) P.items.push(it.id);
+          if (P.items.length < MAX_ITEM_SLOTS) P.items.push(it.id);
           const meta = powerupMeta(it.id);
           if (meta) this.setStatus(`入手 ${meta.icon} ${meta.label}（${meta.effect}）`);
         }
@@ -1117,7 +1121,7 @@ export class Game {
     for (const e of B.enemies) {
       if (e.hp <= 0) {
         B.fx.push(spawnExplosion(e.x, e.y, e.kind === 'boss'));
-        if (B.items.length < 5 && Math.random() < (e.kind === 'boss' ? 1 : 0.4)) {
+        if (B.items.length < MAX_ITEM_SLOTS && Math.random() < (e.kind === 'boss' ? 1 : 0.4)) {
           const dropId = pickPowerupId();
           if (dropId === 'heal' || dropId === 'heal_big') {
             B.hp = Math.min(100, B.hp + (dropId === 'heal_big' ? 50 : 25));

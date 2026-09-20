@@ -5,22 +5,25 @@
 export const OPP_RATIO = 1 / 3;
 export const OWN_RATIO = 1 / 3;
 const ITEM_STYLE = {
-  homing: { color: '#ff66ff', icon: '◆' },
-  laser: { color: '#66ccff', icon: '═' },
-  spread: { color: '#ffaa33', icon: '※※' },
-  bomb: { color: '#ff5522', icon: '◎' },
-  shock: { color: '#88ddff', icon: '⚡' },
-  rapid: { color: '#ffee44', icon: '≫' },
-  meteor: { color: '#ff7744', icon: '☄' },
-  send: { color: '#ff8844', icon: '⇒' },
-  direct: { color: '#ff3333', icon: '※' },
-  heal: { color: '#44ff88', icon: '+' },
-  heal_big: { color: '#22ff66', icon: '++' },
-  send_mech: { color: '#88aaff', icon: '艦' },
-  send_golem: { color: '#cc88ff', icon: '塞' },
-  send_tank: { color: '#66ddff', icon: '砲' },
-  send_drone: { color: '#33ffff', icon: '群' },
+  homing:     { color: '#ff66ff', icon: '◆',  label: '追尾',   effect: '追尾弾を連射' },
+  laser:      { color: '#66ccff', icon: '═',  label: 'レーザー', effect: '前方レーザー' },
+  spread:     { color: '#ffaa33', icon: '※※', label: '散弾',   effect: '扇状弾幕' },
+  bomb:       { color: '#ff5522', icon: '◎',  label: 'ボム',   effect: '画面全体攻撃' },
+  shock:      { color: '#88ddff', icon: '⚡',  label: '電撃',   effect: '近距離感電' },
+  rapid:      { color: '#ffee44', icon: '≫',  label: '連射',   effect: '連射強化' },
+  meteor:     { color: '#ff7744', icon: '☄',  label: '隕石',   effect: '相手に隕石' },
+  send:       { color: '#ff8844', icon: '⇒',  label: '敵送信', effect: '相手に敵を送る' },
+  direct:     { color: '#ff3333', icon: '※',  label: '直撃',   effect: '相手HPを削る' },
+  heal:       { color: '#44ff88', icon: '+',  label: '回復',   effect: 'HP+25' },
+  heal_big:   { color: '#22ff66', icon: '++', label: '大回復', effect: 'HP+50' },
+  send_mech:  { color: '#88aaff', icon: '艦',  label: '戦艦',   effect: '戦艦を送る' },
+  send_golem: { color: '#cc88ff', icon: '塞',  label: '要塞',   effect: '要塞を送る' },
+  send_tank:  { color: '#66ddff', icon: '砲',  label: '砲艦',   effect: 'ガンシップ送信' },
+  send_drone: { color: '#33ffff', icon: '群',  label: '無人機', effect: 'ドローン4機' },
 };
+
+export const MAX_ITEM_SLOTS = 3;
+
 
 export const CTRL_RATIO = 1 / 3;
 
@@ -52,17 +55,49 @@ export function resizeCanvas(canvas) {
 }
 
 /** Hit zone for 「アイテム」 button inside control pane (canvas pixels). */
+/** Vertical item slots on the right of the control pane (max 3). */
+export function itemSlotRects(ctrl, count = MAX_ITEM_SLOTS) {
+  const n = Math.max(1, count | 0);
+  const padX = Math.max(8, ctrl.w * 0.02);
+  const padTop = Math.max(6, ctrl.h * 0.04);
+  const padBot = Math.max(22, ctrl.h * 0.18); // leave room for status strip
+  const gap = Math.max(6, ctrl.h * 0.02);
+  const colW = Math.max(100, Math.min(168, ctrl.w * 0.38));
+  const availH = ctrl.h - padTop - padBot - gap * (n - 1);
+  const slotH = Math.max(52, availH / n);
+  const x = ctrl.x + ctrl.w - colW - padX;
+  const rects = [];
+  for (let i = 0; i < n; i++) {
+    const y = ctrl.y + padTop + i * (slotH + gap);
+    // button body ~68% of slot, description under it
+    const btnH = Math.max(34, slotH * 0.62);
+    rects.push({
+      x, y, w: colW, h: slotH,
+      btnX: x, btnY: y, btnW: colW, btnH,
+      descY: y + btnH + 2,
+    });
+  }
+  return rects;
+}
+
+/** Hit-test a canvas point against vertical item slots. Returns index or -1. */
+export function hitItemSlot(ctrl, canvasX, canvasY, filledCount = MAX_ITEM_SLOTS) {
+  const rects = itemSlotRects(ctrl, MAX_ITEM_SLOTS);
+  const n = Math.min(filledCount, rects.length);
+  for (let i = 0; i < n; i++) {
+    const r = rects[i];
+    if (
+      canvasX >= r.btnX && canvasX <= r.btnX + r.btnW &&
+      canvasY >= r.btnY && canvasY <= r.btnY + r.btnH
+    ) return i;
+  }
+  return -1;
+}
+
+/** @deprecated — use itemSlotRects / hitItemSlot */
 export function itemButtonRect(ctrl) {
-  // Large tap target on the right of the control pane
-  const bw = Math.max(120, Math.min(200, ctrl.w * 0.42));
-  const bh = Math.max(72, Math.min(130, ctrl.h * 0.52));
-  const pad = Math.max(10, ctrl.w * 0.025);
-  return {
-    x: ctrl.x + ctrl.w - bw - pad,
-    y: ctrl.y + (ctrl.h - bh) * 0.28,
-    w: bw,
-    h: bh,
-  };
+  const r = itemSlotRects(ctrl, 1)[0];
+  return { x: r.btnX, y: r.btnY, w: r.btnW, h: r.btnH };
 }
 
 /** Fiery orange/red nebula (play / opponent views). */
@@ -648,62 +683,46 @@ function drawControlPanel(ctx, area, localState) {
   ctx.textBaseline = 'top';
   ctx.fillText(touch.active ? 'ドラッグ中（他の指で発動可）' : '自機をドラッグ', sx, sy + shipH * 0.7);
 
-  // Queued items — color + icon + next label
+  // Vertical item slots (max 3) on the right — button + description under each
   const items = (localState.player && localState.player.items) || [];
-  const pipR = Math.max(8, Math.min(12, area.h * 0.07));
-  const pipGap = pipR * 2.6;
-  const pipY = area.h * 0.22;
-  const startX = area.w * 0.1;
-  for (let i = 0; i < items.length; i++) {
+  const slots = itemSlotRects({ x: 0, y: 0, w: area.w, h: area.h }, MAX_ITEM_SLOTS);
+  for (let i = 0; i < slots.length; i++) {
+    const r = slots[i];
     const id = items[i];
-    const st = ITEM_STYLE[id] || { color: '#ffd24a', icon: '?' };
-    const ix = startX + i * pipGap;
-    ctx.fillStyle = st.color;
-    ctx.beginPath();
-    ctx.arc(ix, pipY, pipR + (i === 0 ? 2 : 0), 0, Math.PI * 2);
+    const filled = !!id;
+    const st = filled ? (ITEM_STYLE[id] || { color: '#ffd24a', icon: '?', label: '?', effect: '' }) : null;
+
+    // Button body
+    ctx.fillStyle = filled ? 'rgba(255, 210, 74, 0.32)' : 'rgba(60, 70, 110, 0.35)';
+    ctx.strokeStyle = filled ? (st.color || 'rgba(255,230,140,0.95)') : 'rgba(160,170,210,0.45)';
+    ctx.lineWidth = filled ? 3 : 1.5;
+    roundRect(ctx, r.btnX, r.btnY, r.btnW, r.btnH, 12);
     ctx.fill();
-    ctx.strokeStyle = i === 0 ? '#fff' : 'rgba(255,255,255,0.7)';
-    ctx.lineWidth = i === 0 ? 2.5 : 1.5;
     ctx.stroke();
-    ctx.fillStyle = '#111';
-    ctx.font = `bold ${Math.max(9, pipR)}px sans-serif`;
+
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(st.icon, ix, pipY + 0.5);
-  }
-  if (items.length) {
-    const next = ITEM_STYLE[items[0]] || {};
-    const metaLabel = (localState.nextItemLabel) || '';
-    ctx.font = `600 ${Math.max(10, area.h * 0.065)}px "Hiragino Sans","Noto Sans JP",sans-serif`;
-    ctx.fillStyle = next.color || '#ffe08a';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText(metaLabel || '次のアイテム', startX - pipR, pipY + pipR + 4);
-  }
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = filled ? 3 : 0;
+    if (filled) {
+      const iconFs = Math.max(16, Math.min(26, r.btnH * 0.42));
+      ctx.font = `700 ${iconFs}px "Hiragino Sans","Noto Sans JP",sans-serif`;
+      ctx.fillStyle = '#fff8e0';
+      ctx.fillText(`${st.icon} ${st.label || ''}`, r.btnX + r.btnW * 0.5, r.btnY + r.btnH * 0.45);
+    } else {
+      ctx.font = `600 ${Math.max(11, r.btnH * 0.28)}px "Hiragino Sans","Noto Sans JP",sans-serif`;
+      ctx.fillStyle = 'rgba(200,210,240,0.55)';
+      ctx.fillText(`枠${i + 1}`, r.btnX + r.btnW * 0.5, r.btnY + r.btnH * 0.5);
+    }
+    ctx.shadowBlur = 0;
 
-  // 「アイテム」 tap button (top-right of control pane)
-  const btn = itemButtonRect({ x: 0, y: 0, w: area.w, h: area.h });
-  const hasItem = items.length > 0;
-  ctx.fillStyle = hasItem ? 'rgba(255, 210, 74, 0.28)' : 'rgba(80, 90, 140, 0.35)';
-  ctx.strokeStyle = hasItem ? 'rgba(255, 230, 140, 0.9)' : 'rgba(180, 190, 230, 0.55)';
-  ctx.lineWidth = 2.5;
-  roundRect(ctx, btn.x, btn.y, btn.w, btn.h, 14);
-  ctx.fill();
-  ctx.stroke();
-  const btnFont = Math.max(16, Math.min(28, btn.w * 0.18));
-  ctx.font = `700 ${btnFont}px "Hiragino Sans","Noto Sans JP","Yu Gothic",Meiryo,sans-serif`;
-  ctx.fillStyle = hasItem ? '#fff8e0' : 'rgba(220,225,255,0.7)';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.shadowColor = '#000';
-  ctx.shadowBlur = 3;
-  const nextId = items[0];
-  const nextSt = nextId ? ITEM_STYLE[nextId] : null;
-  ctx.fillText(nextSt ? `発動 ${nextSt.icon}` : 'アイテム', btn.x + btn.w * 0.5, btn.y + btn.h * 0.42);
-  ctx.font = `600 ${Math.max(8, btnFont * 0.65)}px sans-serif`;
-  ctx.fillStyle = hasItem ? 'rgba(255,248,224,0.85)' : 'rgba(220,225,255,0.55)';
-  ctx.fillText('移動中もOK', btn.x + btn.w * 0.5, btn.y + btn.h * 0.72);
-  ctx.shadowBlur = 0;
+    // Description under button
+    const descFs = Math.max(9, Math.min(13, r.w * 0.09));
+    ctx.font = `600 ${descFs}px "Hiragino Sans","Noto Sans JP",sans-serif`;
+    ctx.fillStyle = filled ? 'rgba(255,248,220,0.9)' : 'rgba(180,190,220,0.45)';
+    ctx.textBaseline = 'top';
+    ctx.fillText(filled ? (st.effect || '') : '空', r.btnX + r.btnW * 0.5, r.descY, r.btnW * 0.96);
+  }
 
   // Status strip at bottom of control pane
   const stripH = Math.max(22, area.h * 0.22);
