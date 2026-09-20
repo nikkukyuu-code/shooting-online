@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-} from './entities.js?v=1.5.21';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.21';
-import { sfx } from './audio.js?v=1.5.21';
+} from './entities.js?v=1.5.22';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.22';
+import { sfx } from './audio.js?v=1.5.22';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -201,7 +201,7 @@ export class Game {
       }
 
       this.pointerY = Math.max(0.06, Math.min(0.94, localY));
-      this.pointerX = Math.max(0.06, Math.min(0.55, localX)); // keep clear of right item column
+      this.pointerX = Math.max(0.06, Math.min(0.88, localX));
       this.pointerDown = true;
       this.ctrlTouch = { active: true, x: this.pointerX, y: this.pointerY };
       return true;
@@ -222,6 +222,9 @@ export class Game {
     const beginItemPress = (id, canvasX, canvasY) => {
       const slot = slotIndexAt(canvasX, canvasY);
       if (slot < 0) return false;
+      // Empty slot: never arm a press (avoids "I didn't have an item" confusion)
+      const items = (this.state && this.state.player && this.state.player.items) || [];
+      if (slot >= items.length || !items[slot]) return false;
       this._itemPress = { id, slot, x: canvasX, y: canvasY };
       return true;
     };
@@ -623,6 +626,8 @@ export class Game {
       return;
     }
     if (msg.type === 'directHit') {
+      this.setStatus('相手の直撃！');
+      setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1200);
       const dmg = msg.dmg || 8;
       this.state.incomingDirect = 0.85;
       this.applyPlayerDamage(dmg, 'direct');
@@ -1243,6 +1248,8 @@ export class Game {
         B.fx.push(spawnExplosion(e.x, e.y, e.kind === 'boss'));
         if (B.items.length < MAX_ITEM_SLOTS && Math.random() < (e.kind === 'boss' ? 1 : 0.4)) {
           const dropId = pickPowerupId();
+          // COM never gets direct (looks like player's own upward laser)
+          if (dropId === 'direct') dropId = 'laser';
           if (dropId === 'heal' || dropId === 'heal_big') {
             B.hp = Math.min(100, B.hp + (dropId === 'heal_big' ? 50 : 25));
             B.fx.push(spawnExplosion(48, B.y * fh, dropId === 'heal_big'));
@@ -1302,9 +1309,9 @@ export class Game {
         const heavy = B.items.findIndex((id) => id === 'send_mech' || id === 'send_golem' || id === 'send_tank' || id === 'send_drone' || id === 'send' || id === 'meteor');
         if (heavy >= 0) return heavy;
       }
-      // default: first offensive
-      const off = B.items.findIndex((id) => id !== 'heal' && id !== 'heal_big');
-      return off >= 0 ? off : 0;
+      // default: first offensive (never direct — visual confuses with player's shot)
+      const off = B.items.findIndex((id) => id !== 'heal' && id !== 'heal_big' && id !== 'direct');
+      return off >= 0 ? off : -1;
     };
 
     const tryUse = (force = false) => {
@@ -1329,10 +1336,9 @@ export class Game {
       } else if (id === 'heal' || id === 'heal_big') {
         B.hp = Math.min(100, B.hp + (id === 'heal_big' ? 50 : 25));
       } else if (id === 'direct') {
-        this.applyPlayerDamage(8, 'direct');
-        this.state.incomingDirect = 0.85;
-        if (B) B.directBeam = 0.85;
-        this.state.fx.push(spawnExplosion(this.state.player.x, this.state.player.y * fh, false));
+        // Disabled for COM — was mistaken for the player's own direct attack
+        B.items.push('laser');
+        B.powerCd = 0.4;
       } else if (id === 'spread') {
         const by = B.y * fh;
         for (let i = -3; i <= 3; i++) {

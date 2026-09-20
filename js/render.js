@@ -666,8 +666,9 @@ function drawDamageNumbers(ctx, L, nums) {
   ctx.restore();
 }
 
-function drawDirectBeam(ctx, x0, y0, x1, y1, lifeRatio = 1) {
+function drawDirectBeam(ctx, x0, y0, x1, y1, lifeRatio = 1, tint = 'own') {
   // Straight-line staccato bolts only (no sideways jitter = no "homing" look)
+  // tint: 'own' = red upward (player), 'incoming' = purple downward (opponent)
   const now = performance.now();
   const dx = x1 - x0;
   const dy = y1 - y0;
@@ -678,10 +679,14 @@ function drawDirectBeam(ctx, x0, y0, x1, y1, lifeRatio = 1) {
   const gap = boltLen * 0.5;
   const n = Math.max(4, Math.floor(len / (boltLen + gap)));
   const baseA = Math.max(0.3, Math.min(1, lifeRatio));
+  const isIn = tint === 'incoming';
+  const glow = isIn ? '#a040ff' : '#ff2040';
+  const outer = isIn ? '#c060ff' : '#ff3355';
+  const core = isIn ? '#f0e8ff' : '#ffe8f0';
 
   ctx.save();
   ctx.lineCap = 'round';
-  ctx.shadowColor = '#ff2040';
+  ctx.shadowColor = glow;
 
   for (let i = 0; i < n; i++) {
     const phase = (now / 28 + i * 1.7) % 1;
@@ -695,7 +700,7 @@ function drawDirectBeam(ctx, x0, y0, x1, y1, lifeRatio = 1) {
     const a = baseA * (0.55 + 0.45 * (1 - phase / 0.58));
 
     ctx.globalAlpha = a * 0.85;
-    ctx.strokeStyle = '#ff3355';
+    ctx.strokeStyle = outer;
     ctx.lineWidth = 7;
     ctx.shadowBlur = 14;
     ctx.beginPath();
@@ -704,7 +709,7 @@ function drawDirectBeam(ctx, x0, y0, x1, y1, lifeRatio = 1) {
     ctx.stroke();
 
     ctx.globalAlpha = a;
-    ctx.strokeStyle = '#ffe8f0';
+    ctx.strokeStyle = core;
     ctx.lineWidth = 2.5;
     ctx.shadowBlur = 6;
     ctx.beginPath();
@@ -717,10 +722,16 @@ function drawDirectBeam(ctx, x0, y0, x1, y1, lifeRatio = 1) {
     const spark = 10 + 8 * Math.sin(now / 30);
     const g = ctx.createRadialGradient(x1, y1, 0, x1, y1, spark);
     g.addColorStop(0, 'rgba(255,255,255,0.95)');
-    g.addColorStop(0.35, 'rgba(255,90,110,0.6)');
-    g.addColorStop(1, 'rgba(255,0,40,0)');
+    if (isIn) {
+      g.addColorStop(0.35, 'rgba(180,100,255,0.6)');
+      g.addColorStop(1, 'rgba(120,0,200,0)');
+    } else {
+      g.addColorStop(0.35, 'rgba(255,90,110,0.6)');
+      g.addColorStop(1, 'rgba(255,0,40,0)');
+    }
     ctx.globalAlpha = baseA;
     ctx.fillStyle = g;
+
     ctx.beginPath();
     ctx.arc(x1, y1, spark, 0, Math.PI * 2);
     ctx.fill();
@@ -1025,7 +1036,7 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
     const py = L.own.y + (pl.y <= 1 ? pl.y * L.own.h : pl.y);
     const ox = L.opp.x + ((oppDraw.px != null ? oppDraw.px : 48) * (oppDraw._sx || 1));
     // Fall straight down from opp ship X to our Y, but keep X = our ship (column hit)
-    drawDirectBeam(ctx, px, L.opp.y + 8, px, py, lr);
+    drawDirectBeam(ctx, px, L.opp.y + 8, px, py, lr, 'incoming');
   }
 
 
