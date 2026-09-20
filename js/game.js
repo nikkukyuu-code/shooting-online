@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.5.12';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.12';
-import { sfx } from './audio.js?v=1.5.12';
+} from './entities.js?v=1.5.13';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.13';
+import { sfx } from './audio.js?v=1.5.13';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -218,10 +218,11 @@ export class Game {
     this._onPointerDown = (e) => {
       e.preventDefault();
       const p = mapPoint(e.clientX, e.clientY);
-      // Item button: fire without releasing ship drag
+      // Item slot: one use only (debounce inside tryUsePower)
       {
         const slot = slotIndexAt(p.canvasX, p.canvasY);
         if (slot >= 0) {
+          this._itemPointerHandled = true;
           this.tryUsePower(slot);
           return;
         }
@@ -243,17 +244,23 @@ export class Game {
     // Multi-touch: ship finger + item finger at once
     this._onTouchStart = (e) => {
       e.preventDefault();
-      for (const t of e.changedTouches) {
-        const p = mapPoint(t.clientX, t.clientY);
-        {
-          const slot = slotIndexAt(p.canvasX, p.canvasY);
-          if (slot >= 0) {
+      // If pointer events already handled the item tap, skip duplicate touch fire
+      if (this._itemPointerHandled) {
+        this._itemPointerHandled = false;
+        // Still allow other fingers to grab the ship
+      }
+      for (const touch of e.changedTouches) {
+        const p = mapPoint(touch.clientX, touch.clientY);
+        const slot = slotIndexAt(p.canvasX, p.canvasY);
+        if (slot >= 0) {
+          // Only use via touch when this is a pure-touch path (no recent pointer item)
+          if (!this._itemUseAt || performance.now() - this._itemUseAt > 280) {
             this.tryUsePower(slot);
-            continue;
           }
+          continue;
         }
         if (p.relY < OPP_RATIO) continue;
-        tryGrabOrMoveShip(t.identifier, p.relX, p.relY, true);
+        tryGrabOrMoveShip(touch.identifier, p.relX, p.relY, true);
       }
     };
     this._onTouchMove = (e) => {
@@ -341,13 +348,19 @@ export class Game {
   tryUsePower(index = 0) {
     if (this.waiting || this.ended || !this.state.alive) return;
     const p = this.state.player;
+    // Prevent double-fire from pointerdown + touchstart (and accidental multi-use)
+    const now = performance.now();
+    if (this._itemUseAt && now - this._itemUseAt < 280) return;
     if (p.activeTimer > 0) return;
     if (!p.items.length) {
       this.setStatus(HINT);
       return;
     }
-    const i = Math.max(0, Math.min(p.items.length - 1, index | 0));
+    const i = index | 0;
+    // Only the tapped slot — never fall back to another item
+    if (i < 0 || i >= p.items.length) return;
     const id = p.items.splice(i, 1)[0];
+    this._itemUseAt = now;
     this.activatePower(id);
   }
 

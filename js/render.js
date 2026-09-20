@@ -86,9 +86,10 @@ export function hitItemSlot(ctrl, canvasX, canvasY, filledCount = MAX_ITEM_SLOTS
   const n = Math.min(filledCount, rects.length);
   for (let i = 0; i < n; i++) {
     const r = rects[i];
+    // Whole slot is tappable (button + description), slots are non-overlapping
     if (
-      canvasX >= r.btnX && canvasX <= r.btnX + r.btnW &&
-      canvasY >= r.btnY && canvasY <= r.btnY + r.btnH
+      canvasX >= r.x && canvasX <= r.x + r.w &&
+      canvasY >= r.y && canvasY <= r.y + r.h
     ) return i;
   }
   return -1;
