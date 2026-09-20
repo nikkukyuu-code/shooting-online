@@ -1,8 +1,8 @@
 import {
   POWERUPS, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.2.2';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.2.2';
-import { sfx } from './audio.js?v=1.2.2';
+} from './entities.js?v=1.3.0';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.3.0';
+import { sfx } from './audio.js?v=1.3.0';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -421,7 +421,7 @@ export class Game {
 
     // Auto fire
     P.fireCd -= dt;
-    const fireRate = P.activePower === 'homing' ? 0.12 : 0.18;
+    const fireRate = P.activePower === 'homing' ? 0.16 : 0.28;
     if (P.fireCd <= 0 && S.alive) {
       P.fireCd = fireRate;
       const by = P.y * fh;
@@ -442,7 +442,7 @@ export class Game {
         const ly = P.y * fh;
         for (const e of S.enemies) {
           if (Math.abs(e.y - ly) < e.h * 0.55 + 8 && e.x > P.x) {
-            e.hp -= 0.35;
+            e.hp -= 0.12;
           }
         }
       }
@@ -450,15 +450,18 @@ export class Game {
 
     // Spawn enemies
     this._spawnAcc += dt;
-    const spawnEvery = Math.max(0.28, 0.75 - S.time * 0.012);
+    const spawnEvery = Math.max(0.12, 0.38 - S.time * 0.015);
     if (this._spawnAcc >= spawnEvery) {
       this._spawnAcc = 0;
-      const roll = Math.random();
-      const kind = roll > 0.78 ? 'elite' : roll > 0.45 ? 'swarm' : 'basic';
-      S.enemies.push(spawnEnemy(fw, fh, kind));
+      const n = 2 + (Math.random() > 0.55 ? 1 : 0) + (S.time > 20 ? 1 : 0);
+      for (let i = 0; i < n; i++) {
+        const roll = Math.random();
+        const kind = roll > 0.62 ? 'elite' : roll > 0.32 ? 'swarm' : 'basic';
+        S.enemies.push(spawnEnemy(fw, fh, kind));
+      }
     }
     this._bossAcc += dt;
-    if (this._bossAcc > 45 && !S.enemies.some((e) => e.kind === 'boss')) {
+    if (this._bossAcc > 22 && !S.enemies.some((e) => e.kind === 'boss')) {
       this._bossAcc = 0;
       S.enemies.push(spawnEnemy(fw, fh, 'boss'));
     }
@@ -471,8 +474,12 @@ export class Game {
       e.y = Math.max(16, Math.min(fh - 16, e.y));
       e.fireCd -= dt;
       if (e.fireCd <= 0 && e.x < fw) {
-        e.fireCd = e.kind === 'boss' ? 0.55 : 1.4 + Math.random();
-        S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y, -200 - Math.random() * 80, (Math.random() - 0.5) * 55, 'enemy', false, 2));
+        e.fireCd = e.kind === 'boss' ? 0.28 : e.kind === 'elite' ? 0.45 + Math.random() * 0.25 : 0.7 + Math.random() * 0.35;
+        S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y, -260 - Math.random() * 100, (Math.random() - 0.5) * 80, 'enemy', false, 6));
+        if (e.kind === 'elite' || e.kind === 'boss') {
+          S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y - 10, -240, -40, 'enemy', false, 5));
+          S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y + 10, -240, 40, 'enemy', false, 5));
+        }
       }
     }
 
@@ -542,8 +549,8 @@ export class Game {
       if (b.owner !== 'enemy') continue;
       const py = P.y * fh;
       if (P.invuln <= 0 && Math.abs(b.x - P.x) < 14 && Math.abs(b.y - py) < 12) {
-        P.hp = Math.max(0, P.hp - 8);
-        P.invuln = 0.8;
+        P.hp = Math.max(0, P.hp - 18);
+        P.invuln = 0.45;
         b.life = 0;
         S.fx.push(spawnExplosion(P.x, py, false));
         sfx.hit();
@@ -554,9 +561,9 @@ export class Game {
     for (const e of S.enemies) {
       const py = P.y * fh;
       if (P.invuln <= 0 && Math.abs(e.x - P.x) < e.w * 0.4 + 10 && Math.abs(e.y - py) < e.h * 0.4 + 8) {
-        P.hp = Math.max(0, P.hp - 12);
-        P.invuln = 1;
-        e.hp -= 2;
+        P.hp = Math.max(0, P.hp - 28);
+        P.invuln = 0.55;
+        e.hp -= 1;
         S.fx.push(spawnExplosion(P.x, py, true));
       }
     }
@@ -641,8 +648,8 @@ export class Game {
       e.y += Math.sin(e.phase) * 12 * dt;
       e.fireCd -= dt;
       if (e.fireCd <= 0) {
-        e.fireCd = 1.6;
-        B.bullets.push(spawnBullet(e.x, e.y, -210, 0, 'enemy', false, 2));
+        e.fireCd = 0.55;
+        B.bullets.push(spawnBullet(e.x, e.y, -260, 0, 'enemy', false, 6));
       }
     }
     for (const b of B.bullets) {
@@ -694,7 +701,7 @@ export class Game {
       }
       // small direct hit
       if (Math.random() > 0.4) {
-        this.state.player.hp = Math.max(0, this.state.player.hp - 10);
+        this.state.player.hp = Math.max(0, this.state.player.hp - 20);
         this.state.fx.push(spawnExplosion(this.state.player.x, this.state.player.y * fh, false));
       }
     }
