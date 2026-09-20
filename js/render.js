@@ -13,7 +13,7 @@ const ITEM_STYLE = {
   rapid:      { color: '#ffee44', icon: '≫',  label: '連射',   effect: '連射強化' },
   meteor:     { color: '#ff7744', icon: '☄',  label: '隕石',   effect: '相手に隕石' },
   send:       { color: '#ff8844', icon: '⇒',  label: '敵送信', effect: '相手に敵を送る' },
-  direct:     { color: '#ff3333', icon: '※',  label: '直撃',   effect: '相手HPを削る' },
+  direct:     { color: '#ff3333', icon: '※',  label: '直撃',   effect: '上向きレーザー' },
   heal:       { color: '#44ff88', icon: '+',  label: '回復',   effect: 'HP+25' },
   heal_big:   { color: '#22ff66', icon: '++', label: '大回復', effect: 'HP+50' },
   send_mech:  { color: '#88aaff', icon: '艦',  label: '戦艦',   effect: '戦艦を送る' },
@@ -186,9 +186,10 @@ function roundRectPath(ctx, x, y, w, h, rad) {
   ctx.closePath();
 }
 
-function drawShip(ctx, x, y, w, h, color = '#e8f0ff', facing = 1) {
+function drawShip(ctx, x, y, w, h, color = '#e8f0ff', facing = 1, angle = 0) {
   ctx.save();
   ctx.translate(x, y);
+  ctx.rotate(angle || 0);
   if (facing < 0) ctx.scale(-1, 1);
   const t = performance.now() / 1000;
 
@@ -665,6 +666,38 @@ function drawDamageNumbers(ctx, L, nums) {
   ctx.restore();
 }
 
+function drawDirectBeam(ctx, x0, y0, x1, y1, lifeRatio = 1) {
+  const pulse = 0.55 + 0.35 * Math.sin(performance.now() / 35);
+  ctx.save();
+  ctx.globalAlpha = Math.max(0.25, Math.min(1, lifeRatio)) * pulse;
+  ctx.strokeStyle = '#ff4466';
+  ctx.lineWidth = 14;
+  ctx.shadowColor = '#ff2040';
+  ctx.shadowBlur = 22;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y1);
+  ctx.stroke();
+  ctx.strokeStyle = '#ffe0e8';
+  ctx.lineWidth = 4;
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y1);
+  ctx.stroke();
+  // impact bloom
+  const g = ctx.createRadialGradient(x1, y1, 0, x1, y1, 28);
+  g.addColorStop(0, 'rgba(255,255,255,0.9)');
+  g.addColorStop(0.4, 'rgba(255,80,100,0.55)');
+  g.addColorStop(1, 'rgba(255,0,40,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(x1, y1, 28, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawLaser(ctx, player, fieldH) {
   if (player.activePower !== 'laser' || player.activeTimer <= 0) return;
   const y = player.y * fieldH;
@@ -867,8 +900,16 @@ export function drawField(ctx, area, snap, opts = {}) {
   const px = (p.x || snap.px || 48) * (p.x && p.x > 1 ? sx : 1);
   if (snap.alive !== false) {
     const blink = !darkened && snap.invuln > 0 && Math.floor(performance.now() / 60) % 2 === 0;
-    if (!blink) drawShip(ctx, px, py, 28 * Math.min(sx, 1.2), 18 * Math.min(sy, 1.2), darkened ? '#cde' : (snap.invuln > 0 ? '#ffaaaa' : '#e8f0ff'));
+    const facingUp = !darkened && snap.player && snap.player.activePower === 'direct' && snap.player.activeTimer > 0;
+    const facingDown = darkened && snap.directBeam; // opponent firing down at us
+    const ang = facingUp ? -Math.PI / 2 : (facingDown ? Math.PI / 2 : 0);
+    if (!blink) drawShip(ctx, px, py, 28 * Math.min(sx, 1.2), 18 * Math.min(sy, 1.2), darkened ? '#cde' : (snap.invuln > 0 ? '#ffaaaa' : '#e8f0ff'), 1, ang);
     if (!darkened && snap.player) drawLaser(ctx, snap.player, fh);
+    // Own-pane part of upward direct beam
+    if (facingUp) {
+      const lr = Math.min(1, snap.player.activeTimer / 0.85);
+      drawDirectBeam(ctx, px, py - 16, px, 8, lr);
+    }
   }
 
   ctx.restore();
@@ -913,6 +954,29 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
 
   // 2) MIDDLE — player's own gameplay field (display)
   drawField(ctx, L.own, localSnap, { darkened: false });
+
+  // Cross-pane direct-attack beam (own ship → opponent)
+  const pl = localState.player;
+  if (pl && pl.activePower === 'direct' && pl.activeTimer > 0) {
+    const px = L.own.x + (pl.x || 48);
+    const py = L.own.y + (pl.y <= 1 ? pl.y * L.own.h : pl.y);
+    const lr = Math.min(1, pl.activeTimer / 0.85);
+    // Continue from top of own pane into opp pane toward opponent ship
+    const opp = oppDraw;
+    const ox = L.opp.x + ((opp.px != null ? opp.px : (opp.player && opp.player.x) || 48) * (opp._sx || 1));
+    const oy = L.opp.y + ((opp.py != null ? opp.py : 0.5) * L.opp.h);
+    drawDirectBeam(ctx, px, L.own.y + 4, ox, oy, lr);
+  }
+  // Incoming beam when opponent/COM fires direct at us
+  if (localState.incomingDirect && localState.incomingDirect > 0) {
+    const lr = Math.min(1, localState.incomingDirect / 0.85);
+    const px = L.own.x + (pl.x || 48);
+    const py = L.own.y + (pl.y <= 1 ? pl.y * L.own.h : pl.y);
+    const ox = L.opp.x + ((oppDraw.px != null ? oppDraw.px : 48) * (oppDraw._sx || 1));
+    const oy = L.opp.y + ((oppDraw.py != null ? oppDraw.py : 0.5) * L.opp.h);
+    drawDirectBeam(ctx, ox, oy, px, py, lr);
+  }
+
 
   // HP bars near boundary between top and middle
   const oppHp = remoteSnap ? (remoteSnap.php ?? 100) : (localState.botHp ?? 100);

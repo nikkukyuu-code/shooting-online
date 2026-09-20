@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-} from './entities.js?v=1.5.15';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.15';
-import { sfx } from './audio.js?v=1.5.15';
+} from './entities.js?v=1.5.16';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.16';
+import { sfx } from './audio.js?v=1.5.16';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -538,18 +538,19 @@ export class Game {
       this.state.fx.push(spawnExplosion(p.x + 8, p.y * this.L.own.h, true));
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1200);
     } else if (id === 'direct') {
-      // Direct attack opponent HP
+      // Own ship faces up and fires a piercing laser at the opponent
       const dmg = 8;
+      p.activePower = 'direct';
+      p.activeTimer = 0.85;
+      this.showItemBanner(meta);
       if (this.useBot) {
         this._bot.hp = Math.max(0, this._bot.hp - dmg);
         this.state.botHp = this._bot.hp;
-        this._bot.fx.push(spawnExplosion(this.L.own.w * 0.3, this._bot.y * this.L.own.h, true));
+        this._bot.fx.push(spawnExplosion(this.L.own.w * 0.35, this._bot.y * this.L.own.h, true));
       } else if (this.net) {
         this.net.send({ type: 'directHit', dmg });
       }
-      this.state.fx.push(spawnExplosion(this.L.own.w * 0.7, this.state.player.y * this.L.own.h, true));
-      p.activePower = null;
-      p.activeTimer = 0;
+      this.state.fx.push(spawnExplosion(p.x + 8, p.y * this.L.own.h - 20, false));
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
     }
   }
@@ -595,6 +596,7 @@ export class Game {
     }
     if (msg.type === 'directHit') {
       const dmg = msg.dmg || 8;
+      this.state.incomingDirect = 0.85;
       this.applyPlayerDamage(dmg, 'direct');
       this.state.player.invuln = 0.6;
       this.state.fx.push(spawnExplosion(this.state.player.x + 10, this.state.player.y * this.L.own.h, true));
@@ -711,6 +713,10 @@ export class Game {
     if (this.state.itemBanner) {
       this.state.itemBanner.life -= dt;
       if (this.state.itemBanner.life <= 0) this.state.itemBanner = null;
+    }
+    if (S.incomingDirect > 0) {
+      S.incomingDirect -= dt;
+      if (S.incomingDirect < 0) S.incomingDirect = 0;
     }
     if (P.activeTimer > 0) {
       P.activeTimer -= dt;
@@ -978,6 +984,7 @@ export class Game {
     B.scroll += 55 * dt;
     if (B.invuln == null) B.invuln = 0;
     if (B.invuln > 0) B.invuln -= dt;
+    if (B.directBeam > 0) B.directBeam -= dt;
     if (B.activeTimer > 0) {
       B.activeTimer -= dt;
       if (B.activeTimer <= 0) B.activePower = null;
@@ -1294,6 +1301,8 @@ export class Game {
         B.hp = Math.min(100, B.hp + (id === 'heal_big' ? 50 : 25));
       } else if (id === 'direct') {
         this.applyPlayerDamage(8, 'direct');
+        this.state.incomingDirect = 0.85;
+        if (B) B.directBeam = 0.85;
         this.state.fx.push(spawnExplosion(this.state.player.x, this.state.player.y * fh, false));
       } else if (id === 'spread') {
         const by = B.y * fh;
@@ -1383,6 +1392,7 @@ export class Game {
       bullets: B.bullets,
       fx: B.fx,
       meteors: B.meteors,
+      directBeam: (B.directBeam || 0) > 0,
       px: shipX,
       py: B.y,
       php: B.hp,
