@@ -7,13 +7,18 @@ export const OWN_RATIO = 1 / 3;
 const ITEM_STYLE = {
   homing: { color: '#ff66ff', icon: '◆' },
   laser: { color: '#66ccff', icon: '═' },
+  spread: { color: '#ffaa33', icon: '※※' },
+  bomb: { color: '#ff5522', icon: '◎' },
+  shock: { color: '#88ddff', icon: '⚡' },
+  rapid: { color: '#ffee44', icon: '≫' },
+  meteor: { color: '#ff7744', icon: '☄' },
   send: { color: '#ff8844', icon: '⇒' },
   direct: { color: '#ff3333', icon: '※' },
   heal: { color: '#44ff88', icon: '+' },
   heal_big: { color: '#22ff66', icon: '++' },
-  send_mech: { color: '#55ff99', icon: '機' },
-  send_golem: { color: '#ffbb55', icon: '岩' },
-  send_tank: { color: '#66aaff', icon: '戦' },
+  send_mech: { color: '#88aaff', icon: '艦' },
+  send_golem: { color: '#cc88ff', icon: '塞' },
+  send_tank: { color: '#66ddff', icon: '砲' },
   send_drone: { color: '#33ffff', icon: '群' },
 };
 

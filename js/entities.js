@@ -3,6 +3,11 @@
 export const POWERUPS = [
   { id: 'homing',     label: '追尾ミサイル',  effect: '敵を追う弾を連射',           color: '#ff66ff', icon: '◆' },
   { id: 'laser',      label: 'レーザー',      effect: '太いレーザーで前方攻撃',     color: '#66ccff', icon: '═' },
+  { id: 'spread',     label: 'ショットガン',  effect: '扇状の弾幕を一斉射撃',       color: '#ffaa33', icon: '※※' },
+  { id: 'bomb',       label: 'ボム',          effect: '画面内の敵をまとめて攻撃',   color: '#ff5522', icon: '◎' },
+  { id: 'shock',      label: '電撃',          effect: '近くの敵をまとめて感電',     color: '#88ddff', icon: '⚡' },
+  { id: 'rapid',      label: '連射強化',      effect: '一定時間すばやく強弾を連射', color: '#ffee44', icon: '≫' },
+  { id: 'meteor',     label: '隕石送信',      effect: '相手に隕石攻撃を落とす',     color: '#ff7744', icon: '☄' },
   { id: 'send',       label: '敵キャラ送信',  effect: '相手に敵を送る',             color: '#ff8844', icon: '⇒' },
   { id: 'direct',     label: '直接攻撃',      effect: '相手のHPを直接削る',         color: '#ff3333', icon: '※' },
   { id: 'heal',       label: 'HP回復',        effect: '自分のHPを+25',              color: '#44ff88', icon: '+' },
@@ -20,9 +25,10 @@ export function powerupMeta(id) {
 
 export function pickPowerupId() {
   const weighted = [
-    ['homing', 2], ['laser', 2], ['send', 2], ['direct', 2],
-    ['heal', 4], ['heal_big', 2],
-    ['send_mech', 3], ['send_golem', 3], ['send_tank', 3], ['send_drone', 3],
+    ['homing', 2], ['laser', 2], ['spread', 3], ['bomb', 2], ['shock', 3], ['rapid', 3],
+    ['meteor', 2], ['send', 2], ['direct', 2],
+    ['heal', 3], ['heal_big', 2],
+    ['send_mech', 2], ['send_golem', 2], ['send_tank', 2], ['send_drone', 2],
   ];
   let r = Math.random() * weighted.reduce((s, [, w]) => s + w, 0);
   for (const [id, w] of weighted) { r -= w; if (r <= 0) return id; }

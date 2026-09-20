@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.5.3';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.5.3';
-import { sfx } from './audio.js?v=1.5.3';
+} from './entities.js?v=1.5.4';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.5.4';
+import { sfx } from './audio.js?v=1.5.4';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -410,6 +410,77 @@ export class Game {
       this.sendToOpponent('tank', meta?.label);
     } else if (id === 'send_drone') {
       this.sendToOpponent(['drone', 'drone', 'drone', 'drone'], meta?.label);
+    } else if (id === 'spread') {
+      // Shotgun fan burst
+      const by = p.y * this.L.own.h;
+      for (let i = -3; i <= 3; i++) {
+        const ang = i * 0.18;
+        const spd = 480;
+        this.state.bullets.push(spawnBullet(
+          p.x + 18, by,
+          Math.cos(ang) * spd, Math.sin(ang) * spd,
+          'player', false, 2,
+        ));
+      }
+      this.state.fx.push(spawnExplosion(p.x + 30, by, false));
+      p.activePower = null;
+      p.activeTimer = 0;
+      setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1000);
+    } else if (id === 'bomb') {
+      // Screen bomb: heavy damage to all enemies, clear nearby enemy bullets
+      let hits = 0;
+      for (const e of this.state.enemies) {
+        e.hp -= 28;
+        this.state.fx.push(spawnExplosion(e.x, e.y, e.kind === 'boss'));
+        hits++;
+      }
+      this.state.bullets = this.state.bullets.filter((b) => b.owner === 'player');
+      this.state.fx.push(spawnExplosion(this.L.own.w * 0.55, p.y * this.L.own.h, true));
+      this.showItemBanner(meta, `（敵${hits}体）`);
+      p.activePower = null;
+      p.activeTimer = 0;
+      setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1200);
+    } else if (id === 'shock') {
+      // Lightning: damage nearby enemies
+      const py = p.y * this.L.own.h;
+      let hits = 0;
+      for (const e of this.state.enemies) {
+        const dx = e.x - p.x;
+        const dy = e.y - py;
+        if (dx * dx + dy * dy < 160 * 160) {
+          e.hp -= 18;
+          this.state.fx.push(spawnExplosion(e.x, e.y, false));
+          hits++;
+        }
+      }
+      this.state.fx.push(spawnExplosion(p.x + 40, py, true));
+      this.showItemBanner(meta, `（命中${hits}）`);
+      p.activePower = null;
+      p.activeTimer = 0;
+      setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1200);
+    } else if (id === 'rapid') {
+      p.activePower = 'rapid';
+      p.activeTimer = 5.5;
+    } else if (id === 'meteor') {
+      // Meteor strike on opponent HP + visual
+      const dmg = 14;
+      if (this.useBot) {
+        this._bot.hp = Math.max(0, this._bot.hp - dmg);
+        this.state.botHp = this._bot.hp;
+        for (let i = 0; i < 3; i++) {
+          this._bot.fx.push(spawnExplosion(
+            this.L.own.w * (0.35 + Math.random() * 0.4),
+            this._bot.y * this.L.own.h + (Math.random() - 0.5) * 40,
+            true,
+          ));
+        }
+      } else if (this.net) {
+        this.net.send({ type: 'directHit', dmg });
+      }
+      this.state.fx.push(spawnExplosion(this.L.own.w * 0.7, p.y * this.L.own.h, true));
+      p.activePower = null;
+      p.activeTimer = 0;
+      setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1400);
     } else if (id === 'heal') {
       const before = p.hp;
       p.hp = Math.min(p.maxHp || 100, p.hp + 25);
@@ -611,12 +682,19 @@ export class Game {
 
     // Auto fire
     P.fireCd -= dt;
-    const fireRate = P.activePower === 'homing' ? 0.16 : 0.28;
+    const fireRate = P.activePower === 'homing' ? 0.16
+      : P.activePower === 'rapid' ? 0.1
+      : 0.28;
     if (P.fireCd <= 0 && S.alive) {
       P.fireCd = fireRate;
       const by = P.y * fh;
       if (P.activePower === 'homing') {
         S.bullets.push(spawnBullet(P.x + 16, by, 320, 0, 'player', true, 3));
+        sfx.shot();
+      } else if (P.activePower === 'rapid') {
+        S.bullets.push(spawnBullet(P.x + 16, by, 520, 0, 'player', false, 3));
+        S.bullets.push(spawnBullet(P.x + 16, by - 6, 500, -30, 'player', false, 2));
+        S.bullets.push(spawnBullet(P.x + 16, by + 6, 500, 30, 'player', false, 2));
         sfx.shot();
       } else {
         S.bullets.push(spawnBullet(P.x + 16, by, 420, 0, 'player', false, 2));
@@ -920,12 +998,16 @@ export class Game {
     // --- Fire control: lead aim, burst when aligned, powers ---
     B.fireCd -= dt;
     const aligned = focus && Math.abs(focus.y / fh - B.y) < (mustDodge ? 0.07 : 0.11);
-    const fireRate = B.activePower === 'homing' ? 0.12 : (aligned ? 0.14 : 0.2);
+    const fireRate = B.activePower === 'homing' ? 0.12 : B.activePower === 'rapid' ? 0.09 : (aligned ? 0.14 : 0.2);
     if (B.fireCd <= 0) {
       B.fireCd = fireRate;
       const by = B.y * fh;
       if (B.activePower === 'homing') {
         B.bullets.push(spawnBullet(shipX + 16, by, 360, 0, 'player', true, 3));
+      } else if (B.activePower === 'rapid') {
+        B.bullets.push(spawnBullet(shipX + 16, by, 520, 0, 'player', false, 3));
+        B.bullets.push(spawnBullet(shipX + 16, by - 6, 500, -30, 'player', false, 2));
+        B.bullets.push(spawnBullet(shipX + 16, by + 6, 500, 30, 'player', false, 2));
       } else {
         // slight lead on vertical velocity of focus
         let vy = 0;
@@ -1079,11 +1161,11 @@ export class Game {
         if (h >= 0) return h;
       }
       if (enemyPressure >= 4 && !B.activePower) {
-        const l = B.items.findIndex((id) => id === 'laser' || id === 'homing');
+        const l = B.items.findIndex((id) => id === 'laser' || id === 'homing' || id === 'bomb' || id === 'shock' || id === 'spread' || id === 'rapid');
         if (l >= 0) return l;
       }
       if (playerHp > 55) {
-        const heavy = B.items.findIndex((id) => id === 'send_mech' || id === 'send_golem' || id === 'send_tank' || id === 'send_drone' || id === 'send' || id === 'direct');
+        const heavy = B.items.findIndex((id) => id === 'send_mech' || id === 'send_golem' || id === 'send_tank' || id === 'send_drone' || id === 'send' || id === 'direct' || id === 'meteor');
         if (heavy >= 0) return heavy;
       }
       // default: first offensive
@@ -1095,7 +1177,7 @@ export class Game {
       if (B.powerCd > 0 && !force) return;
       // Seed inventory so COM always has something to think with
       if (!B.items.length) {
-        const pool = ['homing', 'laser', 'send', 'direct', 'send_mech', 'send_golem', 'send_tank', 'send_drone', 'heal'];
+        const pool = ['homing', 'laser', 'spread', 'bomb', 'shock', 'rapid', 'meteor', 'send', 'direct', 'send_mech', 'send_golem', 'send_tank', 'send_drone', 'heal'];
         B.items.push(pool[(Math.random() * pool.length) | 0]);
         if (Math.random() < 0.5) B.items.push(pool[(Math.random() * pool.length) | 0]);
       }
@@ -1115,6 +1197,37 @@ export class Game {
       } else if (id === 'direct') {
         this.applyPlayerDamage(8, 'direct');
         this.state.fx.push(spawnExplosion(this.state.player.x, this.state.player.y * fh, false));
+      } else if (id === 'spread') {
+        const by = B.y * fh;
+        for (let i = -3; i <= 3; i++) {
+          const ang = i * 0.18;
+          const spd = 480;
+          B.bullets.push(spawnBullet(48 + 18, by, Math.cos(ang) * spd, Math.sin(ang) * spd, 'player', false, 2));
+        }
+        B.fx.push(spawnExplosion(48 + 30, by, false));
+      } else if (id === 'bomb') {
+        for (const e of B.enemies) {
+          e.hp -= 28;
+          B.fx.push(spawnExplosion(e.x, e.y, true));
+        }
+        B.bullets = B.bullets.filter((b) => b.owner === 'player');
+      } else if (id === 'shock') {
+        const by = B.y * fh;
+        for (const e of B.enemies) {
+          const dx = e.x - 48;
+          const dy = e.y - by;
+          if (dx * dx + dy * dy < 160 * 160) {
+            e.hp -= 18;
+            B.fx.push(spawnExplosion(e.x, e.y, false));
+          }
+        }
+      } else if (id === 'rapid') {
+        B.activePower = 'rapid';
+        B.activeTimer = 5.5;
+      } else if (id === 'meteor') {
+        this.applyPlayerDamage(14, 'direct');
+        this.state.fx.push(spawnExplosion(this.state.player.x, this.state.player.y * fh, true));
+        this.state.fx.push(spawnExplosion(this.state.player.x + 20, this.state.player.y * fh - 20, false));
       } else if (id === 'send' || id === 'send_mech' || id === 'send_golem' || id === 'send_tank' || id === 'send_drone') {
         const map = {
           send: ['swarm', 'swarm', 'elite'],
