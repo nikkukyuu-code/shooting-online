@@ -149,42 +149,48 @@ function drawShip(ctx, x, y, w, h, color = '#e8f0ff', facing = 1) {
 
 function drawHpPip(ctx, e) {
   const pct = Math.max(0, e.hp / (e.maxHp || e.hp || 1));
-  ctx.fillStyle = '#0008';
-  ctx.fillRect(-e.w * 0.4, -e.h * 0.65, e.w * 0.8, 5);
-  ctx.fillStyle = '#3f3';
-  ctx.fillRect(-e.w * 0.4, -e.h * 0.65, e.w * 0.8 * pct, 5);
+  ctx.fillStyle = 'rgba(0,0,0,0.75)';
+  ctx.fillRect(-e.w * 0.45, -e.h * 0.72, e.w * 0.9, 6);
+  ctx.fillStyle = '#2f2';
+  ctx.fillRect(-e.w * 0.45, -e.h * 0.72, e.w * 0.9 * pct, 6);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(-e.w * 0.45, -e.h * 0.72, e.w * 0.9, 6);
 }
 
 function drawEnemy(ctx, e) {
   ctx.save();
   ctx.translate(e.x, e.y);
   const robot = e.kind === 'mech' || e.kind === 'golem' || e.kind === 'tank' || e.kind === 'drone';
+  const col = e.sent ? '#66eeff' : (e.color || e.c || '#ff5555');
+
+  // Readability: dark halo + bright body + white outline
+  ctx.shadowColor = 'rgba(0,0,0,0.9)';
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+
   if (e.kind === 'boss' || robot) {
-    const col = e.sent ? '#7df' : (e.color || '#9aa');
     ctx.fillStyle = col;
     if (e.kind === 'tank') {
-      // wide chassis + turret
       ctx.fillRect(-e.w * 0.45, -e.h * 0.25, e.w * 0.9, e.h * 0.55);
       ctx.fillRect(-e.w * 0.15, -e.h * 0.45, e.w * 0.55, e.h * 0.25);
       ctx.fillRect(e.w * 0.15, -e.h * 0.12, e.w * 0.4, e.h * 0.12);
-      ctx.fillStyle = '#222';
+      ctx.fillStyle = '#111';
       for (let i = -2; i <= 2; i++) ctx.fillRect(i * e.w * 0.16 - 4, e.h * 0.22, 8, 8);
     } else if (e.kind === 'golem') {
-      // bulky torso + arms
       ctx.fillRect(-e.w * 0.28, -e.h * 0.4, e.w * 0.56, e.h * 0.75);
       ctx.fillRect(-e.w * 0.5, -e.h * 0.15, e.w * 0.2, e.h * 0.45);
       ctx.fillRect(e.w * 0.3, -e.h * 0.15, e.w * 0.2, e.h * 0.45);
-      ctx.fillStyle = '#f44';
-      ctx.beginPath(); ctx.arc(0, -e.h * 0.15, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ff2233';
+      ctx.beginPath(); ctx.arc(0, -e.h * 0.15, 7, 0, Math.PI * 2); ctx.fill();
     } else if (e.kind === 'drone') {
       ctx.beginPath();
       ctx.ellipse(0, 0, e.w * 0.45, e.h * 0.35, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#fff8'; ctx.lineWidth = 1.5; ctx.stroke();
-      ctx.fillStyle = '#f80';
-      ctx.fillRect(-3, -e.h * 0.1, 6, e.h * 0.2);
+      ctx.fillStyle = '#ff8800';
+      ctx.fillRect(-4, -e.h * 0.12, 8, e.h * 0.24);
     } else {
-      // mech / boss: angular robot
       ctx.beginPath();
       ctx.moveTo(e.w * 0.5, 0);
       ctx.lineTo(e.w * 0.15, -e.h * 0.45);
@@ -194,24 +200,39 @@ function drawEnemy(ctx, e) {
       ctx.lineTo(e.w * 0.15, e.h * 0.45);
       ctx.closePath();
       ctx.fill();
-      ctx.strokeStyle = '#fff8';
+      ctx.fillStyle = '#ff2233';
+      ctx.fillRect(-5, -7, 12, 12);
+    }
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    // stroke last shape roughly — for rects redraw outline box
+    if (e.kind === 'tank' || e.kind === 'golem') {
+      ctx.strokeStyle = '#fff';
       ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.fillStyle = '#f44';
-      ctx.fillRect(-4, -6, 10, 10);
+      ctx.strokeRect(-e.w * 0.45, -e.h * 0.45, e.w * 0.9, e.h * 0.85);
     }
     drawHpPip(ctx, e);
   } else {
-    ctx.fillStyle = e.sent ? '#6cf' : e.color;
+    ctx.fillStyle = col;
     ctx.beginPath();
-    ctx.moveTo(-e.w * 0.5, 0);
-    ctx.lineTo(e.w * 0.35, -e.h * 0.5);
-    ctx.lineTo(e.w * 0.15, 0);
-    ctx.lineTo(e.w * 0.35, e.h * 0.5);
+    ctx.moveTo(-e.w * 0.55, 0);
+    ctx.lineTo(e.w * 0.4, -e.h * 0.55);
+    ctx.lineTo(e.w * 0.2, 0);
+    ctx.lineTo(e.w * 0.4, e.h * 0.55);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = '#fff6';
-    ctx.fillRect(-2, -2, 4, 4);
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(e.w * 0.05, 0, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    // small HP for elites
+    if (e.kind === 'elite') drawHpPip(ctx, e);
   }
   ctx.restore();
 }

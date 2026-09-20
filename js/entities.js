@@ -42,14 +42,14 @@ export function createPlayer(side = 'self') {
 
 export function spawnEnemy(fieldW, fieldH, kind = 'basic') {
   const types = {
-    basic:  { w: 24, h: 20, hp: 8,  speed: 100 + Math.random() * 50, score: 10,  color: '#c44' },
-    elite:  { w: 34, h: 28, hp: 18, speed: 75 + Math.random() * 35,  score: 30,  color: '#a28' },
-    swarm:  { w: 16, h: 14, hp: 3,  speed: 150 + Math.random() * 55, score: 5,   color: '#e85' },
-    boss:   { w: 80, h: 64, hp: 120, speed: 34, score: 200, color: '#888' },
-    mech:   { w: 72, h: 60, hp: 55, speed: 42, score: 80,  color: '#6a8' },
-    golem:  { w: 78, h: 70, hp: 70, speed: 28, score: 100, color: '#975' },
-    tank:   { w: 86, h: 52, hp: 85, speed: 32, score: 110, color: '#579' },
-    drone:  { w: 28, h: 22, hp: 10, speed: 130 + Math.random() * 40, score: 20, color: '#4cf' },
+    basic:  { w: 30, h: 26, hp: 8,  speed: 100 + Math.random() * 50, score: 10,  color: '#ff3b3b' },
+    elite:  { w: 40, h: 34, hp: 18, speed: 75 + Math.random() * 35,  score: 30,  color: '#ff66ee' },
+    swarm:  { w: 22, h: 18, hp: 3,  speed: 150 + Math.random() * 55, score: 5,   color: '#ffaa33' },
+    boss:   { w: 80, h: 64, hp: 120, speed: 34, score: 200, color: '#dde2ea' },
+    mech:   { w: 72, h: 60, hp: 55, speed: 42, score: 80,  color: '#55ff99' },
+    golem:  { w: 78, h: 70, hp: 70, speed: 28, score: 100, color: '#ffbb55' },
+    tank:   { w: 86, h: 52, hp: 85, speed: 32, score: 110, color: '#66ccff' },
+    drone:  { w: 28, h: 22, hp: 10, speed: 130 + Math.random() * 40, score: 20, color: '#33ffff' },
   };
   const t = types[kind] || types.basic;
   return {
