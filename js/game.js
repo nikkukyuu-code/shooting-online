@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.4.8';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.4.8';
-import { sfx } from './audio.js?v=1.4.8';
+} from './entities.js?v=1.4.9';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.4.9';
+import { sfx } from './audio.js?v=1.4.9';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -308,8 +308,9 @@ export class Game {
     P.hp = Math.max(0, P.hp - dmg);
     // Visual feedback state
     this.state.hpGhost = Math.max(this.state.hpGhost ?? before, before);
-    this.state.damageFlash = 0.35;
-    this.state.hpShake = 0.4;
+    this.state.hpGhostHold = 0.85; // keep lost chunk visible before draining
+    this.state.damageFlash = 0.55;
+    this.state.hpShake = 0.55;
     this.state.damageNumbers = this.state.damageNumbers || [];
     this.state.damageNumbers.push({
       x: P.x + 20,
@@ -555,8 +556,15 @@ export class Game {
     // Smooth display chase toward real HP
     this.state.hpDisplay += (P.hp - this.state.hpDisplay) * Math.min(1, 8 * dt);
     // Ghost lags behind then catches up (shows lost chunk)
+    if (this.state.hpGhostHold == null) this.state.hpGhostHold = 0;
+    if (this.state.hpGhostHold > 0) this.state.hpGhostHold -= dt;
     if (this.state.hpGhost > P.hp) {
-      this.state.hpGhost += (P.hp - this.state.hpGhost) * Math.min(1, 2.2 * dt);
+      // Hold the orange "lost" chunk, then drain slowly (~1.5s after hold)
+      if (this.state.hpGhostHold <= 0) {
+        const speed = 0.45; // lower = longer visible drain
+        this.state.hpGhost += (P.hp - this.state.hpGhost) * Math.min(1, speed * dt);
+        if (this.state.hpGhost - P.hp < 0.15) this.state.hpGhost = P.hp;
+      }
     } else {
       this.state.hpGhost = P.hp;
     }

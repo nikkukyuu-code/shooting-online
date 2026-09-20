@@ -318,44 +318,50 @@ function drawHpBarsAtBoundary(ctx, L, selfHp, oppHp, maxHp, fx = {}) {
   const barH = Math.max(6, Math.min(11, L.H * 0.012));
   const gap = barH + 6;
   const y0 = L.oppH + Math.max(6, L.ownH * 0.02);
-  const sx = shake > 0 ? (Math.random() - 0.5) * 10 * shake : 0;
-  const sy = shake > 0 ? (Math.random() - 0.5) * 6 * shake : 0;
-  const x = x0 + sx;
-  const y = y0 + sy;
+  const jx = shake > 0 ? (Math.random() - 0.5) * 10 * shake : 0;
+  const jy = shake > 0 ? (Math.random() - 0.5) * 6 * shake : 0;
+  const x = x0 + jx;
+  const y = y0 + jy;
 
-  // self track
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  // TOP = opponent (near opponent pane)
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.fillRect(x, y, barW, barH);
-  // ghost (lost HP chunk) — bright red/orange draining
+  ctx.fillStyle = '#6f6';
+  ctx.fillRect(x, y, barW * Math.max(0, oppHp / maxHp), barH);
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, barW, barH);
+  ctx.font = `600 ${Math.max(8, barH - 1)}px sans-serif`;
+  ctx.fillStyle = 'rgba(220,255,220,0.85)';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('あいて', x + 4, y + barH * 0.5);
+
+  // BOTTOM = self (near own pane) — lost-HP ghost drains slowly
+  const ySelf = y + gap;
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillRect(x, ySelf, barW, barH);
+  // ghost chunk (orange) — stays visible longer
   ctx.fillStyle = flash > 0 ? '#ff5533' : '#ff8844';
-  ctx.fillRect(x, y, barW * Math.max(0, ghost / maxHp), barH);
-  // current HP
+  ctx.fillRect(x, ySelf, barW * Math.max(0, ghost / maxHp), barH);
   const ratio = Math.max(0, display / maxHp);
   ctx.fillStyle = ratio < 0.3 ? '#ff3333' : ratio < 0.55 ? '#ffcc33' : '#33ee66';
-  ctx.fillRect(x, y, barW * ratio, barH);
-  // flash overlay on bar
+  ctx.fillRect(x, ySelf, barW * ratio, barH);
   if (flash > 0) {
-    ctx.fillStyle = `rgba(255,255,255,${0.35 * (flash / 0.35)})`;
-    ctx.fillRect(x, y, barW * ratio, barH);
+    ctx.fillStyle = `rgba(255,255,255,${0.35 * Math.min(1, flash / 0.35)})`;
+    ctx.fillRect(x, ySelf, barW * ratio, barH);
   }
   ctx.strokeStyle = flash > 0 ? '#fff' : 'rgba(255,255,255,0.65)';
   ctx.lineWidth = flash > 0 ? 2 : 1;
-  ctx.strokeRect(x, y, barW, barH);
-  // label
+  ctx.strokeRect(x, ySelf, barW, barH);
   ctx.font = `700 ${Math.max(9, barH)}px sans-serif`;
   ctx.fillStyle = '#fff';
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
-  ctx.fillText(`${Math.max(0, Math.ceil(display))}`, x - 6, y + barH * 0.5);
-
-  // opponent
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
-  ctx.fillRect(x, y + gap, barW, barH);
-  ctx.fillStyle = '#6f6';
-  ctx.fillRect(x, y + gap, barW * Math.max(0, oppHp / maxHp), barH);
-  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(x, y + gap, barW, barH);
+  ctx.fillText(`${Math.max(0, Math.ceil(display))}`, x - 6, ySelf + barH * 0.5);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(255,255,200,0.9)';
+  ctx.fillText('じぶん', x + 4, ySelf + barH * 0.5);
 }
 
 function drawDamageFlash(ctx, L, flash) {
