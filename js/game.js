@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-} from './entities.js?v=1.5.27';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.27';
-import { sfx } from './audio.js?v=1.5.27';
+} from './entities.js?v=1.5.28';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.28';
+import { sfx } from './audio.js?v=1.5.28';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -995,7 +995,7 @@ export class Game {
     if (!B) return;
     const fw = this.L.own.w;
     const fh = this.L.own.h;
-    const shipX = 48;
+    let shipX = B.x || 48;
     B.time += dt;
     B.scroll += 55 * dt;
     if (B.invuln == null) B.invuln = 0;
@@ -1109,30 +1109,34 @@ export class Game {
     B.surgePhase += dt * (1.3 + Math.random() * 0.4);
     let wantX = B.preferredX;
     if (dodging || urgent) {
-      // retreat toward back when dodging bullets/enemies
-      wantX = 34 + Math.random() * 10;
-      B.preferredX += (wantX - B.preferredX) * Math.min(1, 4 * dt);
-    } else if (focus && focus.x < fw * 0.55) {
-      // close in on nearby targets
-      wantX = 70 + Math.min(40, (fw * 0.5 - focus.x) * 0.15);
-      B.preferredX += (wantX - B.preferredX) * Math.min(1, 2.4 * dt);
+      // pull back hard when dodging
+      wantX = fw * 0.08 + Math.random() * fw * 0.06;
+      B.preferredX += (wantX - B.preferredX) * Math.min(1, 5.5 * dt);
+    } else if (focus && focus.x < fw * 0.62) {
+      // surge forward toward targets
+      wantX = fw * 0.38 + Math.min(fw * 0.18, (fw * 0.55 - focus.x) * 0.25);
+      B.preferredX += (wantX - B.preferredX) * Math.min(1, 3.2 * dt);
     } else if (enemyPressure >= 3) {
-      wantX = 40;
-      B.preferredX += (wantX - B.preferredX) * Math.min(1, 2 * dt);
+      wantX = fw * 0.12;
+      B.preferredX += (wantX - B.preferredX) * Math.min(1, 2.8 * dt);
     } else {
-      // idle weave forward/back like a human finger drag
-      wantX = 52 + Math.sin(B.surgePhase) * 22 + Math.sin(B.time * 0.7) * 10;
-      B.preferredX += (wantX - B.preferredX) * Math.min(1, 1.6 * dt);
+      // big idle weave — clearly visible fore/aft (left=back, right=forward)
+      wantX = fw * 0.28 + Math.sin(B.surgePhase) * fw * 0.18 + Math.sin(B.time * 0.55) * fw * 0.08;
+      B.preferredX += (wantX - B.preferredX) * Math.min(1, 2.2 * dt);
     }
-    wantX = B.preferredX + Math.sin(B.surgePhase * 1.7) * 6;
-    const maxSpeedX = dodging ? 220 : 140;
-    const accelX = dodging ? 14 : 7;
-    const desiredVelX = Math.max(-maxSpeedX, Math.min(maxSpeedX, (wantX - B.x) * (dodging ? 6 : 3.2)));
+    // occasional dash pulse
+    if (Math.random() < 0.012) {
+      B.preferredX = Math.random() < 0.5 ? fw * 0.1 : fw * 0.48;
+    }
+    wantX = B.preferredX + Math.sin(B.surgePhase * 1.7) * fw * 0.04;
+    const maxSpeedX = dodging ? fw * 1.1 : fw * 0.75;
+    const accelX = dodging ? 16 : 9;
+    const desiredVelX = Math.max(-maxSpeedX, Math.min(maxSpeedX, (wantX - B.x) * (dodging ? 7 : 4)));
     B.moveVelX += (desiredVelX - B.moveVelX) * Math.min(1, accelX * dt);
-    B.moveVelX += (Math.random() - 0.5) * 8;
+    B.moveVelX += (Math.random() - 0.5) * fw * 0.04;
     B.x += B.moveVelX * dt;
-    B.x = Math.max(28, Math.min(fw * 0.55, B.x));
-    const shipX = B.x;
+    B.x = Math.max(fw * 0.06, Math.min(fw * 0.55, B.x));
+    shipX = B.x;
 
     B.aimNoise += ((Math.random() - 0.5) * 0.06 - B.aimNoise) * Math.min(1, 2.2 * dt);
 
