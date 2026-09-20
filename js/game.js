@@ -1,8 +1,8 @@
 import {
   POWERUPS, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.4.4';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.4.4';
-import { sfx } from './audio.js?v=1.4.4';
+} from './entities.js?v=1.4.5';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.4.5';
+import { sfx } from './audio.js?v=1.4.5';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -22,7 +22,8 @@ export class Game {
     this.pointerY = 0.5;
     this.pointerX = 0.14; // normalized 0..1 within own field width (left=back, right=forward)
     this.pointerDown = false;
-    this.ctrlTouch = { active: false, x: 0.5, y: 0.5 }; // finger pos in ctrl pane (0..1)
+    this.ctrlTouch = { active: false, x: 0.5, y: 0.5 };
+    this.draggingShip = false; // only move when grabbing ship on control pad // finger pos in ctrl pane (0..1)
     this._lastTs = 0;
     this._spawnAcc = 0;
     this._bossAcc = 0;
@@ -53,6 +54,7 @@ export class Game {
     this.pointerY = 0.5;
     this.pointerX = 0.14;
     this.ctrlTouch = { active: false, x: 0.5, y: 0.5 };
+    this.draggingShip = false; // only move when grabbing ship on control pad
     this.ui.endOverlay.classList.add('hidden');
     this.setStatus(WAIT);
   }
@@ -183,38 +185,54 @@ export class Game {
         return;
       }
 
-      // PRIMARY: bottom control pane drag → ship X/Y in own field
+      // PRIMARY: bottom control pane — must grab the ship to move
       if (relY >= ownBot) {
-        if (onBtn && isMove) return; // don't steer while over button during move-from-btn
+        if (onBtn && isMove) return;
         const localY = (relY - ownBot) / CTRL_RATIO;
-        // Leave a little margin so status strip / button feel less sticky
+        const localX = relX;
+        const shipX = this.pointerX;
+        const shipY = this.pointerY;
+        // Generous touch radius (normalized pane space)
+        const hitR = 0.14;
+        const dx = localX - shipX;
+        const dy = localY - shipY;
+        const onShip = (dx * dx + dy * dy) <= hitR * hitR;
+
+        if (isDown) {
+          if (!onShip) {
+            // Touched empty pad — do not start moving
+            this.draggingShip = false;
+            this.pointerDown = false;
+            this.ctrlTouch = { active: false, x: shipX, y: shipY };
+            return;
+          }
+          this.draggingShip = true;
+        }
+
+        if (!this.draggingShip) {
+          // Moving finger without an active grab — ignore
+          return;
+        }
+
         this.pointerY = Math.max(0.06, Math.min(0.94, localY));
-        this.pointerX = Math.max(0.06, Math.min(0.88, relX));
+        this.pointerX = Math.max(0.06, Math.min(0.88, localX));
         this.pointerDown = true;
         this.ctrlTouch = {
           active: true,
-          x: Math.max(0.02, Math.min(0.98, relX)),
-          y: Math.max(0.02, Math.min(0.98, localY)),
+          x: this.pointerX,
+          y: this.pointerY,
         };
         return;
       }
 
-      // OPTIONAL convenience: middle pane drag also moves ship
+      // Middle / playfield: display only — no drag move
       if (relY >= ownTop && relY < ownBot) {
-        const localY = (relY - ownTop) / OWN_RATIO;
-        this.pointerY = Math.max(0.06, Math.min(0.94, localY));
-        this.pointerX = Math.max(0.06, Math.min(0.88, relX));
-        this.pointerDown = true;
-        // Mirror indicator into ctrl pane so user sees where control maps
-        this.ctrlTouch = {
-          active: true,
-          x: Math.max(0.02, Math.min(0.98, relX)),
-          y: Math.max(0.02, Math.min(0.98, localY)),
-        };
+        return;
       }
     };
     this._onPointerUp = () => {
       this.pointerDown = false;
+      this.draggingShip = false;
       if (this.ctrlTouch) this.ctrlTouch.active = false;
     };
     c.addEventListener('pointerdown', this._onPointer, { passive: false });
@@ -445,6 +463,14 @@ export class Game {
       if (this._keys.has('ArrowDown') || this._keys.has('s') || this._keys.has('S')) this.pointerY = Math.min(0.94, this.pointerY + 1.2 * dt);
       if (this._keys.has('ArrowLeft') || this._keys.has('a') || this._keys.has('A')) this.pointerX = Math.max(0.06, this.pointerX - 1.2 * dt);
       if (this._keys.has('ArrowRight') || this._keys.has('d') || this._keys.has('D')) this.pointerX = Math.min(0.88, this.pointerX + 1.2 * dt);
+    }
+    // Keep control-pad ship marker synced with actual ship when not grabbing
+    if (!this.draggingShip) {
+      this.ctrlTouch = {
+        active: false,
+        x: this.pointerX,
+        y: this.pointerY,
+      };
     }
     // Move player toward pointer (free 2D within own field)
     P.y += (this.pointerY - P.y) * Math.min(1, 12 * dt);

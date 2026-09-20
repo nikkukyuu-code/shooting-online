@@ -360,37 +360,28 @@ function drawControlPanel(ctx, area, localState) {
   ctx.fillStyle = 'rgba(180, 190, 255, 0.28)';
   ctx.fillRect(0, 0, area.w, 2);
 
-  // Touch / finger indicator (subtle crosshair + ring)
-  const touch = localState.ctrlTouch;
-  if (touch && touch.active) {
-    const tx = touch.x * area.w;
-    const ty = touch.y * area.h;
-    const r = Math.min(area.w, area.h) * 0.14;
-    ctx.strokeStyle = 'rgba(200, 210, 255, 0.35)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(tx, ty, r, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(220, 230, 255, 0.45)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(tx - r * 0.7, ty);
-    ctx.lineTo(tx + r * 0.7, ty);
-    ctx.moveTo(tx, ty - r * 0.7);
-    ctx.lineTo(tx, ty + r * 0.7);
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    ctx.beginPath();
-    ctx.arc(tx, ty, 3, 0, Math.PI * 2);
-    ctx.fill();
-  } else {
-    // Idle pad hint ring
-    ctx.strokeStyle = 'rgba(160, 170, 220, 0.16)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(area.w * 0.42, area.h * 0.42, Math.min(area.w, area.h) * 0.16, 0, Math.PI * 2);
-    ctx.stroke();
-  }
+  // Control ship — touch this to move (mirrors playfield position)
+  const touch = localState.ctrlTouch || {};
+  const p = localState.player || {};
+  const sx = (touch.x != null ? touch.x : 0.14) * area.w;
+  const sy = (touch.y != null ? touch.y : (p.y <= 1 ? p.y : 0.5)) * area.h;
+  const shipW = Math.max(34, area.w * 0.12);
+  const shipH = Math.max(22, area.h * 0.14);
+  // Grab hint ring
+  ctx.strokeStyle = touch.active ? 'rgba(120, 220, 255, 0.75)' : 'rgba(200, 220, 255, 0.4)';
+  ctx.lineWidth = touch.active ? 2.5 : 1.5;
+  ctx.setLineDash(touch.active ? [] : [4, 4]);
+  ctx.beginPath();
+  ctx.arc(sx, sy, Math.max(shipW, shipH) * 0.85, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  drawShip(ctx, sx, sy, shipW, shipH, '#e8f0ff');
+  // Label
+  ctx.font = `600 ${Math.max(10, area.h * 0.07)}px "Hiragino Sans","Noto Sans JP",sans-serif`;
+  ctx.fillStyle = 'rgba(230,240,255,0.75)';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(touch.active ? 'ドラッグ中' : '自機をドラッグ', sx, sy + shipH * 0.7);
 
   // Queued item pips (left-center of pad)
   const items = (localState.player && localState.player.items) || [];
