@@ -1,8 +1,8 @@
 import {
-  POWERUPS, powerupMeta, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.5.1';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.5.1';
-import { sfx } from './audio.js?v=1.5.1';
+  POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
+} from './entities.js?v=1.5.2';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.5.2';
+import { sfx } from './audio.js?v=1.5.2';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -129,7 +129,14 @@ export class Game {
       scroll: 0,
       items: [],
       time: 0,
-      powerCd: 8,
+      powerCd: 2.5,
+      invuln: 0,
+      activePower: null,
+      activeTimer: 0,
+      laserCd: 0,
+      thinkAcc: 0,
+      preferredY: 0.5,
+      lastDodgeDir: 1,
     };
     this.state.botHp = 100;
   }
@@ -787,84 +794,179 @@ export class Game {
     const B = this._bot;
     const fw = this.L.own.w;
     const fh = this.L.own.h;
+    const shipX = 48;
     B.time += dt;
     B.scroll += 55 * dt;
-
-    // AI: prioritize dodging incoming bullets, then track enemies
-    let nearest = null;
-    let nd = 1e9;
-    for (const e of B.enemies) {
-      const d = e.x - 48;
-      if (d > 0 && d < nd) { nd = d; nearest = e; }
+    if (B.invuln == null) B.invuln = 0;
+    if (B.invuln > 0) B.invuln -= dt;
+    if (B.activeTimer > 0) {
+      B.activeTimer -= dt;
+      if (B.activeTimer <= 0) B.activePower = null;
     }
 
-    let dodgeY = null;
-    let bestThreat = 0;
-    for (const b of B.bullets) {
-      if (b.owner !== 'enemy') continue;
-      if (b.vx >= 0) continue; // not flying left toward COM
-      const bx = b.x;
-      const byN = b.y / fh;
-      // ETA-ish: closer + on lane = higher threat
-      if (bx > fw * 0.55 || bx < 20) continue;
-      const lane = Math.abs(byN - B.y);
-      if (lane > 0.14) continue;
-      const threat = (1 - bx / fw) * (1 - lane / 0.14);
-      if (threat > bestThreat) {
-        bestThreat = threat;
-        // Escape to the emptier side of the bullet lane
-        const upClear = byN;
-        const downClear = 1 - byN;
-        dodgeY = upClear >= downClear
-          ? Math.max(0.08, byN - 0.22 - Math.random() * 0.06)
-          : Math.min(0.92, byN + 0.22 + Math.random() * 0.06);
+    // --- Threat model: score every Y lane (0..1) ---
+    const lanes = 17;
+    const scores = new Array(lanes).fill(0);
+    const laneY = (i) => 0.06 + (i / (lanes - 1)) * 0.88;
+    const threatAt = (yN, lookAhead = 1.1) => {
+      let thr = 0;
+      for (const b of B.bullets) {
+        if (b.owner !== 'enemy' || b.vx >= 0) continue;
+        // Predict bullet Y when it reaches shipX
+        const dist = b.x - shipX;
+        if (dist < -20 || dist > fw * 0.95) continue;
+        const eta = dist / Math.max(40, -b.vx);
+        if (eta < 0 || eta > lookAhead) continue;
+        const predY = (b.y + b.vy * eta) / fh;
+        const lane = Math.abs(predY - yN);
+        const near = 1 - Math.min(1, dist / (fw * 0.7));
+        if (lane < 0.11) thr += (1 - lane / 0.11) * (0.55 + near * 1.6) * (eta < 0.35 ? 1.8 : 1);
+        else if (lane < 0.18) thr += 0.15 * near;
       }
-    }
-    // Also dodge enemies about to ram
-    for (const e of B.enemies) {
-      if (e.x > 110) continue;
-      const eyN = e.y / fh;
-      if (Math.abs(eyN - B.y) < 0.12) {
-        dodgeY = B.y < 0.5
-          ? Math.min(0.9, eyN + 0.28)
-          : Math.max(0.1, eyN - 0.28);
-        bestThreat = Math.max(bestThreat, 0.9);
+      for (const e of B.enemies) {
+        const ey = e.y / fh;
+        const eta = (e.x - shipX) / Math.max(30, e.speed);
+        if (e.x < shipX + 160 && Math.abs(ey - yN) < 0.14) {
+          thr += (1 - Math.abs(ey - yN) / 0.14) * (e.x < 90 ? 2.4 : 1.1);
+        }
+        // Prefer not sitting on dense fire lines of elites/bosses
+        if (eta > 0 && eta < 1.4 && Math.abs(ey - yN) < 0.08 && (e.kind === 'elite' || e.kind === 'boss' || e.kind === 'mech' || e.kind === 'tank')) {
+          thr += 0.35;
+        }
       }
+      // Soft preference: stay near preferred lane when safe
+      thr += Math.abs(yN - B.preferredY) * 0.12;
+      // Edge penalty
+      if (yN < 0.12 || yN > 0.88) thr += 0.25;
+      return thr;
+    };
+
+    for (let i = 0; i < lanes; i++) scores[i] = threatAt(laneY(i));
+    let bestI = 0;
+    let bestScore = 1e9;
+    for (let i = 0; i < lanes; i++) {
+      // Prefer lanes reachable soon (distance cost)
+      const reach = Math.abs(laneY(i) - B.y) * 0.9;
+      const s = scores[i] + reach;
+      if (s < bestScore) { bestScore = s; bestI = i; }
+    }
+    const safest = laneY(bestI);
+    const currentThreat = threatAt(B.y, 0.85);
+    const mustDodge = currentThreat > 0.55 || (scores[bestI] + 0.35 < currentThreat);
+
+    // --- Target selection: value = closeness + HP + kind weight, penalize off-lane if dodging ---
+    let focus = null;
+    let focusVal = -1e9;
+    for (const e of B.enemies) {
+      if (e.x < shipX - 10) continue;
+      const kindW = ({ boss: 5, mech: 4, golem: 4, tank: 4, elite: 3, drone: 2, basic: 1.5, swarm: 1 })[e.kind] || 1;
+      const dist = Math.max(20, e.x - shipX);
+      const align = 1 - Math.min(1, Math.abs(e.y / fh - B.y) / 0.25);
+      const danger = e.x < 140 ? 2.2 : 1;
+      let val = kindW * 18 / Math.sqrt(dist) + align * 6 + danger + (e.maxHp ? e.hp / e.maxHp : 0.5);
+      if (mustDodge) val -= Math.abs(e.y / fh - safest) * 8;
+      if (val > focusVal) { focusVal = val; focus = e; }
     }
 
-    let target;
-    if (dodgeY != null && bestThreat > 0.15) {
-      target = dodgeY;
-    } else if (nearest) {
-      target = nearest.y / fh + Math.sin(B.time * 2.2) * 0.04;
-    } else {
-      target = 0.5 + Math.sin(B.time * 1.1) * 0.2;
+    // Update preferred lane toward focus when safe
+    if (!mustDodge && focus) {
+      B.preferredY += ((focus.y / fh) - B.preferredY) * Math.min(1, 3 * dt);
+    } else if (mustDodge) {
+      B.preferredY = safest;
     }
-    target = Math.max(0.08, Math.min(0.92, target));
-    // Snap faster when dodging
-    const chase = dodgeY != null ? 18 : 10;
+
+    let target = mustDodge ? safest : (focus ? focus.y / fh : B.preferredY);
+    // Micro weave when idle-safe
+    if (!mustDodge && !focus) {
+      target = 0.5 + Math.sin(B.time * 1.4) * 0.18;
+    }
+    // If dodging, commit past the threat rather than grazing it
+    if (mustDodge) {
+      const dir = safest >= B.y ? 1 : -1;
+      B.lastDodgeDir = dir;
+      target = Math.max(0.07, Math.min(0.93, safest + dir * 0.04));
+    }
+    target = Math.max(0.07, Math.min(0.93, target));
+    const chase = mustDodge ? 28 : (focus && Math.abs(focus.y / fh - B.y) < 0.12 ? 14 : 11);
     B.y += (target - B.y) * Math.min(1, chase * dt);
 
+    // --- Fire control: lead aim, burst when aligned, powers ---
     B.fireCd -= dt;
+    const aligned = focus && Math.abs(focus.y / fh - B.y) < (mustDodge ? 0.07 : 0.11);
+    const fireRate = B.activePower === 'homing' ? 0.12 : (aligned ? 0.14 : 0.2);
     if (B.fireCd <= 0) {
-      B.fireCd = 0.22;
-      B.bullets.push(spawnBullet(48 + 16, B.y * fh, 400, 0, 'player', false, 1));
+      B.fireCd = fireRate;
+      const by = B.y * fh;
+      if (B.activePower === 'homing') {
+        B.bullets.push(spawnBullet(shipX + 16, by, 360, 0, 'player', true, 3));
+      } else {
+        // slight lead on vertical velocity of focus
+        let vy = 0;
+        if (focus && aligned) {
+          const lead = Math.sin(focus.phase || 0) * 4;
+          vy = lead;
+        }
+        B.bullets.push(spawnBullet(shipX + 16, by, 430, vy, 'player', false, aligned ? 2 : 1));
+        if (aligned && focus && (focus.kind === 'boss' || focus.kind === 'mech' || focus.kind === 'tank' || focus.kind === 'golem')) {
+          B.bullets.push(spawnBullet(shipX + 16, by - 7, 400, -8, 'player', false, 1));
+          B.bullets.push(spawnBullet(shipX + 16, by + 7, 400, 8, 'player', false, 1));
+        }
+      }
     }
 
+    // Laser beam while active
+    if (B.activePower === 'laser' && B.activeTimer > 0) {
+      B.laserCd = (B.laserCd || 0) - dt;
+      if (B.laserCd <= 0) {
+        B.laserCd = 0.05;
+        const by = B.y * fh;
+        for (const e of B.enemies) {
+          if (e.x > shipX && Math.abs(e.y - by) < 16) {
+            e.hp -= 2.2;
+            if (Math.random() < 0.08) B.fx.push(spawnExplosion(e.x, e.y));
+          }
+        }
+      }
+    }
+
+    // Homing bullet steering (bot field)
+    for (const b of B.bullets) {
+      if (!b.homing || b.owner !== 'player') continue;
+      let best = null; let bd = 1e9;
+      for (const e of B.enemies) {
+        const d = (e.x - b.x) * (e.x - b.x) + (e.y - b.y) * (e.y - b.y);
+        if (d < bd && e.x > b.x - 10) { bd = d; best = e; }
+      }
+      if (best) {
+        const ang = Math.atan2(best.y - b.y, best.x - b.x);
+        const spd = Math.hypot(b.vx, b.vy) || 360;
+        b.vx = Math.cos(ang) * spd;
+        b.vy = Math.sin(ang) * spd;
+      }
+    }
+
+    // --- Spawns (slightly denser so AI has something to think about) ---
     B.spawnAcc += dt;
-    if (B.spawnAcc > 0.9) {
+    if (B.spawnAcc > 0.85) {
       B.spawnAcc = 0;
-      B.enemies.push(spawnEnemy(fw, fh, Math.random() > 0.7 ? 'swarm' : 'basic'));
+      const r = Math.random();
+      const kind = r > 0.88 ? 'elite' : r > 0.55 ? 'swarm' : 'basic';
+      B.enemies.push(spawnEnemy(fw, fh, kind));
     }
 
     for (const e of B.enemies) {
       e.x -= e.speed * dt;
       e.phase += dt * 2;
       e.y += Math.sin(e.phase) * 12 * dt;
+      e.y = Math.max(20, Math.min(fh - 20, e.y));
       e.fireCd -= dt;
       if (e.fireCd <= 0) {
-        e.fireCd = 2.4;
-        B.bullets.push(spawnBullet(e.x, e.y, -160, 0, 'enemy', false, 2));
+        e.fireCd = (e.kind === 'elite' || e.kind === 'boss') ? 1.6 : 2.2;
+        B.bullets.push(spawnBullet(e.x, e.y, -170, (Math.random() - 0.5) * 20, 'enemy', false, 2));
+        if (e.kind === 'elite' || e.kind === 'boss') {
+          B.bullets.push(spawnBullet(e.x, e.y - 10, -160, -28, 'enemy', false, 1));
+          B.bullets.push(spawnBullet(e.x, e.y + 10, -160, 28, 'enemy', false, 1));
+        }
       }
     }
     for (const b of B.bullets) {
@@ -873,7 +975,7 @@ export class Game {
       b.life -= dt;
     }
 
-    // Bot bullets hit bot's enemies
+    // Bot bullets hit enemies + item drops into bot inventory
     for (const b of B.bullets) {
       if (b.owner !== 'player') continue;
       for (const e of B.enemies) {
@@ -884,47 +986,118 @@ export class Game {
         }
       }
     }
-    // Enemy hits bot (smaller hurtbox + i-frames so dodge AI can work)
-    if (B.invuln == null) B.invuln = 0;
-    if (B.invuln > 0) B.invuln -= dt;
+    const kept = [];
+    for (const e of B.enemies) {
+      if (e.hp <= 0) {
+        B.fx.push(spawnExplosion(e.x, e.y, e.kind === 'boss'));
+        if (B.items.length < 5 && Math.random() < (e.kind === 'boss' ? 1 : 0.4)) {
+          B.items.push(pickPowerupId());
+        }
+      } else if (e.x > -40) {
+        kept.push(e);
+      }
+    }
+    B.enemies = kept;
+
+    // Hits on bot
     for (const b of B.bullets) {
       if (b.owner !== 'enemy') continue;
-      if (B.invuln <= 0 && Math.abs(b.x - 48) < 10 && Math.abs(b.y - B.y * fh) < 9) {
+      if (B.invuln <= 0 && Math.abs(b.x - shipX) < 10 && Math.abs(b.y - B.y * fh) < 9) {
         B.hp = Math.max(0, B.hp - 5);
         B.invuln = 0.55;
         b.life = 0;
-        B.fx.push(spawnExplosion(48, B.y * fh, false));
+        B.fx.push(spawnExplosion(shipX, B.y * fh, false));
       }
     }
     for (const e of B.enemies) {
-      if (B.invuln <= 0 && Math.abs(e.x - 48) < e.w * 0.35 + 6 && Math.abs(e.y - B.y * fh) < e.h * 0.35 + 6) {
+      if (B.invuln <= 0 && Math.abs(e.x - shipX) < e.w * 0.35 + 6 && Math.abs(e.y - B.y * fh) < e.h * 0.35 + 6) {
         B.hp = Math.max(0, B.hp - 7);
         B.invuln = 0.7;
         e.hp = 0;
-        B.fx.push(spawnExplosion(48, B.y * fh, true));
+        B.fx.push(spawnExplosion(shipX, B.y * fh, true));
       }
     }
 
-    B.enemies = B.enemies.filter((e) => e.hp > 0 && e.x > -40);
     B.bullets = B.bullets.filter((b) => b.life > 0 && b.x > -40 && b.x < fw + 80);
     for (const f of B.fx) f.life -= dt;
     B.fx = B.fx.filter((f) => f.life > 0);
 
-    // Bot occasionally uses direct pressure via surviving — also slow HP drain race? Better: bot uses powers
+    // --- Smart item / power usage ---
     B.powerCd -= dt;
-    if (B.powerCd <= 0) {
-      B.powerCd = 10 + Math.random() * 6;
-      // send enemies to player
-      for (let i = 0; i < 2; i++) {
-        const e = spawnEnemy(fw, fh, 'swarm');
-        e.sent = true;
-        this.state.enemies.push(e);
+    const playerHp = this.state.player.hp;
+    const enemyPressure = B.enemies.filter((e) => e.x < fw * 0.7).length;
+    const pickBestItem = () => {
+      if (!B.items.length) return null;
+      // Priority rules
+      if (B.hp <= 45) {
+        const h = B.items.findIndex((id) => id === 'heal_big' || id === 'heal');
+        if (h >= 0) return h;
       }
-      // small direct hit
-      if (Math.random() > 0.4) {
+      if (B.hp <= 70) {
+        const h = B.items.findIndex((id) => id === 'heal_big');
+        if (h >= 0) return h;
+      }
+      if (enemyPressure >= 4 && !B.activePower) {
+        const l = B.items.findIndex((id) => id === 'laser' || id === 'homing');
+        if (l >= 0) return l;
+      }
+      if (playerHp > 55) {
+        const heavy = B.items.findIndex((id) => id === 'send_mech' || id === 'send_golem' || id === 'send_tank' || id === 'send_drone' || id === 'send' || id === 'direct');
+        if (heavy >= 0) return heavy;
+      }
+      // default: first offensive
+      const off = B.items.findIndex((id) => id !== 'heal' && id !== 'heal_big');
+      return off >= 0 ? off : 0;
+    };
+
+    const tryUse = (force = false) => {
+      if (B.powerCd > 0 && !force) return;
+      // Seed inventory so COM always has something to think with
+      if (!B.items.length) {
+        const pool = ['homing', 'laser', 'send', 'direct', 'send_mech', 'send_golem', 'send_tank', 'send_drone', 'heal'];
+        B.items.push(pool[(Math.random() * pool.length) | 0]);
+        if (Math.random() < 0.5) B.items.push(pool[(Math.random() * pool.length) | 0]);
+      }
+      const idx = pickBestItem();
+      if (idx == null || idx < 0) return;
+      const id = B.items.splice(idx, 1)[0];
+      B.powerCd = 3.2 + Math.random() * 1.8;
+
+      if (id === 'homing') {
+        B.activePower = 'homing';
+        B.activeTimer = 6;
+      } else if (id === 'laser') {
+        B.activePower = 'laser';
+        B.activeTimer = 4;
+      } else if (id === 'heal' || id === 'heal_big') {
+        B.hp = Math.min(100, B.hp + (id === 'heal_big' ? 50 : 25));
+      } else if (id === 'direct') {
         this.applyPlayerDamage(8, 'direct');
         this.state.fx.push(spawnExplosion(this.state.player.x, this.state.player.y * fh, false));
+      } else if (id === 'send') {
+        this.sendToOpponent(['swarm', 'swarm', 'elite'], 'COM敵送信');
+      } else if (id === 'send_mech') {
+        this.sendToOpponent('mech', 'COM戦艦');
+      } else if (id === 'send_golem') {
+        this.sendToOpponent('golem', 'COM要塞');
+      } else if (id === 'send_tank') {
+        this.sendToOpponent('tank', 'COMガンシップ');
+      } else if (id === 'send_drone') {
+        this.sendToOpponent(['drone', 'drone', 'drone', 'drone'], 'COM無人機');
       }
+    };
+
+    // Use when: cooldown ready AND (low HP heal / many enemies / mid-fight pressure)
+    if (B.powerCd <= 0) {
+      const wantHeal = B.hp <= 50 && B.items.some((id) => id === 'heal' || id === 'heal_big');
+      const wantClear = enemyPressure >= 3;
+      const wantPressure = playerHp >= 40 && B.time > 4;
+      if (wantHeal || wantClear || wantPressure || B.items.length >= 3) tryUse();
+    }
+    // Emergency heal even if cooldown almost ready
+    if (B.hp <= 30 && B.powerCd < 1.2 && B.items.some((id) => id === 'heal' || id === 'heal_big')) {
+      B.powerCd = 0;
+      tryUse(true);
     }
 
     this.state.botHp = B.hp;
@@ -933,7 +1106,7 @@ export class Game {
       enemies: B.enemies,
       bullets: B.bullets,
       fx: B.fx,
-      px: 48,
+      px: shipX,
       py: B.y,
       php: B.hp,
       alive: B.hp > 0,
