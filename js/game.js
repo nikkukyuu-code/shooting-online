@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.5.5';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.5.5';
-import { sfx } from './audio.js?v=1.5.5';
+} from './entities.js?v=1.5.6';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.5.6';
+import { sfx } from './audio.js?v=1.5.6';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -859,15 +859,19 @@ export class Game {
       }
     }
 
-    // Collect items
+    // Collect items — heal applies instantly on pickup
     const leftItems = [];
     for (const it of S.items) {
       const py = P.y * fh;
       if (Math.abs(it.x - P.x) < 20 && Math.abs(it.y - py) < 20) {
-        if (P.items.length < 5) P.items.push(it.id);
         sfx.pickup();
-        const meta = powerupMeta(it.id);
-        if (meta) this.setStatus(`入手 ${meta.icon} ${meta.label}（${meta.effect}）`);
+        if (it.id === 'heal' || it.id === 'heal_big') {
+          this.activatePower(it.id);
+        } else {
+          if (P.items.length < 5) P.items.push(it.id);
+          const meta = powerupMeta(it.id);
+          if (meta) this.setStatus(`入手 ${meta.icon} ${meta.label}（${meta.effect}）`);
+        }
       } else if (it.life > 0 && it.x > -20) {
         leftItems.push(it);
       }
@@ -1114,7 +1118,13 @@ export class Game {
       if (e.hp <= 0) {
         B.fx.push(spawnExplosion(e.x, e.y, e.kind === 'boss'));
         if (B.items.length < 5 && Math.random() < (e.kind === 'boss' ? 1 : 0.4)) {
-          B.items.push(pickPowerupId());
+          const dropId = pickPowerupId();
+          if (dropId === 'heal' || dropId === 'heal_big') {
+            B.hp = Math.min(100, B.hp + (dropId === 'heal_big' ? 50 : 25));
+            B.fx.push(spawnExplosion(48, B.y * fh, dropId === 'heal_big'));
+          } else {
+            B.items.push(dropId);
+          }
         }
       } else if (e.x > -40) {
         kept.push(e);
