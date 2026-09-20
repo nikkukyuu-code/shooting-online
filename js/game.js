@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-} from './entities.js?v=1.5.26';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.26';
-import { sfx } from './audio.js?v=1.5.26';
+} from './entities.js?v=1.5.27';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.27';
+import { sfx } from './audio.js?v=1.5.27';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -144,6 +144,10 @@ export class Game {
       thinkAcc: 0,
       preferredY: 0.5,
       lastDodgeDir: 1,
+      x: 48,
+      preferredX: 48,
+      moveVelX: 0,
+      surgePhase: 0,
     };
     this.state.botHp = 100;
   }
@@ -1097,6 +1101,39 @@ export class Game {
     B.y += B.moveVel * dt;
     B.y = Math.max(0.07, Math.min(0.93, B.y));
 
+    // Fore-aft (X): push in when pressuring, pull back when dodging / crowded
+    if (B.x == null) B.x = 48;
+    if (B.preferredX == null) B.preferredX = 48;
+    if (B.moveVelX == null) B.moveVelX = 0;
+    if (B.surgePhase == null) B.surgePhase = Math.random() * Math.PI * 2;
+    B.surgePhase += dt * (1.3 + Math.random() * 0.4);
+    let wantX = B.preferredX;
+    if (dodging || urgent) {
+      // retreat toward back when dodging bullets/enemies
+      wantX = 34 + Math.random() * 10;
+      B.preferredX += (wantX - B.preferredX) * Math.min(1, 4 * dt);
+    } else if (focus && focus.x < fw * 0.55) {
+      // close in on nearby targets
+      wantX = 70 + Math.min(40, (fw * 0.5 - focus.x) * 0.15);
+      B.preferredX += (wantX - B.preferredX) * Math.min(1, 2.4 * dt);
+    } else if (enemyPressure >= 3) {
+      wantX = 40;
+      B.preferredX += (wantX - B.preferredX) * Math.min(1, 2 * dt);
+    } else {
+      // idle weave forward/back like a human finger drag
+      wantX = 52 + Math.sin(B.surgePhase) * 22 + Math.sin(B.time * 0.7) * 10;
+      B.preferredX += (wantX - B.preferredX) * Math.min(1, 1.6 * dt);
+    }
+    wantX = B.preferredX + Math.sin(B.surgePhase * 1.7) * 6;
+    const maxSpeedX = dodging ? 220 : 140;
+    const accelX = dodging ? 14 : 7;
+    const desiredVelX = Math.max(-maxSpeedX, Math.min(maxSpeedX, (wantX - B.x) * (dodging ? 6 : 3.2)));
+    B.moveVelX += (desiredVelX - B.moveVelX) * Math.min(1, accelX * dt);
+    B.moveVelX += (Math.random() - 0.5) * 8;
+    B.x += B.moveVelX * dt;
+    B.x = Math.max(28, Math.min(fw * 0.55, B.x));
+    const shipX = B.x;
+
     B.aimNoise += ((Math.random() - 0.5) * 0.06 - B.aimNoise) * Math.min(1, 2.2 * dt);
 
     // --- Fire control: lead aim, burst when aligned, powers ---
@@ -1409,7 +1446,7 @@ export class Game {
       fx: B.fx,
       meteors: B.meteors,
       directBeam: (B.directBeam || 0) > 0,
-      px: shipX,
+      px: B.x || shipX,
       py: B.y,
       php: B.hp,
       alive: B.hp > 0,
