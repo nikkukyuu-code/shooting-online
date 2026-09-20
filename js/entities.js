@@ -1,17 +1,22 @@
 /** Game entities: player, enemies, bullets, items, effects */
 
 export const POWERUPS = [
-  { id: 'homing',     label: '追尾ミサイル' },
-  { id: 'laser',      label: 'レーザー' },
-  { id: 'send',       label: '対戦相手へ敵キャラを送信' },
-  { id: 'direct',     label: '対戦相手を直接攻撃' },
-  { id: 'heal',       label: 'HP回復' },
-  { id: 'heal_big',   label: '大回復' },
-  { id: 'send_mech',  label: '巨大メカを送信' },
-  { id: 'send_golem', label: '装甲ゴーレムを送信' },
-  { id: 'send_tank',  label: '重戦車ロボを送信' },
-  { id: 'send_drone', label: '破壊ドローン群を送信' },
+  { id: 'homing',     label: '追尾ミサイル',  effect: '敵を追う弾を連射',           color: '#ff66ff', icon: '◆' },
+  { id: 'laser',      label: 'レーザー',      effect: '太いレーザーで前方攻撃',     color: '#66ccff', icon: '═' },
+  { id: 'send',       label: '敵キャラ送信',  effect: '相手に敵を送る',             color: '#ff8844', icon: '⇒' },
+  { id: 'direct',     label: '直接攻撃',      effect: '相手のHPを直接削る',         color: '#ff3333', icon: '※' },
+  { id: 'heal',       label: 'HP回復',        effect: '自分のHPを+25',              color: '#44ff88', icon: '+' },
+  { id: 'heal_big',   label: '大回復',        effect: '自分のHPを+50',              color: '#22ff66', icon: '++' },
+  { id: 'send_mech',  label: '巨大メカ送信',  effect: '相手に巨大メカを送る',       color: '#55ff99', icon: '機' },
+  { id: 'send_golem', label: 'ゴーレム送信',  effect: '相手に硬いゴーレムを送る',   color: '#ffbb55', icon: '岩' },
+  { id: 'send_tank',  label: '戦車ロボ送信',  effect: '相手に重戦車ロボを送る',     color: '#66aaff', icon: '戦' },
+  { id: 'send_drone', label: 'ドローン群送信', effect: '相手にドローンを4体送る',   color: '#33ffff', icon: '群' },
 ];
+
+export function powerupMeta(id) {
+  return POWERUPS.find((p) => p.id === id) || POWERUPS[0];
+}
+
 
 export function pickPowerupId() {
   const weighted = [

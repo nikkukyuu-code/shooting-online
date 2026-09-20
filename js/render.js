@@ -4,6 +4,19 @@
 
 export const OPP_RATIO = 1 / 3;
 export const OWN_RATIO = 1 / 3;
+const ITEM_STYLE = {
+  homing: { color: '#ff66ff', icon: '◆' },
+  laser: { color: '#66ccff', icon: '═' },
+  send: { color: '#ff8844', icon: '⇒' },
+  direct: { color: '#ff3333', icon: '※' },
+  heal: { color: '#44ff88', icon: '+' },
+  heal_big: { color: '#22ff66', icon: '++' },
+  send_mech: { color: '#55ff99', icon: '機' },
+  send_golem: { color: '#ffbb55', icon: '岩' },
+  send_tank: { color: '#66aaff', icon: '戦' },
+  send_drone: { color: '#33ffff', icon: '群' },
+};
+
 export const CTRL_RATIO = 1 / 3;
 
 export function layout(canvas) {
@@ -258,22 +271,24 @@ function drawBullet(ctx, b) {
 }
 
 function drawItem(ctx, it) {
+  const st = ITEM_STYLE[it.id] || { color: '#ffd24a', icon: '★' };
   ctx.save();
   ctx.translate(it.x, it.y);
-  ctx.fillStyle = '#ffd24a';
+  ctx.shadowColor = st.color;
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = st.color;
   ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  for (let i = 0; i < 5; i++) {
-    const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
-    const r = i % 2 === 0 ? 9 : 4;
-    const x = Math.cos(a) * r;
-    const y = Math.sin(a) * r;
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
+  ctx.arc(0, 0, 11, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#111';
+  ctx.font = 'bold 11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(st.icon, 0, 1);
   ctx.restore();
 }
 
@@ -383,21 +398,37 @@ function drawControlPanel(ctx, area, localState) {
   ctx.textBaseline = 'top';
   ctx.fillText(touch.active ? 'ドラッグ中' : '自機をドラッグ', sx, sy + shipH * 0.7);
 
-  // Queued item pips (left-center of pad)
+  // Queued items — color + icon + next label
   const items = (localState.player && localState.player.items) || [];
-  const pipR = Math.max(5, Math.min(9, area.h * 0.055));
-  const pipGap = pipR * 2.5;
-  const pipY = area.h * 0.28;
-  const startX = area.w * 0.12;
+  const pipR = Math.max(8, Math.min(12, area.h * 0.07));
+  const pipGap = pipR * 2.6;
+  const pipY = area.h * 0.22;
+  const startX = area.w * 0.1;
   for (let i = 0; i < items.length; i++) {
+    const id = items[i];
+    const st = ITEM_STYLE[id] || { color: '#ffd24a', icon: '?' };
     const ix = startX + i * pipGap;
-    ctx.fillStyle = i === 0 ? '#ffd24a' : '#c8a84a';
+    ctx.fillStyle = st.color;
     ctx.beginPath();
-    ctx.arc(ix, pipY, pipR, 0, Math.PI * 2);
+    ctx.arc(ix, pipY, pipR + (i === 0 ? 2 : 0), 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = i === 0 ? '#fff' : 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = i === 0 ? 2.5 : 1.5;
     ctx.stroke();
+    ctx.fillStyle = '#111';
+    ctx.font = `bold ${Math.max(9, pipR)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(st.icon, ix, pipY + 0.5);
+  }
+  if (items.length) {
+    const next = ITEM_STYLE[items[0]] || {};
+    const metaLabel = (localState.nextItemLabel) || '';
+    ctx.font = `600 ${Math.max(10, area.h * 0.065)}px "Hiragino Sans","Noto Sans JP",sans-serif`;
+    ctx.fillStyle = next.color || '#ffe08a';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(metaLabel || '次のアイテム', startX - pipR, pipY + pipR + 4);
   }
 
   // 「アイテム」 tap button (top-right of control pane)
@@ -416,7 +447,9 @@ function drawControlPanel(ctx, area, localState) {
   ctx.textBaseline = 'middle';
   ctx.shadowColor = '#000';
   ctx.shadowBlur = 3;
-  ctx.fillText('アイテム', btn.x + btn.w * 0.5, btn.y + btn.h * 0.5);
+  const nextId = items[0];
+  const nextSt = nextId ? ITEM_STYLE[nextId] : null;
+  ctx.fillText(nextSt ? `発動 ${nextSt.icon}` : 'アイテム', btn.x + btn.w * 0.5, btn.y + btn.h * 0.5);
   ctx.shadowBlur = 0;
 
   // Status strip at bottom of control pane
@@ -486,7 +519,7 @@ export function drawField(ctx, area, snap, opts = {}) {
   }
 
   const items = snap.worldItems || [];
-  for (const it of items) drawItem(ctx, { x: it.x * sx, y: it.y * sy });
+  for (const it of items) drawItem(ctx, { x: it.x * sx, y: it.y * sy, id: it.id });
 
   const fx = snap.fx || [];
   for (const f of fx) drawFx(ctx, { x: f.x * sx, y: f.y * sy, life: f.l ?? f.life, max: f.m ?? f.max, r: (f.r || 14) * sx });
@@ -557,6 +590,31 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
   // Divider between own and control
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   ctx.fillRect(0, L.oppH + L.ownH - 1, L.W, 2);
+
+
+  // Item effect banner (center of own field)
+  const ban = localState.itemBanner;
+  if (ban && ban.life > 0) {
+    const a = Math.min(1, ban.life / 0.35) * Math.min(1, (ban.max - ban.life) / 0.2 + 0.8);
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, a));
+    const bx = L.own.x + L.own.w * 0.5;
+    const by = L.own.y + L.own.h * 0.2;
+    const tw = L.own.w * 0.9;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    roundRect(ctx, bx - tw / 2, by - 18, tw, 36, 8);
+    ctx.fill();
+    ctx.strokeStyle = ban.color || '#fff';
+    ctx.lineWidth = 2;
+    roundRect(ctx, bx - tw / 2, by - 18, tw, 36, 8);
+    ctx.stroke();
+    ctx.fillStyle = ban.color || '#fff';
+    ctx.font = `800 ${Math.max(13, L.own.w * 0.045)}px "Hiragino Sans","Noto Sans JP",sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(ban.text, bx, by, tw * 0.92);
+    ctx.restore();
+  }
 
   if (waiting) {
     ctx.fillStyle = 'rgba(0,0,0,0.25)';

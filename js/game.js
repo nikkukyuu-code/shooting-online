@@ -1,8 +1,8 @@
 import {
-  POWERUPS, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.4.5';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.4.5';
-import { sfx } from './audio.js?v=1.4.5';
+  POWERUPS, powerupMeta, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
+} from './entities.js?v=1.4.6';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.4.6';
+import { sfx } from './audio.js?v=1.4.6';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -310,10 +310,23 @@ export class Game {
     setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
   }
 
+
+  showItemBanner(meta, extra = '') {
+    if (!meta) return;
+    const line = `${meta.icon || ''} ${meta.label}：${meta.effect}${extra ? ' ' + extra : ''}`;
+    this.setStatus(line);
+    this.state.itemBanner = {
+      text: line,
+      color: meta.color || '#fff',
+      life: 1.6,
+      max: 1.6,
+    };
+  }
+
   activatePower(id) {
     const p = this.state.player;
-    const meta = POWERUPS.find((x) => x.id === id);
-    if (meta) this.setStatus(meta.label);
+    const meta = powerupMeta(id);
+    this.showItemBanner(meta);
     sfx.power();
 
     if (id === 'homing') {
@@ -335,7 +348,7 @@ export class Game {
     } else if (id === 'heal') {
       const before = p.hp;
       p.hp = Math.min(p.maxHp || 100, p.hp + 25);
-      this.setStatus(`HP回復 +${p.hp - before}`);
+      this.showItemBanner(meta, `（+${p.hp - before}）`);
       p.activePower = null;
       p.activeTimer = 0;
       this.state.fx.push(spawnExplosion(p.x + 8, p.y * this.L.own.h, false));
@@ -343,7 +356,7 @@ export class Game {
     } else if (id === 'heal_big') {
       const before = p.hp;
       p.hp = Math.min(p.maxHp || 100, p.hp + 50);
-      this.setStatus(`大回復 +${p.hp - before}`);
+      this.showItemBanner(meta, `（+${p.hp - before}）`);
       p.activePower = null;
       p.activeTimer = 0;
       this.state.fx.push(spawnExplosion(p.x + 8, p.y * this.L.own.h, true));
@@ -432,6 +445,11 @@ export class Game {
     }
 
     this.state.ctrlTouch = this.ctrlTouch;
+    const ni = this.state.player.items[0];
+    if (ni) {
+      const m = powerupMeta(ni);
+      this.state.nextItemLabel = `${m.icon} ${m.label}：${m.effect}`;
+    } else this.state.nextItemLabel = "";
     renderFrame(this.ctx, this.L, this.state, this.remoteSnap, this.waiting);
     this._raf = requestAnimationFrame((t) => this.frame(t));
   }
@@ -439,7 +457,7 @@ export class Game {
   syncOut() {
     if (!this.net || this.useBot || !this.net.ready) return;
     const snap = serializeField(this.state);
-    snap.worldItems = this.state.items.map((it) => ({ x: it.x, y: it.y }));
+    snap.worldItems = this.state.items.map((it) => ({ x: it.x, y: it.y, id: it.id }));
     this.net.send({
       type: 'state',
       state: snap,
@@ -478,11 +496,20 @@ export class Game {
     P.x += (targetX - P.x) * Math.min(1, 12 * dt);
     P.x = Math.max(20, Math.min(fw * 0.88, P.x));
     if (P.invuln > 0) P.invuln -= dt;
+    if (this.state.itemBanner) {
+      this.state.itemBanner.life -= dt;
+      if (this.state.itemBanner.life <= 0) this.state.itemBanner = null;
+    }
     if (P.activeTimer > 0) {
       P.activeTimer -= dt;
       if (P.activeTimer <= 0) {
         P.activePower = null;
-        if (!this.ended) this.setStatus(P.items.length ? (POWERUPS.find(x => x.id === P.items[0])?.label || HINT) : HINT);
+        if (!this.ended) {
+          if (P.items.length) {
+            const n = powerupMeta(P.items[0]);
+            this.setStatus(`次: ${n.icon} ${n.label}（${n.effect}） / アイテムで発動`);
+          } else this.setStatus(HINT);
+        }
       }
     }
 
@@ -645,8 +672,8 @@ export class Game {
       if (Math.abs(it.x - P.x) < 20 && Math.abs(it.y - py) < 20) {
         if (P.items.length < 5) P.items.push(it.id);
         sfx.pickup();
-        const meta = POWERUPS.find((x) => x.id === it.id);
-        if (meta) this.setStatus(meta.label);
+        const meta = powerupMeta(it.id);
+        if (meta) this.setStatus(`入手 ${meta.icon} ${meta.label}（${meta.effect}）`);
       } else if (it.life > 0 && it.x > -20) {
         leftItems.push(it);
       }
