@@ -276,6 +276,21 @@ export function drawField(ctx, area, snap, opts = {}) {
     const sh = selfHp != null ? selfHp : (snap.player ? snap.player.hp : snap.php);
     const oh = oppHp != null ? oppHp : 100;
     drawHpBars(ctx, { w: fw, h: fh }, sh ?? 100, oh ?? 100, 100);
+    // item queue pips
+    const items = (snap.player && snap.player.items) || [];
+    if (items.length) {
+      for (let i = 0; i < items.length; i++) {
+        const ix = 12 + i * 16;
+        const iy = fh - 18;
+        ctx.fillStyle = '#ffd24a';
+        ctx.beginPath();
+        ctx.arc(ix, iy, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
   }
 
   ctx.restore();

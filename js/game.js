@@ -2,6 +2,7 @@ import {
   POWERUPS, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
 } from './entities.js';
 import { resizeCanvas, renderFrame, layout } from './render.js';
+import { sfx } from './audio.js';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -219,6 +220,7 @@ export class Game {
     const p = this.state.player;
     const meta = POWERUPS.find((x) => x.id === id);
     if (meta) this.setStatus(meta.label);
+    sfx.power();
 
     if (id === 'homing') {
       p.activePower = 'homing';
@@ -368,8 +370,10 @@ export class Game {
       const by = P.y * fh;
       if (P.activePower === 'homing') {
         S.bullets.push(spawnBullet(P.x + 16, by, 320, 0, 'player', true, 2));
+        sfx.shot();
       } else {
         S.bullets.push(spawnBullet(P.x + 16, by, 420, 0, 'player', false, 1));
+        sfx.shot();
       }
     }
 
@@ -464,6 +468,7 @@ export class Game {
     for (const e of S.enemies) {
       if (e.hp <= 0) {
         S.fx.push(spawnExplosion(e.x, e.y, e.kind === 'boss'));
+        sfx.explode();
         P.score += e.score;
         if (Math.random() < (e.kind === 'boss' ? 1 : 0.35)) {
           S.items.push(spawnItem(e.x, e.y));
@@ -484,6 +489,7 @@ export class Game {
         P.invuln = 0.8;
         b.life = 0;
         S.fx.push(spawnExplosion(P.x, py, false));
+        sfx.hit();
       }
     }
 
@@ -504,6 +510,7 @@ export class Game {
       const py = P.y * fh;
       if (Math.abs(it.x - P.x) < 20 && Math.abs(it.y - py) < 20) {
         if (P.items.length < 5) P.items.push(it.id);
+        sfx.pickup();
         const meta = POWERUPS.find((x) => x.id === it.id);
         if (meta) this.setStatus(meta.label);
       } else if (it.life > 0 && it.x > -20) {
@@ -658,6 +665,7 @@ export class Game {
     this.ended = true;
     this.state.alive = won ? this.state.alive : false;
     const msg = won ? 'あなたの勝ちです' : 'あなたの負けです';
+    if (won) sfx.win(); else sfx.lose();
     this.setStatus(msg);
     this.ui.endMessage.textContent = msg;
     this.ui.endOverlay.classList.remove('hidden');
