@@ -1,8 +1,8 @@
 import {
   POWERUPS, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.4.3';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.4.3';
-import { sfx } from './audio.js?v=1.4.3';
+} from './entities.js?v=1.4.4';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.4.4';
+import { sfx } from './audio.js?v=1.4.4';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -655,24 +655,60 @@ export class Game {
     B.time += dt;
     B.scroll += 55 * dt;
 
-    // Simple AI: track average enemy height / dodge
-    let threatY = B.y;
+    // AI: prioritize dodging incoming bullets, then track enemies
     let nearest = null;
     let nd = 1e9;
     for (const e of B.enemies) {
-      const d = e.x;
-      if (d < nd) { nd = d; nearest = e; }
+      const d = e.x - 48;
+      if (d > 0 && d < nd) { nd = d; nearest = e; }
     }
+
+    let dodgeY = null;
+    let bestThreat = 0;
     for (const b of B.bullets) {
-      if (b.owner === 'enemy' && b.x < fw * 0.5) {
-        if (Math.abs(b.y / fh - B.y) < 0.08) {
-          threatY = B.y < 0.5 ? B.y + 0.2 : B.y - 0.2;
-        }
+      if (b.owner !== 'enemy') continue;
+      if (b.vx >= 0) continue; // not flying left toward COM
+      const bx = b.x;
+      const byN = b.y / fh;
+      // ETA-ish: closer + on lane = higher threat
+      if (bx > fw * 0.55 || bx < 20) continue;
+      const lane = Math.abs(byN - B.y);
+      if (lane > 0.14) continue;
+      const threat = (1 - bx / fw) * (1 - lane / 0.14);
+      if (threat > bestThreat) {
+        bestThreat = threat;
+        // Escape to the emptier side of the bullet lane
+        const upClear = byN;
+        const downClear = 1 - byN;
+        dodgeY = upClear >= downClear
+          ? Math.max(0.08, byN - 0.22 - Math.random() * 0.06)
+          : Math.min(0.92, byN + 0.22 + Math.random() * 0.06);
       }
     }
-    if (nearest) threatY = nearest.y / fh;
-    const target = Math.max(0.1, Math.min(0.9, threatY + Math.sin(B.time) * 0.05));
-    B.y += (target - B.y) * Math.min(1, 6 * dt);
+    // Also dodge enemies about to ram
+    for (const e of B.enemies) {
+      if (e.x > 110) continue;
+      const eyN = e.y / fh;
+      if (Math.abs(eyN - B.y) < 0.12) {
+        dodgeY = B.y < 0.5
+          ? Math.min(0.9, eyN + 0.28)
+          : Math.max(0.1, eyN - 0.28);
+        bestThreat = Math.max(bestThreat, 0.9);
+      }
+    }
+
+    let target;
+    if (dodgeY != null && bestThreat > 0.15) {
+      target = dodgeY;
+    } else if (nearest) {
+      target = nearest.y / fh + Math.sin(B.time * 2.2) * 0.04;
+    } else {
+      target = 0.5 + Math.sin(B.time * 1.1) * 0.2;
+    }
+    target = Math.max(0.08, Math.min(0.92, target));
+    // Snap faster when dodging
+    const chase = dodgeY != null ? 18 : 10;
+    B.y += (target - B.y) * Math.min(1, chase * dt);
 
     B.fireCd -= dt;
     if (B.fireCd <= 0) {
@@ -692,7 +728,7 @@ export class Game {
       e.y += Math.sin(e.phase) * 12 * dt;
       e.fireCd -= dt;
       if (e.fireCd <= 0) {
-        e.fireCd = 1.8;
+        e.fireCd = 2.4;
         B.bullets.push(spawnBullet(e.x, e.y, -160, 0, 'enemy', false, 2));
       }
     }
@@ -713,18 +749,24 @@ export class Game {
         }
       }
     }
-    // Enemy hits bot
+    // Enemy hits bot (smaller hurtbox + i-frames so dodge AI can work)
+    if (B.invuln == null) B.invuln = 0;
+    if (B.invuln > 0) B.invuln -= dt;
     for (const b of B.bullets) {
       if (b.owner !== 'enemy') continue;
-      if (Math.abs(b.x - 48) < 14 && Math.abs(b.y - B.y * fh) < 12) {
-        B.hp = Math.max(0, B.hp - 7);
+      if (B.invuln <= 0 && Math.abs(b.x - 48) < 10 && Math.abs(b.y - B.y * fh) < 9) {
+        B.hp = Math.max(0, B.hp - 5);
+        B.invuln = 0.55;
         b.life = 0;
+        B.fx.push(spawnExplosion(48, B.y * fh, false));
       }
     }
     for (const e of B.enemies) {
-      if (Math.abs(e.x - 48) < e.w * 0.4 + 10 && Math.abs(e.y - B.y * fh) < e.h * 0.4 + 8) {
-        B.hp = Math.max(0, B.hp - 10);
+      if (B.invuln <= 0 && Math.abs(e.x - 48) < e.w * 0.35 + 6 && Math.abs(e.y - B.y * fh) < e.h * 0.35 + 6) {
+        B.hp = Math.max(0, B.hp - 7);
+        B.invuln = 0.7;
         e.hp = 0;
+        B.fx.push(spawnExplosion(48, B.y * fh, true));
       }
     }
 
