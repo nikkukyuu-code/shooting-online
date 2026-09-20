@@ -1029,14 +1029,14 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
     // Straight UP only (same X) — never slant toward opponent ship
     drawDirectBeam(ctx, px, L.own.y + 4, px, L.opp.y + L.opp.h * 0.45, lr);
   }
-  // Incoming: straight DOWN on our ship column (fixed at fire) — no chase
+  // Incoming: FROM opponent pane DOWN onto us. Spark must be at the TOP
+  // (never at our ship — that looked like we were firing upward with no item).
   if (localState.incomingDirect && localState.incomingDirect > 0) {
     const lr = Math.min(1, localState.incomingDirect / 0.85);
     const px = L.own.x + (pl.x || 48);
     const py = L.own.y + (pl.y <= 1 ? pl.y * L.own.h : pl.y);
-    const ox = L.opp.x + ((oppDraw.px != null ? oppDraw.px : 48) * (oppDraw._sx || 1));
-    // Fall straight down from opp ship X to our Y, but keep X = our ship (column hit)
-    drawDirectBeam(ctx, px, L.opp.y + 8, px, py, lr, 'incoming');
+    // Endpoint (spark) = opponent side; start = just above our ship
+    drawDirectBeam(ctx, px, py - 10, px, L.opp.y + 12, lr, 'incoming');
   }
 
 

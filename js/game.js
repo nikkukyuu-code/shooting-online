@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-} from './entities.js?v=1.5.23';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.23';
-import { sfx } from './audio.js?v=1.5.23';
+} from './entities.js?v=1.5.24';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.24';
+import { sfx } from './audio.js?v=1.5.24';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -354,7 +354,9 @@ export class Game {
     if (i < 0 || i >= p.items.length) return;
     const id = p.items.splice(i, 1)[0];
     this._itemUseAt = now;
+    this._powerFromItem = true;
     this.activatePower(id);
+    this._powerFromItem = false;
   }
 
 
@@ -535,7 +537,11 @@ export class Game {
       this.state.fx.push(spawnExplosion(p.x + 8, p.y * this.L.own.h, true));
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1200);
     } else if (id === 'direct') {
-      // Own ship faces up and fires a piercing laser at the opponent
+      // Only when actually consumed from inventory (never from net / COM / pickup)
+      if (!this._powerFromItem) {
+        console.warn('blocked direct without item');
+        return;
+      }
       const dmg = 8;
       p.activePower = 'direct';
       p.activeTimer = 0.85;
@@ -592,14 +598,13 @@ export class Game {
       return;
     }
     if (msg.type === 'directHit') {
-      this.setStatus('相手の直撃！');
-      setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1200);
+      // Incoming only — do NOT set player.activePower (that made it look like WE fired)
       const dmg = msg.dmg || 8;
       this.state.incomingDirect = 0.85;
       this.applyPlayerDamage(dmg, 'direct');
       this.state.player.invuln = 0.6;
       this.state.fx.push(spawnExplosion(this.state.player.x + 10, this.state.player.y * this.L.own.h, true));
-      this.setStatus('対戦相手を直接攻撃');
+      this.setStatus('相手からの直撃！');
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1400);
       if (this.state.player.hp <= 0) this.finish(false);
       return;
