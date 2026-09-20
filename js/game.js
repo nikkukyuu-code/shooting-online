@@ -1,7 +1,7 @@
 import {
   POWERUPS, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
 } from './entities.js';
-import { resizeCanvas, renderFrame, layout } from './render.js';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js';
 import { sfx } from './audio.js';
 
 const HINT = '敵を倒してアイテムを取得してください';
@@ -20,6 +20,7 @@ export class Game {
     this.useBot = false;
     this.remoteSnap = null;
     this.pointerY = 0.5;
+    this.pointerX = 0.14; // normalized 0..1 within own field width (left=back, right=forward)
     this.pointerDown = false;
     this._lastTs = 0;
     this._spawnAcc = 0;
@@ -48,6 +49,8 @@ export class Game {
     this.ended = false;
     this.waiting = true;
     this.remoteSnap = null;
+    this.pointerY = 0.5;
+    this.pointerX = 0.14;
     this.ui.endOverlay.classList.add('hidden');
     this.setStatus(WAIT);
   }
@@ -144,25 +147,30 @@ export class Game {
     this._onPointer = (e) => {
       e.preventDefault();
       const rect = c.getBoundingClientRect();
-      const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
-      const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
+      const touch = e.touches ? e.touches[0] : null;
+      if (!touch && (e.type === 'touchend' || e.type === 'touchcancel')) return;
+      const clientY = touch ? touch.clientY : e.clientY;
+      const clientX = touch ? touch.clientX : e.clientX;
       const relY = (clientY - rect.top) / rect.height;
       const relX = (clientX - rect.left) / rect.width;
-      // Movement mapped to own field (top 65%)
-      if (relY <= 0.65) {
-        this.pointerY = Math.max(0.06, Math.min(0.94, relY / 0.65));
+
+      const ownTop = OPP_RATIO;
+      const ownBot = OPP_RATIO + OWN_RATIO; // CTRL starts here (~0.75)
+      const isDown = e.type === 'pointerdown' || e.type === 'touchstart' || e.type === 'mousedown';
+
+      // Middle pane (~45%): drag sets ship X+Y (free 2D in own field)
+      if (relY >= ownTop && relY < ownBot) {
+        const localY = (relY - ownTop) / OWN_RATIO;
+        this.pointerY = Math.max(0.06, Math.min(0.94, localY));
+        // X: left = retreat, right = advance toward enemies
+        this.pointerX = Math.max(0.06, Math.min(0.88, relX));
         this.pointerDown = true;
-      } else {
-        // Tap opponent view / bottom → activate next power-up
-        if (e.type === 'pointerdown' || e.type === 'touchstart' || e.type === 'mousedown') {
-          this.tryUsePower();
-        }
+      } else if (relY >= ownBot) {
+        // Bottom control pane: tap activates next power-up
+        if (isDown) this.tryUsePower();
       }
-      // also allow dragging anywhere in own field
-      if (relY <= 0.72) {
-        this.pointerY = Math.max(0.06, Math.min(0.94, Math.min(relY, 0.65) / 0.65));
-      }
-      void relX;
+      // Top opponent pane: ignore for movement / items
+      void CTRL_RATIO;
     };
     this._onPointerUp = () => { this.pointerDown = false; };
     c.addEventListener('pointerdown', this._onPointer, { passive: false });
@@ -178,7 +186,7 @@ export class Game {
     this._keys = new Set();
     this._onKeyDown = (e) => {
       this._keys.add(e.key);
-      if (['ArrowUp','ArrowDown','w','W','s','S',' ','Enter'].includes(e.key)) e.preventDefault();
+      if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','W','s','S','a','A','d','D',' ','Enter'].includes(e.key)) e.preventDefault();
       if (e.key === ' ' || e.key === 'Enter') this.tryUsePower();
     };
     this._onKeyUp = (e) => { this._keys.delete(e.key); };
@@ -345,14 +353,18 @@ export class Game {
     S.time += dt;
     S.scroll += 60 * dt;
 
-    // Keyboard nudge
+    // Keyboard nudge (Y = up/down, X = back/forward along flight axis)
     if (this._keys) {
       if (this._keys.has('ArrowUp') || this._keys.has('w') || this._keys.has('W')) this.pointerY = Math.max(0.06, this.pointerY - 1.2 * dt);
       if (this._keys.has('ArrowDown') || this._keys.has('s') || this._keys.has('S')) this.pointerY = Math.min(0.94, this.pointerY + 1.2 * dt);
+      if (this._keys.has('ArrowLeft') || this._keys.has('a') || this._keys.has('A')) this.pointerX = Math.max(0.06, this.pointerX - 1.2 * dt);
+      if (this._keys.has('ArrowRight') || this._keys.has('d') || this._keys.has('D')) this.pointerX = Math.min(0.88, this.pointerX + 1.2 * dt);
     }
-    // Move player toward pointer
-    const target = this.pointerY;
-    P.y += (target - P.y) * Math.min(1, 12 * dt);
+    // Move player toward pointer (free 2D within own field)
+    P.y += (this.pointerY - P.y) * Math.min(1, 12 * dt);
+    const targetX = this.pointerX * fw;
+    P.x += (targetX - P.x) * Math.min(1, 12 * dt);
+    P.x = Math.max(20, Math.min(fw * 0.88, P.x));
     if (P.invuln > 0) P.invuln -= dt;
     if (P.activeTimer > 0) {
       P.activeTimer -= dt;

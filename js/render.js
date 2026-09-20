@@ -1,13 +1,23 @@
-/** Canvas rendering for split-view shmup */
+/** Canvas rendering for 3-pane portrait shmup
+ *  TOP ~30% opponent | MIDDLE ~45% own | BOTTOM ~25% control
+ */
 
-const OWN_RATIO = 0.65;
+export const OPP_RATIO = 0.30;
+export const OWN_RATIO = 0.45;
+export const CTRL_RATIO = 0.25;
 
 export function layout(canvas) {
   const W = canvas.width;
   const H = canvas.height;
+  const oppH = Math.floor(H * OPP_RATIO);
   const ownH = Math.floor(H * OWN_RATIO);
-  const oppH = H - ownH;
-  return { W, H, ownH, oppH, own: { x: 0, y: 0, w: W, h: ownH }, opp: { x: 0, y: ownH, w: W, h: oppH } };
+  const ctrlH = H - oppH - ownH; // remainder ≈ 25%
+  return {
+    W, H, oppH, ownH, ctrlH,
+    opp:  { x: 0, y: 0,           w: W, h: oppH },
+    own:  { x: 0, y: oppH,        w: W, h: ownH },
+    ctrl: { x: 0, y: oppH + ownH, w: W, h: ctrlH },
+  };
 }
 
 export function resizeCanvas(canvas) {
@@ -178,12 +188,15 @@ function drawFx(ctx, f) {
   ctx.restore();
 }
 
-function drawHpBars(ctx, area, selfHp, oppHp, maxHp) {
-  const x = area.w * 0.16;
-  const y = area.h * 0.38;
-  const barW = area.w * 0.58;
-  const barH = Math.max(4, Math.min(7, area.h * 0.012));
+/** Green HP bars near the top/middle pane boundary. */
+function drawHpBarsAtBoundary(ctx, L, selfHp, oppHp, maxHp) {
+  const x = L.W * 0.16;
+  const barW = L.W * 0.58;
+  const barH = Math.max(4, Math.min(8, L.H * 0.008));
   const gap = barH + 5;
+  // Sit just below the opp/own divider (into middle pane a bit), matching reference stills
+  const y = L.oppH + Math.max(6, L.ownH * 0.02);
+
   // self
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.fillRect(x, y, barW, barH);
@@ -222,16 +235,82 @@ function drawLaser(ctx, player, fieldH) {
   ctx.restore();
 }
 
-/** Draw one field into a clipped region. `snap` is local state or remote snapshot. */
-export function drawField(ctx, area, snap, opts = {}) {
-  const { darkened = false, showBars = true, selfHp, oppHp } = opts;
+/** Cooler purple-blue-grey control panel (not a play field). */
+function drawControlPanel(ctx, area, localState) {
   ctx.save();
   ctx.beginPath();
   ctx.rect(area.x, area.y, area.w, area.h);
   ctx.clip();
   ctx.translate(area.x, area.y);
 
-  // Scale remote snapshots that were authored in different sizes using normalized coords where possible
+  const g = ctx.createLinearGradient(0, 0, 0, area.h);
+  g.addColorStop(0, '#3a3a55');
+  g.addColorStop(0.4, '#2c2c48');
+  g.addColorStop(1, '#1a1a30');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, area.w, area.h);
+
+  // subtle panel sheen
+  ctx.fillStyle = 'rgba(120, 130, 180, 0.08)';
+  ctx.fillRect(0, 0, area.w, area.h * 0.35);
+
+  // top edge highlight
+  ctx.fillStyle = 'rgba(180, 190, 220, 0.22)';
+  ctx.fillRect(0, 0, area.w, 2);
+
+  // Queued item icons / pips (center-upper of panel)
+  const items = (localState.player && localState.player.items) || [];
+  const pipR = Math.max(5, Math.min(9, area.h * 0.06));
+  const pipGap = pipR * 2.4;
+  const totalW = items.length ? (items.length - 1) * pipGap : 0;
+  const startX = area.w * 0.5 - totalW * 0.5;
+  const pipY = area.h * 0.32;
+  for (let i = 0; i < items.length; i++) {
+    const ix = startX + i * pipGap;
+    ctx.fillStyle = i === 0 ? '#ffd24a' : '#c8a84a';
+    ctx.beginPath();
+    ctx.arc(ix, pipY, pipR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  // Soft virtual-pad hint ring in center when no items
+  if (!items.length) {
+    ctx.strokeStyle = 'rgba(160, 170, 210, 0.18)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(area.w * 0.5, area.h * 0.38, Math.min(area.w, area.h) * 0.18, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Status / instruction text (DOM also mirrors this; canvas copy for offline/embed)
+  const text = localState.statusText || '';
+  if (text) {
+    const fontSize = Math.max(12, Math.min(18, area.w * 0.045));
+    ctx.font = `600 ${fontSize}px "Hiragino Sans","Noto Sans JP","Yu Gothic",Meiryo,sans-serif`;
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 4;
+    ctx.fillText(text, area.w * 0.5, area.h * 0.72, area.w * 0.92);
+    ctx.shadowBlur = 0;
+  }
+
+  ctx.restore();
+}
+
+/** Draw one field into a clipped region. `snap` is local state or remote snapshot. */
+export function drawField(ctx, area, snap, opts = {}) {
+  const { darkened = false } = opts;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(area.x, area.y, area.w, area.h);
+  ctx.clip();
+  ctx.translate(area.x, area.y);
+
   const fw = area.w;
   const fh = area.h;
   const sx = snap._sx || 1;
@@ -272,34 +351,12 @@ export function drawField(ctx, area, snap, opts = {}) {
     if (!darkened && snap.player) drawLaser(ctx, snap.player, fh);
   }
 
-  if (showBars) {
-    const sh = selfHp != null ? selfHp : (snap.player ? snap.player.hp : snap.php);
-    const oh = oppHp != null ? oppHp : 100;
-    drawHpBars(ctx, { w: fw, h: fh }, sh ?? 100, oh ?? 100, 100);
-    // item queue pips
-    const items = (snap.player && snap.player.items) || [];
-    if (items.length) {
-      for (let i = 0; i < items.length; i++) {
-        const ix = 12 + i * 16;
-        const iy = fh - 18;
-        ctx.fillStyle = '#ffd24a';
-        ctx.beginPath();
-        ctx.arc(ix, iy, 5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-    }
-  }
-
   ctx.restore();
 }
 
 export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
   ctx.clearRect(0, 0, L.W, L.H);
 
-  // Prepare local draw snap
   const localSnap = {
     player: localState.player,
     enemies: localState.enemies,
@@ -310,22 +367,13 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
     alive: localState.alive,
   };
 
-  const oppHp = remoteSnap ? (remoteSnap.php ?? 100) : (localState.botHp ?? 100);
-  drawField(ctx, L.own, localSnap, {
-    darkened: false,
-    showBars: true,
-    selfHp: localState.player.hp,
-    oppHp,
-  });
-
-  // Opponent view
+  // 1) TOP — opponent live view (darkened)
   let oppDraw;
   if (remoteSnap) {
     const sx = L.opp.w / (remoteSnap._fw || L.own.w);
     const sy = L.opp.h / (remoteSnap._fh || L.own.h);
     oppDraw = { ...remoteSnap, _sx: sx, _sy: sy, player: { x: remoteSnap.px, y: remoteSnap.py } };
   } else {
-    // Mirror a dim placeholder or bot field
     oppDraw = localState.botSnap || {
       scroll: localState.scroll * 0.9,
       enemies: [],
@@ -339,18 +387,30 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
       _sy: L.opp.h / L.own.h,
     };
   }
-  drawField(ctx, L.opp, oppDraw, { darkened: true, showBars: false });
+  drawField(ctx, L.opp, oppDraw, { darkened: true });
 
-  // Divider line
+  // 2) MIDDLE — player's own gameplay field
+  drawField(ctx, L.own, localSnap, { darkened: false });
+
+  // HP bars near boundary between top and middle
+  const oppHp = remoteSnap ? (remoteSnap.php ?? 100) : (localState.botHp ?? 100);
+  drawHpBarsAtBoundary(ctx, L, localState.player.hp, oppHp, 100);
+
+  // Divider between opp and own
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.fillRect(0, L.ownH - 2, L.W, 3);
+  ctx.fillRect(0, L.oppH - 2, L.W, 3);
   ctx.fillStyle = 'rgba(255,200,150,0.25)';
-  ctx.fillRect(0, L.ownH - 1, L.W, 1);
+  ctx.fillRect(0, L.oppH - 1, L.W, 1);
+
+  // 3) BOTTOM — control panel (cooler tone; not a play field)
+  drawControlPanel(ctx, L.ctrl, localState);
+
+  // Divider between own and control
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillRect(0, L.oppH + L.ownH - 1, L.W, 2);
 
   if (waiting) {
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.fillRect(0, 0, L.W, L.H);
   }
 }
-
-export { OWN_RATIO };
