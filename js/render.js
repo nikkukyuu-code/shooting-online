@@ -13,7 +13,7 @@ const ITEM_STYLE = {
   rapid:      { color: '#ffee44', icon: '≫',  label: '連射',   effect: '連射強化' },
   meteor:     { color: '#ff7744', icon: '☄',  label: '隕石',   effect: '相手に隕石' },
   send:       { color: '#ff8844', icon: '⇒',  label: '敵送信', effect: '相手に敵を送る' },
-  direct:     { color: '#ff3333', icon: '※',  label: '直撃',   effect: '上向きレーザー' },
+  direct:     { color: '#ff3333', icon: '※',  label: '直撃',   effect: '上向き連射レーザー' },
   heal:       { color: '#44ff88', icon: '+',  label: '回復',   effect: 'HP+25' },
   heal_big:   { color: '#22ff66', icon: '++', label: '大回復', effect: 'HP+50' },
   send_mech:  { color: '#88aaff', icon: '艦',  label: '戦艦',   effect: '戦艦を送る' },
@@ -667,34 +667,69 @@ function drawDamageNumbers(ctx, L, nums) {
 }
 
 function drawDirectBeam(ctx, x0, y0, x1, y1, lifeRatio = 1) {
-  const pulse = 0.55 + 0.35 * Math.sin(performance.now() / 35);
+  // Staccato micro-lasers: many short bolts along the path, flickering rapidly
+  const now = performance.now();
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  const px = -uy;
+  const py = ux;
+  const boltLen = Math.max(18, Math.min(36, len * 0.12));
+  const gap = boltLen * 0.55;
+  const n = Math.max(4, Math.floor(len / (boltLen + gap)));
+  const baseA = Math.max(0.3, Math.min(1, lifeRatio));
+
   ctx.save();
-  ctx.globalAlpha = Math.max(0.25, Math.min(1, lifeRatio)) * pulse;
-  ctx.strokeStyle = '#ff4466';
-  ctx.lineWidth = 14;
-  ctx.shadowColor = '#ff2040';
-  ctx.shadowBlur = 22;
   ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  ctx.lineTo(x1, y1);
-  ctx.stroke();
-  ctx.strokeStyle = '#ffe0e8';
-  ctx.lineWidth = 4;
-  ctx.shadowBlur = 8;
-  ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  ctx.lineTo(x1, y1);
-  ctx.stroke();
-  // impact bloom
-  const g = ctx.createRadialGradient(x1, y1, 0, x1, y1, 28);
-  g.addColorStop(0, 'rgba(255,255,255,0.9)');
-  g.addColorStop(0.4, 'rgba(255,80,100,0.55)');
-  g.addColorStop(1, 'rgba(255,0,40,0)');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(x1, y1, 28, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.shadowColor = '#ff2040';
+
+  for (let i = 0; i < n; i++) {
+    // Each bolt flickers on/off on its own cadence
+    const phase = (now / 28 + i * 1.7) % 1;
+    if (phase > 0.62) continue; // off most of the time → short pulses
+    const jitter = Math.sin(now / 40 + i * 2.3) * 5;
+    const t0 = (i / n) + (phase * 0.04);
+    const t1 = Math.min(1, t0 + boltLen / len);
+    const ax = x0 + ux * len * t0 + px * jitter;
+    const ay = y0 + uy * len * t0 + py * jitter;
+    const bx = x0 + ux * len * t1 + px * jitter * 0.4;
+    const by = y0 + uy * len * t1 + py * jitter * 0.4;
+    const a = baseA * (0.55 + 0.45 * (1 - phase / 0.62));
+
+    ctx.globalAlpha = a * 0.85;
+    ctx.strokeStyle = '#ff3355';
+    ctx.lineWidth = 7;
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+
+    ctx.globalAlpha = a;
+    ctx.strokeStyle = '#ffe8f0';
+    ctx.lineWidth = 2.5;
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+  }
+
+  // Small impact sparks at the tip (also stutter)
+  if ((now / 50) % 1 < 0.7) {
+    const spark = 10 + 8 * Math.sin(now / 30);
+    const g = ctx.createRadialGradient(x1, y1, 0, x1, y1, spark);
+    g.addColorStop(0, 'rgba(255,255,255,0.95)');
+    g.addColorStop(0.35, 'rgba(255,90,110,0.6)');
+    g.addColorStop(1, 'rgba(255,0,40,0)');
+    ctx.globalAlpha = baseA;
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x1, y1, spark, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
 }
 

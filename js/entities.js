@@ -9,7 +9,7 @@ export const POWERUPS = [
   { id: 'rapid',      label: '連射強化',      effect: '一定時間すばやく強弾を連射', color: '#ffee44', icon: '≫' },
   { id: 'meteor',     label: '隕石送信',      effect: '相手に隕石攻撃を落とす',     color: '#ff7744', icon: '☄' },
   { id: 'send',       label: '敵キャラ送信',  effect: '相手に敵を送る',             color: '#ff8844', icon: '⇒' },
-  { id: 'direct',     label: '直接攻撃',      effect: '上向きレーザーで相手を直撃', color: '#ff3333', icon: '※' },
+  { id: 'direct',     label: '直接攻撃',      effect: '小刻み上向きレーザーで相手を直撃', color: '#ff3333', icon: '※' },
   { id: 'heal',       label: 'HP回復',        effect: '自分のHPを+25',              color: '#44ff88', icon: '+' },
   { id: 'heal_big',   label: '大回復',        effect: '自分のHPを+50',              color: '#22ff66', icon: '++' },
   { id: 'send_mech',  label: '戦艦送信',      effect: '相手に宇宙戦艦を送る',       color: '#88aaff', icon: '艦' },
