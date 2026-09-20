@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.5.9';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.9';
-import { sfx } from './audio.js?v=1.5.9';
+} from './entities.js?v=1.5.10';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.10';
+import { sfx } from './audio.js?v=1.5.10';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -921,36 +921,29 @@ export class Game {
     const lanes = 17;
     const scores = new Array(lanes).fill(0);
     const laneY = (i) => 0.06 + (i / (lanes - 1)) * 0.88;
-    const threatAt = (yN, lookAhead = 1.1) => {
+    const threatAt = (yN, lookAhead = 0.55) => {
       let thr = 0;
       for (const b of B.bullets) {
         if (b.owner !== 'enemy' || b.vx >= 0) continue;
-        // Predict bullet Y when it reaches shipX
+        // Only react to nearby bullets (shorter foresight = weaker dodge)
         const dist = b.x - shipX;
-        if (dist < -20 || dist > fw * 0.95) continue;
+        if (dist < -20 || dist > fw * 0.45) continue;
         const eta = dist / Math.max(40, -b.vx);
         if (eta < 0 || eta > lookAhead) continue;
         const predY = (b.y + b.vy * eta) / fh;
         const lane = Math.abs(predY - yN);
-        const near = 1 - Math.min(1, dist / (fw * 0.7));
-        if (lane < 0.11) thr += (1 - lane / 0.11) * (0.55 + near * 1.6) * (eta < 0.35 ? 1.8 : 1);
-        else if (lane < 0.18) thr += 0.15 * near;
+        const near = 1 - Math.min(1, dist / (fw * 0.45));
+        if (lane < 0.07) thr += (1 - lane / 0.07) * (0.35 + near * 0.9) * (eta < 0.2 ? 1.3 : 1);
       }
       for (const e of B.enemies) {
         const ey = e.y / fh;
-        const eta = (e.x - shipX) / Math.max(30, e.speed);
-        if (e.x < shipX + 160 && Math.abs(ey - yN) < 0.14) {
-          thr += (1 - Math.abs(ey - yN) / 0.14) * (e.x < 90 ? 2.4 : 1.1);
-        }
-        // Prefer not sitting on dense fire lines of elites/bosses
-        if (eta > 0 && eta < 1.4 && Math.abs(ey - yN) < 0.08 && (e.kind === 'elite' || e.kind === 'boss' || e.kind === 'mech' || e.kind === 'tank')) {
-          thr += 0.35;
+        // Only dodge near rams
+        if (e.x < shipX + 70 && Math.abs(ey - yN) < 0.1) {
+          thr += (1 - Math.abs(ey - yN) / 0.1) * (e.x < 70 ? 1.4 : 0.6);
         }
       }
-      // Soft preference: stay near preferred lane when safe
-      thr += Math.abs(yN - B.preferredY) * 0.12;
-      // Edge penalty
-      if (yN < 0.12 || yN > 0.88) thr += 0.25;
+      thr += Math.abs(yN - B.preferredY) * 0.2;
+      if (yN < 0.1 || yN > 0.9) thr += 0.2;
       return thr;
     };
 
@@ -965,7 +958,7 @@ export class Game {
     }
     const safest = laneY(bestI);
     const currentThreat = threatAt(B.y, 0.85);
-    const mustDodge = currentThreat > 0.55 || (scores[bestI] + 0.35 < currentThreat);
+    const mustDodge = currentThreat > 1.35 || (scores[bestI] + 0.85 < currentThreat);
 
     // --- Target selection: value = closeness + HP + kind weight, penalize off-lane if dodging ---
     let focus = null;
@@ -997,10 +990,10 @@ export class Game {
     if (mustDodge) {
       const dir = safest >= B.y ? 1 : -1;
       B.lastDodgeDir = dir;
-      target = Math.max(0.07, Math.min(0.93, safest + dir * 0.04));
+      target = Math.max(0.07, Math.min(0.93, safest + dir * 0.02));
     }
     target = Math.max(0.07, Math.min(0.93, target));
-    const chase = mustDodge ? 28 : (focus && Math.abs(focus.y / fh - B.y) < 0.12 ? 14 : 11);
+    const chase = mustDodge ? 10 : (focus && Math.abs(focus.y / fh - B.y) < 0.12 ? 9 : 7);
     B.y += (target - B.y) * Math.min(1, chase * dt);
 
     // --- Fire control: lead aim, burst when aligned, powers ---
@@ -1136,20 +1129,20 @@ export class Game {
     }
     B.enemies = kept;
 
-    // Hits on bot
+    // Hits on bot — larger hurtbox, shorter i-frames so HP actually drops
     for (const b of B.bullets) {
       if (b.owner !== 'enemy') continue;
-      if (B.invuln <= 0 && Math.abs(b.x - shipX) < 10 && Math.abs(b.y - B.y * fh) < 9) {
-        B.hp = Math.max(0, B.hp - 5);
-        B.invuln = 0.55;
+      if (B.invuln <= 0 && Math.abs(b.x - shipX) < 16 && Math.abs(b.y - B.y * fh) < 14) {
+        B.hp = Math.max(0, B.hp - 8);
+        B.invuln = 0.28;
         b.life = 0;
         B.fx.push(spawnExplosion(shipX, B.y * fh, false));
       }
     }
     for (const e of B.enemies) {
-      if (B.invuln <= 0 && Math.abs(e.x - shipX) < e.w * 0.35 + 6 && Math.abs(e.y - B.y * fh) < e.h * 0.35 + 6) {
-        B.hp = Math.max(0, B.hp - 7);
-        B.invuln = 0.7;
+      if (B.invuln <= 0 && Math.abs(e.x - shipX) < e.w * 0.45 + 10 && Math.abs(e.y - B.y * fh) < e.h * 0.45 + 10) {
+        B.hp = Math.max(0, B.hp - 12);
+        B.invuln = 0.35;
         e.hp = 0;
         B.fx.push(spawnExplosion(shipX, B.y * fh, true));
       }
@@ -1166,11 +1159,11 @@ export class Game {
     const pickBestItem = () => {
       if (!B.items.length) return null;
       // Priority rules
-      if (B.hp <= 45) {
+      if (B.hp <= 28) {
         const h = B.items.findIndex((id) => id === 'heal_big' || id === 'heal');
         if (h >= 0) return h;
       }
-      if (B.hp <= 70) {
+      if (B.hp <= 40) {
         const h = B.items.findIndex((id) => id === 'heal_big');
         if (h >= 0) return h;
       }
@@ -1265,13 +1258,13 @@ export class Game {
 
     // Use when: cooldown ready AND (low HP heal / many enemies / mid-fight pressure)
     if (B.powerCd <= 0) {
-      const wantHeal = B.hp <= 50 && B.items.some((id) => id === 'heal' || id === 'heal_big');
+      const wantHeal = B.hp <= 30 && B.items.some((id) => id === 'heal' || id === 'heal_big');
       const wantClear = enemyPressure >= 3;
       const wantPressure = playerHp >= 40 && B.time > 4;
       if (wantHeal || wantClear || wantPressure || B.items.length >= 3) tryUse();
     }
     // Emergency heal even if cooldown almost ready
-    if (B.hp <= 30 && B.powerCd < 1.2 && B.items.some((id) => id === 'heal' || id === 'heal_big')) {
+    if (B.hp <= 18 && B.powerCd < 0.8 && B.items.some((id) => id === 'heal' || id === 'heal_big')) {
       B.powerCd = 0;
       tryUse(true);
     }
