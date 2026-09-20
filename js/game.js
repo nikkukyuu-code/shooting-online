@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.5.2';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.5.2';
-import { sfx } from './audio.js?v=1.5.2';
+} from './entities.js?v=1.5.3';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.5.3';
+import { sfx } from './audio.js?v=1.5.3';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -343,18 +343,27 @@ export class Game {
   }
 
 
+
+  /** Sent enemies park on the right side and fight from there. */
+  markSentEnemy(e, fw, fh) {
+    e.sent = true;
+    e.holdX = fw * (0.72 + Math.random() * 0.14);
+    e.holdY = Math.max(28, Math.min(fh - 28, e.y));
+    e.x = fw + 24 + Math.random() * 50;
+    e.y = e.holdY;
+    // Fight a bit more often once parked
+    e.fireCd = Math.min(e.fireCd || 1, 0.6 + Math.random() * 0.5);
+    return e;
+  }
+
   /** Push sent enemies into bot field or net. kinds: string | string[] */
   sendToOpponent(kinds, statusLabel) {
     const list = Array.isArray(kinds) ? kinds : [kinds];
+    const fw = this.L.own.w, fh = this.L.own.h;
     if (this.useBot) {
       for (const kind of list) {
-        const e = spawnEnemy(this.L.own.w, this.L.own.h, kind);
-        e.sent = true;
-        this._bot.enemies.push({
-          ...e,
-          x: this.L.own.w + 20,
-          y: 40 + Math.random() * (this.L.own.h - 80),
-        });
+        const e = this.markSentEnemy(spawnEnemy(fw, fh, kind), fw, fh);
+        this._bot.enemies.push(e);
       }
     } else if (this.net) {
       this.net.send({ type: 'sendEnemies', kinds: list });
@@ -452,18 +461,16 @@ export class Game {
     }
     if (msg.type === 'sendEnemies') {
       const kinds = msg.kinds || null;
+      const fw = this.L.own.w, fh = this.L.own.h;
       if (kinds && kinds.length) {
         for (const kind of kinds) {
-          const e = spawnEnemy(this.L.own.w, this.L.own.h, kind);
-          e.sent = true;
-          this.state.enemies.push(e);
+          this.state.enemies.push(this.markSentEnemy(spawnEnemy(fw, fh, kind), fw, fh));
         }
       } else {
         const n = msg.count || 3;
         for (let i = 0; i < n; i++) {
-          const e = spawnEnemy(this.L.own.w, this.L.own.h, i === n - 1 ? 'elite' : 'swarm');
-          e.sent = true;
-          this.state.enemies.push(e);
+          const e = spawnEnemy(fw, fh, i === n - 1 ? 'elite' : 'swarm');
+          this.state.enemies.push(this.markSentEnemy(e, fw, fh));
         }
       }
       this.setStatus('対戦相手から敵が送られてきた！');
@@ -652,17 +659,37 @@ export class Game {
     // Update enemies
     for (const e of S.enemies) {
       e.phase += dt * 2;
-      e.x -= e.speed * dt;
-      if (e.kind !== 'boss' && e.kind !== 'mech' && e.kind !== 'golem' && e.kind !== 'tank') e.y += Math.sin(e.phase) * 18 * dt;
+      if (e.sent) {
+        if (e.holdX == null) e.holdX = fw * (0.72 + Math.random() * 0.14);
+        if (e.holdY == null) e.holdY = e.y;
+        // Approach right-side hold point, then park and weave
+        if (e.x > e.holdX + 2) {
+          e.x -= Math.max(60, e.speed) * dt;
+        } else {
+          e.x += (e.holdX - e.x) * Math.min(1, 8 * dt);
+          e.y = e.holdY + Math.sin(e.phase) * (e.kind === 'swarm' || e.kind === 'drone' ? 28 : 18);
+        }
+      } else {
+        e.x -= e.speed * dt;
+        if (e.kind !== 'boss' && e.kind !== 'mech' && e.kind !== 'golem' && e.kind !== 'tank') {
+          e.y += Math.sin(e.phase) * 18 * dt;
+        }
+      }
       e.y = Math.max(16, Math.min(fh - 16, e.y));
       e.fireCd -= dt;
-      if (e.fireCd <= 0 && e.x < fw) {
-        e.fireCd = (e.kind === 'boss' || e.kind === 'tank') ? 1.0
-          : (e.kind === 'mech' || e.kind === 'golem') ? 1.3 + Math.random() * 0.4
-          : e.kind === 'elite' ? 1.6 + Math.random() * 0.5
-          : 2.2 + Math.random() * 0.8;
+      const onScreen = e.x < fw + 10;
+      const parked = e.sent ? e.x <= (e.holdX || fw) + 8 : true;
+      if (e.fireCd <= 0 && onScreen && parked) {
+        e.fireCd = e.sent
+          ? ((e.kind === 'boss' || e.kind === 'tank' || e.kind === 'mech') ? 0.85
+            : (e.kind === 'golem' || e.kind === 'elite') ? 1.1
+            : 1.5 + Math.random() * 0.4)
+          : ((e.kind === 'boss' || e.kind === 'tank') ? 1.0
+            : (e.kind === 'mech' || e.kind === 'golem') ? 1.3 + Math.random() * 0.4
+            : e.kind === 'elite' ? 1.6 + Math.random() * 0.5
+            : 2.2 + Math.random() * 0.8);
         S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y, -160 - Math.random() * 30, (Math.random() - 0.5) * 24, 'enemy', false, 2));
-        if (e.kind === 'boss' || e.kind === 'tank' || e.kind === 'mech') {
+        if (e.kind === 'boss' || e.kind === 'tank' || e.kind === 'mech' || (e.sent && (e.kind === 'golem' || e.kind === 'elite'))) {
           S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y - 12, -160, -30, 'enemy', false, 1));
           S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y + 12, -160, 30, 'enemy', false, 1));
         }
@@ -955,15 +982,29 @@ export class Game {
     }
 
     for (const e of B.enemies) {
-      e.x -= e.speed * dt;
       e.phase += dt * 2;
-      e.y += Math.sin(e.phase) * 12 * dt;
+      if (e.sent) {
+        if (e.holdX == null) e.holdX = fw * (0.72 + Math.random() * 0.14);
+        if (e.holdY == null) e.holdY = e.y;
+        if (e.x > e.holdX + 2) {
+          e.x -= Math.max(60, e.speed) * dt;
+        } else {
+          e.x += (e.holdX - e.x) * Math.min(1, 8 * dt);
+          e.y = e.holdY + Math.sin(e.phase) * (e.kind === 'swarm' || e.kind === 'drone' ? 28 : 18);
+        }
+      } else {
+        e.x -= e.speed * dt;
+        e.y += Math.sin(e.phase) * 12 * dt;
+      }
       e.y = Math.max(20, Math.min(fh - 20, e.y));
       e.fireCd -= dt;
-      if (e.fireCd <= 0) {
-        e.fireCd = (e.kind === 'elite' || e.kind === 'boss') ? 1.6 : 2.2;
+      const parked = e.sent ? e.x <= (e.holdX || fw) + 8 : true;
+      if (e.fireCd <= 0 && parked) {
+        e.fireCd = e.sent
+          ? ((e.kind === 'elite' || e.kind === 'boss' || e.kind === 'mech' || e.kind === 'tank') ? 1.0 : 1.5)
+          : ((e.kind === 'elite' || e.kind === 'boss') ? 1.6 : 2.2);
         B.bullets.push(spawnBullet(e.x, e.y, -170, (Math.random() - 0.5) * 20, 'enemy', false, 2));
-        if (e.kind === 'elite' || e.kind === 'boss') {
+        if (e.kind === 'elite' || e.kind === 'boss' || (e.sent && (e.kind === 'mech' || e.kind === 'tank' || e.kind === 'golem'))) {
           B.bullets.push(spawnBullet(e.x, e.y - 10, -160, -28, 'enemy', false, 1));
           B.bullets.push(spawnBullet(e.x, e.y + 10, -160, 28, 'enemy', false, 1));
         }
@@ -1074,16 +1115,24 @@ export class Game {
       } else if (id === 'direct') {
         this.applyPlayerDamage(8, 'direct');
         this.state.fx.push(spawnExplosion(this.state.player.x, this.state.player.y * fh, false));
-      } else if (id === 'send') {
-        this.sendToOpponent(['swarm', 'swarm', 'elite'], 'COM敵送信');
-      } else if (id === 'send_mech') {
-        this.sendToOpponent('mech', 'COM戦艦');
-      } else if (id === 'send_golem') {
-        this.sendToOpponent('golem', 'COM要塞');
-      } else if (id === 'send_tank') {
-        this.sendToOpponent('tank', 'COMガンシップ');
-      } else if (id === 'send_drone') {
-        this.sendToOpponent(['drone', 'drone', 'drone', 'drone'], 'COM無人機');
+      } else if (id === 'send' || id === 'send_mech' || id === 'send_golem' || id === 'send_tank' || id === 'send_drone') {
+        const map = {
+          send: ['swarm', 'swarm', 'elite'],
+          send_mech: ['mech'],
+          send_golem: ['golem'],
+          send_tank: ['tank'],
+          send_drone: ['drone', 'drone', 'drone', 'drone'],
+        };
+        const labels = {
+          send: 'COM敵送信', send_mech: 'COM戦艦', send_golem: 'COM要塞',
+          send_tank: 'COMガンシップ', send_drone: 'COM無人機',
+        };
+        const fw = this.L.own.w, fh = this.L.own.h;
+        for (const kind of map[id]) {
+          this.state.enemies.push(this.markSentEnemy(spawnEnemy(fw, fh, kind), fw, fh));
+        }
+        this.setStatus(labels[id]);
+        setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1400);
       }
     };
 
