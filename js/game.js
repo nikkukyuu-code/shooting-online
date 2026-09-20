@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.4.6';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.4.6';
-import { sfx } from './audio.js?v=1.4.6';
+} from './entities.js?v=1.4.7';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.4.7';
+import { sfx } from './audio.js?v=1.4.7';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -23,7 +23,8 @@ export class Game {
     this.pointerX = 0.14; // normalized 0..1 within own field width (left=back, right=forward)
     this.pointerDown = false;
     this.ctrlTouch = { active: false, x: 0.5, y: 0.5 };
-    this.draggingShip = false; // only move when grabbing ship on control pad // finger pos in ctrl pane (0..1)
+    this.draggingShip = false;
+    this.shipPointerId = null; // pointer/touch that grabbed the ship // finger pos in ctrl pane (0..1)
     this._lastTs = 0;
     this._spawnAcc = 0;
     this._bossAcc = 0;
@@ -54,7 +55,8 @@ export class Game {
     this.pointerY = 0.5;
     this.pointerX = 0.14;
     this.ctrlTouch = { active: false, x: 0.5, y: 0.5 };
-    this.draggingShip = false; // only move when grabbing ship on control pad
+    this.draggingShip = false;
+    this.shipPointerId = null;
     this.ui.endOverlay.classList.add('hidden');
     this.setStatus(WAIT);
   }
@@ -148,99 +150,119 @@ export class Game {
 
   bindInput() {
     const c = this.canvas;
-    this._onPointer = (e) => {
-      e.preventDefault();
+    const mapPoint = (clientX, clientY) => {
       const rect = c.getBoundingClientRect();
-      const touch = e.touches ? e.touches[0] : null;
-      if (!touch && (e.type === 'touchend' || e.type === 'touchcancel')) return;
-      const clientY = touch ? touch.clientY : e.clientY;
-      const clientX = touch ? touch.clientX : e.clientX;
-      // CSS-pixel coords → canvas buffer coords for button hit-test
       const scaleX = c.width / rect.width;
       const scaleY = c.height / rect.height;
-      const canvasX = (clientX - rect.left) * scaleX;
-      const canvasY = (clientY - rect.top) * scaleY;
-      const relY = (clientY - rect.top) / rect.height;
-      const relX = (clientX - rect.left) / rect.width;
+      return {
+        canvasX: (clientX - rect.left) * scaleX,
+        canvasY: (clientY - rect.top) * scaleY,
+        relX: (clientX - rect.left) / rect.width,
+        relY: (clientY - rect.top) / rect.height,
+      };
+    };
 
-      const ownTop = OPP_RATIO;
-      const ownBot = OPP_RATIO + OWN_RATIO; // CTRL starts here (~2/3)
-      const isDown = e.type === 'pointerdown' || e.type === 'touchstart' || e.type === 'mousedown';
-      const isMove = e.type === 'pointermove' || e.type === 'touchmove' || e.type === 'mousemove';
-
-      // Top opponent pane: ignore for movement / items
-      if (relY < ownTop) {
-        void CTRL_RATIO;
-        return;
-      }
-
-      // 「アイテム」 button in control pane (primary power activation)
+    const onItemButton = (canvasX, canvasY) => {
       const btn = itemButtonRect(this.L.ctrl);
-      const onBtn =
+      return (
         canvasX >= btn.x && canvasX <= btn.x + btn.w &&
-        canvasY >= btn.y && canvasY <= btn.y + btn.h;
-      if (onBtn && isDown) {
+        canvasY >= btn.y && canvasY <= btn.y + btn.h
+      );
+    };
+
+    const ownBot = () => OPP_RATIO + OWN_RATIO;
+
+    const tryGrabOrMoveShip = (pid, relX, relY, isDown) => {
+      if (relY < ownBot()) return false;
+      const localY = (relY - ownBot()) / CTRL_RATIO;
+      const localX = relX;
+      const hitR = 0.16;
+      const dx = localX - this.pointerX;
+      const dy = localY - this.pointerY;
+      const onShip = (dx * dx + dy * dy) <= hitR * hitR;
+
+      if (isDown) {
+        if (!onShip) return false;
+        this.draggingShip = true;
+        this.shipPointerId = pid;
+      } else if (!this.draggingShip || this.shipPointerId !== pid) {
+        return false;
+      }
+
+      this.pointerY = Math.max(0.06, Math.min(0.94, localY));
+      this.pointerX = Math.max(0.06, Math.min(0.88, localX));
+      this.pointerDown = true;
+      this.ctrlTouch = { active: true, x: this.pointerX, y: this.pointerY };
+      return true;
+    };
+
+    const releaseShipPointer = (pid) => {
+      if (this.shipPointerId == null || this.shipPointerId === pid) {
+        this.draggingShip = false;
+        this.shipPointerId = null;
+        this.pointerDown = false;
+        if (this.ctrlTouch) this.ctrlTouch.active = false;
+      }
+    };
+
+    // Pointer events (mouse / pen / one finger with pointer events)
+    this._onPointerDown = (e) => {
+      e.preventDefault();
+      const p = mapPoint(e.clientX, e.clientY);
+      // Item button: fire without releasing ship drag
+      if (onItemButton(p.canvasX, p.canvasY)) {
         this.tryUsePower();
-        this.ctrlTouch.active = false;
         return;
       }
+      if (p.relY < OPP_RATIO) return;
+      tryGrabOrMoveShip(e.pointerId, p.relX, p.relY, true);
+    };
+    this._onPointerMove = (e) => {
+      if (!this.draggingShip || this.shipPointerId !== e.pointerId) return;
+      e.preventDefault();
+      const p = mapPoint(e.clientX, e.clientY);
+      // Keep dragging even if finger slides over the item button
+      tryGrabOrMoveShip(e.pointerId, p.relX, p.relY, false);
+    };
+    this._onPointerUp = (e) => {
+      releaseShipPointer(e.pointerId);
+    };
 
-      // PRIMARY: bottom control pane — must grab the ship to move
-      if (relY >= ownBot) {
-        if (onBtn && isMove) return;
-        const localY = (relY - ownBot) / CTRL_RATIO;
-        const localX = relX;
-        const shipX = this.pointerX;
-        const shipY = this.pointerY;
-        // Generous touch radius (normalized pane space)
-        const hitR = 0.14;
-        const dx = localX - shipX;
-        const dy = localY - shipY;
-        const onShip = (dx * dx + dy * dy) <= hitR * hitR;
-
-        if (isDown) {
-          if (!onShip) {
-            // Touched empty pad — do not start moving
-            this.draggingShip = false;
-            this.pointerDown = false;
-            this.ctrlTouch = { active: false, x: shipX, y: shipY };
-            return;
-          }
-          this.draggingShip = true;
+    // Multi-touch: ship finger + item finger at once
+    this._onTouchStart = (e) => {
+      e.preventDefault();
+      for (const t of e.changedTouches) {
+        const p = mapPoint(t.clientX, t.clientY);
+        if (onItemButton(p.canvasX, p.canvasY)) {
+          this.tryUsePower();
+          continue;
         }
-
-        if (!this.draggingShip) {
-          // Moving finger without an active grab — ignore
-          return;
-        }
-
-        this.pointerY = Math.max(0.06, Math.min(0.94, localY));
-        this.pointerX = Math.max(0.06, Math.min(0.88, localX));
-        this.pointerDown = true;
-        this.ctrlTouch = {
-          active: true,
-          x: this.pointerX,
-          y: this.pointerY,
-        };
-        return;
-      }
-
-      // Middle / playfield: display only — no drag move
-      if (relY >= ownTop && relY < ownBot) {
-        return;
+        if (p.relY < OPP_RATIO) continue;
+        tryGrabOrMoveShip(t.identifier, p.relX, p.relY, true);
       }
     };
-    this._onPointerUp = () => {
-      this.pointerDown = false;
-      this.draggingShip = false;
-      if (this.ctrlTouch) this.ctrlTouch.active = false;
+    this._onTouchMove = (e) => {
+      e.preventDefault();
+      for (const t of e.changedTouches) {
+        if (!this.draggingShip || this.shipPointerId !== t.identifier) continue;
+        const p = mapPoint(t.clientX, t.clientY);
+        tryGrabOrMoveShip(t.identifier, p.relX, p.relY, false);
+      }
     };
-    c.addEventListener('pointerdown', this._onPointer, { passive: false });
-    c.addEventListener('pointermove', this._onPointer, { passive: false });
+    this._onTouchEnd = (e) => {
+      for (const t of e.changedTouches) {
+        releaseShipPointer(t.identifier);
+      }
+    };
+
+    c.addEventListener('pointerdown', this._onPointerDown, { passive: false });
+    c.addEventListener('pointermove', this._onPointerMove, { passive: false });
     c.addEventListener('pointerup', this._onPointerUp);
-    c.addEventListener('touchstart', this._onPointer, { passive: false });
-    c.addEventListener('touchmove', this._onPointer, { passive: false });
-    c.addEventListener('touchend', this._onPointerUp);
+    c.addEventListener('pointercancel', this._onPointerUp);
+    c.addEventListener('touchstart', this._onTouchStart, { passive: false });
+    c.addEventListener('touchmove', this._onTouchMove, { passive: false });
+    c.addEventListener('touchend', this._onTouchEnd);
+    c.addEventListener('touchcancel', this._onTouchEnd);
     this.bindKeyboard();
   }
 
@@ -264,13 +286,16 @@ export class Game {
 
   unbindInput() {
     const c = this.canvas;
-    if (!this._onPointer) return;
-    c.removeEventListener('pointerdown', this._onPointer);
-    c.removeEventListener('pointermove', this._onPointer);
-    c.removeEventListener('pointerup', this._onPointerUp);
-    c.removeEventListener('touchstart', this._onPointer);
-    c.removeEventListener('touchmove', this._onPointer);
-    c.removeEventListener('touchend', this._onPointerUp);
+    if (this._onPointerDown) {
+      c.removeEventListener('pointerdown', this._onPointerDown);
+      c.removeEventListener('pointermove', this._onPointerMove);
+      c.removeEventListener('pointerup', this._onPointerUp);
+      c.removeEventListener('pointercancel', this._onPointerUp);
+      c.removeEventListener('touchstart', this._onTouchStart);
+      c.removeEventListener('touchmove', this._onTouchMove);
+      c.removeEventListener('touchend', this._onTouchEnd);
+      c.removeEventListener('touchcancel', this._onTouchEnd);
+    }
     this.unbindKeyboard();
   }
 

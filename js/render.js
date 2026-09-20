@@ -396,7 +396,7 @@ function drawControlPanel(ctx, area, localState) {
   ctx.fillStyle = 'rgba(230,240,255,0.75)';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.fillText(touch.active ? 'ドラッグ中' : '自機をドラッグ', sx, sy + shipH * 0.7);
+  ctx.fillText(touch.active ? 'ドラッグ中（他の指で発動可）' : '自機をドラッグ', sx, sy + shipH * 0.7);
 
   // Queued items — color + icon + next label
   const items = (localState.player && localState.player.items) || [];
@@ -449,7 +449,10 @@ function drawControlPanel(ctx, area, localState) {
   ctx.shadowBlur = 3;
   const nextId = items[0];
   const nextSt = nextId ? ITEM_STYLE[nextId] : null;
-  ctx.fillText(nextSt ? `発動 ${nextSt.icon}` : 'アイテム', btn.x + btn.w * 0.5, btn.y + btn.h * 0.5);
+  ctx.fillText(nextSt ? `発動 ${nextSt.icon}` : 'アイテム', btn.x + btn.w * 0.5, btn.y + btn.h * 0.42);
+  ctx.font = `600 ${Math.max(8, btnFont * 0.65)}px sans-serif`;
+  ctx.fillStyle = hasItem ? 'rgba(255,248,224,0.85)' : 'rgba(220,225,255,0.55)';
+  ctx.fillText('移動中もOK', btn.x + btn.w * 0.5, btn.y + btn.h * 0.72);
   ctx.shadowBlur = 0;
 
   // Status strip at bottom of control pane
