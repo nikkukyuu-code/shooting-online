@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, serializeField,
-} from './entities.js?v=1.4.7';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.4.7';
-import { sfx } from './audio.js?v=1.4.7';
+} from './entities.js?v=1.4.8';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemButtonRect } from './render.js?v=1.4.8';
+import { sfx } from './audio.js?v=1.4.8';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -299,6 +299,29 @@ export class Game {
     this.unbindKeyboard();
   }
 
+
+  applyPlayerDamage(amount, cause = 'hit') {
+    const P = this.state.player;
+    const before = P.hp;
+    const dmg = Math.max(0, Math.min(amount, before));
+    if (dmg <= 0) return 0;
+    P.hp = Math.max(0, P.hp - dmg);
+    // Visual feedback state
+    this.state.hpGhost = Math.max(this.state.hpGhost ?? before, before);
+    this.state.damageFlash = 0.35;
+    this.state.hpShake = 0.4;
+    this.state.damageNumbers = this.state.damageNumbers || [];
+    this.state.damageNumbers.push({
+      x: P.x + 20,
+      y: (P.y <= 1 ? P.y : 0.5),
+      text: `-${Math.round(dmg)}`,
+      life: 0.9,
+      max: 0.9,
+    });
+    if (this.state.hpDisplay == null) this.state.hpDisplay = before;
+    return dmg;
+  }
+
   tryUsePower() {
     if (this.waiting || this.ended || !this.state.alive) return;
     const p = this.state.player;
@@ -373,6 +396,8 @@ export class Game {
     } else if (id === 'heal') {
       const before = p.hp;
       p.hp = Math.min(p.maxHp || 100, p.hp + 25);
+      this.state.hpGhost = p.hp;
+      this.state.hpDisplay = p.hp;
       this.showItemBanner(meta, `（+${p.hp - before}）`);
       p.activePower = null;
       p.activeTimer = 0;
@@ -381,6 +406,8 @@ export class Game {
     } else if (id === 'heal_big') {
       const before = p.hp;
       p.hp = Math.min(p.maxHp || 100, p.hp + 50);
+      this.state.hpGhost = p.hp;
+      this.state.hpDisplay = p.hp;
       this.showItemBanner(meta, `（+${p.hp - before}）`);
       p.activePower = null;
       p.activeTimer = 0;
@@ -437,7 +464,7 @@ export class Game {
     }
     if (msg.type === 'directHit') {
       const dmg = msg.dmg || 8;
-      this.state.player.hp = Math.max(0, this.state.player.hp - dmg);
+      this.applyPlayerDamage(dmg, 'direct');
       this.state.player.invuln = 0.6;
       this.state.fx.push(spawnExplosion(this.state.player.x + 10, this.state.player.y * this.L.own.h, true));
       this.setStatus('対戦相手を直接攻撃');
@@ -521,6 +548,28 @@ export class Game {
     P.x += (targetX - P.x) * Math.min(1, 12 * dt);
     P.x = Math.max(20, Math.min(fw * 0.88, P.x));
     if (P.invuln > 0) P.invuln -= dt;
+
+    // HP drain / damage VFX tick
+    if (this.state.hpDisplay == null) this.state.hpDisplay = P.hp;
+    if (this.state.hpGhost == null) this.state.hpGhost = P.hp;
+    // Smooth display chase toward real HP
+    this.state.hpDisplay += (P.hp - this.state.hpDisplay) * Math.min(1, 8 * dt);
+    // Ghost lags behind then catches up (shows lost chunk)
+    if (this.state.hpGhost > P.hp) {
+      this.state.hpGhost += (P.hp - this.state.hpGhost) * Math.min(1, 2.2 * dt);
+    } else {
+      this.state.hpGhost = P.hp;
+    }
+    if (this.state.damageFlash > 0) this.state.damageFlash -= dt;
+    if (this.state.hpShake > 0) this.state.hpShake -= dt;
+    if (this.state.damageNumbers) {
+      for (const n of this.state.damageNumbers) {
+        n.life -= dt;
+        n.y -= 0.25 * dt; // float up in normalized space
+      }
+      this.state.damageNumbers = this.state.damageNumbers.filter((n) => n.life > 0);
+    }
+
     if (this.state.itemBanner) {
       this.state.itemBanner.life -= dt;
       if (this.state.itemBanner.life <= 0) this.state.itemBanner = null;
@@ -671,7 +720,7 @@ export class Game {
       if (b.owner !== 'enemy') continue;
       const py = P.y * fh;
       if (P.invuln <= 0 && Math.abs(b.x - P.x) < 14 && Math.abs(b.y - py) < 12) {
-        P.hp = Math.max(0, P.hp - 6);
+        this.applyPlayerDamage(6, 'bullet');
         P.invuln = 0.75;
         b.life = 0;
         S.fx.push(spawnExplosion(P.x, py, false));
@@ -683,7 +732,7 @@ export class Game {
     for (const e of S.enemies) {
       const py = P.y * fh;
       if (P.invuln <= 0 && Math.abs(e.x - P.x) < e.w * 0.4 + 10 && Math.abs(e.y - py) < e.h * 0.4 + 8) {
-        P.hp = Math.max(0, P.hp - 10);
+        this.applyPlayerDamage(10, 'ram');
         P.invuln = 0.9;
         e.hp -= 1;
         S.fx.push(spawnExplosion(P.x, py, true));
@@ -865,7 +914,7 @@ export class Game {
       }
       // small direct hit
       if (Math.random() > 0.4) {
-        this.state.player.hp = Math.max(0, this.state.player.hp - 8);
+        this.applyPlayerDamage(8, 'direct');
         this.state.fx.push(spawnExplosion(this.state.player.x, this.state.player.y * fh, false));
       }
     }

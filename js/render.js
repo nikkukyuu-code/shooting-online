@@ -307,29 +307,85 @@ function drawFx(ctx, f) {
   ctx.restore();
 }
 
-/** Green HP bars near the top/middle pane boundary. */
-function drawHpBarsAtBoundary(ctx, L, selfHp, oppHp, maxHp) {
-  const x = L.W * 0.16;
+/** Green HP bars near the top/middle pane boundary — with drain ghost + shake. */
+function drawHpBarsAtBoundary(ctx, L, selfHp, oppHp, maxHp, fx = {}) {
+  const ghost = fx.hpGhost != null ? fx.hpGhost : selfHp;
+  const display = fx.hpDisplay != null ? fx.hpDisplay : selfHp;
+  const shake = Math.max(0, fx.hpShake || 0);
+  const flash = Math.max(0, fx.damageFlash || 0);
+  const x0 = L.W * 0.16;
   const barW = L.W * 0.58;
-  const barH = Math.max(4, Math.min(8, L.H * 0.008));
-  const gap = barH + 5;
-  // Sit just below the opp/own divider (into middle pane a bit), matching reference stills
-  const y = L.oppH + Math.max(6, L.ownH * 0.02);
+  const barH = Math.max(6, Math.min(11, L.H * 0.012));
+  const gap = barH + 6;
+  const y0 = L.oppH + Math.max(6, L.ownH * 0.02);
+  const sx = shake > 0 ? (Math.random() - 0.5) * 10 * shake : 0;
+  const sy = shake > 0 ? (Math.random() - 0.5) * 6 * shake : 0;
+  const x = x0 + sx;
+  const y = y0 + sy;
 
-  // self
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  // self track
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
   ctx.fillRect(x, y, barW, barH);
-  ctx.fillStyle = '#3f3';
-  ctx.fillRect(x, y, barW * Math.max(0, selfHp / maxHp), barH);
-  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  // ghost (lost HP chunk) — bright red/orange draining
+  ctx.fillStyle = flash > 0 ? '#ff5533' : '#ff8844';
+  ctx.fillRect(x, y, barW * Math.max(0, ghost / maxHp), barH);
+  // current HP
+  const ratio = Math.max(0, display / maxHp);
+  ctx.fillStyle = ratio < 0.3 ? '#ff3333' : ratio < 0.55 ? '#ffcc33' : '#33ee66';
+  ctx.fillRect(x, y, barW * ratio, barH);
+  // flash overlay on bar
+  if (flash > 0) {
+    ctx.fillStyle = `rgba(255,255,255,${0.35 * (flash / 0.35)})`;
+    ctx.fillRect(x, y, barW * ratio, barH);
+  }
+  ctx.strokeStyle = flash > 0 ? '#fff' : 'rgba(255,255,255,0.65)';
+  ctx.lineWidth = flash > 0 ? 2 : 1;
   ctx.strokeRect(x, y, barW, barH);
+  // label
+  ctx.font = `700 ${Math.max(9, barH)}px sans-serif`;
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(`${Math.max(0, Math.ceil(display))}`, x - 6, y + barH * 0.5);
+
   // opponent
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.fillRect(x, y + gap, barW, barH);
   ctx.fillStyle = '#6f6';
   ctx.fillRect(x, y + gap, barW * Math.max(0, oppHp / maxHp), barH);
   ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = 1;
   ctx.strokeRect(x, y + gap, barW, barH);
+}
+
+function drawDamageFlash(ctx, L, flash) {
+  if (!flash || flash <= 0) return;
+  const a = Math.min(0.45, flash * 1.2);
+  ctx.save();
+  ctx.fillStyle = `rgba(255, 30, 30, ${a})`;
+  // Own field vignette
+  ctx.fillRect(L.own.x, L.own.y, L.own.w, L.own.h);
+  ctx.restore();
+}
+
+function drawDamageNumbers(ctx, L, nums) {
+  if (!nums || !nums.length) return;
+  ctx.save();
+  for (const n of nums) {
+    const t = n.life / n.max;
+    const x = L.own.x + n.x;
+    const y = L.own.y + n.y * L.own.h;
+    ctx.globalAlpha = Math.max(0, t);
+    ctx.font = `900 ${Math.max(16, L.own.w * 0.07)}px sans-serif`;
+    ctx.fillStyle = '#ff4444';
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 3;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeText(n.text, x, y);
+    ctx.fillText(n.text, x, y);
+  }
+  ctx.restore();
 }
 
 function drawLaser(ctx, player, fieldH) {
@@ -532,7 +588,8 @@ export function drawField(ctx, area, snap, opts = {}) {
   const py = (p.y <= 1 ? p.y * fh : p.y * sy);
   const px = (p.x || snap.px || 48) * (p.x && p.x > 1 ? sx : 1);
   if (snap.alive !== false) {
-    drawShip(ctx, px, py, 28 * Math.min(sx, 1.2), 18 * Math.min(sy, 1.2), darkened ? '#cde' : '#e8f0ff');
+    const blink = !darkened && snap.invuln > 0 && Math.floor(performance.now() / 60) % 2 === 0;
+    if (!blink) drawShip(ctx, px, py, 28 * Math.min(sx, 1.2), 18 * Math.min(sy, 1.2), darkened ? '#cde' : (snap.invuln > 0 ? '#ffaaaa' : '#e8f0ff'));
     if (!darkened && snap.player) drawLaser(ctx, snap.player, fh);
   }
 
@@ -544,6 +601,7 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
 
   const localSnap = {
     player: localState.player,
+    invuln: localState.player && localState.player.invuln,
     enemies: localState.enemies,
     bullets: localState.bullets,
     worldItems: localState.items,
@@ -579,7 +637,14 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
 
   // HP bars near boundary between top and middle
   const oppHp = remoteSnap ? (remoteSnap.php ?? 100) : (localState.botHp ?? 100);
-  drawHpBarsAtBoundary(ctx, L, localState.player.hp, oppHp, 100);
+  drawHpBarsAtBoundary(ctx, L, localState.player.hp, oppHp, 100, {
+    hpGhost: localState.hpGhost,
+    hpDisplay: localState.hpDisplay,
+    hpShake: localState.hpShake,
+    damageFlash: localState.damageFlash,
+  });
+  drawDamageFlash(ctx, L, localState.damageFlash);
+  drawDamageNumbers(ctx, L, localState.damageNumbers);
 
   // Divider between opp and own
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
