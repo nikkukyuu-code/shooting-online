@@ -2,12 +2,13 @@ import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=1.5.66';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.66';
-import { sfx } from './audio.js?v=1.5.66';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.66';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=1.5.66';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=1.5.66';
+} from './entities.js?v=1.5.67';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.67';
+import { sfx } from './audio.js?v=1.5.67';
+import { isExAttackItem, useExItem, tickExItems } from './attack_items.js?v=1.5.67';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.67';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=1.5.67';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=1.5.67';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -871,7 +872,31 @@ export class Game {
       }
       this.state.fx.push(spawnExplosion(p.x + 8, p.y * this.L.own.h - 20, false));
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
+    } else if (isExAttackItem(id)) {
+      // v1.5.67 extra attack items (貫通ビーム / オプション / クラスター / ブラックホール / フリーズ / リフレクター)
+      const extra = useExItem(id, this.exField());
+      if (extra) this.showItemBanner(meta, extra);
+      p.activePower = null;
+      p.activeTimer = 0;
+      setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1400);
     }
+  }
+
+  /** Own-field view for attack_items.js (shared with COM via botExField). */
+  exField() {
+    const S = this.state;
+    return {
+      enemies: S.enemies, bullets: S.bullets, fx: S.fx,
+      sx: S.player.x, sy: S.player.y * this.L.own.h, fw: this.L.own.w, fh: this.L.own.h,
+    };
+  }
+
+  botExField() {
+    const B = this._bot;
+    return {
+      enemies: B.enemies, bullets: B.bullets, fx: B.fx,
+      sx: B.x || 48, sy: B.y * this.L.own.h, fw: this.L.own.w, fh: this.L.own.h,
+    };
   }
 
   onNet(msg) {
@@ -1101,6 +1126,9 @@ export class Game {
       }
     }
 
+    // v1.5.67 extra attack items (beam / pods / missiles / vortex / freeze / discs)
+    tickExItems(this.exField(), dt);
+
     // Spawn enemies
     this._spawnAcc += dt;
     const spawnEvery = Math.max(0.35, 0.85 - S.time * 0.01);
@@ -1122,6 +1150,7 @@ export class Game {
 
     // Update enemies (vertical weave + forward/back surge)
     for (const e of S.enemies) {
+      if (e.frozenT > 0) continue; // フリーズ: no movement / no fire while frozen
       e.phase += dt * 2;
       e.surgePhase = (e.surgePhase || 0) + dt * (e.surgeFreq || 1.4);
       if (e.appearT > 0) e.appearT = Math.max(0, e.appearT - dt);
@@ -1185,6 +1214,7 @@ export class Game {
     for (const it of S.items) {
       it.y += Math.sin(S.time * 3 + it.x) * 10 * dt;
       it.x -= 30 * dt;
+      it.y = Math.max(24, Math.min(fh - 24, it.y)); // bigger orb stays inside the pane
       it.life -= dt;
     }
 
@@ -1251,7 +1281,7 @@ export class Game {
     const leftItems = [];
     for (const it of S.items) {
       const py = P.y * fh;
-      if (Math.abs(it.x - P.x) < 20 && Math.abs(it.y - py) < 20) {
+      if (Math.abs(it.x - P.x) < 32 && Math.abs(it.y - py) < 32) { // v1.5.67: matches bigger orb
         sfx.pickup();
         if (it.id === 'heal' || it.id === 'heal_big') {
           this.activatePower(it.id);
@@ -1508,6 +1538,9 @@ export class Game {
       }
     }
 
+    // v1.5.67 extra attack items on the COM field (same logic as the player)
+    tickExItems(this.botExField(), dt);
+
     // Homing bullet steering (bot field): same turn-rate + sticky lock as player
     for (const b of B.bullets) {
       if (!b.homing || b.owner !== 'player') continue;
@@ -1525,6 +1558,7 @@ export class Game {
     }
 
     for (const e of B.enemies) {
+      if (e.frozenT > 0) continue; // フリーズ: no movement / no fire while frozen
       e.phase += dt * 2;
       e.surgePhase = (e.surgePhase || 0) + dt * (e.surgeFreq || 1.4);
       if (e.appearT > 0) e.appearT = Math.max(0, e.appearT - dt);
@@ -1644,7 +1678,7 @@ export class Game {
         if (h >= 0) return h;
       }
       if (enemyPressure >= 4 && !B.activePower) {
-        const l = B.items.findIndex((id) => id === 'laser' || id === 'homing' || id === 'bomb' || id === 'shock' || id === 'spread' || id === 'rapid');
+        const l = B.items.findIndex((id) => id === 'laser' || id === 'homing' || id === 'bomb' || id === 'shock' || id === 'spread' || id === 'rapid' || isExAttackItem(id));
         if (l >= 0) return l;
       }
       if (playerHp > 55) {
@@ -1660,7 +1694,8 @@ export class Game {
       if (B.powerCd > 0 && !force) return;
       // Seed inventory so COM always has something to think with
       if (!B.items.length) {
-        const pool = ['homing', 'laser', 'spread', 'bomb', 'shock', 'rapid', 'meteor', 'send', 'send_mech', 'send_golem', 'send_tank', 'send_drone', 'heal'];
+        const pool = ['homing', 'laser', 'spread', 'bomb', 'shock', 'rapid', 'meteor', 'send', 'send_mech', 'send_golem', 'send_tank', 'send_drone', 'heal',
+          'pbeam', 'option', 'cluster', 'blackhole', 'freeze', 'reflect'];
         B.items.push(pool[(Math.random() * pool.length) | 0]);
         if (Math.random() < 0.5) B.items.push(pool[(Math.random() * pool.length) | 0]);
       }
@@ -1727,6 +1762,8 @@ export class Game {
         }
         this.setStatus(this.sendLabelForKinds(kinds, 'COM敵送信'));
         setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1400);
+      } else if (isExAttackItem(id)) {
+        useExItem(id, this.botExField());
       }
     };
 

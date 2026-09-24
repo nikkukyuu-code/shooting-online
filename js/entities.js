@@ -16,6 +16,13 @@ export const POWERUPS = [
   { id: 'send_golem', label: '要塞送信',      effect: '相手に軌道要塞を送る',       desc: 'ゴーレム級の重装甲ユニットを相手フィールドへ送る。', color: '#cc88ff', icon: '塞' },
   { id: 'send_tank',  label: 'ガンシップ送信', effect: '相手に重ガンシップを送る',   desc: 'タンク級の重ガンシップを送り、厚い弾幕で圧をかける。', color: '#66ddff', icon: '砲' },
   { id: 'send_drone', label: '無人機群送信',  effect: '相手に宇宙ドローンを4機送る', desc: 'ドローンを複数機まとめて送り、数で相手を撹乱する。', color: '#33ffff', icon: '群' },
+  // v1.5.67 — extra player attack items (logic/visuals in attack_items.js)
+  { id: 'pbeam',      label: '貫通ビーム',    effect: '極太ビームで前方を貫通',     desc: '約2.6秒、前方へ極太ビームを照射。当たった敵を全部貫通し、ビーム上の敵弾も消す。', color: '#d58cff', icon: '▶' },
+  { id: 'option',     label: 'オプション',    effect: '子機2機が一緒に射撃',         desc: '約8秒、自機の上下に子機（ビット）が付いて前方へ弾を撃ち続ける。', color: '#ff9ed2', icon: '∞' },
+  { id: 'cluster',    label: 'クラスターミサイル', effect: '分裂して小爆発するミサイル', desc: 'ミサイル4発を扇状に発射。途中で3つに分裂し、小さな爆発で周りの敵を巻き込む。', color: '#ff5c8a', icon: '裂' },
+  { id: 'blackhole',  label: 'ブラックホール', effect: '敵と敵弾を吸い込み攻撃',     desc: '前方にブラックホールを作り約2秒間敵と敵弾を吸い寄せ、最後に収縮爆発でダメージ。', color: '#8a6bff', icon: '●' },
+  { id: 'freeze',     label: 'フリーズ',      effect: '周囲の敵を凍らせる',         desc: '自機のまわりの敵を約3秒凍らせて動きと攻撃を止め、小ダメージ。範囲内の敵弾も消す。', color: '#bff4ff', icon: '氷' },
+  { id: 'reflect',    label: 'リフレクター',  effect: '壁で跳ね返る円盤を発射',     desc: '画面の端で跳ね返る円盤を4枚発射。敵を貫通しながら何度も当たり、敵弾も弾く。', color: '#ffc34d', icon: '◇' },
 ];
 
 export function powerupMeta(id) {
@@ -26,9 +33,12 @@ export function powerupMeta(id) {
 export function pickPowerupId() {
   const weighted = [
     ['homing', 2], ['laser', 2], ['spread', 3], ['bomb', 2], ['shock', 3], ['rapid', 3],
-    ['meteor', 2], ['send', 2], ['direct', 1],
-    ['heal', 2], ['heal_big', 1],
-    ['send_mech', 2], ['send_golem', 2], ['send_tank', 2], ['send_drone', 2],
+    ['meteor', 2], ['send', 2.4], ['direct', 1],
+    // Recovery nudged up so its share stays ~9% after the v1.5.67 items were added
+    ['heal', 2.6], ['heal_big', 1.3],
+    ['send_mech', 2.3], ['send_golem', 2.3], ['send_tank', 2.3], ['send_drone', 2.3],
+    // v1.5.67 extra attack items
+    ['pbeam', 1.5], ['option', 1.5], ['cluster', 1.5], ['blackhole', 1.5], ['freeze', 1.5], ['reflect', 1.5],
   ];
   let r = Math.random() * weighted.reduce((s, [, w]) => s + w, 0);
   for (const [id, w] of weighted) { r -= w; if (r <= 0) return id; }
@@ -169,7 +179,7 @@ export function spawnBullet(x, y, vx, vy, owner = 'player', homing = false, dmg 
 export function spawnItem(x, y) {
   const id = pickPowerupId();
   const p = POWERUPS.find((x) => x.id === id) || POWERUPS[0];
-  return { x, y, w: 18, h: 18, id: p.id, label: p.label, vy: 20, life: 8 };
+  return { x, y, w: 40, h: 40, id: p.id, label: p.label, vy: 20, life: 8 }; // v1.5.67: bigger orb (r 11→20)
 }
 
 export function spawnMeteor(x, y, tx, ty) {
@@ -255,7 +265,7 @@ export function serializeField(state) {
       k: b.k || undefined,
       r: b.r > 3.5 ? b.r : undefined,
     })),
-    fx: state.fx.slice(0, 12).map(f => ({ x: f.x, y: f.y, l: f.life, m: f.max, r: f.r, k: f.kind, t: f.t })),
+    fx: state.fx.slice(0, 12).map(f => ({ x: f.x, y: f.y, l: f.life, m: f.max, r: f.r, k: f.kind, t: f.t, a: f.a })),
     scroll: state.scroll,
     status: state.statusText,
     alive: state.alive,

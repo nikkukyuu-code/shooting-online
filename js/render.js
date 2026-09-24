@@ -1,6 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=1.5.67';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -22,6 +23,7 @@ const ITEM_STYLE = {
   send_tank:  { color: '#66ddff', icon: '砲',  label: '砲艦',   effect: 'ガンシップ送信' },
   send_drone: { color: '#33ffff', icon: '群',  label: '無人機', effect: 'ドローン4機' },
 };
+Object.assign(ITEM_STYLE, EX_ITEM_STYLE); // v1.5.67 extra attack items
 
 export const MAX_ITEM_SLOTS = 3;
 
@@ -297,7 +299,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=1.5.66`;
+  return `assets/enemies/${kind}/${frame}.png?v=1.5.67`;
 }
 
 function loadKindSprite(kind) {
@@ -1004,31 +1006,77 @@ function drawEnemyShot(ctx, b, k, ux, uy, ang) {
   }
 }
 
+/** Pickup orb radius in field px (v1.5.67: 11 → 20 so items read clearly vs enemies/bullets). */
+export const ITEM_ORB_R = 20;
+
 function drawItem(ctx, it) {
   const st = ITEM_STYLE[it.id] || { color: '#ffd24a', icon: '★' };
+  const R = ITEM_ORB_R;
+  const now = performance.now() / 1000;
   ctx.save();
   ctx.translate(it.x, it.y);
   // Blink/pulse when remaining lifetime ≤ 5s (despawn warning)
   if (typeof it.life === 'number' && it.life <= 5) {
     const hz = 3; // ~3 Hz smooth pulse — visible, not seizure-fast
-    const pulse = 0.5 + 0.5 * Math.sin((performance.now() / 1000) * Math.PI * 2 * hz);
+    const pulse = 0.5 + 0.5 * Math.sin(now * Math.PI * 2 * hz);
     ctx.globalAlpha = 0.22 + 0.78 * pulse;
   }
-  ctx.shadowColor = st.color;
-  ctx.shadowBlur = 12;
-  ctx.fillStyle = st.color;
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 2;
+  // Soft colour halo
+  const halo = ctx.createRadialGradient(0, 0, R * 0.6, 0, 0, R * 1.75);
+  halo.addColorStop(0, st.color);
+  halo.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.globalAlpha *= 0.55;
+  ctx.fillStyle = halo;
   ctx.beginPath();
-  ctx.arc(0, 0, 11, 0, Math.PI * 2);
+  ctx.arc(0, 0, R * 1.75, 0, Math.PI * 2);
   ctx.fill();
+  ctx.globalAlpha /= 0.55;
+  // Rotating dashed "pickup" ring — nothing else on the stage looks like this
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 5]);
+  ctx.lineDashOffset = -now * 24;
+  ctx.beginPath();
+  ctx.arc(0, 0, R + 5, 0, Math.PI * 2);
   ctx.stroke();
+  ctx.setLineDash([]);
+  // Glossy body in the item colour
+  const body = ctx.createRadialGradient(-R * 0.35, -R * 0.4, R * 0.1, 0, 0, R);
+  body.addColorStop(0, '#ffffff');
+  body.addColorStop(0.35, st.color);
+  body.addColorStop(1, st.color);
+  ctx.fillStyle = body;
+  ctx.shadowColor = st.color;
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(0, 0, R, 0, Math.PI * 2);
+  ctx.fill();
   ctx.shadowBlur = 0;
-  ctx.fillStyle = '#111';
-  ctx.font = 'bold 11px sans-serif';
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.arc(0, 0, R - 2.2, 0, Math.PI * 2);
+  ctx.stroke();
+  // Icon — large, dark, fitted inside the orb (2-char icons shrink to fit)
+  const icon = String(st.icon || '★');
+  let fs = Math.round(R * 1.05);
+  ctx.font = `900 ${fs}px "Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif`;
+  const maxW = R * 1.5;
+  const w = ctx.measureText(icon).width;
+  if (w > maxW) {
+    fs = Math.max(10, Math.floor(fs * maxW / w));
+    ctx.font = `900 ${fs}px "Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif`;
+  }
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(st.icon, 0, 1);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+  ctx.strokeText(icon, 0, 1);
+  ctx.fillStyle = '#111';
+  ctx.fillText(icon, 0, 1);
   ctx.restore();
 }
 
@@ -1423,6 +1471,7 @@ function drawBombFx(ctx, f) {
 }
 
 function drawFx(ctx, f) {
+  if (drawExFx(ctx, f)) return; // v1.5.67 extra attack items (attack_items.js)
   if (f.kind === 'shock') { drawShockFx(ctx, f); return; }
   if (f.kind === 'bomb') { drawBombFx(ctx, f); return; }
   const t = 1 - f.life / f.max;
@@ -2084,6 +2133,7 @@ export function drawField(ctx, area, snap, opts = {}) {
       x: f.x * sx, y: f.y * sy, life: f.l ?? f.life, max: f.m ?? f.max, r: (f.r || 14) * sx,
       kind: f.k ?? f.kind, sc: sx,
       t: tg ? tg.map(([tx, ty]) => [tx * sx, ty * sy]) : undefined,
+      a: f.a,
     });
   }
 
