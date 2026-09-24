@@ -2,11 +2,11 @@ import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=1.5.64';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.64';
-import { sfx } from './audio.js?v=1.5.64';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.64';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE } from './meta.js?v=1.5.64';
+} from './entities.js?v=1.5.65';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.65';
+import { sfx } from './audio.js?v=1.5.65';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.65';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=1.5.65';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -293,6 +293,21 @@ export class Game {
       this._playerDeck = ['basic', 'drone', 'elite', 'swarm', 'tank'];
     }
     this._comDeck = COM_DECK.slice();
+    this._comDeckInfo = null;
+    // COM battle: build a strong deck matched to the player's deck strength.
+    // (Online P2P is unchanged — the opponent uses their own deck.)
+    if (this.useBot) {
+      try {
+        const info = buildComDeck(this._playerDeck);
+        if (info && Array.isArray(info.deck) && info.deck.length === DECK_SIZE
+          && info.deck.every((id) => CATALOG_BY_ID[id])) {
+          this._comDeck = info.deck.slice();
+          this._comDeckInfo = info;
+        }
+      } catch (_) {
+        this._comDeck = COM_DECK.slice();
+      }
+    }
     // Clear victory celebration DOM if present
     if (this.ui.endOverlay) {
       this.ui.endOverlay.classList.remove('victory', 'defeat', 'pt-show');
@@ -318,8 +333,17 @@ export class Game {
 
     if (bot) {
       this.waiting = false;
-      this.setStatus(HINT);
       this._initBot();
+      const lv = this._comDeckInfo && this._comDeckInfo.level;
+      if (lv) {
+        const msg = `相手デッキ：レベル${lv}`;
+        this.setStatus(msg);
+        setTimeout(() => {
+          if (!this.ended && !this.waiting && this.state && this.state.statusText === msg) this.setStatus(HINT);
+        }, 2600);
+      } else {
+        this.setStatus(HINT);
+      }
     } else if (net) {
       net.on('data', (msg) => this.onNet(msg));
       net.on('disconnected', () => {

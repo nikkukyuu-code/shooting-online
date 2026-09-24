@@ -1,11 +1,145 @@
 /** Persist PT / owned unlocks / deck (exactly 5 unique). localStorage key: shootingOnline_meta */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP } from './catalog.js?v=1.5.64';
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP } from './catalog.js?v=1.5.65';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;
 
 /** Fixed COM AI deck (mid-tier) — fair, not using player unlocks. */
 export const COM_DECK = ['mech', 'golem', 'missile_destroyer', 'siege_mech', 'gorgon_mech'];
+
+/* ---------------------------------------------------------------------------
+ * COM deck matched to the player's deck strength (v1.5.65)
+ * ------------------------------------------------------------------------- */
+
+/** Free starters have price 0 → give them a pseudo price so they still count. */
+const STARTER_POWER = { swarm: 20, basic: 25, drone: 25, elite: 30, tank: 30, mech: 35, golem: 40, boss: 45 };
+/** Small bonus by tier (heavier tiers have more HP / stronger attacks). */
+const TIER_BONUS = { swarm: 0, basic: 0, drone: 0, elite: 5, tank: 10, mech: 10, golem: 15, boss: 20 };
+
+/** Strength of one unit: price (or starter pseudo price) + tier bonus. */
+export function unitPower(id) {
+  const u = CATALOG_BY_ID[id];
+  if (!u) return 0;
+  const tier = u.tier || 'basic';
+  const base = u.price > 0 ? u.price : (STARTER_POWER[tier] || 25);
+  return base + (TIER_BONUS[tier] || 0);
+}
+
+/** Deck strength score = sum of unit powers. */
+export function deckPower(deck) {
+  let s = 0;
+  for (const id of deck || []) s += unitPower(id);
+  return s;
+}
+
+/** Units the COM may use: catalog units with sprites, never wave_* kinds. */
+function comPool() {
+  return CATALOG
+    .filter((u) => u && typeof u.id === 'string' && !u.id.startsWith('wave_'))
+    .map((u) => ({ id: u.id, p: unitPower(u.id) }))
+    .filter((u) => u.p > 0)
+    .sort((a, b) => a.p - b.p);
+}
+
+const COM_POOL = comPool();
+const POOL_MIN = COM_POOL.slice(0, DECK_SIZE).reduce((s, u) => s + u.p, 0);
+const POOL_MAX = COM_POOL.slice(-DECK_SIZE).reduce((s, u) => s + u.p, 0);
+
+/** 1 (starter level) … 10 (top-tier) from a deck strength score. */
+export function deckLevel(score) {
+  if (!(POOL_MAX > POOL_MIN)) return 1;
+  const t = (score - POOL_MIN) / (POOL_MAX - POOL_MIN);
+  return Math.max(1, Math.min(10, 1 + Math.round(9 * t)));
+}
+
+function isValidComDeck(deck) {
+  if (!Array.isArray(deck) || deck.length !== DECK_SIZE) return false;
+  if (new Set(deck).size !== DECK_SIZE) return false;
+  return deck.every((id) => CATALOG_BY_ID[id] && !String(id).startsWith('wave_'));
+}
+
+/**
+ * Build a COM deck of 5 unique units whose strength is ~100–115% of the
+ * player's deck (clamped to what the catalog can reach). Randomized per call.
+ * Falls back to COM_DECK if anything goes wrong.
+ * @returns {{ deck: string[], score: number, playerScore: number, level: number }}
+ */
+export function buildComDeck(playerDeck, rng = Math.random) {
+  const fallback = () => {
+    const d = COM_DECK.slice();
+    return { deck: d, score: deckPower(d), playerScore: deckPower(playerDeck), level: deckLevel(deckPower(d)) };
+  };
+  try {
+    const pool = COM_POOL;
+    if (pool.length < DECK_SIZE) return fallback();
+    const P = Math.max(POOL_MIN, deckPower(playerDeck));
+    let hi = Math.min(P * 1.15, POOL_MAX);
+    let lo = Math.min(P * 1.0, POOL_MAX * 0.97);
+    if (lo > hi) lo = hi * 0.95;
+    const playerKey = [...new Set(playerDeck || [])].sort().join(',');
+    const sum = (d) => d.reduce((s, x) => s + x.p, 0);
+    const inBand = (s) => s >= lo && s <= hi;
+    let best = null;
+    let bestCost = Infinity;
+
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const target = lo + (hi - lo) * (0.15 + 0.85 * rng());
+      const deck = [];
+      const used = new Set();
+      // Randomized greedy: each slot picks a unit near the remaining average.
+      for (let i = 0; i < DECK_SIZE; i++) {
+        const k = DECK_SIZE - i;
+        const avg = (target - sum(deck)) / k;
+        const win = Math.max(15, avg * 0.4);
+        let cands = pool.filter((u) => !used.has(u.id) && Math.abs(u.p - avg) <= win);
+        if (!cands.length) {
+          const rest = pool.filter((u) => !used.has(u.id));
+          rest.sort((a, b) => Math.abs(a.p - avg) - Math.abs(b.p - avg));
+          cands = rest.slice(0, 3);
+        }
+        const pick = cands[Math.floor(rng() * cands.length) % cands.length];
+        deck.push(pick);
+        used.add(pick.id);
+      }
+      // Repair: swap units toward the target until inside the band.
+      for (let it = 0; it < 12 && !inBand(sum(deck)); it++) {
+        const cur = sum(deck);
+        let bestSwap = null;
+        let bestDist = Math.abs(cur - target);
+        for (let i = 0; i < deck.length; i++) {
+          for (const u of pool) {
+            if (used.has(u.id)) continue;
+            const d = Math.abs(cur - deck[i].p + u.p - target);
+            if (d < bestDist) { bestDist = d; bestSwap = [i, u]; }
+          }
+        }
+        if (!bestSwap) break;
+        const [i, u] = bestSwap;
+        used.delete(deck[i].id);
+        deck[i] = u;
+        used.add(u.id);
+      }
+      const s = sum(deck);
+      const same = deck.map((x) => x.id).sort().join(',') === playerKey;
+      const bandDist = s < lo ? lo - s : s > hi ? s - hi : 0;
+      const cost = bandDist * 10 + (same ? 5 : 0);
+      if (cost < bestCost) { bestCost = cost; best = deck.slice(); }
+      if (cost === 0) break;
+    }
+    if (!best) return fallback();
+    // Shuffle order so the send rotation varies too.
+    const ids = best.map((x) => x.id);
+    for (let i = ids.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+    }
+    if (!isValidComDeck(ids)) return fallback();
+    const score = deckPower(ids);
+    return { deck: ids, score, playerScore: P, level: deckLevel(score) };
+  } catch (_) {
+    return fallback();
+  }
+}
 
 function defaultMeta() {
   return {
