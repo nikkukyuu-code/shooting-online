@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-} from './entities.js?v=1.5.31';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.31';
-import { sfx } from './audio.js?v=1.5.31';
+} from './entities.js?v=1.5.32';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.32';
+import { sfx } from './audio.js?v=1.5.32';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -187,11 +187,12 @@ export class Game {
       return hitItemSlot(this.L.ctrl, canvasX, canvasY, filled);
     };
 
-    const ownBot = () => OPP_RATIO + OWN_RATIO;
+    const ctrlTop = () => OPP_RATIO + OWN_RATIO;
+    const ctrlBot = () => ctrlTop() + CTRL_RATIO;
 
     const tryGrabOrMoveShip = (pid, relX, relY, isDown) => {
-      if (relY < ownBot()) return false;
-      const localY = (relY - ownBot()) / CTRL_RATIO;
+      if (relY < ctrlTop() || relY >= ctrlBot()) return false;
+      const localY = (relY - ctrlTop()) / CTRL_RATIO;
       const localX = relX;
       const hitR = 0.16;
       const dx = localX - this.pointerX;
@@ -238,7 +239,7 @@ export class Game {
       e.preventDefault();
       const p = mapPoint(e.clientX, e.clientY);
       if (pressItemSlot(p.canvasX, p.canvasY)) return;
-      if (p.relY < OPP_RATIO) return;
+      if (p.relY < OPP_RATIO || p.relY >= ctrlBot()) return;
       tryGrabOrMoveShip(e.pointerId, p.relX, p.relY, true);
     };
     this._onPointerMove = (e) => {
@@ -258,7 +259,7 @@ export class Game {
         const p = mapPoint(touch.clientX, touch.clientY);
         // tryUsePower debounce ignores duplicate within 280ms after pointerdown
         if (pressItemSlot(p.canvasX, p.canvasY)) continue;
-        if (p.relY < OPP_RATIO) continue;
+        if (p.relY < OPP_RATIO || p.relY >= ctrlBot()) continue;
         tryGrabOrMoveShip(touch.identifier, p.relX, p.relY, true);
       }
     };

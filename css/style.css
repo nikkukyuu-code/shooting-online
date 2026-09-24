@@ -146,7 +146,7 @@ html, body {
 }
 .stop-btn:active { background: rgba(80,40,30,0.65); }
 
-/* Status text is drawn on the canvas control panel (bottom ~25%).
+/* Status text is drawn on the canvas info pane (bottom ~20%).
    Keep this node for Game.setStatus / a11y; hide visually to avoid double text. */
 .status-bar {
   position: absolute;

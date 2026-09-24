@@ -1,9 +1,10 @@
-/** Canvas rendering for 3-pane portrait shmup
- *  TOP / MIDDLE / BOTTOM — equal height (1/3 each) (操作画面)
+/** Canvas rendering for 4-pane portrait shmup
+ *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
 
-export const OPP_RATIO = 1 / 3;
-export const OWN_RATIO = 1 / 3;
+export const INFO_RATIO = 0.2;
+export const OPP_RATIO = 0.8 / 3;
+export const OWN_RATIO = 0.8 / 3;
 const ITEM_STYLE = {
   homing:     { color: '#ff66ff', icon: '◆',  label: '追尾',   effect: '追尾弾を連射' },
   laser:      { color: '#66ccff', icon: '═',  label: 'レーザー', effect: '小刻み前方レーザー' },
@@ -25,19 +26,21 @@ const ITEM_STYLE = {
 export const MAX_ITEM_SLOTS = 3;
 
 
-export const CTRL_RATIO = 1 / 3;
+export const CTRL_RATIO = 0.8 / 3;
 
 export function layout(canvas) {
   const W = canvas.width;
   const H = canvas.height;
   const oppH = Math.floor(H * OPP_RATIO);
   const ownH = Math.floor(H * OWN_RATIO);
-  const ctrlH = H - oppH - ownH; // remainder ≈ 25%
+  const ctrlH = Math.floor(H * CTRL_RATIO);
+  const infoH = H - oppH - ownH - ctrlH; // remainder absorbs rounding
   return {
-    W, H, oppH, ownH, ctrlH,
-    opp:  { x: 0, y: 0,           w: W, h: oppH },
-    own:  { x: 0, y: oppH,        w: W, h: ownH },
-    ctrl: { x: 0, y: oppH + ownH, w: W, h: ctrlH },
+    W, H, oppH, ownH, ctrlH, infoH,
+    opp:  { x: 0, y: 0,                     w: W, h: oppH },
+    own:  { x: 0, y: oppH,                  w: W, h: ownH },
+    ctrl: { x: 0, y: oppH + ownH,           w: W, h: ctrlH },
+    info: { x: 0, y: oppH + ownH + ctrlH,   w: W, h: infoH },
   };
 }
 
@@ -60,7 +63,7 @@ export function itemSlotRects(ctrl, count = MAX_ITEM_SLOTS) {
   const n = Math.max(1, count | 0);
   const padX = Math.max(8, ctrl.w * 0.02);
   const padTop = Math.max(6, ctrl.h * 0.04);
-  const padBot = Math.max(22, ctrl.h * 0.18); // leave room for status strip
+  const padBot = Math.max(8, ctrl.h * 0.04); // status moved to info pane
   const gap = Math.max(6, ctrl.h * 0.02);
   const colW = Math.max(100, Math.min(168, ctrl.w * 0.38));
   const availH = ctrl.h - padTop - padBot - gap * (n - 1);
@@ -786,9 +789,69 @@ function drawLaser(ctx, player, fieldH) {
 }
 
 /**
- * Bottom control surface (操作画面): purple/blue nebula pad — not a full playfield.
- * Shows status text, item pips, アイテム button, and optional touch crosshair.
+ * Control surface (操作画面): purple/blue nebula pad — not a full playfield.
+ * Shows item slots, control ship, and optional touch crosshair (status lives in info pane).
  */
+
+/**
+ * Bottom information pane (~20%): status, HP, layout guide.
+ */
+function drawInfoPanel(ctx, area, localState) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(area.x, area.y, area.w, area.h);
+  ctx.clip();
+  ctx.translate(area.x, area.y);
+
+  // Dark readable panel
+  const g = ctx.createLinearGradient(0, 0, 0, area.h);
+  g.addColorStop(0, '#1a1428');
+  g.addColorStop(1, '#0c0a14');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, area.w, area.h);
+
+  // Top edge highlight
+  ctx.fillStyle = 'rgba(200, 210, 255, 0.35)';
+  ctx.fillRect(0, 0, area.w, 2);
+
+  const fontStack = '"Hiragino Sans","Noto Sans JP","Yu Gothic",Meiryo,sans-serif';
+  const selfHp = Math.max(0, Math.round(localState.player?.hp ?? 100));
+  const oppHp = Math.max(0, Math.round(
+    localState.oppHpDisplay ?? localState.botHp ?? 100
+  ));
+  const status = localState.statusText || '';
+
+  // Large status line
+  const statusFs = Math.max(14, Math.min(22, area.h * 0.28));
+  ctx.font = `700 ${statusFs}px ${fontStack}`;
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = '#000';
+  ctx.shadowBlur = 5;
+  ctx.fillText(status, area.w * 0.5, area.h * 0.32, area.w * 0.94);
+  ctx.shadowBlur = 0;
+
+  // Self / opponent HP
+  const hpFs = Math.max(12, Math.min(18, area.h * 0.2));
+  ctx.font = `600 ${hpFs}px ${fontStack}`;
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#88ffaa';
+  ctx.fillText(`自分 HP ${selfHp}`, area.w * 0.04, area.h * 0.62, area.w * 0.44);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#ff8899';
+  ctx.fillText(`相手 HP ${oppHp}`, area.w * 0.96, area.h * 0.62, area.w * 0.44);
+
+  // Compact layout labels
+  const labFs = Math.max(10, Math.min(14, area.h * 0.14));
+  ctx.font = `500 ${labFs}px ${fontStack}`;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(210, 220, 255, 0.75)';
+  ctx.fillText('上:相手｜中:自分｜下:操作', area.w * 0.5, area.h * 0.86, area.w * 0.94);
+
+  ctx.restore();
+}
+
 function drawControlPanel(ctx, area, localState) {
   ctx.save();
   ctx.beginPath();
@@ -874,23 +937,6 @@ function drawControlPanel(ctx, area, localState) {
     ctx.shadowColor = '#000';
     ctx.shadowBlur = 2;
     ctx.fillText(filled ? (st.effect || '') : '空', r.btnX + r.btnW * 0.5, r.descY - 2 + descH * 0.5, r.btnW * 0.94);
-    ctx.shadowBlur = 0;
-  }
-
-  // Status strip at bottom of control pane
-  const stripH = Math.max(22, area.h * 0.22);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
-  ctx.fillRect(0, area.h - stripH, area.w, stripH);
-  const text = localState.statusText || '';
-  if (text) {
-    const fontSize = Math.max(11, Math.min(16, area.w * 0.042));
-    ctx.font = `600 ${fontSize}px "Hiragino Sans","Noto Sans JP","Yu Gothic",Meiryo,sans-serif`;
-    ctx.fillStyle = '#ffffff';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = '#000';
-    ctx.shadowBlur = 4;
-    ctx.fillText(text, area.w * 0.5, area.h - stripH * 0.5, area.w * 0.92);
     ctx.shadowBlur = 0;
   }
 
@@ -1057,13 +1103,19 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
   ctx.fillStyle = 'rgba(255,200,150,0.25)';
   ctx.fillRect(0, L.oppH - 1, L.W, 1);
 
-  // 3) BOTTOM — 操作画面 (purple/blue nebula control pad)
+  // 3) Control — 操作画面 (purple/blue nebula pad)
   drawControlPanel(ctx, L.ctrl, localState);
 
   // Divider between own and control
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   ctx.fillRect(0, L.oppH + L.ownH - 1, L.W, 2);
 
+  // Divider above info + 4) info pane
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(0, L.oppH + L.ownH + L.ctrlH - 1, L.W, 2);
+  ctx.fillStyle = 'rgba(180,190,255,0.3)';
+  ctx.fillRect(0, L.oppH + L.ownH + L.ctrlH, L.W, 1);
+  drawInfoPanel(ctx, L.info, { ...localState, oppHpDisplay: oppHp });
 
   // Item effect banner (center of own field)
   const ban = localState.itemBanner;
