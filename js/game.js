@@ -2,11 +2,11 @@ import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=1.5.56';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.56';
-import { sfx } from './audio.js?v=1.5.56';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.56';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE } from './meta.js?v=1.5.56';
+} from './entities.js?v=1.5.57';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.57';
+import { sfx } from './audio.js?v=1.5.57';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.57';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE } from './meta.js?v=1.5.57';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -109,20 +109,26 @@ function pushEnemyAttack(e, bullets, tx, ty) {
   const kind = resolveEnemyTier(e.kind || 'basic');
   const ox = e.x - (e.w || 20) * 0.4;
   const oy = e.y;
-  const aim = Math.atan2(ty - oy, tx - ox);
+  // Missiles may aim at live target; lasers never chase / home.
+  const missileAim = Math.atan2(ty - oy, tx - ox);
+  const hasLockedLaserAim = e.laserAimX != null && e.laserAimY != null;
+  // Locked telegraph aim, else straight left (toward player side; vy≈0).
+  const laserBaseAim = hasLockedLaserAim
+    ? Math.atan2(e.laserAimY - oy, e.laserAimX - ox)
+    : Math.PI;
 
   const fireNormal = (vx, vy, dmg = 2) => {
     bullets.push(spawnBullet(ox, oy, vx, vy, 'enemy', false, dmg));
   };
   const fireLaser = (spd = 480, dmg = 2, angOff = 0) => {
-    const a = aim + angOff;
+    const a = laserBaseAim + angOff;
     bullets.push(spawnBullet(
       ox, oy, Math.cos(a) * spd, Math.sin(a) * spd,
       'enemy', false, dmg, { laser: true, life: 2.0 },
     ));
   };
   const fireMissile = (homeDur = 0.55, angJitter = 0.3) => {
-    const a = aim + (Math.random() - 0.5) * angJitter;
+    const a = missileAim + (Math.random() - 0.5) * angJitter;
     const spd = 230 + Math.random() * 30;
     // Spawn dmg field lowered (was 3); player hit uses homing?4:6
     bullets.push(spawnBullet(
@@ -185,11 +191,13 @@ const LASER_TELE_DUR = 0.55;
 function tickEnemyLaserFire(e, bullets, tx, ty, dt, canFire, computeReload) {
   if (e.laserTeleT > 0) {
     e.laserTeleT = Math.max(0, e.laserTeleT - dt);
-    e.laserAimX = tx;
-    e.laserAimY = ty;
+    // Aim locked at charge start — do not track player during telegraph.
     if (e.laserTeleT <= 0) {
       e.laserTeleT = 0;
+      // Lasers use e.laserAim*; missiles still get live tx/ty for limited home.
       pushEnemyAttack(e, bullets, tx, ty);
+      e.laserAimX = undefined;
+      e.laserAimY = undefined;
       e.fireCd = computeReload();
       return true;
     }
@@ -201,12 +209,16 @@ function tickEnemyLaserFire(e, bullets, tx, ty, dt, canFire, computeReload) {
   if (e.sent && isLargeEnemy(e) && enemyAttackUsesLaser(e.kind)) {
     e.laserTeleT = LASER_TELE_DUR;
     e.laserTeleMax = LASER_TELE_DUR;
+    // Lock aim once at charge start (warning beam stays fixed).
     e.laserAimX = tx;
     e.laserAimY = ty;
     e.fireCd = 0;
     return false;
   }
   e.fireCd = computeReload();
+  // No telegraph: clear any stale lock so lasers fire straight left.
+  e.laserAimX = undefined;
+  e.laserAimY = undefined;
   pushEnemyAttack(e, bullets, tx, ty);
   return true;
 }

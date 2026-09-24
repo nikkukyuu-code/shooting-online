@@ -1,11 +1,11 @@
-import { VERSION_LABEL } from './version.js?v=1.5.56';
-import { Net } from './net.js?v=1.5.56';
-import { Game } from './game.js?v=1.5.56';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=1.5.56';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=1.5.56';
-import { registerEnemyKinds } from './render.js?v=1.5.56';
-import { ALL_KIND_IDS } from './catalog.js?v=1.5.56';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=1.5.56';
+import { VERSION_LABEL } from './version.js?v=1.5.57';
+import { Net } from './net.js?v=1.5.57';
+import { Game } from './game.js?v=1.5.57';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=1.5.57';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=1.5.57';
+import { registerEnemyKinds } from './render.js?v=1.5.57';
+import { ALL_KIND_IDS } from './catalog.js?v=1.5.57';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=1.5.57';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -120,7 +120,7 @@ function refreshPtDisplay(meta) {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=1.5.56`;
+  return `assets/enemies/${id}/0.png?v=1.5.57`;
 }
 
 function unitName(id) {
