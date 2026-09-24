@@ -631,58 +631,96 @@ function drawBullet(ctx, b) {
     const ux = vx / spd;
     const uy = vy / spd;
     const ang = Math.atan2(vy, vx);
-    // Soft continuous ribbon — alpha→0 at tail, denser near tip (transparency, not blur)
-    const ribbonLen = homing ? 72 : 85;
-    const rx0 = b.x - ux * ribbonLen;
-    const ry0 = b.y - uy * ribbonLen;
-    const ribbon = ctx.createLinearGradient(rx0, ry0, b.x, b.y);
-    if (homing) {
+    const trail = (homing && Array.isArray(b.trail) && b.trail.length > 1) ? b.trail : null;
+    ctx.shadowBlur = 0;
+    ctx.lineCap = 'round';
+    if (trail) {
+      // Curved ribbon along position history (natural arcs when turning)
+      ctx.beginPath();
+      ctx.moveTo(trail[0].x, trail[0].y);
+      for (let i = 1; i < trail.length; i++) ctx.lineTo(trail[i].x, trail[i].y);
+      ctx.lineTo(b.x, b.y);
+      const n = trail.length;
+      const g0 = trail[0];
+      const ribbon = ctx.createLinearGradient(g0.x, g0.y, b.x, b.y);
       ribbon.addColorStop(0, 'rgba(255,80,200,0)');
       ribbon.addColorStop(0.25, 'rgba(255,100,210,0.06)');
       ribbon.addColorStop(0.55, 'rgba(255,130,225,0.18)');
       ribbon.addColorStop(0.85, 'rgba(255,160,240,0.38)');
       ribbon.addColorStop(1, 'rgba(255,190,255,0.55)');
-    } else {
-      ribbon.addColorStop(0, 'rgba(255,40,70,0)');
-      ribbon.addColorStop(0.25, 'rgba(255,50,80,0.06)');
-      ribbon.addColorStop(0.55, 'rgba(255,70,95,0.18)');
-      ribbon.addColorStop(0.85, 'rgba(255,110,130,0.38)');
-      ribbon.addColorStop(1, 'rgba(255,150,160,0.55)');
-    }
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = ribbon;
-    ctx.lineWidth = homing ? 5.5 : 5;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(rx0, ry0);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
-    // Ghost afterimages: strong alpha fade at tail → opaque near tip
-    const ghosts = 13;
-    const gap = homing ? 7.5 : 9;
-    for (let i = ghosts; i >= 1; i--) {
-      const t = 1 - i / ghosts; // 0 at tail → ~1 near tip
-      const a = t * t * 0.55; // quadratic fade — strongly transparent at tail
-      if (a < 0.02) continue;
-      const len = 12 + t * 18;
-      const thick = (homing ? 2.8 : 2.4) * (0.35 + t * 0.75);
-      const gx = b.x - ux * gap * i;
-      const gy = b.y - uy * gap * i;
-      ctx.strokeStyle = homing
-        ? `rgba(255,120,220,${a})`
-        : `rgba(255,70,90,${a})`;
-      ctx.lineWidth = thick;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(gx - ux * len * 0.55, gy - uy * len * 0.55);
-      ctx.lineTo(gx + ux * len * 0.35, gy + uy * len * 0.35);
+      ctx.strokeStyle = ribbon;
+      ctx.lineWidth = 5.5;
       ctx.stroke();
+      // Ghost afterimages along path — alpha fades toward rear
+      for (let i = 0; i < n; i++) {
+        const t = i / (n - 1); // 0 at oldest → 1 near tip
+        const a = t * t * 0.55;
+        if (a < 0.02) continue;
+        const p0 = trail[Math.max(0, i - 1)];
+        const p1 = trail[i];
+        const dx = p1.x - p0.x;
+        const dy = p1.y - p0.y;
+        const ds = Math.hypot(dx, dy) || 1;
+        const tx = dx / ds;
+        const ty = dy / ds;
+        const len = 12 + t * 18;
+        const thick = 2.8 * (0.35 + t * 0.75);
+        ctx.strokeStyle = `rgba(255,120,220,${a})`;
+        ctx.lineWidth = thick;
+        ctx.beginPath();
+        ctx.moveTo(p1.x - tx * len * 0.55, p1.y - ty * len * 0.55);
+        ctx.lineTo(p1.x + tx * len * 0.35, p1.y + ty * len * 0.35);
+        ctx.stroke();
+      }
+    } else {
+      // Soft continuous ribbon — alpha→0 at tail, denser near tip (transparency, not blur)
+      const ribbonLen = homing ? 72 : 85;
+      const rx0 = b.x - ux * ribbonLen;
+      const ry0 = b.y - uy * ribbonLen;
+      const ribbon = ctx.createLinearGradient(rx0, ry0, b.x, b.y);
+      if (homing) {
+        ribbon.addColorStop(0, 'rgba(255,80,200,0)');
+        ribbon.addColorStop(0.25, 'rgba(255,100,210,0.06)');
+        ribbon.addColorStop(0.55, 'rgba(255,130,225,0.18)');
+        ribbon.addColorStop(0.85, 'rgba(255,160,240,0.38)');
+        ribbon.addColorStop(1, 'rgba(255,190,255,0.55)');
+      } else {
+        ribbon.addColorStop(0, 'rgba(255,40,70,0)');
+        ribbon.addColorStop(0.25, 'rgba(255,50,80,0.06)');
+        ribbon.addColorStop(0.55, 'rgba(255,70,95,0.18)');
+        ribbon.addColorStop(0.85, 'rgba(255,110,130,0.38)');
+        ribbon.addColorStop(1, 'rgba(255,150,160,0.55)');
+      }
+      ctx.strokeStyle = ribbon;
+      ctx.lineWidth = homing ? 5.5 : 5;
+      ctx.beginPath();
+      ctx.moveTo(rx0, ry0);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      // Ghost afterimages: strong alpha fade at tail → opaque near tip
+      const ghosts = 13;
+      const gap = homing ? 7.5 : 9;
+      for (let i = ghosts; i >= 1; i--) {
+        const t = 1 - i / ghosts; // 0 at tail → ~1 near tip
+        const a = t * t * 0.55; // quadratic fade — strongly transparent at tail
+        if (a < 0.02) continue;
+        const len = 12 + t * 18;
+        const thick = (homing ? 2.8 : 2.4) * (0.35 + t * 0.75);
+        const gx = b.x - ux * gap * i;
+        const gy = b.y - uy * gap * i;
+        ctx.strokeStyle = homing
+          ? `rgba(255,120,220,${a})`
+          : `rgba(255,70,90,${a})`;
+        ctx.lineWidth = thick;
+        ctx.beginPath();
+        ctx.moveTo(gx - ux * len * 0.55, gy - uy * len * 0.55);
+        ctx.lineTo(gx + ux * len * 0.35, gy + uy * len * 0.35);
+        ctx.stroke();
+      }
     }
     // Bright elongated core streak (oriented along velocity; light alpha, minimal blur)
-    ctx.shadowBlur = 0;
     ctx.strokeStyle = homing ? 'rgba(255,180,255,0.92)' : 'rgba(255,160,170,0.92)';
     ctx.lineWidth = homing ? 3.0 : 2.8;
-    ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(b.x - ux * 10, b.y - uy * 10);
     ctx.lineTo(b.x + ux * 8, b.y + uy * 8);
@@ -1215,7 +1253,10 @@ export function drawField(ctx, area, snap, opts = {}) {
 
   const bullets = snap.bullets || [];
   for (const b of bullets) {
-    drawBullet(ctx, { x: b.x * sx, y: b.y * sy, owner: b.o || b.owner, homing: b.h || b.homing, r: 3, vx: b.vx, vy: b.vy });
+    drawBullet(ctx, {
+      x: b.x * sx, y: b.y * sy, owner: b.o || b.owner, homing: b.h || b.homing, r: 3, vx: b.vx, vy: b.vy,
+      trail: Array.isArray(b.trail) ? b.trail.map((p) => ({ x: p.x * sx, y: p.y * sy })) : undefined,
+    });
   }
 
   const items = snap.worldItems || [];

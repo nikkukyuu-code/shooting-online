@@ -54,6 +54,8 @@ export function createPlayer(side = 'self') {
   };
 }
 
+let _enemyUidSeq = 1;
+
 export function spawnEnemy(fieldW, fieldH, kind = 'basic') {
   const types = {
     // Visual + hitbox sizes ×2 (drawEnemy uses e.w/e.h; player ship unchanged)
@@ -69,6 +71,7 @@ export function spawnEnemy(fieldW, fieldH, kind = 'basic') {
   const t = types[kind] || types.basic;
   return {
     kind,
+    _uid: _enemyUidSeq++,
     x: fieldW + 20 + Math.random() * 40,
     y: 30 + Math.random() * Math.max(40, fieldH - 60),
     w: t.w, h: t.h,

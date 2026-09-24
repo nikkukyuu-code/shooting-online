@@ -1,11 +1,63 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-} from './entities.js?v=1.5.38';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.38';
-import { sfx } from './audio.js?v=1.5.38';
+} from './entities.js?v=1.5.39';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.39';
+import { sfx } from './audio.js?v=1.5.39';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
+
+/** Homing missile: limited turn rate + sticky lock-on (no instant snap). */
+const HOMING_TURN_RATE = 10.5; // rad/s (~9–12)
+const HOMING_SPD = 380;
+const HOMING_TRAIL_CAP = 12;
+
+function steerHomingBullet(b, enemies, dt, fieldW) {
+  let target = null;
+  if (b.lockKey != null) {
+    target = enemies.find((e) => e._uid === b.lockKey) || null;
+    // Drop lock if dead, far behind, or offscreen
+    if (target && (target.hp <= 0 || target.x < b.x - 50 || target.x > fieldW + 80 || target.x < -40)) {
+      target = null;
+      b.lockKey = null;
+    }
+  }
+  if (!target) {
+    let best = null;
+    let bestD = 1e9;
+    for (const e of enemies) {
+      if (e.hp <= 0) continue;
+      if (e.x < b.x - 20) continue; // roughly ahead
+      const d = (e.x - b.x) ** 2 + (e.y - b.y) ** 2;
+      if (d < bestD) { bestD = d; best = e; }
+    }
+    if (best) {
+      target = best;
+      b.lockKey = best._uid;
+    }
+  }
+  if (target) {
+    const desired = Math.atan2(target.y - b.y, target.x - b.x);
+    let cur = Math.atan2(b.vy || 0, b.vx || 1);
+    let delta = desired - cur;
+    while (delta > Math.PI) delta -= Math.PI * 2;
+    while (delta < -Math.PI) delta += Math.PI * 2;
+    const maxTurn = HOMING_TURN_RATE * dt;
+    if (delta > maxTurn) delta = maxTurn;
+    else if (delta < -maxTurn) delta = -maxTurn;
+    const ang = cur + delta;
+    b.vx = Math.cos(ang) * HOMING_SPD;
+    b.vy = Math.sin(ang) * HOMING_SPD;
+  }
+}
+
+function pushHomingTrail(b) {
+  if (!b.homing || b.owner !== 'player') return;
+  b.trail = b.trail || [];
+  b.trail.push({ x: b.x, y: b.y });
+  if (b.trail.length > HOMING_TRAIL_CAP) b.trail.shift();
+}
+
 
 export class Game {
   constructor(canvas, ui) {
@@ -757,7 +809,15 @@ export class Game {
       P.fireCd = fireRate;
       const by = P.y * fh;
       if (P.activePower === 'homing') {
-        S.bullets.push(spawnBullet(P.x + 16, by, 320, 0, 'player', true, 4));
+        this._homingShotN = (this._homingShotN || 0) + 1;
+        const n = this._homingShotN;
+        const fan = ((n % 5) - 2) * 0.09 + (Math.random() - 0.5) * 0.05;
+        const spd0 = 320;
+        S.bullets.push(spawnBullet(
+          P.x + 16, by,
+          Math.cos(fan) * spd0, Math.sin(fan) * spd0 + ((n % 5) - 2) * 18,
+          'player', true, 4,
+        ));
         sfx.shot();
       } else if (P.activePower === 'rapid') {
         S.bullets.push(spawnBullet(P.x + 16, by, 520, 0, 'player', false, 3));
@@ -850,25 +910,15 @@ export class Game {
       }
     }
 
-    // Bullets
+    // Bullets (homing: turn-rate limit + sticky lock, then trail)
     for (const b of S.bullets) {
       if (b.homing && b.owner === 'player') {
-        let best = null;
-        let bestD = 1e9;
-        for (const e of S.enemies) {
-          const d = (e.x - b.x) ** 2 + (e.y - b.y) ** 2;
-          if (d < bestD) { bestD = d; best = e; }
-        }
-        if (best) {
-          const ang = Math.atan2(best.y - b.y, best.x - b.x);
-          const spd = 380;
-          b.vx = Math.cos(ang) * spd;
-          b.vy = Math.sin(ang) * spd;
-        }
+        steerHomingBullet(b, S.enemies, dt, fw);
       }
       b.x += b.vx * dt;
       b.y += b.vy * dt;
       b.life -= dt;
+      pushHomingTrail(b);
     }
 
     // Items float
@@ -1153,7 +1203,15 @@ export class Game {
       B.fireCd = fireRate;
       const by = B.y * fh;
       if (B.activePower === 'homing') {
-        B.bullets.push(spawnBullet(shipX + 16, by, 360, 0, 'player', true, 4));
+        B._homingShotN = (B._homingShotN || 0) + 1;
+        const n = B._homingShotN;
+        const fan = ((n % 5) - 2) * 0.09 + (Math.random() - 0.5) * 0.05;
+        const spd0 = 360;
+        B.bullets.push(spawnBullet(
+          shipX + 16, by,
+          Math.cos(fan) * spd0, Math.sin(fan) * spd0 + ((n % 5) - 2) * 18,
+          'player', true, 4,
+        ));
       } else if (B.activePower === 'rapid') {
         B.bullets.push(spawnBullet(shipX + 16, by, 520, 0, 'player', false, 3));
         B.bullets.push(spawnBullet(shipX + 16, by - 6, 500, -30, 'player', false, 2));
@@ -1188,20 +1246,10 @@ export class Game {
       }
     }
 
-    // Homing bullet steering (bot field)
+    // Homing bullet steering (bot field): same turn-rate + sticky lock as player
     for (const b of B.bullets) {
       if (!b.homing || b.owner !== 'player') continue;
-      let best = null; let bd = 1e9;
-      for (const e of B.enemies) {
-        const d = (e.x - b.x) * (e.x - b.x) + (e.y - b.y) * (e.y - b.y);
-        if (d < bd && e.x > b.x - 10) { bd = d; best = e; }
-      }
-      if (best) {
-        const ang = Math.atan2(best.y - b.y, best.x - b.x);
-        const spd = Math.hypot(b.vx, b.vy) || 360;
-        b.vx = Math.cos(ang) * spd;
-        b.vy = Math.sin(ang) * spd;
-      }
+      steerHomingBullet(b, B.enemies, dt, fw);
     }
 
     // --- Spawns (slightly denser so AI has something to think about) ---
@@ -1253,6 +1301,7 @@ export class Game {
       b.x += b.vx * dt;
       b.y += b.vy * dt;
       b.life -= dt;
+      pushHomingTrail(b);
     }
 
     // Bot bullets hit enemies + item drops into bot inventory
