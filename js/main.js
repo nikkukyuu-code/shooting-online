@@ -1,11 +1,11 @@
-import { VERSION_LABEL } from './version.js?v=1.5.51';
-import { Net } from './net.js?v=1.5.51';
-import { Game } from './game.js?v=1.5.51';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=1.5.51';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=1.5.51';
-import { registerEnemyKinds } from './render.js?v=1.5.51';
-import { ALL_KIND_IDS } from './catalog.js?v=1.5.51';
-import { setKindTier, POWERUPS } from './entities.js?v=1.5.51';
+import { VERSION_LABEL } from './version.js?v=1.5.52';
+import { Net } from './net.js?v=1.5.52';
+import { Game } from './game.js?v=1.5.52';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=1.5.52';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=1.5.52';
+import { registerEnemyKinds } from './render.js?v=1.5.52';
+import { ALL_KIND_IDS } from './catalog.js?v=1.5.52';
+import { setKindTier, POWERUPS } from './entities.js?v=1.5.52';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier(Object.fromEntries(ALL_KIND_IDS.map((id) => [id, (CATALOG_BY_ID[id] && CATALOG_BY_ID[id].tier) || id])));
@@ -117,7 +117,7 @@ function refreshPtDisplay(meta) {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=1.5.51`;
+  return `assets/enemies/${id}/0.png?v=1.5.52`;
 }
 
 function unitName(id) {
@@ -140,7 +140,7 @@ function renderUnitDetail(container, unitId, opts = {}) {
     : '';
   container.innerHTML = `
     <div class="detail-sprite">
-      <img src="${spriteUrl(unitId)}" alt="" width="96" height="96" />
+      <img src="${spriteUrl(unitId)}" alt="" width="72" height="72" />
     </div>
     <div class="detail-body">
       <div class="detail-name">${intro.name}</div>
