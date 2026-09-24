@@ -10,7 +10,7 @@ const ITEM_STYLE = {
   laser:      { color: '#66ccff', icon: '═',  label: 'レーザー', effect: '小刻み前方レーザー' },
   spread:     { color: '#ffaa33', icon: '※※', label: '散弾',   effect: '扇状弾幕' },
   bomb:       { color: '#ff5522', icon: '◎',  label: 'ボム',   effect: '画面全体攻撃' },
-  shock:      { color: '#88ddff', icon: '⚡',  label: '電撃',   effect: '近距離感電' },
+  shock:      { color: '#88ddff', icon: '⚡',  label: '電撃',   effect: '広範囲感電' },
   rapid:      { color: '#ffee44', icon: '≫',  label: '連射',   effect: '連射強化' },
   meteor:     { color: '#ff7744', icon: '☄',  label: '隕石',   effect: '相手に隕石' },
   send:       { color: '#ff8844', icon: '⇒',  label: '敵送信', effect: '相手に敵を送る' },
@@ -297,7 +297,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=1.5.62`;
+  return `assets/enemies/${kind}/${frame}.png?v=1.5.63`;
 }
 
 function loadKindSprite(kind) {
@@ -979,7 +979,94 @@ function drawMeteor(ctx, m) {
   ctx.restore();
 }
 
+/** Jagged lightning polyline from (x1,y1) to (x2,y2). */
+function boltPath(ctx, x1, y1, x2, y2, jag, segs) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len, ny = dx / len;
+  ctx.moveTo(x1, y1);
+  for (let i = 1; i < segs; i++) {
+    const u = i / segs;
+    const off = (Math.random() - 0.5) * 2 * jag;
+    ctx.lineTo(x1 + dx * u + nx * off, y1 + dy * u + ny * off);
+  }
+  ctx.lineTo(x2, y2);
+}
+
+/** 電撃 area FX: shows the exact hit circle (radius f.r) + bolts to hit targets. */
+function drawShockFx(ctx, f) {
+  const t = Math.min(1, Math.max(0, 1 - f.life / f.max));
+  const R = f.r;
+  const grow = Math.min(1, t / 0.15); // ring shoots out to full radius in ~0.1s
+  const fade = t < 0.6 ? 1 : Math.max(0, 1 - (t - 0.6) / 0.4);
+  const cx = f.x, cy = f.y;
+  ctx.save();
+  // Area fill — the whole hit circle tinted electric blue (source-over so it reads on red nebula)
+  const rg = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+  rg.addColorStop(0, `rgba(170,230,255,${0.42 * fade})`);
+  rg.addColorStop(0.7, `rgba(40,140,255,${0.26 * fade})`);
+  rg.addColorStop(1, `rgba(70,190,255,${0.40 * fade})`);
+  ctx.fillStyle = rg;
+  ctx.beginPath();
+  ctx.arc(cx, cy, R * grow, 0, Math.PI * 2);
+  ctx.fill();
+  // Boundary: jagged electric ring exactly at the hit radius
+  const rr = R * grow;
+  ctx.shadowColor = `rgba(90,200,255,${fade})`;
+  ctx.shadowBlur = 10;
+  const n = Math.max(24, Math.round(rr / 8));
+  ctx.lineJoin = 'round';
+  for (let pass = 0; pass < 2; pass++) {
+    ctx.strokeStyle = pass === 0 ? `rgba(90,200,255,${0.55 * fade})` : `rgba(235,250,255,${0.95 * fade})`;
+    ctx.lineWidth = pass === 0 ? 7 : 2.2;
+    ctx.beginPath();
+    for (let i = 0; i <= n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const j = i === 0 || i === n ? 0 : (Math.random() - 0.5) * 7;
+      const x = cx + Math.cos(a) * (rr + j);
+      const y = cy + Math.sin(a) * (rr + j);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  // Radial bolts reaching the edge
+  ctx.strokeStyle = `rgba(200,240,255,${0.75 * fade})`;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  const spokes = 10;
+  const rot = t * 2.2;
+  for (let i = 0; i < spokes; i++) {
+    const a = rot + (i / spokes) * Math.PI * 2;
+    boltPath(ctx, cx, cy, cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, Math.max(4, rr * 0.05), 7);
+  }
+  ctx.stroke();
+  // Bolts to each hit enemy (bright)
+  const targets = f.t || [];
+  if (targets.length && grow >= 1) {
+    for (let pass = 0; pass < 2; pass++) {
+      ctx.strokeStyle = pass === 0 ? `rgba(120,210,255,${0.6 * fade})` : `rgba(255,255,255,${fade})`;
+      ctx.lineWidth = pass === 0 ? 6 : 2;
+      ctx.beginPath();
+      for (const [tx, ty] of targets) {
+        const d = Math.hypot(tx - cx, ty - cy);
+        boltPath(ctx, cx, cy, tx, ty, Math.max(4, d * 0.06), Math.max(4, Math.round(d / 22)));
+      }
+      ctx.stroke();
+    }
+  }
+  // Core flash at the ship
+  const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, 34);
+  core.addColorStop(0, `rgba(255,255,255,${fade})`);
+  core.addColorStop(1, 'rgba(120,220,255,0)');
+  ctx.fillStyle = core;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 34, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawFx(ctx, f) {
+  if (f.kind === 'shock') { drawShockFx(ctx, f); return; }
   const t = 1 - f.life / f.max;
   ctx.save();
   ctx.globalAlpha = Math.max(0, 1 - t);
@@ -1618,7 +1705,14 @@ export function drawField(ctx, area, snap, opts = {}) {
   }
 
   const fx = snap.fx || [];
-  for (const f of fx) drawFx(ctx, { x: f.x * sx, y: f.y * sy, life: f.l ?? f.life, max: f.m ?? f.max, r: (f.r || 14) * sx });
+  for (const f of fx) {
+    const tg = f.t || null;
+    drawFx(ctx, {
+      x: f.x * sx, y: f.y * sy, life: f.l ?? f.life, max: f.m ?? f.max, r: (f.r || 14) * sx,
+      kind: f.k ?? f.kind,
+      t: tg ? tg.map(([tx, ty]) => [tx * sx, ty * sy]) : undefined,
+    });
+  }
 
   // player
   const p = snap.player || { x: snap.px ?? 48, y: snap.py ?? 0.5 };

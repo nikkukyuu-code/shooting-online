@@ -1,12 +1,12 @@
 import {
-  POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
+  POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=1.5.62';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.62';
-import { sfx } from './audio.js?v=1.5.62';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.62';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE } from './meta.js?v=1.5.62';
+} from './entities.js?v=1.5.63';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.63';
+import { sfx } from './audio.js?v=1.5.63';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.63';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE } from './meta.js?v=1.5.63';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -754,16 +754,19 @@ export class Game {
       // Lightning: damage nearby enemies
       const py = p.y * this.L.own.h;
       let hits = 0;
+      const targets = [];
       for (const e of this.state.enemies) {
         const dx = e.x - p.x;
         const dy = e.y - py;
-        if (dx * dx + dy * dy < 160 * 160) {
+        if (dx * dx + dy * dy < SHOCK_RADIUS * SHOCK_RADIUS) {
           e.hp -= 18;
           this.state.fx.push(spawnExplosion(e.x, e.y, false));
+          targets.push([e.x, e.y]);
           hits++;
         }
       }
-      this.state.fx.push(spawnExplosion(p.x + 40, py, true));
+      // Area FX drawn at the exact hit radius (front of list so it survives net snapshot slice)
+      this.state.fx.unshift(spawnShockFx(p.x, py, SHOCK_RADIUS, targets));
       this.showItemBanner(meta, `（命中${hits}）`);
       p.activePower = null;
       p.activeTimer = 0;
@@ -1648,14 +1651,18 @@ export class Game {
         B.bullets = B.bullets.filter((b) => b.owner === 'player');
       } else if (id === 'shock') {
         const by = B.y * fh;
+        const cx = B.x || 48; // centre on COM ship's actual position (it moves horizontally)
+        const targets = [];
         for (const e of B.enemies) {
-          const dx = e.x - 48;
+          const dx = e.x - cx;
           const dy = e.y - by;
-          if (dx * dx + dy * dy < 160 * 160) {
+          if (dx * dx + dy * dy < SHOCK_RADIUS * SHOCK_RADIUS) {
             e.hp -= 18;
             B.fx.push(spawnExplosion(e.x, e.y, false));
+            targets.push([e.x, e.y]);
           }
         }
+        B.fx.unshift(spawnShockFx(cx, by, SHOCK_RADIUS, targets));
       } else if (id === 'rapid') {
         B.activePower = 'rapid';
         B.activeTimer = 5.5;

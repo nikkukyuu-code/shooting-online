@@ -5,7 +5,7 @@ export const POWERUPS = [
   { id: 'laser',      label: 'レーザー',      effect: '小刻みレーザーで前方攻撃',   desc: '細いレーザーを前方へ連射。直線の敵に強い。', color: '#66ccff', icon: '═' },
   { id: 'spread',     label: 'ショットガン',  effect: '扇状の弾幕を一斉射撃',       desc: '扇状に弾をばらまき、近〜中距離の群れを一掃する。', color: '#ffaa33', icon: '※※' },
   { id: 'bomb',       label: 'ボム',          effect: '画面内の敵をまとめて攻撃',   desc: '画面内の敵に大ダメージ。周囲の敵弾も消しやすい緊急回避用。', color: '#ff5522', icon: '◎' },
-  { id: 'shock',      label: '電撃',          effect: '近くの敵をまとめて感電',     desc: '自機付近の敵をまとめて感電させ、短い制圧に向く。', color: '#88ddff', icon: '⚡' },
+  { id: 'shock',      label: '電撃',          effect: '周囲の広範囲の敵を感電',     desc: '自機周囲の広い円内の敵をまとめて感電させる。', color: '#88ddff', icon: '⚡' },
   { id: 'rapid',      label: '連射強化',      effect: '一定時間すばやく強弾を連射', desc: '一定時間、自機の連射速度と弾威力が上がる強化アイテム。', color: '#ffee44', icon: '≫' },
   { id: 'meteor',     label: '隕石送信',      effect: '相手に隕石攻撃を落とす',     desc: '対戦相手のフィールドへ隕石を落とし、直接ダメージを与える。', color: '#ff7744', icon: '☄' },
   { id: 'send',       label: '敵キャラ送信',  effect: '相手に敵を送る',             desc: 'デッキから選んだ敵を相手フィールドへ送る基本送信アイテム。', color: '#ff8844', icon: '⇒' },
@@ -198,6 +198,20 @@ export function spawnExplosion(x, y, big = false) {
   };
 }
 
+/** 電撃 (shock) hit radius in field pixels — v1.5.63: doubled from 160. */
+export const SHOCK_RADIUS = 320;
+
+/** Shock area FX: expanding electric ring to `r` + bolts to each hit target ([x,y] pairs). */
+export function spawnShockFx(x, y, r = SHOCK_RADIUS, targets = []) {
+  return {
+    kind: 'shock',
+    x, y, r,
+    life: 0.7,
+    max: 0.7,
+    t: targets.slice(0, 16).map(([tx, ty]) => [Math.round(tx), Math.round(ty)]),
+  };
+}
+
 export function serializeField(state) {
   // Compact snapshot for peer sync
   return {
@@ -219,7 +233,7 @@ export function serializeField(state) {
       x: b.x, y: b.y, o: b.owner, h: !!b.homing, vx: b.vx, vy: b.vy,
       L: b.laser ? 1 : undefined,
     })),
-    fx: state.fx.slice(0, 12).map(f => ({ x: f.x, y: f.y, l: f.life, m: f.max, r: f.r })),
+    fx: state.fx.slice(0, 12).map(f => ({ x: f.x, y: f.y, l: f.life, m: f.max, r: f.r, k: f.kind, t: f.t })),
     scroll: state.scroll,
     status: state.statusText,
     alive: state.alive,
