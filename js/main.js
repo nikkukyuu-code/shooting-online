@@ -1,6 +1,6 @@
-import { VERSION_LABEL } from './version.js?v=1.5.34';
-import { Net } from './net.js?v=1.5.34';
-import { Game } from './game.js?v=1.5.34';
+import { VERSION_LABEL } from './version.js?v=1.5.35';
+import { Net } from './net.js?v=1.5.35';
+import { Game } from './game.js?v=1.5.35';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -34,12 +34,31 @@ function show(screen) {
   screens[screen].classList.add('active');
 }
 
+function isHostingWaiting() {
+  return !!(net && net.role === 'host' && !game);
+}
+
+function restoreStartButton() {
+  els.btnStart.textContent = '入室';
+  els.btnStart.disabled = false;
+}
+
+function setHostingWaitingUI(on) {
+  if (on) {
+    els.btnStart.textContent = '入室（相手用）';
+    els.btnStart.disabled = true;
+  } else {
+    restoreStartButton();
+  }
+}
+
 function setBusy(v) {
   busy = v;
   if (els.btnCpu) els.btnCpu.disabled = v;
   els.btnFind.disabled = v;
   els.btnCreate.disabled = v;
-  els.btnStart.disabled = v;
+  // Keep Start disabled while host is waiting for a guest
+  els.btnStart.disabled = v || isHostingWaiting();
 }
 
 function cleanupGame() {
@@ -58,6 +77,7 @@ function goMenu() {
   setBusy(false);
   els.fieldFind.value = '';
   els.fieldCode.value = '';
+  restoreStartButton();
   show('menu');
 }
 
@@ -146,6 +166,7 @@ els.btnCreate.addEventListener('click', async () => {
     els.fieldCode.value = room;
     els.inputRoom.value = room;
     els.fieldFind.value = '部屋コード表示中・相手待ち';
+    setHostingWaitingUI(true);
     show('menu'); // stay on menu so host can read/share the room code
     // Only enter battle when a guest actually connects
     net.on('connected', () => {
@@ -168,6 +189,7 @@ els.btnCreate.addEventListener('click', async () => {
     els.fieldCode.value = '';
     alert('部屋を作成できませんでした。別の部屋名を試すか、しばらくしてから再度お試しください。');
     cleanupGame();
+    restoreStartButton();
     show('menu');
   } finally {
     setBusy(false);
@@ -176,6 +198,11 @@ els.btnCreate.addEventListener('click', async () => {
 
 els.btnStart.addEventListener('click', async () => {
   if (busy) return;
+  // Host waiting for guest: do NOT destroy peer / self-join as guest
+  if (net && net.role === 'host' && !game) {
+    els.fieldFind.value = 'すでにホスト中・相手待ち（部屋コードを相手に伝えてください）';
+    return;
+  }
   const name = els.inputRoom.value.trim();
   if (!name) {
     els.inputRoom.focus();
