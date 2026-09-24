@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-} from './entities.js?v=1.5.43';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.43';
-import { sfx } from './audio.js?v=1.5.43';
+} from './entities.js?v=1.5.44';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.44';
+import { sfx } from './audio.js?v=1.5.44';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -711,7 +711,7 @@ export class Game {
   syncOut() {
     if (!this.net || this.useBot || !this.net.ready) return;
     const snap = serializeField(this.state);
-    snap.worldItems = this.state.items.map((it) => ({ x: it.x, y: it.y, id: it.id }));
+    snap.worldItems = this.state.items.map((it) => ({ x: it.x, y: it.y, id: it.id, life: it.life }));
     this.net.send({
       type: 'state',
       state: snap,

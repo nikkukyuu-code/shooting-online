@@ -284,23 +284,11 @@ function drawHpPip(ctx, e) {
   ctx.strokeRect(-e.w * 0.45, -e.h * 0.78, e.w * 0.9, 6);
 }
 
-/** User-art enemy sprites: 5 per-kind anim frames (assets/enemies/<kind>/0..4.png).
+/** User-art enemy sprites: static frame 0 only (assets/enemies/<kind>/0.png).
  * Sourced from tools/source_enemy_sheet.png via tools/extract_user_enemy_sprites.py.
- * Motions: gentle ゆらゆら sway/bob baked into frames — no full spins. */
+ * No frame cycling / no ゆらゆら sway — single static pose per kind. */
 const ENEMY_KINDS = ['basic', 'drone', 'elite', 'mech', 'tank', 'golem', 'swarm', 'boss'];
-const ENEMY_FRAME_COUNT = 5;
-/** ms per frame — calm sway (~120–160ms). */
-const ENEMY_FRAME_MS = {
-  basic: 140,   // walk-bob + sway
-  drone: 150,   // hover tilt/bob
-  elite: 130,   // engine pulse + soft bank
-  mech: 130,    // thruster flicker + soft sway
-  tank: 160,    // heavy rock
-  golem: 140,   // core pulse + arm sway
-  swarm: 130,   // crescent rock/sway
-  boss: 160,    // station pulse + soft sway
-};
-const ENEMY_FRAME_MS_DEFAULT = 140;
+const ENEMY_STATIC_FRAME = 0;
 /** @type {Record<string, HTMLImageElement[]>} */
 const enemySprites = Object.create(null);
 let enemySpritesReady = false;
@@ -308,7 +296,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=1.5.43`;
+  return `assets/enemies/${kind}/${frame}.png?v=1.5.44`;
 }
 
 export function preloadEnemySprites() {
@@ -318,43 +306,29 @@ export function preloadEnemySprites() {
   let loaded = 0;
   for (const kind of ENEMY_KINDS) {
     enemySprites[kind] = [];
-    for (let i = 0; i < ENEMY_FRAME_COUNT; i++) {
-      pending++;
-      const img = new Image();
-      img.decoding = 'async';
-      img.onload = () => {
-        loaded++;
-        if (loaded >= pending) enemySpritesReady = true;
-      };
-      img.onerror = () => {
-        loaded++;
-        if (loaded >= pending) enemySpritesReady = true;
-      };
-      img.src = enemyAssetUrl(kind, i);
-      enemySprites[kind][i] = img;
-    }
+    pending++;
+    const img = new Image();
+    img.decoding = 'async';
+    img.onload = () => {
+      loaded++;
+      if (loaded >= pending) enemySpritesReady = true;
+    };
+    img.onerror = () => {
+      loaded++;
+      if (loaded >= pending) enemySpritesReady = true;
+    };
+    img.src = enemyAssetUrl(kind, ENEMY_STATIC_FRAME);
+    enemySprites[kind][ENEMY_STATIC_FRAME] = img;
   }
 }
 
 // Kick off load as soon as this module evaluates
 preloadEnemySprites();
 
-function enemyFrameMs(kind) {
-  return ENEMY_FRAME_MS[kind] || ENEMY_FRAME_MS_DEFAULT;
-}
-
-function enemyFrameIndex(e, kind) {
-  const t = performance.now();
-  const ms = enemyFrameMs(kind || e.kind || 'basic');
-  // Desync by spawn x so packs don't animate in lockstep
-  const offset = (typeof e.x === 'number' ? e.x : 0) * 0.07;
-  return Math.floor((t + offset * ms) / ms) % ENEMY_FRAME_COUNT;
-}
-
 function drawEnemySprite(ctx, e, kind) {
   const frames = enemySprites[kind];
   if (!frames) return false;
-  const img = frames[enemyFrameIndex(e, kind)];
+  const img = frames[ENEMY_STATIC_FRAME];
   if (!img || !img.complete || !img.naturalWidth) return false;
   const sent = !!e.sent;
   const w = e.w, h = e.h;
@@ -376,9 +350,7 @@ function drawEnemySprite(ctx, e, kind) {
 function drawEnemyFallback(ctx, e, kind, sent, w, h, t, pulse) {
   const body = sent ? 'rgba(80,200,220,0.85)' : 'rgba(200,60,70,0.85)';
   const rim = sent ? 'rgba(180,240,255,0.95)' : 'rgba(255,200,200,0.9)';
-  const bob = Math.sin(t * 3.2 + (e.phase || 0)) * h * 0.03;
   ctx.save();
-  ctx.translate(0, bob);
   ctx.fillStyle = body;
   ctx.beginPath();
   ctx.ellipse(0, 0, w * 0.48, h * 0.42, 0, 0, Math.PI * 2);
@@ -575,6 +547,12 @@ function drawItem(ctx, it) {
   const st = ITEM_STYLE[it.id] || { color: '#ffd24a', icon: '★' };
   ctx.save();
   ctx.translate(it.x, it.y);
+  // Blink/pulse when remaining lifetime ≤ 5s (despawn warning)
+  if (typeof it.life === 'number' && it.life <= 5) {
+    const hz = 3; // ~3 Hz smooth pulse — visible, not seizure-fast
+    const pulse = 0.5 + 0.5 * Math.sin((performance.now() / 1000) * Math.PI * 2 * hz);
+    ctx.globalAlpha = 0.22 + 0.78 * pulse;
+  }
   ctx.shadowColor = st.color;
   ctx.shadowBlur = 12;
   ctx.fillStyle = st.color;
@@ -1066,7 +1044,7 @@ export function drawField(ctx, area, snap, opts = {}) {
   }
 
   const items = snap.worldItems || [];
-  for (const it of items) drawItem(ctx, { x: it.x * sx, y: it.y * sy, id: it.id });
+  for (const it of items) drawItem(ctx, { x: it.x * sx, y: it.y * sy, id: it.id, life: it.life });
 
   const meteors = snap.meteors || [];
   for (const m of meteors) {
