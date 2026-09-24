@@ -1,11 +1,11 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-  setKindTier, resolveEnemyTier,
-} from './entities.js?v=1.5.49';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.49';
-import { sfx } from './audio.js?v=1.5.49';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.49';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE } from './meta.js?v=1.5.49';
+  setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
+} from './entities.js?v=1.5.50';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.50';
+import { sfx } from './audio.js?v=1.5.50';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.50';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE } from './meta.js?v=1.5.50';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -169,6 +169,44 @@ function pushEnemyAttack(e, bullets, tx, ty) {
     fireNormal(-160 - Math.random() * 30, (Math.random() - 0.5) * 24, 2);
   }
 }
+
+/** Laser charge telegraph duration for large sent enemies (readable "about to fire"). */
+const LASER_TELE_DUR = 0.55;
+
+/**
+ * Fire-cycle for one enemy: large sent + laser → telegraph first, then pushEnemyAttack.
+ * computeReload() returns the post-shot fireCd.
+ * Returns true if a shot was fired this frame.
+ */
+function tickEnemyLaserFire(e, bullets, tx, ty, dt, canFire, computeReload) {
+  if (e.laserTeleT > 0) {
+    e.laserTeleT = Math.max(0, e.laserTeleT - dt);
+    e.laserAimX = tx;
+    e.laserAimY = ty;
+    if (e.laserTeleT <= 0) {
+      e.laserTeleT = 0;
+      pushEnemyAttack(e, bullets, tx, ty);
+      e.fireCd = computeReload();
+      return true;
+    }
+    return false;
+  }
+  e.fireCd -= dt;
+  if (!canFire || e.fireCd > 0) return false;
+  // Large sent units that shoot lasers: charge telegraph before the volley
+  if (e.sent && isLargeEnemy(e) && enemyAttackUsesLaser(e.kind)) {
+    e.laserTeleT = LASER_TELE_DUR;
+    e.laserTeleMax = LASER_TELE_DUR;
+    e.laserAimX = tx;
+    e.laserAimY = ty;
+    e.fireCd = 0;
+    return false;
+  }
+  e.fireCd = computeReload();
+  pushEnemyAttack(e, bullets, tx, ty);
+  return true;
+}
+
 
 
 export class Game {
@@ -1055,23 +1093,19 @@ export class Game {
         }
       }
       e.y = Math.max(16, Math.min(fh - 16, e.y));
-      e.fireCd -= dt;
       const onScreen = e.x < fw + 10;
       const parked = e.sent ? e.x <= (e.holdX || fw) + 8 : true;
-      if (e.fireCd <= 0 && onScreen && parked) {
-        {
-          const tier = resolveEnemyTier(e.kind);
-          e.fireCd = e.sent
-            ? ((tier === 'boss' || tier === 'tank' || tier === 'mech') ? 0.95
-              : (tier === 'golem' || tier === 'elite') ? 1.2
-              : 1.55 + Math.random() * 0.4)
-            : ((tier === 'boss' || tier === 'tank') ? 1.15
-              : (tier === 'mech' || tier === 'golem') ? 1.4 + Math.random() * 0.4
-              : tier === 'elite' ? 1.7 + Math.random() * 0.5
-              : 2.25 + Math.random() * 0.8);
-        }
-        pushEnemyAttack(e, S.bullets, P.x, P.y * fh);
-      }
+      tickEnemyLaserFire(e, S.bullets, P.x, P.y * fh, dt, onScreen && parked, () => {
+        const tier = resolveEnemyTier(e.kind);
+        return e.sent
+          ? ((tier === 'boss' || tier === 'tank' || tier === 'mech') ? 0.95
+            : (tier === 'golem' || tier === 'elite') ? 1.2
+            : 1.55 + Math.random() * 0.4)
+          : ((tier === 'boss' || tier === 'tank') ? 1.15
+            : (tier === 'mech' || tier === 'golem') ? 1.4 + Math.random() * 0.4
+            : tier === 'elite' ? 1.7 + Math.random() * 0.5
+            : 2.25 + Math.random() * 0.8);
+      });
     }
 
     // Bullets (player homing + enemy limited-homing, then trail)
@@ -1453,14 +1487,13 @@ export class Game {
         }
       }
       e.y = Math.max(20, Math.min(fh - 20, e.y));
-      e.fireCd -= dt;
       const parked = e.sent ? e.x <= (e.holdX || fw) + 8 : true;
-      if (e.fireCd <= 0 && parked) {
-        e.fireCd = e.sent
-          ? ((['elite','boss','mech','tank'].includes(resolveEnemyTier(e.kind))) ? 1.1 : 1.55)
-          : ((['elite','boss','mech','tank','golem'].includes(resolveEnemyTier(e.kind))) ? 1.7 : 2.25);
-        pushEnemyAttack(e, B.bullets, shipX, B.y * fh);
-      }
+      tickEnemyLaserFire(e, B.bullets, shipX, B.y * fh, dt, parked, () => {
+        const tier = resolveEnemyTier(e.kind);
+        return e.sent
+          ? ((['elite', 'boss', 'mech', 'tank'].includes(tier)) ? 1.1 : 1.55)
+          : ((['elite', 'boss', 'mech', 'tank', 'golem'].includes(tier)) ? 1.7 : 2.25);
+      });
     }
     const botPy = B.y * fh;
     for (const b of B.bullets) {

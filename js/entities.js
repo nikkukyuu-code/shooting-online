@@ -81,6 +81,30 @@ export function resolveEnemyTier(kind) {
   return 'basic';
 }
 
+/** Large / capital-class tiers (boss, golem, tank, mech + heavy sheet units). */
+export const LARGE_ENEMY_TIERS = new Set(['boss', 'golem', 'tank', 'mech']);
+
+/**
+ * True for "デカい" units: large tiers, catalog.large, or size/hp above threshold.
+ * Used for laser telegraph on sent enemies.
+ */
+export function isLargeEnemy(e) {
+  if (!e) return false;
+  if (e.large === true) return true;
+  const tier = resolveEnemyTier(e.kind || 'basic');
+  if (LARGE_ENEMY_TIERS.has(tier)) return true;
+  if ((e.w || 0) >= 150 || (e.h || 0) >= 100) return true;
+  if ((e.maxHp || e.hp || 0) >= 28) return true;
+  return false;
+}
+
+/** Large tiers always include laser in pushEnemyAttack. */
+export function enemyAttackUsesLaser(kind) {
+  const tier = resolveEnemyTier(kind || 'basic');
+  return LARGE_ENEMY_TIERS.has(tier)
+    || tier === 'drone' || tier === 'elite' || tier === 'basic';
+}
+
 export function spawnEnemy(fieldW, fieldH, kind = 'basic') {
   const tier = resolveEnemyTier(kind);
   const base = ENEMY_TIER_STATS[tier] || ENEMY_TIER_STATS.basic;
@@ -168,6 +192,10 @@ export function serializeField(state) {
     enemies: state.enemies.slice(0, 40).map(e => ({
       x: e.x, y: e.y, w: e.w, h: e.h, kind: e.kind, hp: e.hp, c: e.color, s: !!e.sent,
       at: e.appearT > 0 ? +e.appearT.toFixed(3) : undefined,
+      lt: e.laserTeleT > 0 ? +e.laserTeleT.toFixed(3) : undefined,
+      lm: e.laserTeleT > 0 ? +(e.laserTeleMax || 0.6).toFixed(3) : undefined,
+      ax: e.laserTeleT > 0 && e.laserAimX != null ? +e.laserAimX.toFixed(1) : undefined,
+      ay: e.laserTeleT > 0 && e.laserAimY != null ? +e.laserAimY.toFixed(1) : undefined,
     })),
     bullets: state.bullets.filter(b => b.owner === 'player' || b.owner === 'enemy').slice(0, 60).map(b => ({
       x: b.x, y: b.y, o: b.owner, h: !!b.homing, vx: b.vx, vy: b.vy,

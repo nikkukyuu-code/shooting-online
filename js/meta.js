@@ -1,5 +1,5 @@
 /** Persist PT / owned unlocks / deck (exactly 5). localStorage key: shootingOnline_meta */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK } from './catalog.js?v=1.5.49';
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK } from './catalog.js?v=1.5.50';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;

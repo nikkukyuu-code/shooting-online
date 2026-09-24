@@ -297,7 +297,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=1.5.49`;
+  return `assets/enemies/${kind}/${frame}.png?v=1.5.50`;
 }
 
 function loadKindSprite(kind) {
@@ -370,6 +370,89 @@ function drawEnemyFallback(ctx, e, kind, sent, w, h, t, pulse) {
   ctx.restore();
 }
 
+/** Warning aim-beam + muzzle charge for large sent laser telegraph. */
+function drawLaserTelegraph(ctx, e, t) {
+  const teleT = e.laserTeleT || 0;
+  if (teleT <= 0) return;
+  const teleMax = e.laserTeleMax || 0.55;
+  const u = 1 - Math.max(0, Math.min(1, teleT / teleMax)); // 0→1 as charge fills
+  const w = e.w || 40;
+  const h = e.h || 30;
+  // Muzzle on the left (shots fly toward player)
+  const mx = -w * 0.42;
+  const my = 0;
+  const aimX = (e.laserAimX != null ? e.laserAimX : e.x - 200) - e.x;
+  const aimY = (e.laserAimY != null ? e.laserAimY : e.y) - e.y;
+  const ang = Math.atan2(aimY, aimX);
+  const beamLen = Math.max(80, Math.hypot(aimX, aimY));
+  const flash = u > 0.75 ? (0.55 + 0.45 * Math.sin(t * 40)) : (0.35 + 0.25 * Math.sin(t * 18));
+
+  ctx.save();
+  // Warning aim line (dashed / flickering)
+  ctx.translate(mx, my);
+  ctx.rotate(ang);
+  ctx.globalAlpha = 0.35 + 0.55 * u;
+  ctx.strokeStyle = u > 0.7 ? 'rgba(255,80,60,0.95)' : 'rgba(255,200,60,0.85)';
+  ctx.lineWidth = 1.5 + u * 2.5;
+  ctx.setLineDash([6, 5]);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(beamLen, 0);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // Soft glow core along beam
+  ctx.globalAlpha = 0.12 + 0.28 * u * flash;
+  ctx.strokeStyle = 'rgba(255,120,80,0.9)';
+  ctx.lineWidth = 6 + u * 10;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(beamLen * (0.55 + 0.45 * u), 0);
+  ctx.stroke();
+  ctx.restore();
+
+  // Muzzle charge glow
+  ctx.save();
+  const glowR = 6 + u * 14;
+  const g = ctx.createRadialGradient(mx, my, 0, mx, my, glowR);
+  g.addColorStop(0, `rgba(255,255,200,${0.55 + 0.4 * flash})`);
+  g.addColorStop(0.4, `rgba(255,140,40,${0.45 * u + 0.2})`);
+  g.addColorStop(1, 'rgba(255,40,20,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(mx, my, glowR, 0, Math.PI * 2);
+  ctx.fill();
+  // Bright core
+  ctx.globalAlpha = 0.7 + 0.3 * flash;
+  ctx.fillStyle = u > 0.8 ? '#fff' : '#ffe080';
+  ctx.beginPath();
+  ctx.arc(mx, my, 2 + u * 3.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // ！ warning marker above unit
+  ctx.save();
+  const bounce = Math.sin(t * 14) * 2;
+  ctx.globalAlpha = 0.75 + 0.25 * flash;
+  ctx.fillStyle = u > 0.7 ? '#ff4422' : '#ffcc33';
+  ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+  ctx.lineWidth = 3;
+  ctx.font = `bold ${Math.max(14, Math.floor(h * 0.28))}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  const label = '！';
+  const ly = -h * 0.62 + bounce;
+  ctx.strokeText(label, 0, ly);
+  ctx.fillText(label, 0, ly);
+  // Small charge ring around marker
+  ctx.globalAlpha = 0.5 + 0.4 * u;
+  ctx.strokeStyle = u > 0.7 ? 'rgba(255,60,40,0.9)' : 'rgba(255,200,60,0.8)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, ly - 8, 10 + u * 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * u);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawEnemy(ctx, e) {
   ctx.save();
   ctx.translate(e.x, e.y);
@@ -426,6 +509,11 @@ function drawEnemy(ctx, e) {
     ctx.font = appearT > 0 ? 'bold 11px sans-serif' : 'bold 9px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('SEND', 0, e.h * 0.78);
+  }
+  // Laser telegraph (large sent units) — drawn in local space after body
+  if (e.laserTeleT > 0) {
+    ctx.globalAlpha = 1;
+    drawLaserTelegraph(ctx, e, t);
   }
   ctx.restore();
 }
@@ -1234,6 +1322,9 @@ export function drawField(ctx, area, snap, opts = {}) {
       x: e.x * sx, y: e.y * sy, w: (e.w || 20) * sx, h: (e.h || 16) * sy,
       kind: e.kind, hp: e.hp, maxHp: e.maxHp || e.hp || 1, color: e.c || e.color || '#c44', sent: e.s || e.sent,
       appearT: e.appearT ?? e.at, appearMax: e.appearMax || 0.9, _uid: e._uid,
+      laserTeleT: e.laserTeleT ?? e.lt, laserTeleMax: e.laserTeleMax ?? e.lm ?? 0.55,
+      laserAimX: (e.laserAimX ?? e.ax) != null ? (e.laserAimX ?? e.ax) * sx : undefined,
+      laserAimY: (e.laserAimY ?? e.ay) != null ? (e.laserAimY ?? e.ay) * sy : undefined,
     });
   }
 
