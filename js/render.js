@@ -297,7 +297,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=1.5.65`;
+  return `assets/enemies/${kind}/${frame}.png?v=1.5.66`;
 }
 
 function loadKindSprite(kind) {
@@ -530,28 +530,33 @@ function drawLaserTelegraph(ctx, e, t) {
   const beamLen = Math.max(220, (e.laserAimX != null ? Math.abs(e.laserAimX - e.x) : 320));
   const flash = u > 0.75 ? (0.55 + 0.45 * Math.sin(t * 40)) : (0.35 + 0.25 * Math.sin(t * 18));
 
-  ctx.save();
-  // Warning aim line (dashed / flickering) — always horizontal
-  ctx.translate(mx, my);
-  ctx.rotate(ang);
-  ctx.globalAlpha = 0.35 + 0.55 * u;
-  ctx.strokeStyle = u > 0.7 ? 'rgba(255,80,60,0.95)' : 'rgba(255,200,60,0.85)';
-  ctx.lineWidth = 1.5 + u * 2.5;
-  ctx.setLineDash([6, 5]);
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(beamLen, 0);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  // Soft glow core along beam
-  ctx.globalAlpha = 0.12 + 0.28 * u * flash;
-  ctx.strokeStyle = 'rgba(255,120,80,0.9)';
-  ctx.lineWidth = 6 + u * 10;
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(beamLen * (0.55 + 0.45 * u), 0);
-  ctx.stroke();
-  ctx.restore();
+  // Multi-beam patterns (twin / triple / sweep) warn on every lane; each lane stays horizontal.
+  const offs = Array.isArray(e.laserTeleOffs) && e.laserTeleOffs.length ? e.laserTeleOffs : [0];
+  const multi = offs.length > 1;
+  for (const off of offs) {
+    ctx.save();
+    // Warning aim line (dashed / flickering) — always horizontal
+    ctx.translate(mx, my + off);
+    ctx.rotate(ang);
+    ctx.globalAlpha = 0.35 + 0.55 * u;
+    ctx.strokeStyle = u > 0.7 ? 'rgba(255,80,60,0.95)' : 'rgba(255,200,60,0.85)';
+    ctx.lineWidth = (multi ? 1.2 : 1.5) + u * (multi ? 1.6 : 2.5);
+    ctx.setLineDash([6, 5]);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(beamLen, 0);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Soft glow core along beam
+    ctx.globalAlpha = 0.12 + 0.28 * u * flash;
+    ctx.strokeStyle = 'rgba(255,120,80,0.9)';
+    ctx.lineWidth = (multi ? 4 : 6) + u * (multi ? 5 : 10);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(beamLen * (0.55 + 0.45 * u), 0);
+    ctx.stroke();
+    ctx.restore();
+  }
 
   // Muzzle charge glow
   ctx.save();
@@ -817,19 +822,23 @@ function drawBullet(ctx, b) {
     ctx.lineCap = 'round';
     ctx.shadowBlur = 0;
 
+    const k = b.k;
     if (laser) {
       // Fast cyan laser pulse streak (distinct from orange missiles)
-      const len = 26;
+      // k: 'beam' = long thick beam, 'pulse' = short green pulse
+      const beam = k === 'beam';
+      const pulse = k === 'pulse';
+      const len = beam ? 64 : pulse ? 13 : 26;
       // Force horizontal draw for enemy lasers (vy must be 0)
       const lx = -1, ly = 0;
-      ctx.strokeStyle = 'rgba(40,180,255,0.35)';
-      ctx.lineWidth = 6;
+      ctx.strokeStyle = beam ? 'rgba(150,120,255,0.4)' : pulse ? 'rgba(60,255,170,0.35)' : 'rgba(40,180,255,0.35)';
+      ctx.lineWidth = beam ? 11 : 6;
       ctx.beginPath();
       ctx.moveTo(b.x - lx * len, b.y - ly * len);
       ctx.lineTo(b.x + lx * len * 0.4, b.y + ly * len * 0.4);
       ctx.stroke();
-      ctx.strokeStyle = 'rgba(80,220,255,0.95)';
-      ctx.lineWidth = 3.2;
+      ctx.strokeStyle = beam ? 'rgba(190,170,255,0.95)' : pulse ? 'rgba(110,255,200,0.95)' : 'rgba(80,220,255,0.95)';
+      ctx.lineWidth = beam ? 5 : 3.2;
       ctx.beginPath();
       ctx.moveTo(b.x - lx * len * 0.85, b.y - ly * len * 0.85);
       ctx.lineTo(b.x + lx * 6, b.y + ly * 6);
@@ -893,6 +902,8 @@ function drawBullet(ctx, b) {
       ctx.closePath();
       ctx.fill();
       ctx.restore();
+    } else if (k) {
+      drawEnemyShot(ctx, b, k, ux, uy, ang);
     } else {
       // Default enemy orb
       ctx.fillStyle = '#ff6644';
@@ -902,6 +913,95 @@ function drawBullet(ctx, b) {
     }
   }
   ctx.restore();
+}
+
+/** Per-pattern enemy shot looks (cheap: a few arcs/lines, no blur). */
+function drawEnemyShot(ctx, b, k, ux, uy, ang) {
+  const r = b.r || 3;
+  const now = performance.now() / 1000;
+  const dot = (x, y, rr, c) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.fill(); };
+  const streak = (len, w, c) => {
+    ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath();
+    ctx.moveTo(b.x - ux * len, b.y - uy * len); ctx.lineTo(b.x + ux * len * 0.35, b.y + uy * len * 0.35); ctx.stroke();
+  };
+  switch (k) {
+    case 'needle': // aimed / burst — yellow dart
+      streak(15, 5, 'rgba(255,210,60,0.4)');
+      streak(11, 2.2, '#fff2a0');
+      break;
+    case 'stream': // rapid stream — small amber streak
+      streak(8, 3.4, 'rgba(255,180,40,0.85)');
+      dot(b.x, b.y, 1.3, '#fff');
+      break;
+    case 'fan':
+      dot(b.x, b.y, r + 1.2, 'rgba(255,120,40,0.35)');
+      dot(b.x, b.y, r, '#ff8a3a');
+      break;
+    case 'petal': // ring / spiral / split shards — pink
+      dot(b.x, b.y, r + 1.4, 'rgba(255,80,200,0.3)');
+      dot(b.x, b.y, r, '#ff5fd2');
+      dot(b.x, b.y, 1.2, '#fff');
+      break;
+    case 'wave':
+      ctx.strokeStyle = 'rgba(60,255,170,0.55)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(b.x, b.y, r + 3, 0, Math.PI * 2); ctx.stroke();
+      dot(b.x, b.y, r, '#3dffb0');
+      break;
+    case 'big': { // slow plasma orb
+      const pul = 1 + Math.sin(now * 10 + b.x * 0.05) * 0.08;
+      dot(b.x, b.y, r * 1.55 * pul, 'rgba(200,70,255,0.25)');
+      dot(b.x, b.y, r * pul, '#c24cff');
+      dot(b.x, b.y, r * 0.45, '#f6d8ff');
+      break;
+    }
+    case 'split': {
+      const warn = b.st != null && b.st < 0.22;
+      dot(b.x, b.y, r + (warn ? 3 : 1.5), warn ? 'rgba(255,255,160,0.5)' : 'rgba(255,150,40,0.35)');
+      dot(b.x, b.y, r, '#ffa030');
+      dot(b.x, b.y, 1.6, '#fff');
+      break;
+    }
+    case 'mine': {
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(now * 1.5 + b.y * 0.01);
+      ctx.strokeStyle = '#ff5060'; ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      for (let i = 0; i < 4; i++) {
+        const a = i * Math.PI / 2;
+        ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+        ctx.lineTo(Math.cos(a) * (r + 3.5), Math.sin(a) * (r + 3.5));
+      }
+      ctx.stroke();
+      ctx.restore();
+      dot(b.x, b.y, r, '#6a1422');
+      ctx.strokeStyle = '#ff5060'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.stroke();
+      if (Math.floor(now * 4 + b.x * 0.01) % 2 === 0) dot(b.x, b.y, 1.8, '#ffe066');
+      break;
+    }
+    case 'boom': { // spinning three-blade boomerang
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(now * 14);
+      ctx.fillStyle = '#ffd040';
+      ctx.strokeStyle = 'rgba(255,120,30,0.9)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 0; i < 3; i++) {
+        const a = i * (Math.PI * 2 / 3);
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(Math.cos(a + 0.5) * r * 1.4, Math.sin(a + 0.5) * r * 1.4, Math.cos(a) * r * 1.8, Math.sin(a) * r * 1.8);
+        ctx.quadraticCurveTo(Math.cos(a - 0.3) * r * 0.8, Math.sin(a - 0.3) * r * 0.8, 0, 0);
+      }
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+      break;
+    }
+    default:
+      dot(b.x, b.y, r, '#ff6644');
+  }
 }
 
 function drawItem(ctx, it) {
@@ -1945,14 +2045,15 @@ export function drawField(ctx, area, snap, opts = {}) {
       laserTeleT: e.laserTeleT ?? e.lt, laserTeleMax: e.laserTeleMax ?? e.lm ?? 0.55,
       laserAimX: (e.laserAimX ?? e.ax) != null ? (e.laserAimX ?? e.ax) * sx : undefined,
       laserAimY: (e.laserAimY ?? e.ay) != null ? (e.laserAimY ?? e.ay) * sy : undefined,
+      laserTeleOffs: Array.isArray(e.laserTeleOffs ?? e.lo) ? (e.laserTeleOffs ?? e.lo).map((o) => o * sy) : undefined,
     });
   }
 
   const bullets = snap.bullets || [];
   for (const b of bullets) {
     drawBullet(ctx, {
-      x: b.x * sx, y: b.y * sy, owner: b.o || b.owner, homing: b.h || b.homing, r: 3, vx: b.vx, vy: b.vy,
-      laser: !!(b.L || b.laser),
+      x: b.x * sx, y: b.y * sy, owner: b.o || b.owner, homing: b.h || b.homing, r: (b.r || 3) * Math.min(sx, sy), vx: b.vx, vy: b.vy,
+      laser: !!(b.L || b.laser), k: b.k, st: b.st,
       trail: Array.isArray(b.trail) ? b.trail.map((p) => ({ x: p.x * sx, y: p.y * sy })) : undefined,
     });
   }

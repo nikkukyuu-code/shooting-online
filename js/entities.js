@@ -247,10 +247,13 @@ export function serializeField(state) {
       lm: e.laserTeleT > 0 ? +(e.laserTeleMax || 0.6).toFixed(3) : undefined,
       ax: e.laserTeleT > 0 && e.laserAimX != null ? +e.laserAimX.toFixed(1) : undefined,
       ay: e.laserTeleT > 0 && e.laserAimY != null ? +e.laserAimY.toFixed(1) : undefined,
+      lo: e.laserTeleT > 0 && e.laserTeleOffs ? e.laserTeleOffs : undefined,
     })),
     bullets: state.bullets.filter(b => b.owner === 'player' || b.owner === 'enemy').slice(0, 60).map(b => ({
       x: b.x, y: b.y, o: b.owner, h: !!b.homing, vx: b.vx, vy: b.vy,
       L: b.laser ? 1 : undefined,
+      k: b.k || undefined,
+      r: b.r > 3.5 ? b.r : undefined,
     })),
     fx: state.fx.slice(0, 12).map(f => ({ x: f.x, y: f.y, l: f.life, m: f.max, r: f.r, k: f.kind, t: f.t })),
     scroll: state.scroll,

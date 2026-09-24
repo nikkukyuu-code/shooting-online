@@ -2,11 +2,12 @@ import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=1.5.65';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.65';
-import { sfx } from './audio.js?v=1.5.65';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.65';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=1.5.65';
+} from './entities.js?v=1.5.66';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.66';
+import { sfx } from './audio.js?v=1.5.66';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.66';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=1.5.66';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=1.5.66';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -187,37 +188,47 @@ const LASER_TELE_DUR = 0.55;
  * Returns true if a shot was fired this frame.
  */
 function tickEnemyLaserFire(e, bullets, tx, ty, dt, canFire, computeReload) {
+  // Catalog / sent units use their own per-unit loadout (js/attacks.js); wave_* keep pushEnemyAttack.
+  const lo = usesLoadout(e);
+  if (lo) tickEnemyAttackQueue(e, bullets, tx, ty, dt);
+  const fire = () => (lo ? fireLoadoutVolley(e, bullets, tx, ty) : pushEnemyAttack(e, bullets, tx, ty));
+  const reload = () => (lo ? loadoutReload(e) : computeReload());
   if (e.laserTeleT > 0) {
     e.laserTeleT = Math.max(0, e.laserTeleT - dt);
     // Telegraph is fixed horizontal — never track player.
     if (e.laserTeleT <= 0) {
       e.laserTeleT = 0;
       // Missiles still get live tx/ty for limited home; lasers ignore them.
-      pushEnemyAttack(e, bullets, tx, ty);
+      fire();
       e.laserAimX = undefined;
       e.laserAimY = undefined;
-      e.fireCd = computeReload();
+      e.laserTeleOffs = undefined;
+      e.fireCd = reload();
       return true;
     }
     return false;
   }
   e.fireCd -= dt;
   if (!canFire || e.fireCd > 0) return false;
-  // Large sent units that shoot lasers: charge telegraph before the volley
-  if (e.sent && isLargeEnemy(e) && enemyAttackUsesLaser(e.kind)) {
+  // Laser volleys of large sent units (and long / sweep lasers) charge a telegraph first
+  const teleOffs = lo
+    ? loadoutTelegraph(e)
+    : ((e.sent && isLargeEnemy(e) && enemyAttackUsesLaser(e.kind)) ? [0] : null);
+  if (teleOffs) {
     e.laserTeleT = LASER_TELE_DUR;
     e.laserTeleMax = LASER_TELE_DUR;
-    // Fixed horizontal warning beam from muzzle leftward (NOT player aim).
+    // Fixed horizontal warning beam(s) from muzzle leftward (NOT player aim).
     e.laserAimX = e.x - 400;
     e.laserAimY = e.y;
+    e.laserTeleOffs = teleOffs.length === 1 && teleOffs[0] === 0 ? undefined : teleOffs;
     e.fireCd = 0;
     return false;
   }
-  e.fireCd = computeReload();
+  e.fireCd = reload();
   // No telegraph: clear any stale lock so lasers fire straight left.
   e.laserAimX = undefined;
   e.laserAimY = undefined;
-  pushEnemyAttack(e, bullets, tx, ty);
+  fire();
   return true;
 }
 
@@ -1155,17 +1166,20 @@ export class Game {
 
     // Bullets (player homing + enemy limited-homing, then trail)
     const pyAim = P.y * fh;
+    const spawnedEB = [];
     for (const b of S.bullets) {
       if (b.homing && b.owner === 'player') {
         steerHomingBullet(b, S.enemies, dt, fw);
       } else if (b.homing && b.owner === 'enemy' && !b.laser) {
         steerEnemyHoming(b, P.x, pyAim, dt);
       }
+      if (b.k && b.owner === 'enemy') updateEnemyBullet(b, dt, spawnedEB);
       b.x += b.vx * dt;
       b.y += b.vy * dt;
       b.life -= dt;
       pushHomingTrail(b);
     }
+    for (const b of spawnedEB) S.bullets.push(b);
 
     // Items float
     for (const it of S.items) {
@@ -1211,7 +1225,8 @@ export class Game {
     for (const b of S.bullets) {
       if (b.owner !== 'enemy') continue;
       const py = P.y * fh;
-      if (P.invuln <= 0 && Math.abs(b.x - P.x) < 14 && Math.abs(b.y - py) < 12) {
+      const hb = b.hb || 0; // bigger hurtbox for big orbs / mines / beams
+      if (P.invuln <= 0 && Math.abs(b.x - P.x) < 14 + hb && Math.abs(b.y - py) < 12 + hb) {
         const hitDmg = b.homing ? 4 : 6;
         this.applyPlayerDamage(hitDmg, 'bullet');
         P.invuln = 0.75;
@@ -1542,15 +1557,18 @@ export class Game {
       });
     }
     const botPy = B.y * fh;
+    const spawnedBB = [];
     for (const b of B.bullets) {
       if (b.homing && b.owner === 'enemy' && !b.laser) {
         steerEnemyHoming(b, shipX, botPy, dt);
       }
+      if (b.k && b.owner === 'enemy') updateEnemyBullet(b, dt, spawnedBB);
       b.x += b.vx * dt;
       b.y += b.vy * dt;
       b.life -= dt;
       pushHomingTrail(b);
     }
+    for (const b of spawnedBB) B.bullets.push(b);
 
     // Bot bullets hit enemies + item drops into bot inventory
     for (const b of B.bullets) {
@@ -1587,7 +1605,8 @@ export class Game {
     // Hits on bot — fair hurtbox (gets hit, not glass)
     for (const b of B.bullets) {
       if (b.owner !== 'enemy') continue;
-      if (B.invuln <= 0 && Math.abs(b.x - shipX) < 13 && Math.abs(b.y - B.y * fh) < 12) {
+      const hb = b.hb || 0;
+      if (B.invuln <= 0 && Math.abs(b.x - shipX) < 13 + hb && Math.abs(b.y - B.y * fh) < 12 + hb) {
         B.hp = Math.max(0, B.hp - 7);
         B.invuln = 0.38;
         b.life = 0;
@@ -1603,7 +1622,7 @@ export class Game {
       }
     }
 
-    B.bullets = B.bullets.filter((b) => b.life > 0 && b.x > -40 && b.x < fw + 80);
+    B.bullets = B.bullets.filter((b) => b.life > 0 && b.x > -40 && b.x < fw + 80 && b.y > -40 && b.y < fh + 40);
     if (B.enemies.length > 36) B.enemies.length = 36;
     if (B.bullets.length > 100) B.bullets.length = 100;
     if (B.fx.length > 40) B.fx.length = 40;
