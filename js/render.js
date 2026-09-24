@@ -629,13 +629,37 @@ function drawBullet(ctx, b) {
     const spd = Math.hypot(vx, vy) || 1;
     const ux = vx / spd;
     const uy = vy / spd;
-    // Ghost afterimages (3–5) along reverse velocity
-    const ghosts = 5;
-    const gap = 5.5;
+    // Soft continuous ribbon (~85px) under ghosts — classic laser residue density
+    const ribbonLen = 85;
+    const rx0 = b.x - ux * ribbonLen;
+    const ry0 = b.y - uy * ribbonLen;
+    const ribbon = ctx.createLinearGradient(rx0, ry0, b.x, b.y);
+    if (homing) {
+      ribbon.addColorStop(0, 'rgba(255,80,200,0)');
+      ribbon.addColorStop(0.35, 'rgba(255,100,210,0.12)');
+      ribbon.addColorStop(0.75, 'rgba(255,140,230,0.28)');
+      ribbon.addColorStop(1, 'rgba(255,180,255,0.4)');
+    } else {
+      ribbon.addColorStop(0, 'rgba(255,40,70,0)');
+      ribbon.addColorStop(0.35, 'rgba(255,50,80,0.12)');
+      ribbon.addColorStop(0.75, 'rgba(255,80,100,0.28)');
+      ribbon.addColorStop(1, 'rgba(255,140,150,0.4)');
+    }
+    ctx.strokeStyle = ribbon;
+    ctx.lineWidth = homing ? 5.5 : 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(rx0, ry0);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    // Dense ghost afterimages (12–14) with wide spacing — long residual streak
+    const ghosts = 13;
+    const gap = 9;
     for (let i = ghosts; i >= 1; i--) {
-      const a = 0.12 + (1 - i / ghosts) * 0.28;
-      const len = 10 + (ghosts - i) * 2.2;
-      const thick = (homing ? 2.6 : 2.2) * (0.55 + (1 - i / ghosts) * 0.45);
+      const t = 1 - i / ghosts; // 0 at tail → ~1 near tip
+      const a = 0.04 + t * 0.42;
+      const len = 14 + t * 18;
+      const thick = (homing ? 2.8 : 2.4) * (0.4 + t * 0.7);
       const gx = b.x - ux * gap * i;
       const gy = b.y - uy * gap * i;
       ctx.strokeStyle = homing
