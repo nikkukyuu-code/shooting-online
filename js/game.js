@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-} from './entities.js?v=1.5.29';
-import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.29';
-import { sfx } from './audio.js?v=1.5.29';
+} from './entities.js?v=1.5.30';
+import { resizeCanvas, renderFrame, layout, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.30';
+import { sfx } from './audio.js?v=1.5.30';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -85,22 +85,24 @@ export class Game {
       net.on('disconnected', () => {
         if (!this.ended) this.setStatus('接続が切れました');
       });
-      // Host starts when guest ready; guest waits for start
-      if (net.ready && !bot) {
-        // both sides: if already connected, begin after handshake
-      }
+      // Resend hello when DataConnection opens (first send may have been before open)
+      net.on('connected', (info) => {
+        if (info && info.bot) return;
+        if (!this.running || this.ended) return;
+        net.send({ type: 'hello', role: net.role });
+        if (this.waiting && net.ready) this.beginMatch();
+      });
     }
 
     this.running = true;
     this._lastTs = performance.now();
     this._raf = requestAnimationFrame((t) => this.frame(t));
 
-    // Handshake
+    // Handshake — send only if conn already open; otherwise connected handler will send
     if (net && !bot) {
-      net.send({ type: 'hello', role: net.role });
-      // If peer already connected, leave waiting when we get hello/start
       if (net.ready) {
-        // stay in waiting until mutual hello — also allow local start after short delay if host
+        net.send({ type: 'hello', role: net.role });
+        // stay in waiting until mutual hello — also allow local start after short delay
         setTimeout(() => {
           if (this.waiting && net.ready) {
             net.send({ type: 'start' });

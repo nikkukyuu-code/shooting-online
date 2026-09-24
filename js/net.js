@@ -6,8 +6,11 @@
 const PREFIX = 'shooting-online-v1-';
 
 function roomPeerId(name) {
-  const clean = String(name || '').trim().toLowerCase().replace(/[^a-z0-9\-_\u3040-\u30ff\u4e00-\u9fff]/g, '').slice(0, 12);
-  return PREFIX + (clean || 'lobby') + '-' + hash(clean || 'lobby');
+  const clean = String(name || '').trim().toLowerCase()
+    .replace(/[^a-z0-9\-_\u3040-\u30ff\u4e00-\u9fff]/g, '')
+    .slice(0, 24);
+  // ASCII-only peer id for PeerJS broker (Unicode IDs break cloud signaling)
+  return PREFIX + hash(clean || 'lobby');
 }
 
 function hash(s) {
@@ -36,11 +39,16 @@ export class Net {
   }
 
   on(ev, fn) {
-    this.handlers[ev] = fn;
+    if (!this.handlers[ev]) this.handlers[ev] = [];
+    this.handlers[ev].push(fn);
   }
 
   emit(ev, data) {
-    if (this.handlers[ev]) this.handlers[ev](data);
+    const list = this.handlers[ev];
+    if (!list) return;
+    for (const fn of list) {
+      try { fn(data); } catch (_) {}
+    }
   }
 
   destroy() {
@@ -89,7 +97,7 @@ export class Net {
   }
 
   /** Quick match: try shared lobby host, else become host and wait, then bot. */
-  async findOpponent({ waitMs = 2000, onTick } = {}) {
+  async findOpponent({ waitMs = 14000, onTick } = {}) {
     this.destroy();
     this._ensurePeerLib();
     const lobby = 'quick';
@@ -102,7 +110,7 @@ export class Net {
       const c = this.peer.connect(roomPeerId(lobby), { reliable: true });
       const opened = await Promise.race([
         this._waitConnOpen(c).then(() => true),
-        sleep(1500).then(() => false),
+        sleep(2500).then(() => false),
       ]);
       if (opened) {
         this._bindConn(c);
@@ -111,8 +119,10 @@ export class Net {
       }
       try { c.close(); } catch (_) {}
       try { this.peer.destroy(); } catch (_) {}
+      this.peer = null;
     } catch (_) {
       try { this.peer && this.peer.destroy(); } catch (_) {}
+      this.peer = null;
     }
 
     // Become lobby host and wait
@@ -123,6 +133,7 @@ export class Net {
       await this._waitOpen(this.peer);
     } catch (e) {
       // Lobby taken — try join again briefly
+      try { this.peer && this.peer.destroy(); } catch (_) {}
       this.peer = new Peer(undefined, { debug: 0 });
       await this._waitOpen(this.peer);
       const c = this.peer.connect(roomPeerId(lobby), { reliable: true });
@@ -150,7 +161,10 @@ export class Net {
       await sleep(200);
     }
 
-    // Bot fallback
+    // Bot fallback — destroy lobby peer so a second device is not stuck on a dead host
+    try { this.peer && this.peer.destroy(); } catch (_) {}
+    this.peer = null;
+    this.conn = null;
     this.usingBot = true;
     this.emit('status', { room: lobby, role: 'host', msg: 'CPU対戦を開始します' });
     this.emit('connected', { bot: true });
@@ -188,7 +202,7 @@ export class Net {
 
   _waitOpen(peer) {
     return new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error('Peer 接続タイムアウト')), 4000);
+      const t = setTimeout(() => reject(new Error('Peer 接続タイムアウト')), 10000);
       peer.on('open', (id) => { clearTimeout(t); resolve(id); });
       peer.on('error', (e) => { clearTimeout(t); reject(e); });
     });
@@ -196,7 +210,7 @@ export class Net {
 
   _waitConnOpen(conn) {
     return new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error('相手への接続タイムアウト')), 3000);
+      const t = setTimeout(() => reject(new Error('相手への接続タイムアウト')), 8000);
       conn.on('open', () => { clearTimeout(t); resolve(); });
       conn.on('error', (e) => { clearTimeout(t); reject(e); });
     });

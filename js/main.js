@@ -1,6 +1,6 @@
-import { VERSION_LABEL } from './version.js?v=1.5.29';
-import { Net } from './net.js?v=1.5.29';
-import { Game } from './game.js?v=1.5.29';
+import { VERSION_LABEL } from './version.js?v=1.5.30';
+import { Net } from './net.js?v=1.5.30';
+import { Game } from './game.js?v=1.5.30';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -107,20 +107,21 @@ els.btnFind.addEventListener('click', async () => {
   });
   try {
     const result = await net.findOpponent({
-      waitMs: 3000,
+      waitMs: 14000,
       onTick: (left) => {
         els.fieldFind.value = `待機中 ${Math.ceil(left / 1000)}秒`;
       },
     });
     els.fieldFind.value = result.mode === 'bot' ? 'CPU対戦' : 'マッチ成立';
-    startGameSession({ bot: result.mode === 'bot' });
     if (result.mode === 'peer') {
-      // begin when connected
+      // Register BEFORE startGameSession so hello/beginMatch race is avoided
       net.on('connected', () => {
         if (game && game.waiting) game.beginMatch();
       });
+      startGameSession({ bot: false });
       if (net.ready) game.beginMatch();
     } else {
+      startGameSession({ bot: true });
       game.beginMatch();
     }
   } catch (e) {
@@ -145,11 +146,12 @@ els.btnCreate.addEventListener('click', async () => {
     els.fieldCode.value = room;
     els.inputRoom.value = room;
     els.fieldFind.value = '参加者待ち';
-    startGameSession({ bot: false });
-    // Wait for guest — show waiting status
+    // Register BEFORE startGameSession so connected fires into beginMatch
     net.on('connected', () => {
-      if (game) game.beginMatch();
+      if (game && game.waiting) game.beginMatch();
     });
+    startGameSession({ bot: false });
+    if (net.ready) game.beginMatch();
     // Optional: after long wait offer bot
     setTimeout(() => {
       if (game && game.waiting && net && !net.ready) {
@@ -183,10 +185,10 @@ els.btnStart.addEventListener('click', async () => {
     await net.joinRoom(name);
     els.fieldCode.value = name;
     els.fieldFind.value = '入室OK';
-    startGameSession({ bot: false });
     net.on('connected', () => {
-      if (game) game.beginMatch();
+      if (game && game.waiting) game.beginMatch();
     });
+    startGameSession({ bot: false });
     if (net.ready) game.beginMatch();
   } catch (e) {
     console.error(e);
