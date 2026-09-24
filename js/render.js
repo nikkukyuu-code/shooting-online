@@ -297,7 +297,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=1.5.53`;
+  return `assets/enemies/${kind}/${frame}.png?v=1.5.54`;
 }
 
 function loadKindSprite(kind) {

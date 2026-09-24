@@ -1,11 +1,11 @@
-import { VERSION_LABEL } from './version.js?v=1.5.53';
-import { Net } from './net.js?v=1.5.53';
-import { Game } from './game.js?v=1.5.53';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=1.5.53';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=1.5.53';
-import { registerEnemyKinds } from './render.js?v=1.5.53';
-import { ALL_KIND_IDS } from './catalog.js?v=1.5.53';
-import { setKindTier, POWERUPS } from './entities.js?v=1.5.53';
+import { VERSION_LABEL } from './version.js?v=1.5.54';
+import { Net } from './net.js?v=1.5.54';
+import { Game } from './game.js?v=1.5.54';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=1.5.54';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=1.5.54';
+import { registerEnemyKinds } from './render.js?v=1.5.54';
+import { ALL_KIND_IDS } from './catalog.js?v=1.5.54';
+import { setKindTier, POWERUPS } from './entities.js?v=1.5.54';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier(Object.fromEntries(ALL_KIND_IDS.map((id) => [id, (CATALOG_BY_ID[id] && CATALOG_BY_ID[id].tier) || id])));
@@ -117,7 +117,7 @@ function refreshPtDisplay(meta) {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=1.5.53`;
+  return `assets/enemies/${id}/0.png?v=1.5.54`;
 }
 
 function unitName(id) {
@@ -191,8 +191,9 @@ function renderDeckScreen() {
     btn.type = 'button';
     btn.className = 'deck-slot' + (i === selectedDeckSlot ? ' selected' : '');
     btn.dataset.slot = String(i);
-    btn.setAttribute('aria-label', `スロット${i + 1} ${unitName(id)}`);
+    btn.setAttribute('aria-label', `装備中 スロット${i + 1} ${unitName(id)}`);
     btn.innerHTML = `
+      <span class="slot-equipped">装備中</span>
       <span class="slot-n">スロット ${i + 1}</span>
       <img src="${spriteUrl(id)}" alt="" width="72" height="72" loading="lazy" />
       <span class="slot-name">${unitName(id)}</span>
@@ -218,7 +219,7 @@ function renderDeckScreen() {
     btn.type = 'button';
     btn.className = 'unit-card' + (inDeck ? ' in-deck' : '');
     btn.innerHTML = `
-      ${inDeck ? `<span class="unit-badge">スロット${deckSlot + 1}</span>` : ''}
+      ${inDeck ? `<span class="unit-badge equipped">装備中<span class="unit-badge-slot">スロット${deckSlot + 1}</span></span>` : ''}
       <img src="${spriteUrl(u.id)}" alt="" width="64" height="64" loading="lazy" />
       <span class="unit-name">${u.name}</span>
       <span class="unit-attack-chip">${intro.attack.split('／')[0]}</span>
