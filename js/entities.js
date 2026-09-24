@@ -69,6 +69,21 @@ export const ENEMY_TIER_STATS = {
   drone:  { w: 56,  h: 44,  hp: 5,  speedBase: 130, speedRand: 40, score: 20,  color: '#ffd428' },
 };
 
+/**
+ * Wave-only ambient spawn kinds (NOT in shop/deck catalog).
+ * Natural play uses these ids; deck send / net receive keep catalog ids.
+ */
+export const WAVE_KIND_TIERS = {
+  wave_basic: 'basic',
+  wave_swarm: 'swarm',
+  wave_elite: 'elite',
+  wave_boss: 'boss',
+};
+export const WAVE_KIND_IDS = Object.keys(WAVE_KIND_TIERS);
+export function isWaveKind(kind) {
+  return !!(kind && WAVE_KIND_TIERS[kind]);
+}
+
 /** Optional runtime map kind→tier (filled by game from catalog). */
 let _kindTier = Object.create(null);
 export function setKindTier(map) {
@@ -77,6 +92,7 @@ export function setKindTier(map) {
 
 export function resolveEnemyTier(kind) {
   if (ENEMY_TIER_STATS[kind]) return kind;
+  if (WAVE_KIND_TIERS[kind]) return WAVE_KIND_TIERS[kind];
   if (_kindTier[kind] && ENEMY_TIER_STATS[_kindTier[kind]]) return _kindTier[kind];
   return 'basic';
 }

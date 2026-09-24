@@ -1,18 +1,22 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
-} from './entities.js?v=1.5.55';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.55';
-import { sfx } from './audio.js?v=1.5.55';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.55';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE } from './meta.js?v=1.5.55';
+  WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
+} from './entities.js?v=1.5.56';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.56';
+import { sfx } from './audio.js?v=1.5.56';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.56';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE } from './meta.js?v=1.5.56';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
 
-// Register all catalog sprites + tier map once
+// Register catalog sprites + tier map (catalog + wave ambient kinds)
 registerEnemyKinds(ALL_KIND_IDS);
-setKindTier(Object.fromEntries(ALL_KIND_IDS.map((id) => [id, (CATALOG_BY_ID[id] && CATALOG_BY_ID[id].tier) || id])));
+setKindTier({
+  ...Object.fromEntries(ALL_KIND_IDS.map((id) => [id, (CATALOG_BY_ID[id] && CATALOG_BY_ID[id].tier) || id])),
+  ...WAVE_KIND_TIERS,
+});
 
 /** How many copies a send-item type spawns from the deck. */
 const SEND_COUNTS = {
@@ -1054,14 +1058,15 @@ export class Game {
       const n = 1 + (Math.random() > 0.65 ? 1 : 0);
       for (let i = 0; i < n; i++) {
         const roll = Math.random();
-        const kind = roll > 0.85 ? 'elite' : roll > 0.5 ? 'swarm' : 'basic';
+        // Wave-only kinds (not catalog/deck units)
+        const kind = roll > 0.85 ? 'wave_elite' : roll > 0.5 ? 'wave_swarm' : 'wave_basic';
         S.enemies.push(spawnEnemy(fw, fh, kind));
       }
     }
     this._bossAcc += dt;
-    if (this._bossAcc > 22 && !S.enemies.some((e) => e.kind === 'boss')) {
+    if (this._bossAcc > 22 && !S.enemies.some((e) => resolveEnemyTier(e.kind) === 'boss')) {
       this._bossAcc = 0;
-      S.enemies.push(spawnEnemy(fw, fh, 'boss'));
+      S.enemies.push(spawnEnemy(fw, fh, 'wave_boss'));
     }
 
     // Update enemies (vertical weave + forward/back surge)
@@ -1085,7 +1090,7 @@ export class Game {
         // Drift left, but surge forward/back so they don't only slide one way
         const advance = e.speed + Math.cos(e.surgePhase) * (e.speed * 0.55);
         e.x -= advance * dt;
-        if (e.kind !== 'boss' && e.kind !== 'mech' && e.kind !== 'golem' && e.kind !== 'tank') {
+        if (!LARGE_ENEMY_TIERS.has(resolveEnemyTier(e.kind))) {
           e.y += Math.sin(e.phase) * 18 * dt;
         } else {
           // Heavy units also nudge forward/back a bit
@@ -1329,7 +1334,7 @@ export class Game {
     let focusVal = -1e9;
     for (const e of B.enemies) {
       if (e.x < shipX - 10) continue;
-      const kindW = ({ boss: 5, mech: 4, golem: 4, tank: 4, elite: 3, drone: 2, basic: 1.5, swarm: 1 })[e.kind] || 1;
+      const kindW = ({ boss: 5, mech: 4, golem: 4, tank: 4, elite: 3, drone: 2, basic: 1.5, swarm: 1 })[resolveEnemyTier(e.kind)] || 1;
       const dist = Math.max(20, e.x - shipX);
       const align = 1 - Math.min(1, Math.abs(e.y / fh - B.y) / 0.28);
       let val = kindW * 16 / Math.sqrt(dist) + align * 5 + (e.x < 160 ? 1.8 : 0);
@@ -1426,7 +1431,7 @@ export class Game {
           vy = lead;
         }
         B.bullets.push(spawnBullet(shipX + 16, by, 430, vy, 'player', false, aligned ? 3 : 2));
-        if (aligned && focus && (focus.kind === 'boss' || focus.kind === 'mech' || focus.kind === 'tank' || focus.kind === 'golem')) {
+        if (aligned && focus && LARGE_ENEMY_TIERS.has(resolveEnemyTier(focus.kind))) {
           B.bullets.push(spawnBullet(shipX + 16, by - 7, 400, -8, 'player', false, 1));
           B.bullets.push(spawnBullet(shipX + 16, by + 7, 400, 8, 'player', false, 1));
         }
@@ -1459,7 +1464,8 @@ export class Game {
     if (B.spawnAcc > 0.85) {
       B.spawnAcc = 0;
       const r = Math.random();
-      const kind = r > 0.88 ? 'elite' : r > 0.55 ? 'swarm' : 'basic';
+      // Wave-only kinds (not catalog/deck units)
+      const kind = r > 0.88 ? 'wave_elite' : r > 0.55 ? 'wave_swarm' : 'wave_basic';
       B.enemies.push(spawnEnemy(fw, fh, kind));
     }
 
@@ -1482,7 +1488,7 @@ export class Game {
         const advance = e.speed + Math.cos(e.surgePhase) * (e.speed * 0.55);
         e.x -= advance * dt;
         e.y += Math.sin(e.phase) * 12 * dt;
-        if (e.kind === 'boss' || e.kind === 'mech' || e.kind === 'golem' || e.kind === 'tank') {
+        if (LARGE_ENEMY_TIERS.has(resolveEnemyTier(e.kind))) {
           e.x += Math.sin(e.surgePhase * 0.7) * 22 * dt;
         }
       }

@@ -297,7 +297,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=1.5.55`;
+  return `assets/enemies/${kind}/${frame}.png?v=1.5.56`;
 }
 
 function loadKindSprite(kind) {
@@ -320,9 +320,16 @@ export function preloadEnemySprites() {
 export function registerEnemyKinds(ids) {
   if (!Array.isArray(ids) || !ids.length) return;
   const set = new Set(ENEMY_KINDS);
-  for (const id of ids) if (id) set.add(id);
+  for (const id of ids) {
+    // Wave ambient kinds use procedural draw — never load catalog sprites for them
+    if (!id || String(id).startsWith('wave_')) continue;
+    set.add(id);
+  }
   ENEMY_KINDS = [...set];
-  for (const id of ids) if (id) loadKindSprite(id);
+  for (const id of ids) {
+    if (!id || String(id).startsWith('wave_')) continue;
+    loadKindSprite(id);
+  }
 }
 
 // Kick off load as soon as this module evaluates
@@ -349,8 +356,158 @@ function drawEnemySprite(ctx, e, kind) {
   return true;
 }
 
-/** Simple placeholder if a sprite fails to load — not the primary look. */
+/** True for ambient wave-only kinds (no catalog sprite). */
+function isWaveKindId(kind) {
+  return typeof kind === 'string' && kind.startsWith('wave_');
+}
+
+/**
+ * Procedural space-enemy silhouettes for wave-only ambient spawns.
+ * Nose points left (toward the player). Distinct from catalog sprite art.
+ */
+function drawWaveEnemy(ctx, e, kind, sent, w, h, t, pulse) {
+  const tier = (kind || '').replace(/^wave_/, '') || 'basic';
+  const hull = sent ? '#4ec8e0' : ({
+    swarm: '#e84858',
+    basic: '#a8b0bc',
+    elite: '#d8dce8',
+    boss: '#c0c4cc',
+  }[tier] || '#a8b0bc');
+  const accent = sent ? '#b8f0ff' : ({
+    swarm: '#ff8890',
+    basic: '#6a7380',
+    elite: '#8890a0',
+    boss: '#ff5533',
+  }[tier] || '#6a7380');
+  const glow = sent ? 'rgba(80,220,255,0.35)' : 'rgba(255,80,60,0.28)';
+  const thruster = 0.55 + 0.45 * pulse;
+
+  ctx.save();
+  // Soft under-glow
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.ellipse(w * 0.08, 0, w * 0.42, h * 0.38, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (tier === 'swarm') {
+    // Tiny dart
+    ctx.fillStyle = hull;
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.48, 0);
+    ctx.lineTo(w * 0.38, -h * 0.38);
+    ctx.lineTo(w * 0.22, 0);
+    ctx.lineTo(w * 0.38, h * 0.38);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = accent;
+    ctx.fillRect(w * 0.18, -h * 0.08, w * 0.22 * thruster, h * 0.16);
+  } else if (tier === 'elite') {
+    // Twin-wing fighter
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.05, -h * 0.52);
+    ctx.lineTo(w * 0.42, -h * 0.18);
+    ctx.lineTo(-w * 0.05, -h * 0.12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(w * 0.05, h * 0.52);
+    ctx.lineTo(w * 0.42, h * 0.18);
+    ctx.lineTo(-w * 0.05, h * 0.12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = hull;
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.48, 0);
+    ctx.lineTo(w * 0.12, -h * 0.28);
+    ctx.lineTo(w * 0.48, -h * 0.1);
+    ctx.lineTo(w * 0.48, h * 0.1);
+    ctx.lineTo(w * 0.12, h * 0.28);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = sent ? '#e8ffff' : '#2a3340';
+    ctx.beginPath();
+    ctx.ellipse(-w * 0.12, 0, w * 0.14, h * 0.16, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = sent ? '#88e8ff' : '#ff6644';
+    ctx.globalAlpha = 0.7 + 0.3 * thruster;
+    ctx.fillRect(w * 0.38, -h * 0.12, w * 0.14 * thruster, h * 0.08);
+    ctx.fillRect(w * 0.38, h * 0.04, w * 0.14 * thruster, h * 0.08);
+    ctx.globalAlpha = 1;
+  } else if (tier === 'boss') {
+    // Capital hull
+    ctx.fillStyle = accent;
+    ctx.fillRect(-w * 0.1, -h * 0.48, w * 0.55, h * 0.18);
+    ctx.fillRect(-w * 0.1, h * 0.3, w * 0.55, h * 0.18);
+    ctx.fillStyle = hull;
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.5, 0);
+    ctx.lineTo(-w * 0.15, -h * 0.38);
+    ctx.lineTo(w * 0.45, -h * 0.22);
+    ctx.lineTo(w * 0.5, 0);
+    ctx.lineTo(w * 0.45, h * 0.22);
+    ctx.lineTo(-w * 0.15, h * 0.38);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = sent ? '#c8f8ff' : '#3a4050';
+    ctx.fillRect(-w * 0.28, -h * 0.14, w * 0.35, h * 0.28);
+    ctx.strokeStyle = sent ? '#88e0ff' : '#ff4422';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-w * 0.28, -h * 0.14, w * 0.35, h * 0.28);
+    ctx.fillStyle = sent ? '#66d8ff' : '#ff5533';
+    ctx.globalAlpha = 0.65 + 0.35 * thruster;
+    for (let i = -1; i <= 1; i++) {
+      ctx.fillRect(w * 0.42, i * h * 0.16 - h * 0.05, w * 0.12 * thruster, h * 0.1);
+    }
+    ctx.globalAlpha = 1;
+  } else {
+    // basic: compact wedge fighter
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.moveTo(0, -h * 0.48);
+    ctx.lineTo(w * 0.35, -h * 0.08);
+    ctx.lineTo(-w * 0.1, -h * 0.05);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(0, h * 0.48);
+    ctx.lineTo(w * 0.35, h * 0.08);
+    ctx.lineTo(-w * 0.1, h * 0.05);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = hull;
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.48, 0);
+    ctx.lineTo(w * 0.2, -h * 0.32);
+    ctx.lineTo(w * 0.42, 0);
+    ctx.lineTo(w * 0.2, h * 0.32);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = sent ? '#e0ffff' : '#1e2430';
+    ctx.beginPath();
+    ctx.ellipse(-w * 0.08, 0, w * 0.12, h * 0.14, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = sent ? '#88e8ff' : '#ff6644';
+    ctx.globalAlpha = 0.7 + 0.3 * thruster;
+    ctx.fillRect(w * 0.32, -h * 0.08, w * 0.16 * thruster, h * 0.16);
+    ctx.globalAlpha = 1;
+  }
+
+  // Rim
+  ctx.strokeStyle = sent ? 'rgba(180,240,255,0.85)' : 'rgba(255,220,220,0.55)';
+  ctx.lineWidth = 1.25;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, w * 0.48, h * 0.42, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Simple placeholder if a catalog sprite fails to load — not the primary look. */
 function drawEnemyFallback(ctx, e, kind, sent, w, h, t, pulse) {
+  if (isWaveKindId(kind)) {
+    drawWaveEnemy(ctx, e, kind, sent, w, h, t, pulse);
+    return;
+  }
   const body = sent ? 'rgba(80,200,220,0.85)' : 'rgba(200,60,70,0.85)';
   const rim = sent ? 'rgba(180,240,255,0.95)' : 'rgba(255,200,200,0.9)';
   ctx.save();
@@ -361,7 +518,6 @@ function drawEnemyFallback(ctx, e, kind, sent, w, h, t, pulse) {
   ctx.strokeStyle = rim;
   ctx.lineWidth = 1.5;
   ctx.stroke();
-  // tiny kind initial so missing assets are obvious in debug
   ctx.fillStyle = rim;
   ctx.font = `bold ${Math.max(8, Math.floor(h * 0.35))}px sans-serif`;
   ctx.textAlign = 'center';
@@ -490,15 +646,21 @@ function drawEnemy(ctx, e) {
     ctx.restore();
   }
 
-  const drew = drawEnemySprite(ctx, e, kind);
-  if (!drew) {
-    drawEnemyFallback(ctx, e, kind, sent, w, h, t, pulse);
+  // Wave ambient kinds: procedural only (never catalog sprites)
+  if (isWaveKindId(kind)) {
+    drawWaveEnemy(ctx, e, kind, sent, w, h, t, pulse);
+  } else {
+    const drew = drawEnemySprite(ctx, e, kind);
+    if (!drew) {
+      drawEnemyFallback(ctx, e, kind, sent, w, h, t, pulse);
+    }
   }
 
   ctx.shadowBlur = 0;
   // HP pip: same kinds as pre-sprite (skip tiny swarm + basic)
   // Skip HP pip for tiny tiers (basic/swarm) — catalog kinds may share those tiers
-  const tiny = kind === 'swarm' || kind === 'basic'
+  const tierKey = isWaveKindId(kind) ? kind.replace(/^wave_/, '') : kind;
+  const tiny = tierKey === 'swarm' || tierKey === 'basic'
     || (e.w && e.w <= 70 && e.h && e.h <= 60);
   if (!tiny) drawHpPip(ctx, e);
 
