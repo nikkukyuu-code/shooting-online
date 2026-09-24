@@ -296,7 +296,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=1.5.44`;
+  return `assets/enemies/${kind}/${frame}.png?v=1.5.45`;
 }
 
 export function preloadEnemySprites() {
@@ -373,11 +373,36 @@ function drawEnemy(ctx, e) {
   const sent = !!e.sent;
   const t = performance.now() / 1000;
   const pulse = 0.5 + 0.5 * Math.sin(t * 7 + e.x * 0.02);
+  const appearT = (sent && e.appearT > 0) ? e.appearT : 0;
+  const appearMax = e.appearMax || 0.9;
+  const appearU = appearT > 0 ? appearT / appearMax : 0; // 1→0 over FX
   ctx.shadowColor = 'rgba(0,0,0,0.55)';
   ctx.shadowBlur = 6;
 
   const kind = e.kind || 'basic';
   const w = e.w, h = e.h;
+
+  // Sent-unit spawn FX: rapid blink + scale pop + cyan ring (~0.9s)
+  if (appearT > 0) {
+    const blink = 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(t * 28 + (e._uid || 0)));
+    const pop = 1 + 0.45 * appearU; // start big, settle to 1
+    ctx.globalAlpha = blink;
+    ctx.scale(pop, pop);
+    // Expanding cyan ring / flash
+    const ringR = Math.max(w, h) * (0.55 + (1 - appearU) * 0.9);
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, appearU * 1.2) * 0.85;
+    ctx.strokeStyle = 'rgba(120,240,255,0.95)';
+    ctx.lineWidth = 2.5 + appearU * 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, ringR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = `rgba(80,220,255,${0.18 * appearU})`;
+    ctx.beginPath();
+    ctx.arc(0, 0, ringR * 0.85, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
 
   const drew = drawEnemySprite(ctx, e, kind);
   if (!drew) {
@@ -389,8 +414,10 @@ function drawEnemy(ctx, e) {
   if (kind !== 'swarm' && kind !== 'basic') drawHpPip(ctx, e);
 
   if (sent) {
-    ctx.fillStyle = 'rgba(100,230,255,0.9)';
-    ctx.font = 'bold 9px sans-serif';
+    const labelA = appearT > 0 ? (0.55 + 0.45 * (0.5 + 0.5 * Math.sin(t * 18))) : 0.9;
+    ctx.globalAlpha = labelA;
+    ctx.fillStyle = appearT > 0 ? 'rgba(180,255,255,1)' : 'rgba(100,230,255,0.9)';
+    ctx.font = appearT > 0 ? 'bold 11px sans-serif' : 'bold 9px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('SEND', 0, e.h * 0.78);
   }
@@ -1032,6 +1059,7 @@ export function drawField(ctx, area, snap, opts = {}) {
     drawEnemy(ctx, {
       x: e.x * sx, y: e.y * sy, w: (e.w || 20) * sx, h: (e.h || 16) * sy,
       kind: e.kind, hp: e.hp, maxHp: e.maxHp || e.hp || 1, color: e.c || e.color || '#c44', sent: e.s || e.sent,
+      appearT: e.appearT ?? e.at, appearMax: e.appearMax || 0.9, _uid: e._uid,
     });
   }
 

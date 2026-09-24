@@ -135,6 +135,7 @@ export function serializeField(state) {
     at: state.player.activeTimer,
     enemies: state.enemies.slice(0, 40).map(e => ({
       x: e.x, y: e.y, w: e.w, h: e.h, kind: e.kind, hp: e.hp, c: e.color, s: !!e.sent,
+      at: e.appearT > 0 ? +e.appearT.toFixed(3) : undefined,
     })),
     bullets: state.bullets.filter(b => b.owner === 'player' || b.owner === 'enemy').slice(0, 60).map(b => ({
       x: b.x, y: b.y, o: b.owner, h: !!b.homing, vx: b.vx, vy: b.vy,

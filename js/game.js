@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-} from './entities.js?v=1.5.44';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.44';
-import { sfx } from './audio.js?v=1.5.44';
+} from './entities.js?v=1.5.45';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.45';
+import { sfx } from './audio.js?v=1.5.45';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -429,6 +429,9 @@ export class Game {
     e.y = e.holdY;
     // Fight a bit more often once parked
     e.fireCd = Math.min(e.fireCd || 1, 0.6 + Math.random() * 0.5);
+    // Appear FX (~0.9s blink/pop) — visual only; synced via serializeField.at
+    e.appearT = 0.9;
+    e.appearMax = 0.9;
     return e;
   }
 
@@ -866,6 +869,7 @@ export class Game {
     for (const e of S.enemies) {
       e.phase += dt * 2;
       e.surgePhase = (e.surgePhase || 0) + dt * (e.surgeFreq || 1.4);
+      if (e.appearT > 0) e.appearT = Math.max(0, e.appearT - dt);
       const surge = Math.sin(e.surgePhase) * (e.surgeAmp || 32);
       if (e.sent) {
         if (e.holdX == null) e.holdX = fw * (0.72 + Math.random() * 0.14);
@@ -1264,6 +1268,7 @@ export class Game {
     for (const e of B.enemies) {
       e.phase += dt * 2;
       e.surgePhase = (e.surgePhase || 0) + dt * (e.surgeFreq || 1.4);
+      if (e.appearT > 0) e.appearT = Math.max(0, e.appearT - dt);
       const surge = Math.sin(e.surgePhase) * (e.surgeAmp || 32);
       if (e.sent) {
         if (e.holdX == null) e.holdX = fw * (0.72 + Math.random() * 0.14);
