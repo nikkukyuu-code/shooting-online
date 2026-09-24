@@ -297,7 +297,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=1.5.63`;
+  return `assets/enemies/${kind}/${frame}.png?v=1.5.64`;
 }
 
 function loadKindSprite(kind) {
@@ -1065,8 +1065,266 @@ function drawShockFx(ctx, f) {
   ctx.restore();
 }
 
+/* ---------- ボム (bomb) FX — the strongest item, most spectacular effect ---------- */
+const BOMB_CHARGE = 0.14;   // implosion before the visual detonation (damage is already applied)
+const BOMB_SWEEP1 = 0.34;   // 1st shockwave: centre → farthest corner
+const BOMB_SWEEP2 = 0.55;   // 2nd (trailing) shockwave
+const BOMB_DEBRIS = 30;
+const BOMB_EMBERS = 16;
+const BOMB_SMOKE = 7;
+
+/** Deterministic 0..1 hash so particles need no stored state (works for net snapshots too). */
+function bombRand(seed, i) {
+  const v = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453;
+  return v - Math.floor(v);
+}
+const easeOut3 = (u) => 1 - Math.pow(1 - Math.min(1, Math.max(0, u)), 3);
+
+/** Seconds since the bomb FX spawned. */
+function bombAge(f) { return Math.max(0, f.max - f.life); }
+
+/** Pane-level shake offset + full flash strength from any active bomb FX in this pane. */
+function bombPaneFx(list, sc) {
+  let shake = 0, flash = 0, tint = 0, dark = 0;
+  for (const f of list) {
+    if ((f.k ?? f.kind) !== 'bomb') continue;
+    const age = Math.max(0, (f.m ?? f.max) - (f.l ?? f.life));
+    const d = age - BOMB_CHARGE;
+    if (d < 0) {
+      shake = Math.max(shake, 2 * (d + BOMB_CHARGE) / BOMB_CHARGE); // charge tremble
+      dark = Math.max(dark, 0.45 * (d + BOMB_CHARGE) / BOMB_CHARGE); // stage dims as energy gathers
+    } else {
+      if (d < 0.55) shake = Math.max(shake, 11 * Math.pow(1 - d / 0.55, 2));
+      if (d < 0.28) flash = Math.max(flash, 0.9 * (1 - d / 0.28));
+      if (d < 0.9) tint = Math.max(tint, 0.3 * (1 - d / 0.9));
+    }
+  }
+  const k = Math.max(0.5, Math.min(1.2, sc || 1));
+  return {
+    sx: shake > 0 ? (Math.random() - 0.5) * 2 * shake * k : 0,
+    sy: shake > 0 ? (Math.random() - 0.5) * 2 * shake * k : 0,
+    flash, tint, dark,
+  };
+}
+
+function drawBombFx(ctx, f) {
+  const age = bombAge(f);
+  const cx = f.x, cy = f.y;
+  const R = f.r;                       // reaches the farthest corner = whole stage
+  const sc = Math.max(0.45, Math.min(1.3, f.sc || 1));
+  const seed = Math.round(cx * 7 + cy * 13) % 997;
+  ctx.save();
+
+  // 1) Charge-up / implosion (~0.14s): streaks + ring collapsing into the ship
+  if (age < BOMB_CHARGE + 0.04) {
+    const u = Math.min(1, age / BOMB_CHARGE);
+    const a0 = Math.max(0, 1 - Math.max(0, age - BOMB_CHARGE) / 0.04);
+    const ringR = (110 - 100 * easeOut3(u)) * sc;
+    ctx.strokeStyle = `rgba(255,150,50,${0.6 * a0})`;
+    ctx.lineWidth = 9 * sc;
+    ctx.beginPath(); ctx.arc(cx, cy, ringR, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = `rgba(255,240,190,${a0})`;
+    ctx.lineWidth = 2.5 * sc;
+    ctx.beginPath(); ctx.arc(cx, cy, ringR, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = `rgba(255,200,90,${a0})`;
+    ctx.lineWidth = 3 * sc;
+    ctx.beginPath();
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2 + bombRand(seed, i) * 0.4;
+      const r1 = (120 - 110 * u) * sc + bombRand(seed, i + 50) * 20 * sc;
+      const r2 = r1 + 22 * sc * (1 - u * 0.6);
+      ctx.moveTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2);
+      ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+    }
+    ctx.stroke();
+    const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, (16 + 30 * u) * sc);
+    cg.addColorStop(0, `rgba(255,255,255,${a0})`);
+    cg.addColorStop(0.5, `rgba(255,220,120,${0.8 * a0})`);
+    cg.addColorStop(1, 'rgba(255,120,30,0)');
+    ctx.fillStyle = cg;
+    ctx.beginPath(); ctx.arc(cx, cy, (16 + 30 * u) * sc, 0, Math.PI * 2); ctx.fill();
+  }
+
+  const d = age - BOMB_CHARGE;         // time since detonation
+  if (d >= 0) {
+    const life = f.max - BOMB_CHARGE;
+    const fadeAll = d < life * 0.7 ? 1 : Math.max(0, 1 - (d - life * 0.7) / (life * 0.3));
+
+    // 2) Scorched area behind the 1st wave (orange heat over the swept stage)
+    const w1 = R * easeOut3(d / BOMB_SWEEP1);
+    const heat = Math.max(0, 1 - d / 0.9);
+    if (heat > 0 && w1 > 2) {
+      const hg = ctx.createRadialGradient(cx, cy, 0, cx, cy, w1);
+      hg.addColorStop(0, `rgba(255,230,150,${0.45 * heat})`);
+      hg.addColorStop(0.55, `rgba(255,120,30,${0.28 * heat})`);
+      hg.addColorStop(1, `rgba(255,60,10,${0.38 * heat})`);
+      ctx.fillStyle = hg;
+      ctx.beginPath(); ctx.arc(cx, cy, w1, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // 3) Double shockwave rings sweeping the whole stage
+    const rings = [
+      { r: w1, a: Math.max(0, 1 - Math.max(0, d - BOMB_SWEEP1 * 0.6) / 0.35), w: 16, c: '255,170,50', core: '255,250,220' },
+      { r: R * easeOut3((d - 0.1) / BOMB_SWEEP2), a: d < 0.1 ? 0 : Math.max(0, 1 - Math.max(0, d - 0.1 - BOMB_SWEEP2 * 0.6) / 0.4), w: 9, c: '255,70,20', core: '255,200,120' },
+    ];
+    for (const rg of rings) {
+      if (rg.a <= 0 || rg.r < 2) continue;
+      ctx.strokeStyle = `rgba(${rg.c},${0.55 * rg.a})`;
+      ctx.lineWidth = rg.w * sc;
+      ctx.beginPath(); ctx.arc(cx, cy, rg.r, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = `rgba(${rg.core},${0.95 * rg.a})`;
+      ctx.lineWidth = Math.max(1.5, rg.w * 0.25 * sc);
+      ctx.beginPath(); ctx.arc(cx, cy, rg.r - rg.w * 0.2 * sc, 0, Math.PI * 2); ctx.stroke();
+    }
+
+    // 4) Smoke puffs (lingering, drift up)
+    for (let i = 0; i < BOMB_SMOKE; i++) {
+      const st = 0.25 + bombRand(seed, i + 300) * 0.15;
+      const sd = d - st;
+      if (sd <= 0) continue;
+      const u = sd / (life - st);
+      if (u >= 1) continue;
+      const a = bombRand(seed, i + 310) * Math.PI * 2;
+      const dist = (40 + 70 * bombRand(seed, i + 320)) * sc * easeOut3(u * 2);
+      const px = cx + Math.cos(a) * dist, py = cy + Math.sin(a) * dist * 0.7 - 50 * sc * u;
+      const pr = (26 + 40 * u) * sc;
+      const sg = ctx.createRadialGradient(px, py, 0, px, py, pr);
+      const al = 0.32 * Math.sin(Math.PI * Math.min(1, u * 1.3 + 0.15)) * fadeAll;
+      sg.addColorStop(0, `rgba(70,40,35,${al})`);
+      sg.addColorStop(1, 'rgba(40,20,20,0)');
+      ctx.fillStyle = sg;
+      ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // 5) Fireball bloom — grows fast, rises into a mushroom-like cap, then cools
+    const fbU = Math.min(1, d / 0.3);
+    const fbR = (70 * easeOut3(fbU) + 14 * Math.min(1, d / 0.8)) * sc;
+    const cool = Math.max(0, Math.min(1, (d - 0.35) / 0.7)); // 0 hot → 1 cooled
+    const rise = 38 * sc * easeOut3(d / 1.0);
+    const fbA = Math.max(0, 1 - Math.max(0, d - 0.55) / (life - 0.55));
+    if (fbA > 0) {
+      // stem
+      if (d > 0.12) {
+        const sg = ctx.createLinearGradient(cx, cy, cx, cy - rise);
+        sg.addColorStop(0, `rgba(255,140,40,${0.55 * fbA})`);
+        sg.addColorStop(1, `rgba(255,90,20,${0.25 * fbA})`);
+        ctx.fillStyle = sg;
+        const sw = fbR * 0.32;
+        ctx.beginPath();
+        ctx.moveTo(cx - sw, cy); ctx.lineTo(cx - sw * 0.6, cy - rise);
+        ctx.lineTo(cx + sw * 0.6, cy - rise); ctx.lineTo(cx + sw, cy);
+        ctx.closePath(); ctx.fill();
+      }
+      const fy = cy - rise;
+      const g = ctx.createRadialGradient(cx, fy, 0, cx, fy, fbR);
+      const hot = 1 - cool;
+      g.addColorStop(0, `rgba(255,255,${Math.round(230 * hot + 120 * cool)},${fbA})`);
+      g.addColorStop(0.35, `rgba(255,${Math.round(210 * hot + 110 * cool)},${Math.round(90 * hot + 40 * cool)},${0.92 * fbA})`);
+      g.addColorStop(0.7, `rgba(${Math.round(255 * hot + 170 * cool)},${Math.round(90 * hot + 40 * cool)},20,${0.7 * fbA})`);
+      g.addColorStop(1, 'rgba(120,20,0,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.ellipse(cx, fy, fbR * 1.12, fbR * (0.9 - 0.15 * cool), 0, 0, Math.PI * 2); ctx.fill();
+      // mushroom cap: wide rolling cloud billowing out on top once it rises
+      if (d > 0.25) {
+        const cu = Math.min(1, (d - 0.25) / 0.45);
+        const capY = fy - fbR * (0.35 + 0.25 * cu);
+        const capW = fbR * (0.8 + 0.7 * easeOut3(cu)), capH = fbR * (0.35 + 0.2 * cu);
+        const cg2 = ctx.createRadialGradient(cx, capY, 0, cx, capY, capW);
+        cg2.addColorStop(0, `rgba(255,${Math.round(200 - 90 * cool)},${Math.round(90 - 50 * cool)},${0.75 * fbA * cu})`);
+        cg2.addColorStop(0.6, `rgba(${Math.round(230 - 90 * cool)},${Math.round(80 - 40 * cool)},30,${0.5 * fbA * cu})`);
+        cg2.addColorStop(1, 'rgba(90,20,10,0)');
+        ctx.fillStyle = cg2;
+        ctx.beginPath(); ctx.ellipse(cx, capY, capW, capH, 0, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    // 6) Debris sparks — ballistic streaks flying out
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 2.2 * sc;
+    for (let i = 0; i < BOMB_DEBRIS; i++) {
+      const lifeP = 0.45 + bombRand(seed, i + 100) * 0.45;
+      if (d > lifeP) continue;
+      const u = d / lifeP;
+      const a = bombRand(seed, i) * Math.PI * 2;
+      const spd = (260 + 420 * bombRand(seed, i + 200)) * sc;
+      const dist = spd * lifeP * easeOut3(u) * 0.9;
+      const grav = 90 * sc * u * u;
+      const x = cx + Math.cos(a) * dist, y = cy + Math.sin(a) * dist + grav;
+      const tl = (18 * (1 - u) + 4) * sc;
+      const al = 1 - u;
+      ctx.strokeStyle = i % 3 === 0 ? `rgba(255,255,210,${al})` : (i % 3 === 1 ? `rgba(255,190,60,${al})` : `rgba(255,90,30,${al})`);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - Math.cos(a) * tl, y - Math.sin(a) * tl - 2 * sc * u);
+      ctx.stroke();
+    }
+
+    // 7) Chained secondary explosions on every hit target (as the 1st wave reaches them)
+    const targets = f.t || [];
+    for (let i = 0; i < targets.length; i++) {
+      const [tx, ty] = targets[i];
+      const dist = Math.hypot(tx - cx, ty - cy);
+      // invert easeOut3 to find when wave 1 reaches this distance, plus a small chain stagger
+      const reach = Math.min(1, dist / (R || 1));
+      const tHit = BOMB_SWEEP1 * (1 - Math.cbrt(1 - reach)) + (i % 5) * 0.03;
+      const e = d - tHit;
+      if (e < 0 || e > 0.5) continue;
+      const u = e / 0.5;
+      const er = (12 + 40 * easeOut3(u)) * sc;
+      const al = 1 - u;
+      const eg = ctx.createRadialGradient(tx, ty, 0, tx, ty, er);
+      eg.addColorStop(0, `rgba(255,255,230,${al})`);
+      eg.addColorStop(0.4, `rgba(255,190,60,${0.9 * al})`);
+      eg.addColorStop(1, 'rgba(255,60,0,0)');
+      ctx.fillStyle = eg;
+      ctx.beginPath(); ctx.arc(tx, ty, er, 0, Math.PI * 2); ctx.fill();
+      // spark burst (short streaks, no outline ring)
+      ctx.strokeStyle = `rgba(255,230,150,${al})`;
+      ctx.lineWidth = 2 * sc;
+      ctx.beginPath();
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * Math.PI * 2 + bombRand(seed, i * 7 + k) * 0.8;
+        const r1 = er * (0.6 + 0.5 * u), r2 = r1 + 12 * sc * (1 - u);
+        ctx.moveTo(tx + Math.cos(a) * r1, ty + Math.sin(a) * r1);
+        ctx.lineTo(tx + Math.cos(a) * r2, ty + Math.sin(a) * r2);
+      }
+      ctx.stroke();
+      // 2nd pop slightly later (chain feel)
+      if (e > 0.12) {
+        const u2 = (e - 0.12) / 0.38;
+        const ox = (bombRand(seed, i + 400) - 0.5) * 26 * sc, oy = (bombRand(seed, i + 410) - 0.5) * 20 * sc;
+        const r2 = (6 + 20 * easeOut3(u2)) * sc;
+        const g2 = ctx.createRadialGradient(tx + ox, ty + oy, 0, tx + ox, ty + oy, r2);
+        g2.addColorStop(0, `rgba(255,240,180,${1 - u2})`);
+        g2.addColorStop(1, 'rgba(255,80,0,0)');
+        ctx.fillStyle = g2;
+        ctx.beginPath(); ctx.arc(tx + ox, ty + oy, r2, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    // 8) Embers — slow glowing specks drifting up, flickering (lingering after the blast)
+    for (let i = 0; i < BOMB_EMBERS; i++) {
+      const st = 0.2 + bombRand(seed, i + 500) * 0.2;
+      const e = d - st;
+      if (e <= 0) continue;
+      const u = e / (life - st);
+      if (u >= 1) continue;
+      const a = bombRand(seed, i + 510) * Math.PI * 2;
+      const dist = (50 + 150 * bombRand(seed, i + 520)) * sc * easeOut3(Math.min(1, u * 2.5));
+      const x = cx + Math.cos(a) * dist + Math.sin(e * 6 + i) * 6 * sc;
+      const y = cy + Math.sin(a) * dist * 0.8 - 60 * sc * u;
+      const fl = 0.6 + 0.4 * Math.sin(e * 30 + i * 1.7);
+      ctx.fillStyle = `rgba(255,${160 + (i % 4) * 20},60,${(1 - u) * fl})`;
+      const s = (2 + (i % 3)) * sc;
+      ctx.fillRect(x - s / 2, y - s / 2, s, s);
+    }
+  }
+  ctx.restore();
+}
+
 function drawFx(ctx, f) {
   if (f.kind === 'shock') { drawShockFx(ctx, f); return; }
+  if (f.kind === 'bomb') { drawBombFx(ctx, f); return; }
   const t = 1 - f.life / f.max;
   ctx.save();
   ctx.globalAlpha = Math.max(0, 1 - t);
@@ -1662,6 +1920,14 @@ export function drawField(ctx, area, snap, opts = {}) {
   const sx = snap._sx || 1;
   const sy = snap._sy || 1;
 
+  // Bomb: brief shake of THIS stage pane only + full-pane flash (see drawBombFx)
+  const bombPane = bombPaneFx(snap.fx || [], sx);
+  if (bombPane.sx || bombPane.sy) {
+    ctx.fillStyle = '#1a0806';
+    ctx.fillRect(0, 0, fw, fh);
+    ctx.translate(bombPane.sx, bombPane.sy);
+  }
+
   nebula(ctx, fw, fh, (snap.scroll || 0) * (darkened ? 0.7 : 1), darkened ? 7 : 0);
 
   // Opponent view: same fiery nebula, ~20% darker — NOT a purple starfield
@@ -1704,12 +1970,18 @@ export function drawField(ctx, area, snap, opts = {}) {
     });
   }
 
+  // Bomb charge-up: stage dims as the energy gathers (drawn under the FX so the implosion glows)
+  if (bombPane.dark > 0) {
+    ctx.fillStyle = `rgba(0,0,0,${bombPane.dark})`;
+    ctx.fillRect(-60, -60, fw + 120, fh + 120);
+  }
+
   const fx = snap.fx || [];
   for (const f of fx) {
     const tg = f.t || null;
     drawFx(ctx, {
       x: f.x * sx, y: f.y * sy, life: f.l ?? f.life, max: f.m ?? f.max, r: (f.r || 14) * sx,
-      kind: f.k ?? f.kind,
+      kind: f.k ?? f.kind, sc: sx,
       t: tg ? tg.map(([tx, ty]) => [tx * sx, ty * sy]) : undefined,
     });
   }
@@ -1736,6 +2008,21 @@ export function drawField(ctx, area, snap, opts = {}) {
     if (facingUp) {
       const lr = Math.min(1, snap.player.activeTimer / 0.85);
       drawDirectBeam(ctx, px, py - 16, px, 8, lr);
+    }
+  }
+
+  // Bomb detonation: white → orange full-pane flash, then a fading warm tint
+  if (bombPane.flash > 0 || bombPane.tint > 0) {
+    const m = 60; // cover the shake offset margin
+
+    if (bombPane.tint > 0) {
+      ctx.fillStyle = `rgba(255,110,30,${bombPane.tint})`;
+      ctx.fillRect(-m, -m, fw + m * 2, fh + m * 2);
+    }
+    if (bombPane.flash > 0) {
+      const fl = bombPane.flash;
+      ctx.fillStyle = `rgba(255,${Math.round(200 + 55 * fl)},${Math.round(120 + 135 * fl)},${fl})`;
+      ctx.fillRect(-m, -m, fw + m * 2, fh + m * 2);
     }
   }
 

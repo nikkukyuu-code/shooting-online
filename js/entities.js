@@ -212,6 +212,25 @@ export function spawnShockFx(x, y, r = SHOCK_RADIUS, targets = []) {
   };
 }
 
+/** ボム (bomb) FX total duration (s). Hit logic is screen-wide (every enemy on the stage). */
+export const BOMB_FX_LIFE = 1.4;
+
+/**
+ * Bomb FX: short implosion at (x,y), then detonation + double shockwave sweeping the whole
+ * stage (r = distance to the farthest pane corner), fireball bloom, debris, embers/smoke and a
+ * chained secondary explosion on each hit target ([x,y] pairs). Visual only.
+ */
+export function spawnBombFx(x, y, fw, fh, targets = []) {
+  const r = Math.hypot(Math.max(x, fw - x), Math.max(y, fh - y));
+  return {
+    kind: 'bomb',
+    x, y, r: Math.round(r),
+    life: BOMB_FX_LIFE,
+    max: BOMB_FX_LIFE,
+    t: targets.slice(0, 20).map(([tx, ty]) => [Math.round(tx), Math.round(ty)]),
+  };
+}
+
 export function serializeField(state) {
   // Compact snapshot for peer sync
   return {

@@ -1,12 +1,12 @@
 import {
-  POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx,
+  POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=1.5.63';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.63';
-import { sfx } from './audio.js?v=1.5.63';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.63';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE } from './meta.js?v=1.5.63';
+} from './entities.js?v=1.5.64';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.64';
+import { sfx } from './audio.js?v=1.5.64';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.64';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE } from './meta.js?v=1.5.64';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -739,13 +739,16 @@ export class Game {
     } else if (id === 'bomb') {
       // Screen bomb: heavy damage to all enemies, clear nearby enemy bullets
       let hits = 0;
+      const targets = [];
       for (const e of this.state.enemies) {
         e.hp -= 28;
         this.state.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
+        targets.push([e.x, e.y]);
         hits++;
       }
       this.state.bullets = this.state.bullets.filter((b) => b.owner === 'player');
-      this.state.fx.push(spawnExplosion(this.L.own.w * 0.55, p.y * this.L.own.h, true));
+      // Stage-wide bomb FX from the ship (front of list so it survives net snapshot slice)
+      this.state.fx.unshift(spawnBombFx(p.x, p.y * this.L.own.h, this.L.own.w, this.L.own.h, targets));
       this.showItemBanner(meta, `（敵${hits}体）`);
       p.activePower = null;
       p.activeTimer = 0;
@@ -1644,11 +1647,14 @@ export class Game {
         }
         B.fx.push(spawnExplosion(48 + 30, by, false));
       } else if (id === 'bomb') {
+        const targets = [];
         for (const e of B.enemies) {
           e.hp -= 28;
           B.fx.push(spawnExplosion(e.x, e.y, true));
+          targets.push([e.x, e.y]);
         }
         B.bullets = B.bullets.filter((b) => b.owner === 'player');
+        B.fx.unshift(spawnBombFx(B.x || 48, B.y * fh, fw, fh, targets));
       } else if (id === 'shock') {
         const by = B.y * fh;
         const cx = B.x || 48; // centre on COM ship's actual position (it moves horizontally)
