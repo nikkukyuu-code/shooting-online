@@ -10,7 +10,7 @@
   <title>スペーストリックバトル</title>
   <meta name="description" content="スペーストリックバトル — オンライン対戦シューティング。敵を倒してアイテムを取得し、対戦相手と勝負しよう。" />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=1.5.59" />
+  <link rel="stylesheet" href="css/style.css?v=1.5.60" />
 </head>
 <body>
   <div id="app">
@@ -39,7 +39,7 @@
       </div>
       <p class="menu-hint">部屋名を入れて「入室」でゲスト入室 / 「部屋を作る」でホスト待機</p>
       <div id="app-meta" class="app-meta">
-        <span id="app-version">v1.5.59</span>
+        <span id="app-version">v1.5.60</span>
         <span class="meta-sep">·</span>
         <span id="app-visits">アクセス …</span>
       </div>
@@ -74,6 +74,10 @@
           <p class="sub-desc">PTで送信ユニットを解放　<span id="shop-pt">PT: 0</span></p>
         </header>
         <div id="shop-detail" class="unit-detail" aria-live="polite"></div>
+        <div class="shop-buy-row">
+          <button type="button" id="btn-shop-buy" class="menu-btn primary shop-buy-btn">購入</button>
+          <p id="shop-msg" class="shop-msg" role="status" aria-live="polite" hidden></p>
+        </div>
         <div id="shop-list" class="unit-grid shop-grid"></div>
         <details class="intro-panel" id="shop-items-intro">
           <summary>アイテム紹介</summary>
@@ -105,7 +109,7 @@
       <canvas id="game" width="390" height="700"></canvas>
       <div id="ui-overlay">
         <button type="button" id="btn-stop" class="stop-btn">ストップ</button>
-        <div id="game-version" class="game-version">v1.5.59</div>
+        <div id="game-version" class="game-version">v1.5.60</div>
         <div id="status-bar" class="status-bar">対戦相手を待っています</div>
       </div>
       <div id="end-overlay" class="end-overlay hidden">
@@ -116,6 +120,6 @@
   </div>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script type="module" src="js/main.js?v=1.5.59"></script>
+  <script type="module" src="js/main.js?v=1.5.60"></script>
 </body>
 </html>

@@ -1,11 +1,11 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME } from './version.js?v=1.5.59';
-import { Net } from './net.js?v=1.5.59';
-import { Game } from './game.js?v=1.5.59';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=1.5.59';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=1.5.59';
-import { registerEnemyKinds } from './render.js?v=1.5.59';
-import { ALL_KIND_IDS } from './catalog.js?v=1.5.59';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=1.5.59';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME } from './version.js?v=1.5.60';
+import { Net } from './net.js?v=1.5.60';
+import { Game } from './game.js?v=1.5.60';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=1.5.60';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=1.5.60';
+import { registerEnemyKinds } from './render.js?v=1.5.60';
+import { ALL_KIND_IDS } from './catalog.js?v=1.5.60';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=1.5.60';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -52,6 +52,8 @@ const els = {
   deckItemsList: $('#deck-items-list'),
   shopList: $('#shop-list'),
   shopDetail: $('#shop-detail'),
+  btnShopBuy: $('#btn-shop-buy'),
+  shopMsg: $('#shop-msg'),
   shopItemsList: $('#shop-items-list'),
   zukanUnits: $('#zukan-units'),
   zukanItems: $('#zukan-items'),
@@ -120,7 +122,7 @@ function refreshPtDisplay(meta) {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=1.5.59`;
+  return `assets/enemies/${id}/0.png?v=1.5.60`;
 }
 
 function unitName(id) {
@@ -249,6 +251,51 @@ function renderDeckScreen() {
   renderItemsIntro(els.deckItemsList);
 }
 
+function clearShopMsg() {
+  if (!els.shopMsg) return;
+  els.shopMsg.textContent = '';
+  els.shopMsg.hidden = true;
+}
+
+function showShopMsg(text) {
+  if (!els.shopMsg) return;
+  els.shopMsg.textContent = text;
+  els.shopMsg.hidden = false;
+}
+
+function updateShopBuyButton(meta) {
+  const btn = els.btnShopBuy;
+  if (!btn) return;
+  const u = selectedShopId ? CATALOG_BY_ID[selectedShopId] : null;
+  if (!u) {
+    btn.disabled = true;
+    btn.textContent = '購入';
+    return;
+  }
+  if (meta.owned.includes(u.id)) {
+    btn.disabled = true;
+    btn.textContent = '所持済';
+    return;
+  }
+  btn.disabled = false;
+  btn.textContent = u.price <= 0 ? '入手（無料）' : `購入（${u.price} PT）`;
+}
+
+function buySelectedShopUnit() {
+  const u = selectedShopId ? CATALOG_BY_ID[selectedShopId] : null;
+  if (!u) return;
+  const cur = loadMeta();
+  if (cur.owned.includes(u.id)) return;
+  if (cur.pt < u.price) {
+    showShopMsg(`ポイントが足りません（あと ${u.price - cur.pt} PT）`);
+    return;
+  }
+  const res = buyUnit(cur, u.id);
+  clearShopMsg();
+  if (res.ok) refreshPtDisplay(res.meta);
+  renderShopScreen();
+}
+
 function renderShopScreen() {
   const meta = loadMeta();
   refreshPtDisplay(meta);
@@ -259,6 +306,7 @@ function renderShopScreen() {
     selectedShopId = first ? first.id : null;
   }
   renderUnitDetail(els.shopDetail, selectedShopId, { showPrice: true });
+  updateShopBuyButton(meta);
 
   els.shopList.innerHTML = '';
 
@@ -285,27 +333,10 @@ function renderShopScreen() {
       <span class="unit-price">${priceLabel}</span>
     `;
     btn.addEventListener('click', () => {
+      // Selecting only shows details — purchase happens via the 購入 button.
       selectedShopId = u.id;
-      if (owned) {
-        renderShopScreen();
-        return;
-      }
-      const cur = loadMeta();
-      if (cur.pt < u.price) {
-        alert(`PTが足りません（必要 ${u.price} / 所持 ${cur.pt}）`);
-        renderShopScreen();
-        return;
-      }
-      const res = buyUnit(cur, u.id);
-      if (res.ok) {
-        refreshPtDisplay(res.meta);
-        renderShopScreen();
-      } else if (res.reason === 'pt') {
-        alert('PTが足りません');
-        renderShopScreen();
-      } else {
-        renderShopScreen();
-      }
+      clearShopMsg();
+      renderShopScreen();
     });
     btn.dataset.id = u.id;
     els.shopList.appendChild(btn);
@@ -525,6 +556,7 @@ els.btnDeck?.addEventListener('click', () => {
 els.btnShop?.addEventListener('click', () => {
   if (busy) return;
   selectedShopId = null;
+  clearShopMsg();
   renderShopScreen();
   show('shop');
 });
@@ -542,7 +574,12 @@ els.btnDeckBack?.addEventListener('click', () => {
   show('menu');
 });
 
+els.btnShopBuy?.addEventListener('click', () => {
+  buySelectedShopUnit();
+});
+
 els.btnShopBack?.addEventListener('click', () => {
+  clearShopMsg();
   refreshPtDisplay();
   show('menu');
 });
