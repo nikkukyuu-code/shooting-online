@@ -460,21 +460,27 @@ html, body {
 
 .deck-slots {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
 }
 .deck-slot {
   appearance: none;
   border: 2.5px solid rgba(70,90,130,0.55);
   background: rgba(255,255,255,0.96);
   border-radius: 10px;
-  padding: 6px 3px 8px;
+  padding: 5px 2px 6px;
   cursor: pointer;
-  min-height: 118px;
+  min-height: 108px;
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
 }
 .deck-slot.selected {
@@ -483,10 +489,13 @@ html, body {
   background: linear-gradient(180deg, #f4f8ff, #e4eeff);
 }
 .deck-slot img {
-  width: 72px;
-  height: 72px;
+  width: min(100%, 56px);
+  height: auto;
+  aspect-ratio: 1;
+  max-width: 100%;
   object-fit: contain;
   image-rendering: auto;
+  flex-shrink: 1;
 }
 .unit-card img {
   width: 64px;
@@ -515,30 +524,40 @@ html, body {
 .deck-slot .slot-equipped {
   display: block;
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   text-align: center;
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 900;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.02em;
   color: #1a1000;
   background: linear-gradient(180deg, #ffe066, #f0a820);
-  padding: 2px 4px;
+  padding: 1px 2px;
   border-radius: 999px;
   box-shadow: 0 1px 4px rgba(180,100,0,0.35);
-  line-height: 1.3;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .deck-slot.selected .slot-equipped {
   background: linear-gradient(180deg, #ffd040, #e88800);
   box-shadow: 0 0 8px rgba(255,180,40,0.55);
 }
+/* legacy: slot-n kept for safety if any markup still uses it */
 .deck-slot .slot-n {
-  font-size: 0.58rem;
+  font-size: 0.55rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
   color: #6a4a10;
   background: transparent;
   padding: 0;
   border-radius: 0;
   opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 .deck-slot.selected .slot-n {
   background: transparent;
@@ -994,13 +1013,21 @@ html, body {
     gap: 8px;
     max-height: calc(100% - max(40px, env(safe-area-inset-top)) - 16px);
   }
+  .deck-slots { gap: 4px; }
   .deck-slot {
-    min-height: 108px;
-    padding: 4px 2px 6px;
-    gap: 2px;
+    min-height: 92px;
+    padding: 3px 1px 4px;
+    gap: 1px;
+    border-width: 2px;
   }
-  .deck-slot .slot-equipped { font-size: 0.6rem; padding: 1px 3px; }
-  .deck-slot img { width: 52px; height: 52px; }
+  .deck-slot .slot-equipped {
+    font-size: 0.55rem;
+    letter-spacing: 0;
+    padding: 1px 2px;
+  }
+  .deck-slot img { width: min(100%, 44px); height: auto; }
+  .deck-slot .slot-name { font-size: 0.58rem; padding: 0 1px; }
+  .deck-slot .slot-attack { font-size: 0.5rem; padding: 0 2px; }
   .unit-detail {
     min-height: 64px;
     max-height: min(28vh, 180px);

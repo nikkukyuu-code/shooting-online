@@ -1,11 +1,11 @@
-import { VERSION_LABEL } from './version.js?v=1.5.54';
-import { Net } from './net.js?v=1.5.54';
-import { Game } from './game.js?v=1.5.54';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=1.5.54';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=1.5.54';
-import { registerEnemyKinds } from './render.js?v=1.5.54';
-import { ALL_KIND_IDS } from './catalog.js?v=1.5.54';
-import { setKindTier, POWERUPS } from './entities.js?v=1.5.54';
+import { VERSION_LABEL } from './version.js?v=1.5.55';
+import { Net } from './net.js?v=1.5.55';
+import { Game } from './game.js?v=1.5.55';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=1.5.55';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=1.5.55';
+import { registerEnemyKinds } from './render.js?v=1.5.55';
+import { ALL_KIND_IDS } from './catalog.js?v=1.5.55';
+import { setKindTier, POWERUPS } from './entities.js?v=1.5.55';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier(Object.fromEntries(ALL_KIND_IDS.map((id) => [id, (CATALOG_BY_ID[id] && CATALOG_BY_ID[id].tier) || id])));
@@ -117,7 +117,7 @@ function refreshPtDisplay(meta) {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=1.5.54`;
+  return `assets/enemies/${id}/0.png?v=1.5.55`;
 }
 
 function unitName(id) {
@@ -193,9 +193,8 @@ function renderDeckScreen() {
     btn.dataset.slot = String(i);
     btn.setAttribute('aria-label', `装備中 スロット${i + 1} ${unitName(id)}`);
     btn.innerHTML = `
-      <span class="slot-equipped">装備中</span>
-      <span class="slot-n">スロット ${i + 1}</span>
-      <img src="${spriteUrl(id)}" alt="" width="72" height="72" loading="lazy" />
+      <span class="slot-equipped">装備中 · ${i + 1}</span>
+      <img src="${spriteUrl(id)}" alt="" width="56" height="56" loading="lazy" />
       <span class="slot-name">${unitName(id)}</span>
       <span class="slot-attack">${intro.attack.split('／')[0]}</span>
     `;
