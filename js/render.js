@@ -296,176 +296,317 @@ function metalFill(ctx, x0, y0, x1, y1, c0, c1) {
 function drawEnemy(ctx, e) {
   ctx.save();
   ctx.translate(e.x, e.y);
-  const col = e.sent ? '#66eeff' : (e.color || e.c || '#ff5566');
+  const sent = !!e.sent;
   const t = performance.now() / 1000;
   const pulse = 0.5 + 0.5 * Math.sin(t * 7 + e.x * 0.02);
-  ctx.shadowColor = 'rgba(0,0,0,0.9)';
-  ctx.shadowBlur = 14;
+  ctx.shadowColor = 'rgba(0,0,0,0.85)';
+  ctx.shadowBlur = 10;
 
   const kind = e.kind;
-  // Shared: fly leftward silhouette (nose to the left toward player)
+  const w = e.w, h = e.h;
+
+  // Helper: dark outline stroke for retro crispness
+  const strokeDark = (lw = 1.5) => {
+    ctx.strokeStyle = sent ? 'rgba(40,80,100,0.9)' : 'rgba(20,20,28,0.95)';
+    ctx.lineWidth = lw;
+    ctx.stroke();
+  };
+
   if (kind === 'tank') {
-    // Heavy gunship — long hull + ventral cannons
-    const g = ctx.createLinearGradient(-e.w, 0, e.w, 0);
-    g.addColorStop(0, '#e8fbff'); g.addColorStop(0.45, col); g.addColorStop(1, '#0a2030');
-    ctx.fillStyle = g;
+    // Large Red Wedge — wide flat triangle pointing LEFT
+    const body = sent ? '#66ddee' : '#e02028';
+    const shade = sent ? '#2a8aaa' : '#8a1018';
+    const edge = sent ? '#aaf0ff' : '#ff5560';
+    ctx.fillStyle = shade;
     ctx.beginPath();
-    ctx.moveTo(-e.w * 0.55, 0);
-    ctx.lineTo(-e.w * 0.2, -e.h * 0.45);
-    ctx.lineTo(e.w * 0.45, -e.h * 0.28);
-    ctx.lineTo(e.w * 0.55, 0);
-    ctx.lineTo(e.w * 0.45, e.h * 0.28);
-    ctx.lineTo(-e.w * 0.2, e.h * 0.45);
+    ctx.moveTo(-w * 0.58, 0);
+    ctx.lineTo(w * 0.52, -h * 0.48);
+    ctx.lineTo(w * 0.52, h * 0.48);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 1.6; ctx.stroke();
-    // Twin turrets
-    ctx.fillStyle = '#1a3040';
-    ctx.fillRect(-e.w * 0.05, -e.h * 0.55, e.w * 0.35, 5);
-    ctx.fillRect(-e.w * 0.05, e.h * 0.5, e.w * 0.35, 5);
-    ctx.fillStyle = `rgba(80,200,255,${0.5 + 0.4 * pulse})`;
-    ctx.beginPath(); ctx.arc(e.w * 0.35, -e.h * 0.52, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(e.w * 0.35, e.h * 0.52, 3, 0, Math.PI * 2); ctx.fill();
-    // Engines
-    ctx.fillStyle = `rgba(100,220,255,${0.55 + 0.4 * pulse})`;
+    ctx.fillStyle = body;
     ctx.beginPath();
-    ctx.moveTo(e.w * 0.55, -e.h * 0.12);
-    ctx.lineTo(e.w * 0.85, 0);
-    ctx.lineTo(e.w * 0.55, e.h * 0.12);
+    ctx.moveTo(-w * 0.58, 0);
+    ctx.lineTo(w * 0.52, -h * 0.32);
+    ctx.lineTo(w * 0.38, 0);
+    ctx.lineTo(w * 0.52, h * 0.32);
+    ctx.closePath();
     ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.58, 0);
+    ctx.lineTo(w * 0.52, -h * 0.48);
+    ctx.lineTo(w * 0.52, h * 0.48);
+    ctx.closePath();
+    strokeDark(2);
+    // Rear thruster glow
+    ctx.fillStyle = sent
+      ? `rgba(120,230,255,${0.45 + 0.4 * pulse})`
+      : `rgba(255,120,80,${0.45 + 0.4 * pulse})`;
+    ctx.fillRect(w * 0.52, -h * 0.18, w * 0.14, h * 0.36);
+    // Mid stripe
+    ctx.fillStyle = edge;
+    ctx.fillRect(-w * 0.1, -h * 0.08, w * 0.45, h * 0.16);
     ctx.shadowBlur = 0; drawHpPip(ctx, e);
+
   } else if (kind === 'golem') {
-    // Orbital fortress — hexagonal armored station
-    const g = ctx.createRadialGradient(0, 0, 4, 0, 0, e.w * 0.55);
-    g.addColorStop(0, '#fff'); g.addColorStop(0.35, col); g.addColorStop(1, '#201030');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2 - Math.PI / 2;
-      const x = Math.cos(a) * e.w * 0.48;
-      const y = Math.sin(a) * e.h * 0.48;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    // Spinning Drones — green cross arms + yellow core, rotate with t
+    const armCol = sent ? '#55dde8' : '#3cbc48';
+    const armDark = sent ? '#2a8890' : '#1e7a28';
+    const coreCol = sent ? '#aef8ff' : '#ffe033';
+    const coreHot = sent ? '#ffffff' : '#fff8a0';
+    const spin = t * 2.8 + (e.phase || 0);
+    ctx.save();
+    ctx.rotate(spin);
+    // Four arms (+ then look like X as it spins)
+    for (let i = 0; i < 4; i++) {
+      ctx.save();
+      ctx.rotate((i * Math.PI) / 2);
+      ctx.fillStyle = armDark;
+      ctx.fillRect(w * 0.06, -h * 0.11, w * 0.42, h * 0.22);
+      ctx.fillStyle = armCol;
+      ctx.fillRect(w * 0.08, -h * 0.07, w * 0.38, h * 0.14);
+      // Arm tip pad
+      ctx.fillStyle = armDark;
+      ctx.fillRect(w * 0.42, -h * 0.14, w * 0.1, h * 0.28);
+      ctx.restore();
     }
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
-    // Core
-    ctx.fillStyle = `rgba(255,120,255,${0.6 + 0.35 * pulse})`;
-    ctx.beginPath(); ctx.arc(0, 0, e.w * 0.14, 0, Math.PI * 2); ctx.fill();
-    // Ring
-    ctx.strokeStyle = `rgba(200,160,255,${0.4 + 0.3 * pulse})`;
+    ctx.restore();
+    // Yellow circular core
+    ctx.beginPath();
+    ctx.arc(0, 0, Math.min(w, h) * 0.18, 0, Math.PI * 2);
+    ctx.fillStyle = coreCol;
+    ctx.fill();
+    strokeDark(2);
+    ctx.beginPath();
+    ctx.arc(0, 0, Math.min(w, h) * 0.09, 0, Math.PI * 2);
+    ctx.fillStyle = coreHot;
+    ctx.fill();
+    ctx.shadowBlur = 0; drawHpPip(ctx, e);
+
+  } else if (kind === 'boss') {
+    // Gray Station — chunky irregular asymmetric mechanical structure
+    const g0 = sent ? '#88c8d8' : '#b0b4bc';
+    const g1 = sent ? '#4a7888' : '#6a6e78';
+    const g2 = sent ? '#2a4858' : '#3a3e48';
+    const accent = sent ? '#66eef8' : '#e02830';
+    // Base hull blocks (asymmetric)
+    ctx.fillStyle = g2;
+    ctx.fillRect(-w * 0.48, -h * 0.42, w * 0.96, h * 0.84);
+    ctx.fillStyle = g1;
+    ctx.fillRect(-w * 0.42, -h * 0.35, w * 0.55, h * 0.7);
+    ctx.fillStyle = g0;
+    ctx.fillRect(-w * 0.2, -h * 0.22, w * 0.38, h * 0.44);
+    // Protruding modules
+    ctx.fillStyle = g1;
+    ctx.fillRect(-w * 0.55, -h * 0.18, w * 0.18, h * 0.36); // left nose block
+    ctx.fillRect(w * 0.28, -h * 0.5, w * 0.22, h * 0.28);   // top tower
+    ctx.fillRect(w * 0.32, h * 0.22, w * 0.26, h * 0.28);    // bottom pod
+    ctx.fillRect(w * 0.05, -h * 0.48, w * 0.14, h * 0.16);   // sensor mast
+    // Greeble panels
+    ctx.fillStyle = g2;
+    ctx.fillRect(-w * 0.35, -h * 0.28, w * 0.12, h * 0.1);
+    ctx.fillRect(-w * 0.08, h * 0.12, w * 0.16, h * 0.12);
+    ctx.fillRect(w * 0.12, -h * 0.08, w * 0.1, h * 0.16);
+    // Red weak-point accents
+    ctx.fillStyle = accent;
+    ctx.fillRect(-w * 0.12, -h * 0.08, w * 0.14, h * 0.16);
+    ctx.beginPath();
+    ctx.arc(w * 0.18, h * 0.28, Math.min(w, h) * 0.07, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(w * 0.34, -h * 0.42, w * 0.1, h * 0.08);
+    // Pulsing core window
+    ctx.fillStyle = sent
+      ? `rgba(150,240,255,${0.55 + 0.4 * pulse})`
+      : `rgba(255,80,90,${0.55 + 0.4 * pulse})`;
+    ctx.fillRect(-w * 0.08, -h * 0.05, w * 0.1, h * 0.1);
+    // Outline silhouette
+    ctx.strokeStyle = sent ? 'rgba(60,120,140,0.95)' : 'rgba(25,25,30,0.95)';
     ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.ellipse(0, 0, e.w * 0.62, e.h * 0.22, t, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeRect(-w * 0.48, -h * 0.42, w * 0.96, h * 0.84);
     ctx.shadowBlur = 0; drawHpPip(ctx, e);
-  } else if (kind === 'mech' || kind === 'boss') {
-    // Capital ship / battleship — multi-deck silhouette
-    const g = ctx.createLinearGradient(0, -e.h, 0, e.h);
-    g.addColorStop(0, '#ffffff'); g.addColorStop(0.4, col); g.addColorStop(1, '#101828');
-    ctx.fillStyle = g;
+
+  } else if (kind === 'mech') {
+    // White Triangle — solid white isosceles pointing LEFT
+    const body = sent ? '#88e8f8' : '#f4f4f8';
+    const edge = sent ? '#3a90a8' : '#606070';
+    const tip = sent ? '#c8f8ff' : '#ffffff';
+    ctx.fillStyle = body;
     ctx.beginPath();
-    ctx.moveTo(-e.w * 0.55, 0);
-    ctx.lineTo(-e.w * 0.25, -e.h * 0.35);
-    ctx.lineTo(e.w * 0.15, -e.h * 0.5);
-    ctx.lineTo(e.w * 0.55, -e.h * 0.2);
-    ctx.lineTo(e.w * 0.55, e.h * 0.2);
-    ctx.lineTo(e.w * 0.15, e.h * 0.5);
-    ctx.lineTo(-e.w * 0.25, e.h * 0.35);
+    ctx.moveTo(-w * 0.55, 0);
+    ctx.lineTo(w * 0.5, -h * 0.48);
+    ctx.lineTo(w * 0.5, h * 0.48);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 1.8; ctx.stroke();
-    // Bridge tower
-    ctx.fillStyle = '#9cf';
-    roundRectPath(ctx, -e.w * 0.05, -e.h * 0.22, e.w * 0.28, e.h * 0.2, 3);
+    ctx.strokeStyle = edge;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // Inner highlight facet
+    ctx.fillStyle = tip;
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.55, 0);
+    ctx.lineTo(w * 0.15, -h * 0.18);
+    ctx.lineTo(w * 0.15, h * 0.18);
+    ctx.closePath();
     ctx.fill();
-    // Window lights
-    ctx.fillStyle = `rgba(180,230,255,${0.5 + 0.4 * pulse})`;
-    for (let i = 0; i < 5; i++) {
-      ctx.fillRect(-e.w * 0.35 + i * e.w * 0.12, -e.h * 0.08, 4, 3);
-      ctx.fillRect(-e.w * 0.35 + i * e.w * 0.12, e.h * 0.05, 4, 3);
+    // Tiny rear notch
+    ctx.fillStyle = sent ? '#2a7088' : '#404050';
+    ctx.fillRect(w * 0.42, -h * 0.12, w * 0.12, h * 0.24);
+    ctx.shadowBlur = 0; drawHpPip(ctx, e);
+
+  } else if (kind === 'drone') {
+    // Yellow UFO — oval saucer + dark green/black dome on top
+    const disc = sent ? '#88e8f0' : '#ffd428';
+    const discShade = sent ? '#3a98a8' : '#c8a010';
+    const dome = sent ? '#1a4050' : '#1a3a22';
+    const domeLite = sent ? '#2a7080' : '#2e5a34';
+    // Lower saucer ellipse
+    ctx.fillStyle = discShade;
+    ctx.beginPath();
+    ctx.ellipse(0, h * 0.08, w * 0.48, h * 0.28, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = disc;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, w * 0.48, h * 0.26, 0, 0, Math.PI * 2);
+    ctx.fill();
+    strokeDark(1.6);
+    // Dome on top
+    ctx.fillStyle = dome;
+    ctx.beginPath();
+    ctx.ellipse(0, -h * 0.12, w * 0.22, h * 0.22, 0, Math.PI, 0, true);
+    ctx.fill();
+    ctx.fillStyle = domeLite;
+    ctx.beginPath();
+    ctx.ellipse(0, -h * 0.18, w * 0.12, h * 0.1, 0, Math.PI, 0, true);
+    ctx.fill();
+    // Rim lights
+    ctx.fillStyle = sent ? '#aef8ff' : '#fff8a0';
+    for (let i = -2; i <= 2; i++) {
+      ctx.beginPath();
+      ctx.arc(i * w * 0.16, h * 0.02, 2.2, 0, Math.PI * 2);
+      ctx.fill();
     }
-    // Rear thrusters
-    ctx.fillStyle = `rgba(80,160,255,${0.55 + 0.4 * pulse})`;
-    ctx.beginPath();
-    ctx.moveTo(e.w * 0.55, -e.h * 0.15);
-    ctx.lineTo(e.w * 0.85, -e.h * 0.05);
-    ctx.lineTo(e.w * 0.85, e.h * 0.05);
-    ctx.lineTo(e.w * 0.55, e.h * 0.15);
-    ctx.fill();
     ctx.shadowBlur = 0; drawHpPip(ctx, e);
-  } else if (kind === 'drone' || kind === 'swarm') {
-    // Tiny space probes
-    const g = ctx.createRadialGradient(0, 0, 1, 0, 0, e.w * 0.5);
-    g.addColorStop(0, '#fff'); g.addColorStop(0.4, col); g.addColorStop(1, '#033');
-    ctx.fillStyle = g;
+
+  } else if (kind === 'swarm') {
+    // Red Swarmers — small crescent / V / boomerang pointing LEFT
+    const body = sent ? '#66e8f8' : '#ff2a3a';
+    const hot = sent ? '#c8f8ff' : '#ff8890';
+    ctx.fillStyle = body;
     ctx.beginPath();
-    ctx.moveTo(-e.w * 0.45, 0);
-    ctx.lineTo(0, -e.h * 0.45);
-    ctx.lineTo(e.w * 0.5, 0);
-    ctx.lineTo(0, e.h * 0.45);
+    // Upper wing
+    ctx.moveTo(-w * 0.45, 0);
+    ctx.quadraticCurveTo(-w * 0.05, -h * 0.55, w * 0.5, -h * 0.35);
+    ctx.quadraticCurveTo(w * 0.15, -h * 0.15, -w * 0.05, 0);
+    // Lower wing
+    ctx.quadraticCurveTo(w * 0.15, h * 0.15, w * 0.5, h * 0.35);
+    ctx.quadraticCurveTo(-w * 0.05, h * 0.55, -w * 0.45, 0);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.4; ctx.stroke();
-    // Antenna
-    ctx.strokeStyle = `rgba(150,255,255,${0.5 + 0.4 * pulse})`;
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(e.w * 0.55, -e.h * 0.35); ctx.stroke();
-    ctx.fillStyle = '#8ff';
-    ctx.beginPath(); ctx.arc(e.w * 0.55, -e.h * 0.35, 2.5, 0, Math.PI * 2); ctx.fill();
+    strokeDark(1.4);
+    // Inner V highlight
+    ctx.strokeStyle = hot;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(w * 0.25, -h * 0.22);
+    ctx.lineTo(-w * 0.2, 0);
+    ctx.lineTo(w * 0.25, h * 0.22);
+    ctx.stroke();
     ctx.shadowBlur = 0;
-    if (kind === 'drone') drawHpPip(ctx, e);
+    // no HP pip for tiny swarm (matches prior drone/swarm split)
+
   } else if (kind === 'elite') {
-    // Elite interceptor — twin-boom space fighter
-    const g = ctx.createLinearGradient(-e.w, 0, e.w, 0);
-    g.addColorStop(0, '#fff0ff'); g.addColorStop(0.5, col); g.addColorStop(1, '#300040');
-    ctx.fillStyle = g;
+    // White & Red Fighters — arrowhead jet pointing LEFT; white body, red rear
+    const white = sent ? '#b8f0fa' : '#f2f2f6';
+    const whiteEdge = sent ? '#4a98a8' : '#707080';
+    const red = sent ? '#3aa8c0' : '#e01828';
+    const redDark = sent ? '#1a6070' : '#8a0c18';
+    // Main white wedge
+    ctx.fillStyle = white;
     ctx.beginPath();
-    ctx.moveTo(-e.w * 0.55, 0);
-    ctx.lineTo(-e.w * 0.1, -e.h * 0.55);
-    ctx.lineTo(e.w * 0.35, -e.h * 0.25);
-    ctx.lineTo(e.w * 0.15, 0);
-    ctx.lineTo(e.w * 0.35, e.h * 0.25);
-    ctx.lineTo(-e.w * 0.1, e.h * 0.55);
+    ctx.moveTo(-w * 0.55, 0);
+    ctx.lineTo(w * 0.15, -h * 0.42);
+    ctx.lineTo(w * 0.15, h * 0.42);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.8; ctx.stroke();
-    // Twin booms
-    ctx.fillStyle = '#602080';
-    ctx.fillRect(e.w * 0.1, -e.h * 0.48, e.w * 0.4, 4);
-    ctx.fillRect(e.w * 0.1, e.h * 0.44, e.w * 0.4, 4);
-    // Cockpit
-    ctx.fillStyle = '#fcf';
-    ctx.beginPath(); ctx.ellipse(-e.w * 0.05, 0, e.w * 0.12, e.h * 0.2, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = `rgba(255,100,255,${0.5 + 0.4 * pulse})`;
+    // Red rear engines / tail
+    ctx.fillStyle = red;
     ctx.beginPath();
-    ctx.moveTo(e.w * 0.15, -e.h * 0.1);
-    ctx.lineTo(e.w * 0.55, 0);
-    ctx.lineTo(e.w * 0.15, e.h * 0.1);
+    ctx.moveTo(w * 0.1, -h * 0.42);
+    ctx.lineTo(w * 0.52, -h * 0.28);
+    ctx.lineTo(w * 0.52, h * 0.28);
+    ctx.lineTo(w * 0.1, h * 0.42);
+    ctx.closePath();
     ctx.fill();
+    // Engine darker split
+    ctx.fillStyle = redDark;
+    ctx.fillRect(w * 0.38, -h * 0.22, w * 0.16, h * 0.14);
+    ctx.fillRect(w * 0.38, h * 0.08, w * 0.16, h * 0.14);
+    // Outline
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.55, 0);
+    ctx.lineTo(w * 0.15, -h * 0.42);
+    ctx.lineTo(w * 0.52, -h * 0.28);
+    ctx.lineTo(w * 0.52, h * 0.28);
+    ctx.lineTo(w * 0.15, h * 0.42);
+    ctx.closePath();
+    strokeDark(1.8);
+    // Cockpit speck
+    ctx.fillStyle = sent ? '#66e8f8' : '#304050';
+    ctx.beginPath();
+    ctx.ellipse(-w * 0.12, 0, w * 0.1, h * 0.12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Engine glow
+    ctx.fillStyle = sent
+      ? `rgba(100,220,255,${0.5 + 0.4 * pulse})`
+      : `rgba(255,100,60,${0.5 + 0.4 * pulse})`;
+    ctx.fillRect(w * 0.52, -h * 0.12, w * 0.12, h * 0.24);
     ctx.shadowBlur = 0; drawHpPip(ctx, e);
+
   } else {
-    // basic scout — sleek alien dart
-    const g = ctx.createLinearGradient(-e.w, -e.h, e.w, e.h);
-    g.addColorStop(0, '#ffffff'); g.addColorStop(0.4, col); g.addColorStop(1, '#400010');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.moveTo(-e.w * 0.6, 0);
-    ctx.quadraticCurveTo(-e.w * 0.1, -e.h * 0.55, e.w * 0.45, -e.h * 0.2);
-    ctx.lineTo(e.w * 0.25, 0);
-    ctx.lineTo(e.w * 0.45, e.h * 0.2);
-    ctx.quadraticCurveTo(-e.w * 0.1, e.h * 0.55, -e.w * 0.6, 0);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 1.6; ctx.stroke();
-    // Sensor eye
-    const eye = ctx.createRadialGradient(-e.w * 0.15, 0, 0, -e.w * 0.15, 0, 6);
-    eye.addColorStop(0, '#fff'); eye.addColorStop(0.35, '#4cf'); eye.addColorStop(1, '#012');
+    // basic — Gray Mechs: bipedal walker, gray body, dark outline, red eye, walking legs
+    const body = sent ? '#7ab0c0' : '#9aa0a8';
+    const bodyDark = sent ? '#3a6878' : '#4a4e58';
+    const outline = sent ? '#1a4050' : '#22262e';
+    const eye = sent ? '#66eef8' : '#e02028';
+    const walk = Math.sin(t * 10 + (e.phase || 0));
+    // Torso
+    ctx.fillStyle = bodyDark;
+    ctx.fillRect(-w * 0.28, -h * 0.42, w * 0.56, h * 0.55);
+    ctx.fillStyle = body;
+    ctx.fillRect(-w * 0.22, -h * 0.38, w * 0.44, h * 0.42);
+    // Head / shoulder block
+    ctx.fillStyle = body;
+    ctx.fillRect(-w * 0.18, -h * 0.52, w * 0.36, h * 0.16);
+    ctx.fillStyle = bodyDark;
+    ctx.fillRect(-w * 0.32, -h * 0.28, w * 0.12, h * 0.22); // left arm stub
+    ctx.fillRect(w * 0.2, -h * 0.28, w * 0.12, h * 0.22);  // right arm stub
+    // Gun arm pointing left (toward player)
+    ctx.fillStyle = bodyDark;
+    ctx.fillRect(-w * 0.52, -h * 0.12, w * 0.28, h * 0.1);
+    ctx.fillStyle = outline;
+    ctx.fillRect(-w * 0.55, -h * 0.06, w * 0.08, h * 0.04);
+    // Red eye / core
     ctx.fillStyle = eye;
-    ctx.beginPath(); ctx.arc(-e.w * 0.15, 0, 5, 0, Math.PI * 2); ctx.fill();
-    // Tail thruster
-    ctx.fillStyle = `rgba(255,80,120,${0.5 + 0.45 * pulse})`;
     ctx.beginPath();
-    ctx.moveTo(e.w * 0.25, -e.h * 0.1);
-    ctx.lineTo(e.w * 0.7, 0);
-    ctx.lineTo(e.w * 0.25, e.h * 0.1);
+    ctx.arc(-w * 0.02, -h * 0.22, Math.min(w, h) * 0.07, 0, Math.PI * 2);
     ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(-w * 0.01, -h * 0.24, Math.min(w, h) * 0.025, 0, Math.PI * 2);
+    ctx.fill();
+    // Walking legs (animate)
+    const legLift = walk * h * 0.06;
+    ctx.fillStyle = bodyDark;
+    // left leg
+    ctx.fillRect(-w * 0.2, h * 0.08 + legLift, w * 0.14, h * 0.32);
+    ctx.fillRect(-w * 0.24, h * 0.36 + legLift, w * 0.2, h * 0.08);
+    // right leg
+    ctx.fillRect(w * 0.04, h * 0.08 - legLift, w * 0.14, h * 0.32);
+    ctx.fillRect(w * 0.0, h * 0.36 - legLift, w * 0.2, h * 0.08);
+    // Outline torso
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-w * 0.28, -h * 0.42, w * 0.56, h * 0.55);
     ctx.shadowBlur = 0;
   }
 
@@ -481,13 +622,49 @@ function drawEnemy(ctx, e) {
 function drawBullet(ctx, b) {
   ctx.save();
   if (b.owner === 'player') {
-    ctx.strokeStyle = b.homing ? '#ff88ff' : '#fff';
-    ctx.lineWidth = b.homing ? 3 : 2;
-    ctx.shadowColor = b.homing ? '#f0f' : '#8cf';
-    ctx.shadowBlur = 6;
+    const homing = !!b.homing;
+    // Trail direction: behind flight. Player shots go +X; fall back to left of x.
+    const vx = (typeof b.vx === 'number') ? b.vx : 280;
+    const vy = (typeof b.vy === 'number') ? b.vy : 0;
+    const spd = Math.hypot(vx, vy) || 1;
+    const ux = vx / spd;
+    const uy = vy / spd;
+    // Ghost afterimages (3–5) along reverse velocity
+    const ghosts = 5;
+    const gap = 5.5;
+    for (let i = ghosts; i >= 1; i--) {
+      const a = 0.12 + (1 - i / ghosts) * 0.28;
+      const len = 10 + (ghosts - i) * 2.2;
+      const thick = (homing ? 2.6 : 2.2) * (0.55 + (1 - i / ghosts) * 0.45);
+      const gx = b.x - ux * gap * i;
+      const gy = b.y - uy * gap * i;
+      ctx.strokeStyle = homing
+        ? `rgba(255,120,220,${a})`
+        : `rgba(255,70,90,${a})`;
+      ctx.lineWidth = thick;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(gx - ux * len * 0.55, gy - uy * len * 0.55);
+      ctx.lineTo(gx + ux * len * 0.35, gy + uy * len * 0.35);
+      ctx.stroke();
+    }
+    // Bright elongated core streak
+    ctx.shadowColor = homing ? '#ff66ff' : '#ff4466';
+    ctx.shadowBlur = 10;
+    ctx.strokeStyle = homing ? 'rgba(255,180,255,0.95)' : 'rgba(255,160,170,0.95)';
+    ctx.lineWidth = homing ? 3.2 : 2.8;
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(b.x - 8, b.y);
-    ctx.lineTo(b.x + 6, b.y);
+    ctx.moveTo(b.x - ux * 10, b.y - uy * 10);
+    ctx.lineTo(b.x + ux * 8, b.y + uy * 8);
+    ctx.stroke();
+    // Hot white core
+    ctx.shadowBlur = 4;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = homing ? 1.6 : 1.4;
+    ctx.beginPath();
+    ctx.moveTo(b.x - ux * 5, b.y - uy * 5);
+    ctx.lineTo(b.x + ux * 5, b.y + uy * 5);
     ctx.stroke();
   } else {
     ctx.fillStyle = '#ff6644';

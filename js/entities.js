@@ -57,14 +57,14 @@ export function createPlayer(side = 'self') {
 export function spawnEnemy(fieldW, fieldH, kind = 'basic') {
   const types = {
     // Visual + hitbox sizes ×2 (drawEnemy uses e.w/e.h; player ship unchanged)
-    basic:  { w: 68,  h: 56,  hp: 4,  speed: 100 + Math.random() * 50, score: 10,  color: '#ff5566' },
-    elite:  { w: 92,  h: 76,  hp: 10, speed: 75 + Math.random() * 35,  score: 30,  color: '#ff66ff' },
-    swarm:  { w: 52,  h: 40,  hp: 2,  speed: 150 + Math.random() * 55, score: 5,   color: '#66ffcc' },
-    boss:   { w: 184, h: 116, hp: 70, speed: 34, score: 200, color: '#c0d0ff' },
-    mech:   { w: 176, h: 96,  hp: 28, speed: 42, score: 80,  color: '#8899ff' },
-    golem:  { w: 168, h: 140, hp: 36, speed: 28, score: 100, color: '#bb77ff' },
-    tank:   { w: 180, h: 88,  hp: 40, speed: 32, score: 110, color: '#55ccee' },
-    drone:  { w: 56,  h: 44,  hp: 5,  speed: 130 + Math.random() * 40, score: 20, color: '#33ffff' },
+    basic:  { w: 68,  h: 56,  hp: 4,  speed: 100 + Math.random() * 50, score: 10,  color: '#9aa0a8' },
+    elite:  { w: 92,  h: 76,  hp: 10, speed: 75 + Math.random() * 35,  score: 30,  color: '#f2f2f6' },
+    swarm:  { w: 52,  h: 40,  hp: 2,  speed: 150 + Math.random() * 55, score: 5,   color: '#ff2a3a' },
+    boss:   { w: 184, h: 116, hp: 70, speed: 34, score: 200, color: '#b0b4bc' },
+    mech:   { w: 176, h: 96,  hp: 28, speed: 42, score: 80,  color: '#f4f4f8' },
+    golem:  { w: 168, h: 140, hp: 36, speed: 28, score: 100, color: '#3cbc48' },
+    tank:   { w: 180, h: 88,  hp: 40, speed: 32, score: 110, color: '#e02028' },
+    drone:  { w: 56,  h: 44,  hp: 5,  speed: 130 + Math.random() * 40, score: 20, color: '#ffd428' },
   };
   const t = types[kind] || types.basic;
   return {
