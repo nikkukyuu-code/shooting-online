@@ -1,6 +1,6 @@
-import { VERSION_LABEL } from './version.js?v=1.5.46';
-import { Net } from './net.js?v=1.5.46';
-import { Game } from './game.js?v=1.5.46';
+import { VERSION_LABEL } from './version.js?v=1.5.47';
+import { Net } from './net.js?v=1.5.47';
+import { Game } from './game.js?v=1.5.47';
 
 const $ = (sel) => document.querySelector(sel);
 

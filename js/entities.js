@@ -27,7 +27,7 @@ export function pickPowerupId() {
   const weighted = [
     ['homing', 2], ['laser', 2], ['spread', 3], ['bomb', 2], ['shock', 3], ['rapid', 3],
     ['meteor', 2], ['send', 2], ['direct', 1],
-    ['heal', 1], ['heal_big', 1],
+    ['heal', 2], ['heal_big', 1],
     ['send_mech', 2], ['send_golem', 2], ['send_tank', 2], ['send_drone', 2],
   ];
   let r = Math.random() * weighted.reduce((s, [, w]) => s + w, 0);

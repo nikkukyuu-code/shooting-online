@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-} from './entities.js?v=1.5.46';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.46';
-import { sfx } from './audio.js?v=1.5.46';
+} from './entities.js?v=1.5.47';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.47';
+import { sfx } from './audio.js?v=1.5.47';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -104,9 +104,10 @@ function pushEnemyAttack(e, bullets, tx, ty) {
   const fireMissile = (homeDur = 0.55, angJitter = 0.3) => {
     const a = aim + (Math.random() - 0.5) * angJitter;
     const spd = 230 + Math.random() * 30;
+    // Spawn dmg field lowered (was 3); player hit uses homing?4:6
     bullets.push(spawnBullet(
       ox, oy, Math.cos(a) * spd, Math.sin(a) * spd,
-      'enemy', true, 3,
+      'enemy', true, 2,
       { homeT: homeDur, homeMax: homeDur, life: 2.8 },
     ));
   };
@@ -1059,12 +1060,13 @@ export class Game {
     }
     S.enemies = remain;
 
-    // Enemy bullets -> player
+    // Enemy bullets -> player (homing missiles weaker: ~67% of normal/laser)
     for (const b of S.bullets) {
       if (b.owner !== 'enemy') continue;
       const py = P.y * fh;
       if (P.invuln <= 0 && Math.abs(b.x - P.x) < 14 && Math.abs(b.y - py) < 12) {
-        this.applyPlayerDamage(6, 'bullet');
+        const hitDmg = b.homing ? 4 : 6;
+        this.applyPlayerDamage(hitDmg, 'bullet');
         P.invuln = 0.75;
         b.life = 0;
         S.fx.push(spawnExplosion(P.x, py, false));
