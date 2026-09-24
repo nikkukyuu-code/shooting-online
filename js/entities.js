@@ -1,21 +1,21 @@
 /** Game entities: player, enemies, bullets, items, effects */
 
 export const POWERUPS = [
-  { id: 'homing',     label: '追尾ミサイル',  effect: '敵を追う弾を連射',           color: '#ff66ff', icon: '◆' },
-  { id: 'laser',      label: 'レーザー',      effect: '小刻みレーザーで前方攻撃',   color: '#66ccff', icon: '═' },
-  { id: 'spread',     label: 'ショットガン',  effect: '扇状の弾幕を一斉射撃',       color: '#ffaa33', icon: '※※' },
-  { id: 'bomb',       label: 'ボム',          effect: '画面内の敵をまとめて攻撃',   color: '#ff5522', icon: '◎' },
-  { id: 'shock',      label: '電撃',          effect: '近くの敵をまとめて感電',     color: '#88ddff', icon: '⚡' },
-  { id: 'rapid',      label: '連射強化',      effect: '一定時間すばやく強弾を連射', color: '#ffee44', icon: '≫' },
-  { id: 'meteor',     label: '隕石送信',      effect: '相手に隕石攻撃を落とす',     color: '#ff7744', icon: '☄' },
-  { id: 'send',       label: '敵キャラ送信',  effect: '相手に敵を送る',             color: '#ff8844', icon: '⇒' },
-  { id: 'direct',     label: '直接攻撃',      effect: '小刻み上向きレーザーで相手を直撃', color: '#ff3333', icon: '※' },
-  { id: 'heal',       label: 'HP回復',        effect: '自分のHPを+25',              color: '#44ff88', icon: '+' },
-  { id: 'heal_big',   label: '大回復',        effect: '自分のHPを+50',              color: '#22ff66', icon: '++' },
-  { id: 'send_mech',  label: '戦艦送信',      effect: '相手に宇宙戦艦を送る',       color: '#88aaff', icon: '艦' },
-  { id: 'send_golem', label: '要塞送信',      effect: '相手に軌道要塞を送る',       color: '#cc88ff', icon: '塞' },
-  { id: 'send_tank',  label: 'ガンシップ送信', effect: '相手に重ガンシップを送る',   color: '#66ddff', icon: '砲' },
-  { id: 'send_drone', label: '無人機群送信',  effect: '相手に宇宙ドローンを4機送る', color: '#33ffff', icon: '群' },
+  { id: 'homing',     label: '追尾ミサイル',  effect: '敵を追う弾を連射',           desc: '一定時間、敵を追尾するミサイルを連射する攻撃アイテム。', color: '#ff66ff', icon: '◆' },
+  { id: 'laser',      label: 'レーザー',      effect: '小刻みレーザーで前方攻撃',   desc: '細いレーザーを前方へ連射。直線の敵に強い。', color: '#66ccff', icon: '═' },
+  { id: 'spread',     label: 'ショットガン',  effect: '扇状の弾幕を一斉射撃',       desc: '扇状に弾をばらまき、近〜中距離の群れを一掃する。', color: '#ffaa33', icon: '※※' },
+  { id: 'bomb',       label: 'ボム',          effect: '画面内の敵をまとめて攻撃',   desc: '画面内の敵に大ダメージ。周囲の敵弾も消しやすい緊急回避用。', color: '#ff5522', icon: '◎' },
+  { id: 'shock',      label: '電撃',          effect: '近くの敵をまとめて感電',     desc: '自機付近の敵をまとめて感電させ、短い制圧に向く。', color: '#88ddff', icon: '⚡' },
+  { id: 'rapid',      label: '連射強化',      effect: '一定時間すばやく強弾を連射', desc: '一定時間、自機の連射速度と弾威力が上がる強化アイテム。', color: '#ffee44', icon: '≫' },
+  { id: 'meteor',     label: '隕石送信',      effect: '相手に隕石攻撃を落とす',     desc: '対戦相手のフィールドへ隕石を落とし、直接ダメージを与える。', color: '#ff7744', icon: '☄' },
+  { id: 'send',       label: '敵キャラ送信',  effect: '相手に敵を送る',             desc: 'デッキから選んだ敵を相手フィールドへ送る基本送信アイテム。', color: '#ff8844', icon: '⇒' },
+  { id: 'direct',     label: '直接攻撃',      effect: '小刻み上向きレーザーで相手を直撃', desc: '相手ライフへ直接レーザー攻撃。強力だが入手は少なめ。', color: '#ff3333', icon: '※' },
+  { id: 'heal',       label: 'HP回復',        effect: '自分のHPを+25',              desc: '自分のHPを25回復する。ピンチのときの定番回復。', color: '#44ff88', icon: '+' },
+  { id: 'heal_big',   label: '大回復',        effect: '自分のHPを+50',              desc: '自分のHPを50回復する大回復。出現率は低め。', color: '#22ff66', icon: '++' },
+  { id: 'send_mech',  label: '戦艦送信',      effect: '相手に宇宙戦艦を送る',       desc: 'デッキのメカ級など大型を相手へ送る。予告レーザーにも注意。', color: '#88aaff', icon: '艦' },
+  { id: 'send_golem', label: '要塞送信',      effect: '相手に軌道要塞を送る',       desc: 'ゴーレム級の重装甲ユニットを相手フィールドへ送る。', color: '#cc88ff', icon: '塞' },
+  { id: 'send_tank',  label: 'ガンシップ送信', effect: '相手に重ガンシップを送る',   desc: 'タンク級の重ガンシップを送り、厚い弾幕で圧をかける。', color: '#66ddff', icon: '砲' },
+  { id: 'send_drone', label: '無人機群送信',  effect: '相手に宇宙ドローンを4機送る', desc: 'ドローンを複数機まとめて送り、数で相手を撹乱する。', color: '#33ffff', icon: '群' },
 ];
 
 export function powerupMeta(id) {

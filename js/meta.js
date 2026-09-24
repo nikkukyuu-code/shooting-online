@@ -1,5 +1,5 @@
-/** Persist PT / owned unlocks / deck (exactly 5). localStorage key: shootingOnline_meta */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK } from './catalog.js?v=1.5.50';
+/** Persist PT / owned unlocks / deck (exactly 5 unique). localStorage key: shootingOnline_meta */
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK } from './catalog.js?v=1.5.51';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;
@@ -13,6 +13,42 @@ function defaultMeta() {
     owned: [...STARTER_DECK],
     deck: [...STARTER_DECK],
   };
+}
+
+/** Fill deck to DECK_SIZE with unique owned ids (starters first). */
+function fillUniqueDeck(deck, ownedSet) {
+  const out = [];
+  const seen = new Set();
+  for (const id of deck) {
+    if (out.length >= DECK_SIZE) break;
+    if (!id || seen.has(id)) continue;
+    if (!ownedSet.has(id) || !CATALOG_BY_ID[id]) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  for (const id of STARTER_DECK) {
+    if (out.length >= DECK_SIZE) break;
+    if (seen.has(id)) continue;
+    if (!ownedSet.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  for (const id of ownedSet) {
+    if (out.length >= DECK_SIZE) break;
+    if (seen.has(id) || !CATALOG_BY_ID[id]) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  // Last resort: cycle unique starters (always 5 distinct)
+  let i = 0;
+  while (out.length < DECK_SIZE && i < STARTER_DECK.length * 2) {
+    const id = STARTER_DECK[i % STARTER_DECK.length];
+    i++;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out.slice(0, DECK_SIZE);
 }
 
 function sanitize(raw) {
@@ -30,18 +66,8 @@ function sanitize(raw) {
   }
   const owned = [...ownedSet];
 
-  let deck = Array.isArray(raw.deck) ? raw.deck.filter((id) => ownedSet.has(id) && CATALOG_BY_ID[id]) : [];
-  // Fill / trim to exactly 5
-  for (const id of STARTER_DECK) {
-    if (deck.length >= DECK_SIZE) break;
-    if (!deck.includes(id)) deck.push(id);
-  }
-  for (const id of owned) {
-    if (deck.length >= DECK_SIZE) break;
-    if (!deck.includes(id)) deck.push(id);
-  }
-  deck = deck.slice(0, DECK_SIZE);
-  while (deck.length < DECK_SIZE) deck.push(STARTER_DECK[deck.length % STARTER_DECK.length]);
+  const rawDeck = Array.isArray(raw.deck) ? raw.deck : [];
+  const deck = fillUniqueDeck(rawDeck, ownedSet);
 
   return { pt, owned, deck };
 }
@@ -86,14 +112,30 @@ export function buyUnit(meta, id) {
   return { ok: true, meta: saveMeta(next), reason: 'bought' };
 }
 
-/** Replace deck slot (0..4) with an owned unit id. Always length === 5. */
+/**
+ * Replace deck slot (0..4) with an owned unit id.
+ * Unique rule: same unit cannot occupy two slots.
+ * If unitId is already in another slot → auto-swap with that slot.
+ * Always length === 5 after save.
+ * Returns { ok, meta, reason: 'set'|'swap'|'same'|'slot'|'unowned', swappedFrom? }
+ */
 export function setDeckSlot(meta, slot, unitId) {
   if (slot < 0 || slot >= DECK_SIZE) return { ok: false, meta, reason: 'slot' };
   if (!meta.owned.includes(unitId) || !CATALOG_BY_ID[unitId]) {
     return { ok: false, meta, reason: 'unowned' };
   }
-  const deck = meta.deck.slice(0, DECK_SIZE);
-  while (deck.length < DECK_SIZE) deck.push(STARTER_DECK[deck.length]);
+  const deck = fillUniqueDeck(meta.deck.slice(0, DECK_SIZE), new Set(meta.owned));
+  const existing = deck.indexOf(unitId);
+  if (existing === slot) {
+    return { ok: true, meta, reason: 'same' };
+  }
+  if (existing >= 0) {
+    const prev = deck[slot];
+    deck[slot] = unitId;
+    deck[existing] = prev;
+    const next = { ...meta, deck };
+    return { ok: true, meta: saveMeta(next), reason: 'swap', swappedFrom: existing };
+  }
   deck[slot] = unitId;
   const next = { ...meta, deck };
   return { ok: true, meta: saveMeta(next), reason: 'set' };

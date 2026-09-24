@@ -1,11 +1,11 @@
-import { VERSION_LABEL } from './version.js?v=1.5.50';
-import { Net } from './net.js?v=1.5.50';
-import { Game } from './game.js?v=1.5.50';
-import { CATALOG, CATALOG_BY_ID } from './catalog.js?v=1.5.50';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=1.5.50';
-import { registerEnemyKinds } from './render.js?v=1.5.50';
-import { ALL_KIND_IDS } from './catalog.js?v=1.5.50';
-import { setKindTier } from './entities.js?v=1.5.50';
+import { VERSION_LABEL } from './version.js?v=1.5.51';
+import { Net } from './net.js?v=1.5.51';
+import { Game } from './game.js?v=1.5.51';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=1.5.51';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=1.5.51';
+import { registerEnemyKinds } from './render.js?v=1.5.51';
+import { ALL_KIND_IDS } from './catalog.js?v=1.5.51';
+import { setKindTier, POWERUPS } from './entities.js?v=1.5.51';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier(Object.fromEntries(ALL_KIND_IDS.map((id) => [id, (CATALOG_BY_ID[id] && CATALOG_BY_ID[id].tier) || id])));
@@ -17,6 +17,7 @@ const screens = {
   game: $('#screen-game'),
   deck: $('#screen-deck'),
   shop: $('#screen-shop'),
+  zukan: $('#screen-zukan'),
 };
 
 const els = {
@@ -26,8 +27,10 @@ const els = {
   btnStart: $('#btn-start'),
   btnDeck: $('#btn-deck'),
   btnShop: $('#btn-shop'),
+  btnZukan: $('#btn-zukan'),
   btnDeckBack: $('#btn-deck-back'),
   btnShopBack: $('#btn-shop-back'),
+  btnZukanBack: $('#btn-zukan-back'),
   fieldFind: $('#field-find-status'),
   fieldCode: $('#field-room-code'),
   inputRoom: $('#input-room-name'),
@@ -42,13 +45,24 @@ const els = {
   deckSlots: $('#deck-slots'),
   deckOwned: $('#deck-owned'),
   deckHint: $('#deck-hint'),
+  deckDetail: $('#deck-detail'),
+  deckItemsList: $('#deck-items-list'),
   shopList: $('#shop-list'),
+  shopDetail: $('#shop-detail'),
+  shopItemsList: $('#shop-items-list'),
+  zukanUnits: $('#zukan-units'),
+  zukanItems: $('#zukan-items'),
+  zukanUnitDetail: $('#zukan-unit-detail'),
+  zukanTabUnits: $('#zukan-tab-units'),
+  zukanTabItems: $('#zukan-tab-items'),
 };
 
 let net = null;
 let game = null;
 let busy = false;
 let selectedDeckSlot = 0;
+let selectedShopId = null;
+let selectedZukanId = null;
 
 function show(screen) {
   Object.values(screens).forEach((s) => s && s.classList.remove('active'));
@@ -80,6 +94,7 @@ function setBusy(v) {
   els.btnCreate.disabled = v;
   if (els.btnDeck) els.btnDeck.disabled = v;
   if (els.btnShop) els.btnShop.disabled = v;
+  if (els.btnZukan) els.btnZukan.disabled = v;
   els.btnStart.disabled = v || isHostingWaiting();
 }
 
@@ -102,11 +117,60 @@ function refreshPtDisplay(meta) {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=1.5.50`;
+  return `assets/enemies/${id}/0.png?v=1.5.51`;
 }
 
 function unitName(id) {
   return (CATALOG_BY_ID[id] && CATALOG_BY_ID[id].name) || id;
+}
+
+function rarityLabel(r) {
+  return RARITY_JA[r] || r || '';
+}
+
+function renderUnitDetail(container, unitId, opts = {}) {
+  if (!container) return;
+  if (!unitId) {
+    container.innerHTML = `<p class="detail-empty">${opts.empty || 'ユニットを選択すると攻撃パターンを表示します'}</p>`;
+    return;
+  }
+  const intro = unitIntro(unitId);
+  const price = opts.showPrice && CATALOG_BY_ID[unitId]
+    ? `<span class="detail-price">${CATALOG_BY_ID[unitId].price <= 0 ? '無料' : `${CATALOG_BY_ID[unitId].price} PT`}</span>`
+    : '';
+  container.innerHTML = `
+    <div class="detail-sprite">
+      <img src="${spriteUrl(unitId)}" alt="" width="96" height="96" />
+    </div>
+    <div class="detail-body">
+      <div class="detail-name">${intro.name}</div>
+      <div class="detail-meta">
+        <span class="rarity ${intro.rarity}">${rarityLabel(intro.rarity)}</span>
+        <span class="detail-role">${intro.role}</span>
+        ${price}
+      </div>
+      <div class="detail-attack"><span class="detail-label">攻撃</span>${intro.attack}</div>
+      <p class="detail-blurb">${intro.blurb}</p>
+    </div>
+  `;
+}
+
+function renderItemsIntro(container) {
+  if (!container) return;
+  container.innerHTML = '';
+  for (const p of POWERUPS) {
+    const row = document.createElement('div');
+    row.className = 'item-intro-row';
+    row.innerHTML = `
+      <span class="item-intro-icon" style="background:${p.color}">${p.icon}</span>
+      <div class="item-intro-text">
+        <div class="item-intro-name">${p.label}</div>
+        <div class="item-intro-effect">${p.effect}</div>
+        <p class="item-intro-desc">${p.desc || p.effect}</p>
+      </div>
+    `;
+    container.appendChild(row);
+  }
 }
 
 function renderDeckScreen() {
@@ -114,22 +178,32 @@ function renderDeckScreen() {
   refreshPtDisplay(meta);
   if (!els.deckSlots || !els.deckOwned) return;
 
+  const selectedId = meta.deck[selectedDeckSlot];
+  renderUnitDetail(els.deckDetail, selectedId, {
+    empty: 'スロットを選ぶと攻撃パターンを表示します',
+  });
+
   els.deckSlots.innerHTML = '';
   for (let i = 0; i < DECK_SIZE; i++) {
     const id = meta.deck[i];
+    const intro = unitIntro(id);
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'deck-slot' + (i === selectedDeckSlot ? ' selected' : '');
     btn.dataset.slot = String(i);
+    btn.setAttribute('aria-label', `スロット${i + 1} ${unitName(id)}`);
     btn.innerHTML = `
-      <span class="slot-n">#${i + 1}</span>
-      <img src="${spriteUrl(id)}" alt="" width="52" height="52" loading="lazy" />
+      <span class="slot-n">スロット ${i + 1}</span>
+      <img src="${spriteUrl(id)}" alt="" width="72" height="72" loading="lazy" />
       <span class="slot-name">${unitName(id)}</span>
+      <span class="slot-attack">${intro.attack.split('／')[0]}</span>
     `;
     btn.addEventListener('click', () => {
       selectedDeckSlot = i;
       renderDeckScreen();
-      if (els.deckHint) els.deckHint.textContent = `スロット ${i + 1} を選択中 — 下の所持ユニットをタップで入れ替え`;
+      if (els.deckHint) {
+        els.deckHint.textContent = `スロット ${i + 1} を選択中 — 下の所持ユニットをタップで入れ替え（重複不可）`;
+      }
     });
     els.deckSlots.appendChild(btn);
   }
@@ -137,33 +211,54 @@ function renderDeckScreen() {
   els.deckOwned.innerHTML = '';
   const ownedUnits = CATALOG.filter((u) => meta.owned.includes(u.id));
   for (const u of ownedUnits) {
+    const inDeck = meta.deck.includes(u.id);
+    const deckSlot = meta.deck.indexOf(u.id);
+    const intro = unitIntro(u.id);
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'unit-card' + (meta.deck.includes(u.id) ? ' in-deck' : '');
+    btn.className = 'unit-card' + (inDeck ? ' in-deck' : '');
     btn.innerHTML = `
-      <img src="${spriteUrl(u.id)}" alt="" width="52" height="52" loading="lazy" />
+      ${inDeck ? `<span class="unit-badge">スロット${deckSlot + 1}</span>` : ''}
+      <img src="${spriteUrl(u.id)}" alt="" width="64" height="64" loading="lazy" />
       <span class="unit-name">${u.name}</span>
-      <span class="rarity ${u.rarity}">${u.rarity}</span>
+      <span class="unit-attack-chip">${intro.attack.split('／')[0]}</span>
+      <span class="rarity ${u.rarity}">${rarityLabel(u.rarity)}</span>
     `;
     btn.addEventListener('click', () => {
       const res = setDeckSlot(loadMeta(), selectedDeckSlot, u.id);
       if (res.ok) {
-        if (els.deckHint) els.deckHint.textContent = `スロット ${selectedDeckSlot + 1} を ${u.name} に変更`;
+        if (els.deckHint) {
+          if (res.reason === 'swap') {
+            els.deckHint.textContent = `${u.name} はスロット ${(res.swappedFrom ?? 0) + 1} にあったため入れ替えました`;
+          } else if (res.reason === 'same') {
+            els.deckHint.textContent = `${u.name} はすでにスロット ${selectedDeckSlot + 1} です`;
+          } else {
+            els.deckHint.textContent = `スロット ${selectedDeckSlot + 1} を ${u.name} に変更`;
+          }
+        }
         renderDeckScreen();
         refreshPtDisplay(res.meta);
       }
     });
     els.deckOwned.appendChild(btn);
   }
+
+  renderItemsIntro(els.deckItemsList);
 }
 
 function renderShopScreen() {
   const meta = loadMeta();
   refreshPtDisplay(meta);
   if (!els.shopList) return;
+
+  if (!selectedShopId) {
+    const first = CATALOG.find((u) => !meta.owned.includes(u.id)) || CATALOG[0];
+    selectedShopId = first ? first.id : null;
+  }
+  renderUnitDetail(els.shopDetail, selectedShopId, { showPrice: true });
+
   els.shopList.innerHTML = '';
 
-  // Sort: unowned by price asc, then owned
   const list = [...CATALOG].sort((a, b) => {
     const ao = meta.owned.includes(a.id) ? 1 : 0;
     const bo = meta.owned.includes(b.id) ? 1 : 0;
@@ -173,36 +268,83 @@ function renderShopScreen() {
 
   for (const u of list) {
     const owned = meta.owned.includes(u.id);
+    const intro = unitIntro(u.id);
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'unit-card' + (owned ? ' owned' : '');
-    btn.disabled = owned;
+    btn.className = 'unit-card' + (owned ? ' owned' : '') + (selectedShopId === u.id ? ' selected-card' : '');
     const priceLabel = owned ? '所持済' : (u.price <= 0 ? '無料' : `${u.price} PT`);
     btn.innerHTML = `
-      ${owned ? '<span class="unit-badge">OWN</span>' : ''}
-      <img src="${spriteUrl(u.id)}" alt="" width="64" height="64" loading="lazy" />
+      ${owned ? '<span class="unit-badge">所持</span>' : ''}
+      <img src="${spriteUrl(u.id)}" alt="" width="72" height="72" loading="lazy" />
       <span class="unit-name">${u.name}</span>
-      <span class="rarity ${u.rarity}">${u.rarity}</span>
+      <span class="unit-attack-chip">${intro.attack.split('／')[0]}</span>
+      <span class="rarity ${u.rarity}">${rarityLabel(u.rarity)}</span>
       <span class="unit-price">${priceLabel}</span>
     `;
-    if (!owned) {
-      btn.addEventListener('click', () => {
-        const cur = loadMeta();
-        if (cur.pt < u.price) {
-          alert(`PTが足りません（必要 ${u.price} / 所持 ${cur.pt}）`);
-          return;
-        }
-        const res = buyUnit(cur, u.id);
-        if (res.ok) {
-          refreshPtDisplay(res.meta);
-          renderShopScreen();
-        } else if (res.reason === 'pt') {
-          alert('PTが足りません');
-        }
-      });
-    }
+    btn.addEventListener('click', () => {
+      selectedShopId = u.id;
+      if (owned) {
+        renderShopScreen();
+        return;
+      }
+      const cur = loadMeta();
+      if (cur.pt < u.price) {
+        alert(`PTが足りません（必要 ${u.price} / 所持 ${cur.pt}）`);
+        renderShopScreen();
+        return;
+      }
+      const res = buyUnit(cur, u.id);
+      if (res.ok) {
+        refreshPtDisplay(res.meta);
+        renderShopScreen();
+      } else if (res.reason === 'pt') {
+        alert('PTが足りません');
+        renderShopScreen();
+      } else {
+        renderShopScreen();
+      }
+    });
+    btn.dataset.id = u.id;
     els.shopList.appendChild(btn);
   }
+
+  renderItemsIntro(els.shopItemsList);
+}
+
+function renderZukanScreen() {
+  if (!selectedZukanId) selectedZukanId = CATALOG[0]?.id || null;
+  renderUnitDetail(els.zukanUnitDetail, selectedZukanId);
+
+  if (els.zukanUnits) {
+    els.zukanUnits.innerHTML = '';
+    for (const u of CATALOG) {
+      const intro = unitIntro(u.id);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'unit-card' + (selectedZukanId === u.id ? ' selected-card' : '');
+      btn.innerHTML = `
+        <img src="${spriteUrl(u.id)}" alt="" width="72" height="72" loading="lazy" />
+        <span class="unit-name">${u.name}</span>
+        <span class="unit-attack-chip">${intro.attack.split('／')[0]}</span>
+        <span class="rarity ${u.rarity}">${rarityLabel(u.rarity)}</span>
+      `;
+      btn.addEventListener('click', () => {
+        selectedZukanId = u.id;
+        renderZukanScreen();
+      });
+      els.zukanUnits.appendChild(btn);
+    }
+  }
+  renderItemsIntro(els.zukanItems);
+}
+
+function setZukanTab(tab) {
+  const units = tab === 'units';
+  els.zukanTabUnits?.classList.toggle('active', units);
+  els.zukanTabItems?.classList.toggle('active', !units);
+  els.zukanUnits?.classList.toggle('hidden', !units);
+  els.zukanUnitDetail?.classList.toggle('hidden', !units);
+  els.zukanItems?.classList.toggle('hidden', units);
 }
 
 function goMenu() {
@@ -379,8 +521,17 @@ els.btnDeck?.addEventListener('click', () => {
 
 els.btnShop?.addEventListener('click', () => {
   if (busy) return;
+  selectedShopId = null;
   renderShopScreen();
   show('shop');
+});
+
+els.btnZukan?.addEventListener('click', () => {
+  if (busy) return;
+  selectedZukanId = CATALOG[0]?.id || null;
+  setZukanTab('units');
+  renderZukanScreen();
+  show('zukan');
 });
 
 els.btnDeckBack?.addEventListener('click', () => {
@@ -393,6 +544,17 @@ els.btnShopBack?.addEventListener('click', () => {
   show('menu');
 });
 
+els.btnZukanBack?.addEventListener('click', () => {
+  show('menu');
+});
+
+els.zukanTabUnits?.addEventListener('click', () => {
+  setZukanTab('units');
+});
+els.zukanTabItems?.addEventListener('click', () => {
+  setZukanTab('items');
+});
+
 window.addEventListener('shooting-meta-updated', (ev) => {
   refreshPtDisplay(ev.detail || loadMeta());
 });
@@ -402,7 +564,7 @@ document.addEventListener('touchmove', (e) => {
 }, { passive: false });
 
 window.addEventListener('load', () => {
-  // Ensure starters persisted
+  // Ensure starters persisted + duplicate decks cleaned
   saveMeta(loadMeta());
   refreshPtDisplay();
   show('menu');

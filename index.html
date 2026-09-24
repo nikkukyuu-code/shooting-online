@@ -10,7 +10,7 @@
   <title>横スクロール シューティング オンライン対戦</title>
   <meta name="description" content="横スクロールシューティングのオンライン対戦ゲーム。敵を倒してアイテムを取得し、対戦相手と勝負しよう。" />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=1.5.50" />
+  <link rel="stylesheet" href="css/style.css?v=1.5.51" />
 </head>
 <body>
   <div id="app">
@@ -29,10 +29,11 @@
           <button type="button" id="btn-deck" class="menu-btn menu-btn-sub">デッキ</button>
           <button type="button" id="btn-shop" class="menu-btn menu-btn-sub">ショップ</button>
         </div>
+        <button type="button" id="btn-zukan" class="menu-btn menu-btn-sub">図鑑</button>
       </div>
       <p class="menu-hint">部屋名を入れて「入室」でゲスト入室 / 「部屋を作る」でホスト待機</p>
       <div id="app-meta" class="app-meta">
-        <span id="app-version">v1.5.50</span>
+        <span id="app-version">v1.5.51</span>
         <span class="meta-sep">·</span>
         <span id="app-visits">アクセス …</span>
       </div>
@@ -43,11 +44,17 @@
       <div class="sub-panel">
         <header class="sub-head">
           <h2>デッキ編集</h2>
-          <p class="sub-desc">送信する敵を5体装備（空き不可・入れ替えのみ）</p>
+          <p class="sub-desc">送信する敵を<strong>5体・重複なし</strong>で装備</p>
         </header>
-        <div id="deck-slots" class="deck-slots"></div>
+        <div id="deck-slots" class="deck-slots" aria-label="デッキスロット"></div>
         <p id="deck-hint" class="sub-hint">スロットを選んでから、下の所持ユニットをタップして入れ替え</p>
+        <div id="deck-detail" class="unit-detail" aria-live="polite"></div>
+        <h3 class="sub-section-title">所持ユニット</h3>
         <div id="deck-owned" class="unit-grid"></div>
+        <details class="intro-panel" id="deck-items-intro">
+          <summary>アイテム紹介</summary>
+          <div id="deck-items-list" class="items-intro-list"></div>
+        </details>
         <button type="button" id="btn-deck-back" class="menu-btn">メニューへ</button>
       </div>
     </section>
@@ -59,8 +66,31 @@
           <h2>ショップ</h2>
           <p class="sub-desc">PTで送信ユニットを解放　<span id="shop-pt">PT: 0</span></p>
         </header>
+        <div id="shop-detail" class="unit-detail" aria-live="polite"></div>
         <div id="shop-list" class="unit-grid shop-grid"></div>
+        <details class="intro-panel" id="shop-items-intro">
+          <summary>アイテム紹介</summary>
+          <div id="shop-items-list" class="items-intro-list"></div>
+        </details>
         <button type="button" id="btn-shop-back" class="menu-btn">メニューへ</button>
+      </div>
+    </section>
+
+    <section id="screen-zukan" class="screen sub-screen">
+      <div class="sky"></div>
+      <div class="sub-panel">
+        <header class="sub-head">
+          <h2>図鑑</h2>
+          <p class="sub-desc">ユニットの攻撃パターンとバトルアイテム</p>
+        </header>
+        <div class="zukan-tabs" role="tablist">
+          <button type="button" class="zukan-tab active" data-tab="units" id="zukan-tab-units">ユニット</button>
+          <button type="button" class="zukan-tab" data-tab="items" id="zukan-tab-items">アイテム</button>
+        </div>
+        <div id="zukan-unit-detail" class="unit-detail"></div>
+        <div id="zukan-units" class="unit-grid shop-grid"></div>
+        <div id="zukan-items" class="items-intro-list hidden"></div>
+        <button type="button" id="btn-zukan-back" class="menu-btn">メニューへ</button>
       </div>
     </section>
 
@@ -68,7 +98,7 @@
       <canvas id="game" width="390" height="700"></canvas>
       <div id="ui-overlay">
         <button type="button" id="btn-stop" class="stop-btn">ストップ</button>
-        <div id="game-version" class="game-version">v1.5.50</div>
+        <div id="game-version" class="game-version">v1.5.51</div>
         <div id="status-bar" class="status-bar">対戦相手を待っています</div>
       </div>
       <div id="end-overlay" class="end-overlay hidden">
@@ -79,6 +109,6 @@
   </div>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script type="module" src="js/main.js?v=1.5.50"></script>
+  <script type="module" src="js/main.js?v=1.5.51"></script>
 </body>
 </html>

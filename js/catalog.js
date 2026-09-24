@@ -44,3 +44,100 @@ export const STARTER_DECK = ['basic', 'drone', 'elite', 'swarm', 'tank'];
 export const CATALOG_BY_ID = Object.fromEntries(CATALOG.map((u) => [u.id, u]));
 export const ALL_KIND_IDS = CATALOG.map((u) => u.id);
 
+
+/** Tier → 攻撃パターン / 役割 / 紹介文 (デッキ・ショップ・図鑑) */
+export const TIER_INTRO = {
+  basic: {
+    attack: '通常弾／レーザー',
+    role: '軽量機',
+    blurb: '前方へ通常弾や短いレーザーを撃つ基本機体。すばやく動き、数で押す用途向き。',
+  },
+  drone: {
+    attack: 'レーザー／追尾ミサイル',
+    role: '無人機',
+    blurb: 'レーザーを主体に、たまに追尾ミサイルも撃つ軽快な機体。',
+  },
+  elite: {
+    attack: 'レーザー／通常弾／追尾ミサイル',
+    role: '戦闘機',
+    blurb: 'レーザーと三方向弾、追尾ミサイルを組み合わせるバランス型ファイター。',
+  },
+  swarm: {
+    attack: '通常弾',
+    role: '群撃機',
+    blurb: '弱い通常弾のみ。安い・軽い・群れで送るタイプ。',
+  },
+  tank: {
+    attack: 'レーザー／三方向弾／追尾ミサイル',
+    role: '大型・予告レーザー',
+    blurb: '頑丈な大型機。レーザー発射前に予告演出があり、弾幕も厚い。',
+  },
+  mech: {
+    attack: '双レーザー／追尾ミサイル／通常弾',
+    role: '大型・予告レーザー',
+    blurb: '戦艦クラス。双レーザーと追尾ミサイルを放ち、大型は発射予告あり。',
+  },
+  golem: {
+    attack: '扇状レーザー／追尾ミサイル',
+    role: '大型・予告レーザー',
+    blurb: '要塞級の重装甲。扇状レーザーが強く、大型は発射予告あり。',
+  },
+  boss: {
+    attack: '強力レーザー／追尾ミサイル多数',
+    role: '大型ボス・予告レーザー',
+    blurb: '最強クラス。高火力レーザーと複数の追尾ミサイル。大型は発射予告あり。',
+  },
+};
+
+/** Optional per-unit flavor overrides (attack / role / blurb). */
+export const UNIT_INTRO_OVERRIDES = {
+  missile_cruiser: {
+    attack: 'レーザー／追尾ミサイル重視',
+    blurb: 'ミサイル巡洋艦。追尾ミサイルを多めに織り交ぜる戦闘機クラス。',
+  },
+  missile_destroyer: {
+    attack: 'レーザー／追尾ミサイル重視',
+    role: '大型・予告レーザー',
+    blurb: 'ミサイル駆逐艦。大型の弾幕に追尾ミサイルを重ねる。',
+  },
+  orbital_blaster: {
+    attack: '双レーザー／追尾ミサイル',
+    blurb: '軌道ブラスター。遠距離レーザーが得意なメカ級。',
+  },
+  emp_disruptor: {
+    attack: '双レーザー／追尾ミサイル',
+    blurb: 'EMPディスラプター。接近されると危険なメカ級の弾幕。',
+  },
+  security_fly: {
+    attack: '通常弾',
+    blurb: '警備フライ。弱い通常弾だけの群れユニット。',
+  },
+  ai_core: {
+    attack: '強力レーザー／追尾ミサイル多数',
+    blurb: '中枢AIコア。ボス級の最大火力弾幕を繰り出す。',
+  },
+};
+
+export function unitIntro(id) {
+  const u = CATALOG_BY_ID[id];
+  const tier = (u && u.tier) || 'basic';
+  const base = TIER_INTRO[tier] || TIER_INTRO.basic;
+  const ov = UNIT_INTRO_OVERRIDES[id] || {};
+  return {
+    id,
+    name: (u && u.name) || id,
+    tier,
+    rarity: (u && u.rarity) || 'common',
+    attack: ov.attack || base.attack,
+    role: ov.role || base.role,
+    blurb: ov.blurb || base.blurb,
+  };
+}
+
+export const RARITY_JA = {
+  common: 'コモン',
+  uncommon: 'アンコモン',
+  rare: 'レア',
+  epic: 'エピック',
+  legendary: 'レジェンダリー',
+};
