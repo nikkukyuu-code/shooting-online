@@ -362,6 +362,45 @@ html, body {
 }
 .app-meta .meta-sep { margin: 0 0.35em; opacity: 0.55; }
 #app-version { font-weight: 800; color: #9ad4ff; }
+/* 公開5分以内: 「最新」バッジ */
+#app-version.ver-latest {
+  color: #7dffcf;
+  text-shadow: 0 0 6px rgba(80, 255, 190, 0.85);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+}
+.ver-badge {
+  display: inline-block;
+  padding: 0 0.45em;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #00e5a8, #00c8ff);
+  color: #04142a;
+  font-weight: 900;
+  font-size: 0.85em;
+  line-height: 1.5;
+  text-shadow: none;
+  box-shadow: 0 0 8px rgba(0, 230, 190, 0.9);
+  animation: verPulse 1.2s ease-in-out infinite;
+}
+.ver-note {
+  font-weight: 600;
+  color: #c8fff0;
+  opacity: 0.9;
+  max-width: 14em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: none;
+}
+.game-version.ver-latest {
+  color: #7dffcf;
+  text-shadow: 0 0 6px rgba(80, 255, 190, 0.9), 0 1px 2px #000;
+  animation: verPulse 1.2s ease-in-out infinite;
+}
+@keyframes verPulse {
+  0%, 100% { opacity: 1; filter: brightness(1); }
+  50% { opacity: 0.72; filter: brightness(1.35); }
+}
 .menu-hint { bottom: max(48px, calc(env(safe-area-inset-bottom, 0px) + 42px)); }
 
 .game-version {

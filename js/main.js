@@ -1,11 +1,11 @@
-import { VERSION_LABEL } from './version.js?v=1.5.58';
-import { Net } from './net.js?v=1.5.58';
-import { Game } from './game.js?v=1.5.58';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=1.5.58';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=1.5.58';
-import { registerEnemyKinds } from './render.js?v=1.5.58';
-import { ALL_KIND_IDS } from './catalog.js?v=1.5.58';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=1.5.58';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME } from './version.js?v=1.5.59';
+import { Net } from './net.js?v=1.5.59';
+import { Game } from './game.js?v=1.5.59';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=1.5.59';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=1.5.59';
+import { registerEnemyKinds } from './render.js?v=1.5.59';
+import { ALL_KIND_IDS } from './catalog.js?v=1.5.59';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=1.5.59';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -120,7 +120,7 @@ function refreshPtDisplay(meta) {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=1.5.58`;
+  return `assets/enemies/${id}/0.png?v=1.5.59`;
 }
 
 function unitName(id) {
@@ -573,11 +573,66 @@ window.addEventListener('load', () => {
   show('menu');
 });
 
-async function loadVisits() {
+/** 公開から5分以内は「最新」バッジ付きで目立たせる（30秒ごと／復帰時に再判定）。 */
+const LATEST_WINDOW_MS = 5 * 60 * 1000;
+let versionBadgeTimer = null;
+
+function isFreshBuild(now = Date.now()) {
+  const t = Number(BUILD_TIME);
+  return Number.isFinite(t) && t > 0 && now - t >= -60 * 1000 && now - t < LATEST_WINDOW_MS;
+}
+
+function renderVersionBadge() {
+  const fresh = isFreshBuild();
   const verEl = document.getElementById('app-version');
   const gameVer = document.getElementById('game-version');
-  if (verEl) verEl.textContent = VERSION_LABEL;
-  if (gameVer) gameVer.textContent = VERSION_LABEL;
+  if (verEl) {
+    verEl.classList.toggle('ver-latest', fresh);
+    if (fresh) {
+      verEl.innerHTML = '';
+      const label = document.createElement('span');
+      label.textContent = VERSION_LABEL;
+      const badge = document.createElement('span');
+      badge.className = 'ver-badge';
+      badge.textContent = '最新';
+      verEl.append(label, badge);
+      if (BUILD_NOTE) {
+        const note = document.createElement('span');
+        note.className = 'ver-note';
+        note.textContent = BUILD_NOTE;
+        verEl.append(note);
+      }
+      verEl.title = `${VERSION_LABEL} — 最新版（公開から5分以内）${BUILD_NOTE ? ' / ' + BUILD_NOTE : ''}`;
+    } else {
+      verEl.textContent = VERSION_LABEL;
+      verEl.title = BUILD_NOTE ? `${VERSION_LABEL} — ${BUILD_NOTE}` : VERSION_LABEL;
+    }
+  }
+  if (gameVer) {
+    gameVer.classList.toggle('ver-latest', fresh);
+    gameVer.textContent = fresh ? `${VERSION_LABEL} · 最新` : VERSION_LABEL;
+  }
+  return fresh;
+}
+
+function startVersionBadge() {
+  const tick = () => {
+    const fresh = renderVersionBadge();
+    if (!fresh && versionBadgeTimer) {
+      clearInterval(versionBadgeTimer);
+      versionBadgeTimer = null;
+    }
+  };
+  if (renderVersionBadge() && !versionBadgeTimer) {
+    versionBadgeTimer = setInterval(tick, 30 * 1000);
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') tick();
+  });
+}
+
+async function loadVisits() {
+  startVersionBadge();
   const el = document.getElementById('app-visits');
   if (!el) return;
   try {

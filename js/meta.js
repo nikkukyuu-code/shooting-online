@@ -1,11 +1,11 @@
 /** Persist PT / owned unlocks / deck (exactly 5 unique). localStorage key: shootingOnline_meta */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK } from './catalog.js?v=1.5.58';
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP } from './catalog.js?v=1.5.59';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;
 
 /** Fixed COM AI deck (mid-tier) — fair, not using player unlocks. */
-export const COM_DECK = ['mech', 'golem', 'missile_cruiser', 'emp_disruptor', 'gorgon_mech'];
+export const COM_DECK = ['mech', 'golem', 'missile_destroyer', 'siege_mech', 'gorgon_mech'];
 
 function defaultMeta() {
   return {
@@ -58,15 +58,17 @@ function sanitize(raw) {
   if (!Number.isFinite(pt) || pt < 0) pt = 0;
   pt = Math.floor(pt);
 
+  const migrate = (id) => (CATALOG_BY_ID[id] ? id : (LEGACY_ID_MAP[id] || id));
   const ownedSet = new Set(STARTER_DECK);
   if (Array.isArray(raw.owned)) {
-    for (const id of raw.owned) {
+    for (const rid of raw.owned) {
+      const id = migrate(rid);
       if (CATALOG_BY_ID[id]) ownedSet.add(id);
     }
   }
   const owned = [...ownedSet];
 
-  const rawDeck = Array.isArray(raw.deck) ? raw.deck : [];
+  const rawDeck = Array.isArray(raw.deck) ? raw.deck.map(migrate) : [];
   const deck = fillUniqueDeck(rawDeck, ownedSet);
 
   return { pt, owned, deck };
