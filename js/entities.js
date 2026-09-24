@@ -88,8 +88,21 @@ export function spawnEnemy(fieldW, fieldH, kind = 'basic') {
   };
 }
 
-export function spawnBullet(x, y, vx, vy, owner = 'player', homing = false, dmg = 1) {
-  return { x, y, vx, vy, r: homing ? 4 : 3, owner, homing, dmg, life: 3 };
+export function spawnBullet(x, y, vx, vy, owner = 'player', homing = false, dmg = 1, opts = {}) {
+  const laser = !!opts.laser;
+  const b = {
+    x, y, vx, vy,
+    r: laser ? 2.5 : (homing ? 4 : 3),
+    owner, homing, dmg,
+    life: opts.life != null ? opts.life : (laser ? 2.2 : 3),
+    laser,
+  };
+  // Limited-homing: steer only while homeT > 0, then fly straight
+  if (homing && opts.homeT != null) {
+    b.homeT = opts.homeT;
+    b.homeMax = opts.homeMax != null ? opts.homeMax : opts.homeT;
+  }
+  return b;
 }
 
 export function spawnItem(x, y) {
@@ -139,6 +152,7 @@ export function serializeField(state) {
     })),
     bullets: state.bullets.filter(b => b.owner === 'player' || b.owner === 'enemy').slice(0, 60).map(b => ({
       x: b.x, y: b.y, o: b.owner, h: !!b.homing, vx: b.vx, vy: b.vy,
+      L: b.laser ? 1 : undefined,
     })),
     fx: state.fx.slice(0, 12).map(f => ({ x: f.x, y: f.y, l: f.life, m: f.max, r: f.r })),
     scroll: state.scroll,

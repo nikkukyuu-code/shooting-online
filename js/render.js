@@ -296,7 +296,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=1.5.45`;
+  return `assets/enemies/${kind}/${frame}.png?v=1.5.46`;
 }
 
 export function preloadEnemySprites() {
@@ -562,10 +562,99 @@ function drawBullet(ctx, b) {
       ctx.fill();
     }
   } else {
-    ctx.fillStyle = '#ff6644';
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, b.r || 3, 0, Math.PI * 2);
-    ctx.fill();
+    // Enemy projectiles
+    const vx = (typeof b.vx === 'number') ? b.vx : -160;
+    const vy = (typeof b.vy === 'number') ? b.vy : 0;
+    const spd = Math.hypot(vx, vy) || 1;
+    const ux = vx / spd;
+    const uy = vy / spd;
+    const ang = Math.atan2(vy, vx);
+    const laser = !!b.laser;
+    const homing = !!b.homing;
+    ctx.lineCap = 'round';
+    ctx.shadowBlur = 0;
+
+    if (laser) {
+      // Fast cyan/amber laser pulse streak
+      const len = 22;
+      ctx.strokeStyle = 'rgba(255,120,60,0.35)';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(b.x - ux * len, b.y - uy * len);
+      ctx.lineTo(b.x + ux * len * 0.4, b.y + uy * len * 0.4);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,200,90,0.95)';
+      ctx.lineWidth = 3.2;
+      ctx.beginPath();
+      ctx.moveTo(b.x - ux * len * 0.85, b.y - uy * len * 0.85);
+      ctx.lineTo(b.x + ux * 6, b.y + uy * 6);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,230,0.95)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(b.x - ux * 8, b.y - uy * 8);
+      ctx.lineTo(b.x + ux * 5, b.y + uy * 5);
+      ctx.stroke();
+    } else if (homing) {
+      // Limited-homing missile — orange/red diamond + short trail
+      const trail = (Array.isArray(b.trail) && b.trail.length > 1) ? b.trail : null;
+      if (trail) {
+        ctx.beginPath();
+        ctx.moveTo(trail[0].x, trail[0].y);
+        for (let i = 1; i < trail.length; i++) ctx.lineTo(trail[i].x, trail[i].y);
+        ctx.lineTo(b.x, b.y);
+        const g0 = trail[0];
+        const ribbon = ctx.createLinearGradient(g0.x, g0.y, b.x, b.y);
+        ribbon.addColorStop(0, 'rgba(255,80,40,0)');
+        ribbon.addColorStop(0.5, 'rgba(255,100,50,0.2)');
+        ribbon.addColorStop(1, 'rgba(255,160,80,0.55)');
+        ctx.strokeStyle = ribbon;
+        ctx.lineWidth = 4.5;
+        ctx.stroke();
+      } else {
+        const ribbonLen = 48;
+        const rx0 = b.x - ux * ribbonLen;
+        const ry0 = b.y - uy * ribbonLen;
+        const ribbon = ctx.createLinearGradient(rx0, ry0, b.x, b.y);
+        ribbon.addColorStop(0, 'rgba(255,80,40,0)');
+        ribbon.addColorStop(0.5, 'rgba(255,100,50,0.2)');
+        ribbon.addColorStop(1, 'rgba(255,160,80,0.55)');
+        ctx.strokeStyle = ribbon;
+        ctx.lineWidth = 4.5;
+        ctx.beginPath();
+        ctx.moveTo(rx0, ry0);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(ang);
+      ctx.fillStyle = 'rgba(255,180,100,0.95)';
+      ctx.strokeStyle = 'rgba(255,90,40,0.9)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(7, 0);
+      ctx.lineTo(0, 3.0);
+      ctx.lineTo(-4, 0);
+      ctx.lineTo(0, -3.0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#fff8e8';
+      ctx.beginPath();
+      ctx.moveTo(7, 0);
+      ctx.lineTo(2.5, 1.2);
+      ctx.lineTo(2.5, -1.2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    } else {
+      // Default enemy orb
+      ctx.fillStyle = '#ff6644';
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r || 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
   ctx.restore();
 }
@@ -1067,6 +1156,7 @@ export function drawField(ctx, area, snap, opts = {}) {
   for (const b of bullets) {
     drawBullet(ctx, {
       x: b.x * sx, y: b.y * sy, owner: b.o || b.owner, homing: b.h || b.homing, r: 3, vx: b.vx, vy: b.vy,
+      laser: !!(b.L || b.laser),
       trail: Array.isArray(b.trail) ? b.trail.map((p) => ({ x: p.x * sx, y: p.y * sy })) : undefined,
     });
   }

@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-} from './entities.js?v=1.5.45';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.45';
-import { sfx } from './audio.js?v=1.5.45';
+} from './entities.js?v=1.5.46';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.46';
+import { sfx } from './audio.js?v=1.5.46';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -52,10 +52,105 @@ function steerHomingBullet(b, enemies, dt, fieldW) {
 }
 
 function pushHomingTrail(b) {
-  if (!b.homing || b.owner !== 'player') return;
+  if (!b.homing) return;
   b.trail = b.trail || [];
   b.trail.push({ x: b.x, y: b.y });
   if (b.trail.length > HOMING_TRAIL_CAP) b.trail.shift();
+}
+
+/** Enemy limited-homing: steer toward ship only while homeT > 0, then go straight. */
+const ENEMY_HOMING_TURN = 7.0; // rad/s — weaker than player (10.5)
+const ENEMY_HOMING_SPD = 280;
+
+function steerEnemyHoming(b, tx, ty, dt) {
+  if (!b.homing || b.owner !== 'enemy') return;
+  if (typeof b.homeT === 'number') {
+    if (b.homeT <= 0) return;
+    b.homeT -= dt;
+  }
+  const desired = Math.atan2(ty - b.y, tx - b.x);
+  let cur = Math.atan2(b.vy || 0, b.vx || -1);
+  let delta = desired - cur;
+  while (delta > Math.PI) delta -= Math.PI * 2;
+  while (delta < -Math.PI) delta += Math.PI * 2;
+  const maxTurn = ENEMY_HOMING_TURN * dt;
+  if (delta > maxTurn) delta = maxTurn;
+  else if (delta < -maxTurn) delta = -maxTurn;
+  const ang = cur + delta;
+  b.vx = Math.cos(ang) * ENEMY_HOMING_SPD;
+  b.vy = Math.sin(ang) * ENEMY_HOMING_SPD;
+}
+
+/**
+ * Kind-tuned enemy attack: normal / laser pulses / limited-homing missiles.
+ * tx,ty = target ship position in field pixels.
+ */
+function pushEnemyAttack(e, bullets, tx, ty) {
+  const kind = e.kind || 'basic';
+  const ox = e.x - (e.w || 20) * 0.4;
+  const oy = e.y;
+  const aim = Math.atan2(ty - oy, tx - ox);
+
+  const fireNormal = (vx, vy, dmg = 2) => {
+    bullets.push(spawnBullet(ox, oy, vx, vy, 'enemy', false, dmg));
+  };
+  const fireLaser = (spd = 480, dmg = 2, angOff = 0) => {
+    const a = aim + angOff;
+    bullets.push(spawnBullet(
+      ox, oy, Math.cos(a) * spd, Math.sin(a) * spd,
+      'enemy', false, dmg, { laser: true, life: 2.0 },
+    ));
+  };
+  const fireMissile = (homeDur = 0.55, angJitter = 0.3) => {
+    const a = aim + (Math.random() - 0.5) * angJitter;
+    const spd = 230 + Math.random() * 30;
+    bullets.push(spawnBullet(
+      ox, oy, Math.cos(a) * spd, Math.sin(a) * spd,
+      'enemy', true, 3,
+      { homeT: homeDur, homeMax: homeDur, life: 2.8 },
+    ));
+  };
+
+  if (kind === 'swarm') {
+    fireNormal(-170 - Math.random() * 30, (Math.random() - 0.5) * 28, 1);
+  } else if (kind === 'basic') {
+    if (Math.random() < 0.4) fireLaser(400, 2);
+    else fireNormal(-165 - Math.random() * 25, (ty - oy) * 0.4, 2);
+  } else if (kind === 'drone') {
+    fireLaser(440, 2);
+    if (Math.random() < 0.3) fireMissile(0.4, 0.4);
+  } else if (kind === 'elite') {
+    fireLaser(500, 2);
+    fireNormal(-150, -36, 1);
+    fireNormal(-150, 36, 1);
+    if (Math.random() < 0.6) fireMissile(0.5);
+  } else if (kind === 'mech') {
+    fireLaser(520, 2, -0.06);
+    fireLaser(500, 2, 0.06);
+    fireMissile(0.6, 0.25);
+    fireNormal(-145, -48, 1);
+    fireNormal(-145, 48, 1);
+  } else if (kind === 'golem') {
+    fireLaser(460, 2, -0.14);
+    fireLaser(480, 2, 0);
+    fireLaser(460, 2, 0.14);
+    if (Math.random() < 0.35) fireMissile(0.45);
+  } else if (kind === 'tank') {
+    fireLaser(510, 2);
+    fireNormal(-185, -55, 2);
+    fireNormal(-185, 0, 2);
+    fireNormal(-185, 55, 2);
+    if (Math.random() < 0.45) fireMissile(0.48);
+  } else if (kind === 'boss') {
+    fireLaser(540, 3, -0.08);
+    fireLaser(520, 2, 0.08);
+    fireMissile(0.65, 0.2);
+    fireMissile(0.5, 0.45);
+    fireNormal(-170, -40, 2);
+    fireNormal(-170, 40, 2);
+  } else {
+    fireNormal(-160 - Math.random() * 30, (Math.random() - 0.5) * 24, 2);
+  }
 }
 
 
@@ -899,25 +994,24 @@ export class Game {
       const parked = e.sent ? e.x <= (e.holdX || fw) + 8 : true;
       if (e.fireCd <= 0 && onScreen && parked) {
         e.fireCd = e.sent
-          ? ((e.kind === 'boss' || e.kind === 'tank' || e.kind === 'mech') ? 0.85
-            : (e.kind === 'golem' || e.kind === 'elite') ? 1.1
-            : 1.5 + Math.random() * 0.4)
-          : ((e.kind === 'boss' || e.kind === 'tank') ? 1.0
-            : (e.kind === 'mech' || e.kind === 'golem') ? 1.3 + Math.random() * 0.4
-            : e.kind === 'elite' ? 1.6 + Math.random() * 0.5
-            : 2.2 + Math.random() * 0.8);
-        S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y, -160 - Math.random() * 30, (Math.random() - 0.5) * 24, 'enemy', false, 2));
-        if (e.kind === 'boss' || e.kind === 'tank' || e.kind === 'mech' || (e.sent && (e.kind === 'golem' || e.kind === 'elite'))) {
-          S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y - 12, -160, -30, 'enemy', false, 1));
-          S.bullets.push(spawnBullet(e.x - e.w * 0.4, e.y + 12, -160, 30, 'enemy', false, 1));
-        }
+          ? ((e.kind === 'boss' || e.kind === 'tank' || e.kind === 'mech') ? 0.95
+            : (e.kind === 'golem' || e.kind === 'elite') ? 1.2
+            : 1.55 + Math.random() * 0.4)
+          : ((e.kind === 'boss' || e.kind === 'tank') ? 1.15
+            : (e.kind === 'mech' || e.kind === 'golem') ? 1.4 + Math.random() * 0.4
+            : e.kind === 'elite' ? 1.7 + Math.random() * 0.5
+            : 2.25 + Math.random() * 0.8);
+        pushEnemyAttack(e, S.bullets, P.x, P.y * fh);
       }
     }
 
-    // Bullets (homing: turn-rate limit + sticky lock, then trail)
+    // Bullets (player homing + enemy limited-homing, then trail)
+    const pyAim = P.y * fh;
     for (const b of S.bullets) {
       if (b.homing && b.owner === 'player') {
         steerHomingBullet(b, S.enemies, dt, fw);
+      } else if (b.homing && b.owner === 'enemy') {
+        steerEnemyHoming(b, P.x, pyAim, dt);
       }
       b.x += b.vx * dt;
       b.y += b.vy * dt;
@@ -1293,16 +1387,16 @@ export class Game {
       const parked = e.sent ? e.x <= (e.holdX || fw) + 8 : true;
       if (e.fireCd <= 0 && parked) {
         e.fireCd = e.sent
-          ? ((e.kind === 'elite' || e.kind === 'boss' || e.kind === 'mech' || e.kind === 'tank') ? 1.0 : 1.5)
-          : ((e.kind === 'elite' || e.kind === 'boss') ? 1.6 : 2.2);
-        B.bullets.push(spawnBullet(e.x, e.y, -170, (Math.random() - 0.5) * 20, 'enemy', false, 2));
-        if (e.kind === 'elite' || e.kind === 'boss' || (e.sent && (e.kind === 'mech' || e.kind === 'tank' || e.kind === 'golem'))) {
-          B.bullets.push(spawnBullet(e.x, e.y - 10, -160, -28, 'enemy', false, 1));
-          B.bullets.push(spawnBullet(e.x, e.y + 10, -160, 28, 'enemy', false, 1));
-        }
+          ? ((e.kind === 'elite' || e.kind === 'boss' || e.kind === 'mech' || e.kind === 'tank') ? 1.1 : 1.55)
+          : ((e.kind === 'elite' || e.kind === 'boss' || e.kind === 'mech' || e.kind === 'tank' || e.kind === 'golem') ? 1.7 : 2.25);
+        pushEnemyAttack(e, B.bullets, shipX, B.y * fh);
       }
     }
+    const botPy = B.y * fh;
     for (const b of B.bullets) {
+      if (b.homing && b.owner === 'enemy') {
+        steerEnemyHoming(b, shipX, botPy, dt);
+      }
       b.x += b.vx * dt;
       b.y += b.vy * dt;
       b.life -= dt;
