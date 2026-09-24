@@ -297,7 +297,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=1.5.61`;
+  return `assets/enemies/${kind}/${frame}.png?v=1.5.62`;
 }
 
 function loadKindSprite(kind) {
@@ -1281,6 +1281,73 @@ function drawLaser(ctx, player, fieldH) {
  * Shows item slots, control ship, and optional touch crosshair (status lives in info pane).
  */
 
+/** Canvas pixels per CSS pixel (DPR the canvas was sized with). */
+function canvasCssScale(ctx) {
+  const c = ctx.canvas;
+  const cw = c && c.clientWidth;
+  return cw ? Math.max(1, c.width / cw) : 1;
+}
+
+function ellipsize(ctx, text, maxW) {
+  if (ctx.measureText(text).width <= maxW) return text;
+  let t = text;
+  while (t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
+  return t + '…';
+}
+
+/** Largest font (step down from maxFs to minFs) where every line fits maxW on one line. */
+function fitFontSize(ctx, texts, maxW, maxFs, minFs, fontStack, weight) {
+  let fs = maxFs;
+  for (; fs > minFs; fs -= 1) {
+    ctx.font = `${weight} ${fs}px ${fontStack}`;
+    if (texts.every((t) => ctx.measureText(t).width <= maxW)) return fs;
+  }
+  ctx.font = `${weight} ${minFs}px ${fontStack}`;
+  return minFs;
+}
+
+/** Break text into ≤2 lines (prefers breaking at spaces / before （), char-level for JP. */
+function splitTwo(ctx, text, maxW) {
+  const chars = Array.from(text);
+  let cut = 0;
+  let w = 0;
+  for (let i = 0; i < chars.length; i++) {
+    w = ctx.measureText(chars.slice(0, i + 1).join('')).width;
+    if (w > maxW) break;
+    cut = i + 1;
+  }
+  if (cut >= chars.length) return [text];
+  // Prefer a natural break point in the back half of line 1
+  for (let i = cut; i > cut * 0.5; i--) {
+    const ch = chars[i];
+    if (ch === ' ' || ch === '　' || ch === '（' || ch === '(' || ch === '/' || chars[i - 1] === '：' || chars[i - 1] === '、') {
+      cut = i;
+      break;
+    }
+  }
+  const l1 = chars.slice(0, cut).join('').trimEnd();
+  const l2 = chars.slice(cut).join('').trimStart();
+  return [l1, ellipsize(ctx, l2, maxW)];
+}
+
+/**
+ * Fit text into maxW: one line at up to oneLineFs, else two lines at up to twoLineFs,
+ * shrinking down to minFs; truncates with … if still too long.
+ */
+function wrapToFit(ctx, text, maxW, oneLineFs, minFs, fontStack, weight, twoLineFs = oneLineFs) {
+  for (let fs = oneLineFs; fs >= Math.max(minFs, oneLineFs * 0.8); fs -= 1) {
+    ctx.font = `${weight} ${fs}px ${fontStack}`;
+    if (ctx.measureText(text).width <= maxW) return { lines: [text], fs };
+  }
+  for (let fs = twoLineFs; fs >= minFs; fs -= 1) {
+    ctx.font = `${weight} ${fs}px ${fontStack}`;
+    const lines = splitTwo(ctx, text, maxW);
+    if (lines.length === 1 || !lines[1].endsWith('…')) return { lines, fs };
+  }
+  ctx.font = `${weight} ${minFs}px ${fontStack}`;
+  return { lines: splitTwo(ctx, text, maxW), fs: minFs };
+}
+
 /**
  * Bottom information pane (~20%): status, HP, layout guide.
  */
@@ -1309,16 +1376,65 @@ function drawInfoPanel(ctx, area, localState) {
   ));
   const status = localState.statusText || '';
 
-  // Large status line
-  const statusFs = Math.max(14, Math.min(22, area.h * 0.28));
-  ctx.font = `700 ${statusFs}px ${fontStack}`;
-  ctx.fillStyle = '#ffffff';
+  // Status / item information line (item names, pickups, usage announcements
+  // live HERE — never over the stages). Wraps to ≤2 lines inside its box.
+  const u = canvasCssScale(ctx);
+  const boxX = area.w * 0.03;
+  const boxY = area.h * 0.05;
+  const boxW = area.w * 0.94;
+  const boxH = area.h * 0.45;
+  const ban = localState.itemBanner;
+  const banOn = !!(ban && ban.life > 0 && ban.text);
+  const textW = boxW - Math.max(10 * u, boxW * 0.04);
+  const baseFs = Math.max(12 * u, Math.min(20 * u, boxH * 0.4));
+  const minFs = Math.max(11 * u, Math.min(13 * u, boxH * 0.26));
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.shadowColor = '#000';
-  ctx.shadowBlur = 5;
-  ctx.fillText(status, area.w * 0.5, area.h * 0.32, area.w * 0.94);
-  ctx.shadowBlur = 0;
+  if (banOn) {
+    const a = Math.max(0, Math.min(1, ban.life / 0.35));
+    ctx.save();
+    ctx.globalAlpha = 0.35 + 0.65 * a;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    roundRect(ctx, boxX, boxY, boxW, boxH, 8 * u);
+    ctx.fill();
+    ctx.strokeStyle = ban.color || '#ffd24a';
+    ctx.lineWidth = Math.max(1.5, 2 * u);
+    roundRect(ctx, boxX, boxY, boxW, boxH, 8 * u);
+    ctx.stroke();
+    // Secondary detail (e.g. send result) when it differs from the item line
+    const extra = (status && status !== ban.text && !/^敵を倒して/.test(status)) ? status : '';
+    let lines;
+    let fs;
+    if (extra) {
+      fs = fitFontSize(ctx, [ban.text, extra], textW, Math.min(baseFs, boxH * 0.34), minFs, fontStack, 800);
+      lines = [ellipsize(ctx, ban.text, textW), ellipsize(ctx, extra, textW)];
+    } else {
+      ({ lines, fs } = wrapToFit(ctx, ban.text, textW, baseFs, minFs, fontStack, 800, Math.min(baseFs, boxH * 0.36)));
+    }
+    ctx.font = `800 ${fs}px ${fontStack}`;
+    const lh = fs * 1.2;
+    const cy = boxY + boxH * 0.5;
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 3 * u;
+    for (let i = 0; i < lines.length; i++) {
+      const y = cy + (i - (lines.length - 1) / 2) * lh;
+      ctx.fillStyle = i === 0 ? '#ffffff' : '#ffe9a8';
+      ctx.fillText(lines[i], area.w * 0.5, y);
+    }
+    ctx.restore();
+  } else if (status) {
+    const { lines, fs } = wrapToFit(ctx, status, textW, baseFs, minFs, fontStack, 700, Math.min(baseFs, boxH * 0.36));
+    ctx.font = `700 ${fs}px ${fontStack}`;
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 5;
+    const lh = fs * 1.2;
+    const cy = boxY + boxH * 0.5;
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], area.w * 0.5, cy + (i - (lines.length - 1) / 2) * lh);
+    }
+    ctx.shadowBlur = 0;
+  }
 
   // Self / opponent HP (warn when under 30%)
   const hpFs = Math.max(12, Math.min(18, area.h * 0.2));
@@ -1625,29 +1741,8 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
   ctx.fillRect(0, L.oppH + L.ownH + L.ctrlH, L.W, 1);
   drawInfoPanel(ctx, L.info, { ...localState, oppHpDisplay: oppHp });
 
-  // Item effect banner (center of own field)
-  const ban = localState.itemBanner;
-  if (ban && ban.life > 0) {
-    const a = Math.min(1, ban.life / 0.35) * Math.min(1, (ban.max - ban.life) / 0.2 + 0.8);
-    ctx.save();
-    ctx.globalAlpha = Math.max(0, Math.min(1, a));
-    const bx = L.own.x + L.own.w * 0.5;
-    const by = L.own.y + L.own.h * 0.2;
-    const tw = L.own.w * 0.9;
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    roundRect(ctx, bx - tw / 2, by - 18, tw, 36, 8);
-    ctx.fill();
-    ctx.strokeStyle = ban.color || '#fff';
-    ctx.lineWidth = 2;
-    roundRect(ctx, bx - tw / 2, by - 18, tw, 36, 8);
-    ctx.stroke();
-    ctx.fillStyle = ban.color || '#fff';
-    ctx.font = `800 ${Math.max(13, L.own.w * 0.045)}px "Hiragino Sans","Noto Sans JP",sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(ban.text, bx, by, tw * 0.92);
-    ctx.restore();
-  }
+  // Item effect announcements are drawn inside the info pane (drawInfoPanel),
+  // never over the opponent / own stages.
 
   if (waiting) {
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
