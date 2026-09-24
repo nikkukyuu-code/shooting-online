@@ -297,7 +297,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=1.5.60`;
+  return `assets/enemies/${kind}/${frame}.png?v=1.5.61`;
 }
 
 function loadKindSprite(kind) {
@@ -379,16 +379,10 @@ function drawWaveEnemy(ctx, e, kind, sent, w, h, t, pulse) {
     elite: '#8890a0',
     boss: '#ff5533',
   }[tier] || '#6a7380');
-  const glow = sent ? 'rgba(80,220,255,0.35)' : 'rgba(255,80,60,0.28)';
   const thruster = 0.55 + 0.45 * pulse;
 
+  // No under-glow / rim ellipse — ship silhouette only (v1.5.61: removed ring look)
   ctx.save();
-  // Soft under-glow
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.ellipse(w * 0.08, 0, w * 0.42, h * 0.38, 0, 0, Math.PI * 2);
-  ctx.fill();
-
   if (tier === 'swarm') {
     // Tiny dart
     ctx.fillStyle = hull;
@@ -493,12 +487,6 @@ function drawWaveEnemy(ctx, e, kind, sent, w, h, t, pulse) {
     ctx.globalAlpha = 1;
   }
 
-  // Rim
-  ctx.strokeStyle = sent ? 'rgba(180,240,255,0.85)' : 'rgba(255,220,220,0.55)';
-  ctx.lineWidth = 1.25;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, w * 0.48, h * 0.42, 0, 0, Math.PI * 2);
-  ctx.stroke();
   ctx.restore();
 }
 
