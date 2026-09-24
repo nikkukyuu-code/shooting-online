@@ -296,7 +296,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=1.5.47`;
+  return `assets/enemies/${kind}/${frame}.png?v=1.5.48`;
 }
 
 export function preloadEnemySprites() {
@@ -749,52 +749,90 @@ function drawFx(ctx, f) {
   ctx.restore();
 }
 
-/** Green HP bars near the top/middle pane boundary — with drain ghost + shake. */
+/** HP bars at the bottom edge of the opponent pane — drain ghost + shake + low-HP pulse. */
 function drawHpBarsAtBoundary(ctx, L, selfHp, oppHp, maxHp, fx = {}) {
   const ghost = fx.hpGhost != null ? fx.hpGhost : selfHp;
   const display = fx.hpDisplay != null ? fx.hpDisplay : selfHp;
   const shake = Math.max(0, fx.hpShake || 0);
   const flash = Math.max(0, fx.damageFlash || 0);
-  const x0 = L.W * 0.16;
-  const barW = L.W * 0.58;
-  const barH = Math.max(6, Math.min(11, L.H * 0.012));
-  const gap = barH + 6;
-  const y0 = L.oppH + Math.max(6, L.ownH * 0.02);
+  const x0 = L.W * 0.12;
+  const barW = L.W * 0.66;
+  const barH = Math.max(7, Math.min(12, L.H * 0.013));
+  const gap = Math.max(4, barH * 0.55);
+  const totalH = barH * 2 + gap;
+  const padBot = Math.max(4, Math.min(10, L.oppH * 0.035));
+  // Sit at the bottom of the opponent frame (above the opp/own divider)
+  const y0 = L.oppH - padBot - totalH;
   const jx = shake > 0 ? (Math.random() - 0.5) * 10 * shake : 0;
   const jy = shake > 0 ? (Math.random() - 0.5) * 6 * shake : 0;
   const x = x0 + jx;
   const y = y0 + jy;
+  const now = performance.now();
+  const selfRatio = Math.max(0, display / maxHp);
+  const oppRatio = Math.max(0, oppHp / maxHp);
+  const selfLow = selfRatio < 0.3;
+  const oppLow = oppRatio < 0.3;
+  const pulse = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(now / 180)); // ~2.8Hz
 
-  // TOP = opponent (near opponent pane)
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  // Soft backdrop so bars stay readable over the opponent field
+  ctx.fillStyle = 'rgba(0,0,0,0.42)';
+  const bgPad = 4;
+  ctx.fillRect(x - bgPad, y - bgPad, barW + bgPad * 2 + 28, totalH + bgPad * 2);
+
+  // TOP = opponent
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
   ctx.fillRect(x, y, barW, barH);
-  ctx.fillStyle = '#6f6';
-  ctx.fillRect(x, y, barW * Math.max(0, oppHp / maxHp), barH);
-  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-  ctx.lineWidth = 1;
+  let oppFill = oppLow ? '#ff3333' : oppRatio < 0.55 ? '#ffcc33' : '#6f6';
+  if (oppLow) {
+    ctx.save();
+    ctx.shadowColor = `rgba(255,40,40,${0.55 * pulse})`;
+    ctx.shadowBlur = 10 * pulse;
+    ctx.fillStyle = oppFill;
+    ctx.globalAlpha = 0.65 + 0.35 * pulse;
+    ctx.fillRect(x, y, barW * oppRatio, barH);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = oppFill;
+    ctx.fillRect(x, y, barW * oppRatio, barH);
+  }
+  ctx.strokeStyle = oppLow ? `rgba(255,120,120,${0.5 + 0.5 * pulse})` : 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = oppLow ? 1.5 : 1;
   ctx.strokeRect(x, y, barW, barH);
   ctx.font = `600 ${Math.max(8, barH - 1)}px sans-serif`;
-  ctx.fillStyle = 'rgba(220,255,220,0.85)';
+  ctx.fillStyle = 'rgba(220,255,220,0.9)';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillText('あいて', x + 4, y + barH * 0.5);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#fff';
+  ctx.fillText(`${Math.max(0, Math.ceil(oppHp))}`, x + barW - 4, y + barH * 0.5);
 
-  // BOTTOM = self (near own pane) — lost-HP ghost drains slowly
-  const ySelf = y + gap;
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  // BOTTOM = self — lost-HP ghost drains slowly
+  const ySelf = y + barH + gap;
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.fillRect(x, ySelf, barW, barH);
-  // ghost chunk (orange) — stays visible longer
   ctx.fillStyle = flash > 0 ? '#ff5533' : '#ff8844';
   ctx.fillRect(x, ySelf, barW * Math.max(0, ghost / maxHp), barH);
-  const ratio = Math.max(0, display / maxHp);
-  ctx.fillStyle = ratio < 0.3 ? '#ff3333' : ratio < 0.55 ? '#ffcc33' : '#33ee66';
-  ctx.fillRect(x, ySelf, barW * ratio, barH);
+  if (selfLow) {
+    ctx.save();
+    ctx.shadowColor = `rgba(255,20,20,${0.7 * pulse})`;
+    ctx.shadowBlur = 12 * pulse;
+    ctx.fillStyle = '#ff2222';
+    ctx.globalAlpha = 0.6 + 0.4 * pulse;
+    ctx.fillRect(x, ySelf, barW * selfRatio, barH);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = selfRatio < 0.55 ? '#ffcc33' : '#33ee66';
+    ctx.fillRect(x, ySelf, barW * selfRatio, barH);
+  }
   if (flash > 0) {
     ctx.fillStyle = `rgba(255,255,255,${0.35 * Math.min(1, flash / 0.35)})`;
-    ctx.fillRect(x, ySelf, barW * ratio, barH);
+    ctx.fillRect(x, ySelf, barW * selfRatio, barH);
   }
-  ctx.strokeStyle = flash > 0 ? '#fff' : 'rgba(255,255,255,0.65)';
-  ctx.lineWidth = flash > 0 ? 2 : 1;
+  ctx.strokeStyle = selfLow
+    ? `rgba(255,80,80,${0.55 + 0.45 * pulse})`
+    : (flash > 0 ? '#fff' : 'rgba(255,255,255,0.65)');
+  ctx.lineWidth = selfLow || flash > 0 ? 2 : 1;
   ctx.strokeRect(x, ySelf, barW, barH);
   ctx.font = `700 ${Math.max(9, barH)}px sans-serif`;
   ctx.fillStyle = '#fff';
@@ -802,8 +840,46 @@ function drawHpBarsAtBoundary(ctx, L, selfHp, oppHp, maxHp, fx = {}) {
   ctx.textBaseline = 'middle';
   ctx.fillText(`${Math.max(0, Math.ceil(display))}`, x - 6, ySelf + barH * 0.5);
   ctx.textAlign = 'left';
-  ctx.fillStyle = 'rgba(255,255,200,0.9)';
+  ctx.fillStyle = selfLow ? `rgba(255,160,160,${0.75 + 0.25 * pulse})` : 'rgba(255,255,200,0.9)';
   ctx.fillText('じぶん', x + 4, ySelf + barH * 0.5);
+  if (selfLow) {
+    ctx.textAlign = 'right';
+    ctx.fillStyle = `rgba(255,90,90,${0.7 + 0.3 * pulse})`;
+    ctx.font = `800 ${Math.max(8, barH - 1)}px sans-serif`;
+    ctx.fillText('危険', x + barW - 4, ySelf + barH * 0.5);
+  }
+}
+
+/** Persistent red edge vignette + tint while local HP is under 30%. */
+function drawLowHpWarning(ctx, L, selfHp, maxHp = 100) {
+  const ratio = Math.max(0, selfHp / maxHp);
+  if (ratio >= 0.3 || ratio <= 0) return;
+  const now = performance.now();
+  const pulse = 0.5 + 0.5 * Math.sin(now / 220);
+  // Stronger as HP drops further below 30%
+  const danger = Math.min(1, (0.3 - ratio) / 0.3);
+  const a = (0.12 + 0.18 * danger) * (0.65 + 0.35 * pulse);
+
+  ctx.save();
+  // Full-canvas edge vignette
+  const g = ctx.createRadialGradient(
+    L.W * 0.5, L.H * 0.45, L.W * 0.22,
+    L.W * 0.5, L.H * 0.45, L.W * 0.78,
+  );
+  g.addColorStop(0, 'rgba(255,0,0,0)');
+  g.addColorStop(0.55, `rgba(180,0,0,${a * 0.35})`);
+  g.addColorStop(1, `rgba(120,0,0,${a})`);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, L.W, L.H);
+
+  // Own-field top/bottom red strips for an urgent frame
+  const strip = Math.max(3, L.own.h * 0.035);
+  ctx.fillStyle = `rgba(255, 40, 40, ${0.25 + 0.35 * pulse * danger})`;
+  ctx.fillRect(L.own.x, L.own.y, L.own.w, strip);
+  ctx.fillRect(L.own.x, L.own.y + L.own.h - strip, L.own.w, strip);
+  ctx.fillRect(L.own.x, L.own.y, strip * 0.7, L.own.h);
+  ctx.fillRect(L.own.x + L.own.w - strip * 0.7, L.own.y, strip * 0.7, L.own.h);
+  ctx.restore();
 }
 
 function drawDamageFlash(ctx, L, flash) {
@@ -999,15 +1075,18 @@ function drawInfoPanel(ctx, area, localState) {
   ctx.fillText(status, area.w * 0.5, area.h * 0.32, area.w * 0.94);
   ctx.shadowBlur = 0;
 
-  // Self / opponent HP
+  // Self / opponent HP (warn when under 30%)
   const hpFs = Math.max(12, Math.min(18, area.h * 0.2));
   ctx.font = `600 ${hpFs}px ${fontStack}`;
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#88ffaa';
-  ctx.fillText(`自分 HP ${selfHp}`, area.w * 0.04, area.h * 0.62, area.w * 0.44);
+  const selfLow = selfHp < 30;
+  const oppLow = oppHp < 30;
+  const pulse = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(performance.now() / 200));
+  ctx.fillStyle = selfLow ? `rgba(255,70,70,${0.75 + 0.25 * pulse})` : '#88ffaa';
+  ctx.fillText(selfLow ? `自分 HP ${selfHp} 危険` : `自分 HP ${selfHp}`, area.w * 0.04, area.h * 0.62, area.w * 0.44);
   ctx.textAlign = 'right';
-  ctx.fillStyle = '#ff8899';
-  ctx.fillText(`相手 HP ${oppHp}`, area.w * 0.96, area.h * 0.62, area.w * 0.44);
+  ctx.fillStyle = oppLow ? `rgba(255,100,120,${0.75 + 0.25 * pulse})` : '#ff8899';
+  ctx.fillText(oppLow ? `相手 HP ${oppHp} 危険` : `相手 HP ${oppHp}`, area.w * 0.96, area.h * 0.62, area.w * 0.44);
 
   // Compact layout labels
   const labFs = Math.max(10, Math.min(14, area.h * 0.14));
@@ -1182,11 +1261,18 @@ export function drawField(ctx, area, snap, opts = {}) {
   const py = (p.y <= 1 ? p.y * fh : p.y * sy);
   const px = (p.x || snap.px || 48) * (p.x && p.x > 1 ? sx : 1);
   if (snap.alive !== false) {
-    const blink = !darkened && snap.invuln > 0 && Math.floor(performance.now() / 60) % 2 === 0;
+    const invulnBlink = !darkened && snap.invuln > 0 && Math.floor(performance.now() / 60) % 2 === 0;
+    const hpVal = snap.player?.hp ?? snap.php;
+    const lowHp = !darkened && hpVal != null && hpVal / (snap.player?.maxHp || 100) < 0.3;
+    // Slow danger blink when under 30% (does not hide ship completely)
+    const lowBlink = lowHp && Math.floor(performance.now() / 140) % 2 === 0;
+    const blink = invulnBlink;
     const facingUp = !darkened && snap.player && snap.player.activePower === 'direct' && snap.player.activeTimer > 0;
     const facingDown = darkened && snap.directBeam; // opponent firing down at us
     const ang = facingUp ? -Math.PI / 2 : (facingDown ? Math.PI / 2 : 0);
-    if (!blink) drawShip(ctx, px, py, 28 * Math.min(sx, 1.2), 18 * Math.min(sy, 1.2), darkened ? '#cde' : (snap.invuln > 0 ? '#ffaaaa' : '#e8f0ff'), 1, ang);
+    let shipColor = darkened ? '#cde' : (snap.invuln > 0 ? '#ffaaaa' : '#e8f0ff');
+    if (lowHp) shipColor = lowBlink ? '#ff6688' : '#ff3344';
+    if (!blink) drawShip(ctx, px, py, 28 * Math.min(sx, 1.2), 18 * Math.min(sy, 1.2), shipColor, 1, ang);
     if (!darkened && snap.player) drawLaser(ctx, snap.player, fh);
     // Own-pane part of upward direct beam
     if (facingUp) {
@@ -1258,15 +1344,8 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
   }
 
 
-  // HP bars near boundary between top and middle
-  const oppHp = remoteSnap ? (remoteSnap.php ?? 100) : (localState.botHp ?? 100);
-  drawHpBarsAtBoundary(ctx, L, localState.player.hp, oppHp, 100, {
-    hpGhost: localState.hpGhost,
-    hpDisplay: localState.hpDisplay,
-    hpShake: localState.hpShake,
-    damageFlash: localState.damageFlash,
-  });
   drawDamageFlash(ctx, L, localState.damageFlash);
+  drawLowHpWarning(ctx, L, localState.player.hp, 100);
   drawDamageNumbers(ctx, L, localState.damageNumbers);
 
   // Divider between opp and own
@@ -1274,6 +1353,15 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
   ctx.fillRect(0, L.oppH - 2, L.W, 3);
   ctx.fillStyle = 'rgba(255,200,150,0.25)';
   ctx.fillRect(0, L.oppH - 1, L.W, 1);
+
+  // HP bars at bottom of opponent pane (above divider; keeps own playfield clear)
+  const oppHp = remoteSnap ? (remoteSnap.php ?? 100) : (localState.botHp ?? 100);
+  drawHpBarsAtBoundary(ctx, L, localState.player.hp, oppHp, 100, {
+    hpGhost: localState.hpGhost,
+    hpDisplay: localState.hpDisplay,
+    hpShake: localState.hpShake,
+    damageFlash: localState.damageFlash,
+  });
 
   // 3) Control — 操作画面 (purple/blue nebula pad)
   drawControlPanel(ctx, L.ctrl, localState);
