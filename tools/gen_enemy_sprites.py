@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Generate 5 low-poly PNG frames per enemy kind with DISTINCT animations.
+"""Generate 5 low-poly PNG frames per enemy kind with gentle ゆらゆら sway.
 
-Not a shared turntable: each kind gets motion that fits its design
-(walk / hover / thrust / rock / arm-spin / flutter / station pulse).
+No full spins / arm turntables / tumble flips. Each kind keeps light flavor
+(walk-bob, engine pulse, core glow) but body motion is soft tilt + bob.
 """
 from __future__ import annotations
 import math
@@ -155,16 +155,17 @@ def recolor_tris(tris, factor=None, absolute=None):
 # ---------- per-kind animated meshes (phase in [0,1)) ----------
 
 def mesh_basic(phase):
-    """WALK: alternate legs, slight body bob. Facing -X."""
+    """WALK-BOB + ゆらゆら: soft L/R sway, gentle leg bob. Facing -X."""
     g = '#9aa0a8'
     gd = '#5a5e68'
     eye = '#e02028'
-    # phase 0..1 → walk cycle; legs opposite
     ang = phase * 2 * math.pi
-    leg_swing = math.sin(ang) * 0.14   # Z offset of feet in walk plane
-    leg_lift_l = max(0.0, math.sin(ang)) * 0.08
-    leg_lift_r = max(0.0, -math.sin(ang)) * 0.08
-    bob = abs(math.sin(ang * 2)) * 0.04  # double-frequency body bob
+    # soft walk-bob (smaller than old stride)
+    leg_swing = math.sin(ang) * 0.08
+    leg_lift_l = max(0.0, math.sin(ang)) * 0.05
+    leg_lift_r = max(0.0, -math.sin(ang)) * 0.05
+    bob = math.sin(ang) * 0.035
+    sway = math.sin(ang) * 5.0   # soft L/R lean, no spin
 
     tris = []
     body = []
@@ -173,28 +174,24 @@ def mesh_basic(phase):
     body += box(-0.45, 0.1 + bob, 0, 0.22, 0.06, 0.06, gd)
     body += box(0.38, 0.05 + bob, 0, 0.1, 0.12, 0.1, gd)
     body += box(-0.05, 0.55 + bob, 0.2, 0.06, 0.06, 0.04, eye)
-    # slight lean into stride
-    lean = math.sin(ang) * 3.0
-    tris += rotate_tris(body, 'z', lean)
 
-    # left leg (forward when sin>0)
     ll = []
     ll += box(-0.12, -0.45 + bob + leg_lift_l, 0.08 + leg_swing, 0.1, 0.28, 0.1, gd)
     ll += box(-0.12, -0.72 + bob + leg_lift_l, 0.08 + leg_swing, 0.14, 0.06, 0.12, gd)
-    tris += ll
-    # right leg opposite
     rl = []
     rl += box(0.12, -0.45 + bob + leg_lift_r, -0.08 - leg_swing, 0.1, 0.28, 0.1, gd)
     rl += box(0.12, -0.72 + bob + leg_lift_r, -0.08 - leg_swing, 0.14, 0.06, 0.12, gd)
-    tris += rl
+
+    tris = body + ll + rl
+    tris = rotate_tris(tris, 'z', sway)
     return tris
 
 
 def mesh_drone(phase):
-    """HOVER: tilt L/R + vertical bob + rim light pulse."""
+    """HOVER ゆらゆら: soft L/R tilt + vertical bob + rim light pulse."""
     ang = phase * 2 * math.pi
-    bob = math.sin(ang) * 0.07
-    tilt = math.sin(ang) * 8.0  # bank Z
+    bob = math.sin(ang) * 0.055
+    tilt = math.sin(ang) * 6.0  # soft bank Z — no spin
     pulse = 0.5 + 0.5 * math.sin(ang)  # 0..1 rim brighten
 
     tris = []
@@ -233,15 +230,16 @@ def mesh_drone(phase):
     tris = translate_tris(tris, 0, bob, 0)
     tris = rotate_tris(tris, 'z', tilt)
     # tiny yaw wiggle, not a spin
-    tris = rotate_tris(tris, 'y', math.sin(ang * 0.5) * 6.0)
+    tris = rotate_tris(tris, 'y', math.sin(ang) * 3.0)  # tiny yaw sway
     return tris
 
 
 def mesh_elite(phase):
-    """FLIGHT: engine glow pulse + slight bank. Nose stays -X readable."""
+    """FLIGHT ゆらゆら: engine glow pulse + soft bank/bob. Nose stays -X."""
     ang = phase * 2 * math.pi
-    bank = math.sin(ang) * 7.0
-    pitch = math.sin(ang * 2) * 3.0
+    bank = math.sin(ang) * 5.0
+    pitch = math.sin(ang) * 3.0
+    bob = math.sin(ang) * 0.03
     glow = 0.5 + 0.5 * math.sin(ang)  # engine pulse
 
     white = '#f2f2f6'
@@ -265,18 +263,20 @@ def mesh_elite(phase):
     tris += box(0.72 + plume * 0.4, 0.18, 0, plume, 0.05, 0.05, eng_hot)
     tris += box(0.72 + plume * 0.4, -0.18, 0, plume, 0.05, 0.05, eng_hot)
 
-    tris = rotate_tris(tris, 'x', bank)  # roll
+    tris = translate_tris(tris, 0, bob, 0)
+    tris = rotate_tris(tris, 'x', bank)  # soft roll sway
     tris = rotate_tris(tris, 'z', pitch)
     return tris
 
 
 def mesh_mech(phase):
-    """FLIGHT: thruster flicker + slight pitch/roll. Triangle stays nose-left."""
+    """FLIGHT ゆらゆら: thruster flicker + soft pitch/roll sway. Nose-left."""
     ang = phase * 2 * math.pi
-    # flicker: non-smooth pulse via multi-sine
+    # flicker: non-smooth pulse via multi-sine (brightness only)
     flick = 0.55 + 0.45 * abs(math.sin(ang * 2.3 + 0.4)) * (0.7 + 0.3 * math.sin(ang * 5.1))
-    roll = math.sin(ang) * 6.0
-    pitch = math.cos(ang) * 4.0
+    roll = math.sin(ang) * 4.5
+    pitch = math.cos(ang) * 3.0
+    bob = math.sin(ang) * 0.025
 
     white = '#f4f4f8'
     edge = '#606070'
@@ -298,19 +298,20 @@ def mesh_mech(phase):
     if flick > 0.7:
         tris += box(0.68 + fl * 1.1, 0, 0, fl * 0.45, fw * 0.6, fw * 0.5, shade(thr_hot, 1.15))
 
+    tris = translate_tris(tris, 0, bob, 0)
     tris = rotate_tris(tris, 'x', roll)
     tris = rotate_tris(tris, 'z', pitch)
     return tris
 
 
 def mesh_tank(phase):
-    """HEAVY: slow body rock + tread advance bob. Weight-forward wedge."""
+    """HEAVY ゆらゆら: slow body rock + soft bob. Weight-forward wedge."""
     ang = phase * 2 * math.pi
-    rock = math.sin(ang) * 4.0          # slow roll feel
-    pitch = math.sin(ang + 0.8) * 2.5
-    bob = math.sin(ang * 2) * 0.025     # tread advance thud
+    rock = math.sin(ang) * 3.5          # soft roll sway
+    pitch = math.sin(ang + 0.8) * 2.0
+    bob = math.sin(ang) * 0.03
     # tread "advance" — shift side plates slightly
-    tread = math.sin(ang) * 0.04
+    tread = math.sin(ang) * 0.03
 
     red = '#e02028'
     dark = '#8a1018'
@@ -333,15 +334,19 @@ def mesh_tank(phase):
 
 
 def mesh_golem(phase):
-    """ARM SPIN: cross rotates around core + core pulse. Rotation OK here."""
-    ang = phase * 360.0  # full arm rotation over the 5 frames (72° steps)
-    pulse = 0.5 + 0.5 * math.sin(phase * 2 * math.pi)
+    """ゆらゆら: core pulse + soft arm sway/lean — NO arm turntable spin."""
+    ang = phase * 2 * math.pi
+    pulse = 0.5 + 0.5 * math.sin(ang)
+    sway = math.sin(ang) * 7.0    # soft L/R lean of cross
+    rock = math.cos(ang) * 4.0    # soft fore/aft rock
+    bob = math.sin(ang) * 0.03
 
     green = '#3cbc48'
     gd = '#1e7a28'
     yel = lerp_rgb(hex_rgb('#ffe033'), hex_rgb('#fff8c0'), pulse)
     core_hot = lerp_rgb(hex_rgb('#fff8a0'), hex_rgb('#ffffff'), pulse)
 
+    # Fixed cross orientation — sway as a whole, never spin around Y
     arms = []
     arms += box(0.35, 0, 0, 0.35, 0.1, 0.12, green)
     arms += box(-0.35, 0, 0, 0.35, 0.1, 0.12, green)
@@ -349,28 +354,29 @@ def mesh_golem(phase):
     arms += box(0, 0, -0.35, 0.12, 0.1, 0.35, gd)
     for dx, dz in ((0.65, 0), (-0.65, 0), (0, 0.65), (0, -0.65)):
         arms += box(dx, 0, dz, 0.1, 0.14, 0.1, gd)
-    arms = rotate_tris(arms, 'y', ang)
+    arms = rotate_tris(arms, 'z', sway)
+    arms = rotate_tris(arms, 'x', rock)
+    arms = translate_tris(arms, 0, bob, 0)
 
-    # core scales slightly with pulse; does NOT spin with arms
+    # core scales with pulse; follows the same soft bob (no spin)
     cs = 0.20 + 0.05 * pulse
     cis = 0.10 + 0.04 * pulse
     core = []
     core += box(0, 0, 0, cs, cs, cs, yel)
     core += box(0, 0, 0, cis, cis, cis, core_hot)
+    core = translate_tris(core, 0, bob, 0)
 
     return arms + core
 
 
 def mesh_swarm(phase):
-    """FLUTTER/tumble: crescent flaps/flips like a boomerang shard."""
+    """ゆらゆら: gentle rock/sway of crescent — NO tumble flips."""
     ang = phase * 2 * math.pi
-    # chaotic multi-axis tumble — NOT a clean Y turntable
-    flip = math.sin(ang) * 35.0 + math.sin(ang * 2.3) * 12.0
-    yaw = math.cos(ang * 1.4) * 18.0
-    roll = math.sin(ang * 1.7 + 0.5) * 25.0
-    bob = math.sin(ang * 2) * 0.06
-    # wing flap: scale Y of crescent tips
-    flap = 1.0 + 0.18 * math.sin(ang * 2)
+    sway = math.sin(ang) * 8.0     # soft Z tilt L/R
+    rock = math.cos(ang) * 5.0     # soft X rock
+    bob = math.sin(ang) * 0.05
+    # mild wing breathe (not a flap-flip)
+    flap = 1.0 + 0.08 * math.sin(ang * 2)
 
     red = '#ff2a3a'
     hot = '#ff8890'
@@ -383,24 +389,25 @@ def mesh_swarm(phase):
     tris += box(0.1, 0, 0, 0.2, 0.08, 0.08, '#c01828')
 
     tris = translate_tris(tris, 0, bob, 0)
-    tris = rotate_tris(tris, 'z', flip)
-    tris = rotate_tris(tris, 'y', yaw)
-    tris = rotate_tris(tris, 'x', roll)
+    tris = rotate_tris(tris, 'z', sway)
+    tris = rotate_tris(tris, 'x', rock)
     return tris
 
 
 def mesh_boss(phase):
-    """STATION: slow power/light pulse + one turret rotates slowly. No body spin."""
+    """STATION ゆらゆら: power/light pulse + soft body sway. No turret spin."""
     ang = phase * 2 * math.pi
     pulse = 0.5 + 0.5 * math.sin(ang)
-    turret_yaw = phase * 72.0  # slow: 72° over full cycle (one step per frame)
+    sway = math.sin(ang) * 3.0
+    rock = math.cos(ang) * 2.0
+    bob = pulse * 0.02
 
     g0, g1, g2 = '#b0b4bc', '#6a6e78', '#3a3e48'
     accent = lerp_rgb(hex_rgb('#e02830'), hex_rgb('#ff8890'), pulse)
     accent2 = lerp_rgb(hex_rgb('#e02830'), hex_rgb('#ffcc40'), pulse * 0.8)
 
     tris = []
-    # main hull — static facing
+    # main hull — faces -X, soft sway only
     tris += box(0, 0, 0, 0.55, 0.35, 0.4, g1)
     tris += box(-0.15, 0, 0.1, 0.35, 0.28, 0.28, g0)
     tris += box(-0.6, 0, 0, 0.15, 0.18, 0.2, g2)
@@ -412,20 +419,14 @@ def mesh_boss(phase):
     glow_sz = 0.12 + 0.04 * pulse
     tris += box(0.05, 0.05, -0.38, glow_sz, glow_sz * 0.7, 0.04, accent2)
 
-    # top tower + rotating turret segment
-    tower = []
-    tower += box(0.4, 0.4, -0.1, 0.18, 0.2, 0.15, g1)
-    tower += box(0.1, 0.45, 0, 0.08, 0.12, 0.08, g2)
-    # barrel on mast that rotates
-    barrel = box(0.1, 0.58, 0.18, 0.05, 0.05, 0.22, accent)
-    barrel = translate_tris(barrel, -0.1, -0.58, 0)  # to origin of mast tip
-    barrel = rotate_tris(barrel, 'y', turret_yaw)
-    barrel = translate_tris(barrel, 0.1, 0.58, 0)
-    tris += tower
-    tris += barrel
+    # top tower + fixed barrel (pulse color only — no yaw spin)
+    tris += box(0.4, 0.4, -0.1, 0.18, 0.2, 0.15, g1)
+    tris += box(0.1, 0.45, 0, 0.08, 0.12, 0.08, g2)
+    tris += box(0.1, 0.58, 0.18, 0.05, 0.05, 0.22, accent)
 
-    # very slight station "power hum" bob — subtle
-    tris = translate_tris(tris, 0, pulse * 0.015, 0)
+    tris = translate_tris(tris, 0, bob, 0)
+    tris = rotate_tris(tris, 'z', sway)
+    tris = rotate_tris(tris, 'x', rock)
     return tris
 
 
@@ -504,7 +505,7 @@ def main():
             path = os.path.join(kind_dir, f'{i}.png')
             img.save(path, 'PNG')
             print('wrote', path, 'phase', round(phase, 2))
-    print('done', FRAMES, 'frames x', len(KIND_BUILDERS), 'kinds (per-kind anim)')
+    print('done', FRAMES, 'frames x', len(KIND_BUILDERS), 'kinds (ゆらゆら sway)')
 
 
 if __name__ == '__main__':

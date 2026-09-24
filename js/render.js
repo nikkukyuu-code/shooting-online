@@ -285,21 +285,21 @@ function drawHpPip(ctx, e) {
 }
 
 /** Low-poly enemy sprites: 5 per-kind anim frames (assets/enemies/<kind>/0..4.png).
- * Motions: walk / hover / thrust / rock / arm-spin / flutter / station — not a shared turntable. */
+ * Motions: gentle ゆらゆら sway/bob — no full spins, arm turntables, or tumble flips. */
 const ENEMY_KINDS = ['basic', 'drone', 'elite', 'mech', 'tank', 'golem', 'swarm', 'boss'];
 const ENEMY_FRAME_COUNT = 5;
-/** ms per frame, tuned per kind (tank/boss slower; swarm/golem faster). */
+/** ms per frame — calm sway (~120–160ms). */
 const ENEMY_FRAME_MS = {
-  basic: 100,   // walk cycle
-  drone: 130,   // hover tilt/bob
-  elite: 95,    // engine pulse + bank
-  mech: 85,     // thruster flicker
-  tank: 170,    // heavy rock
-  golem: 75,    // arm spin
-  swarm: 60,    // flutter/tumble
-  boss: 200,    // station pulse / slow turret
+  basic: 140,   // walk-bob + sway
+  drone: 150,   // hover tilt/bob
+  elite: 130,   // engine pulse + soft bank
+  mech: 130,    // thruster flicker + soft sway
+  tank: 160,    // heavy rock
+  golem: 140,   // core pulse + arm sway
+  swarm: 130,   // crescent rock/sway
+  boss: 160,    // station pulse + soft sway
 };
-const ENEMY_FRAME_MS_DEFAULT = 110;
+const ENEMY_FRAME_MS_DEFAULT = 140;
 /** @type {Record<string, HTMLImageElement[]>} */
 const enemySprites = Object.create(null);
 let enemySpritesReady = false;
@@ -391,7 +391,7 @@ function drawEnemyFallback(ctx, e, kind, sent, w, h, t, pulse) {
     const body = sent ? '#66ddee' : '#e02028';
     const shade = sent ? '#2a8aaa' : '#8a1018';
     const lite = sent ? '#aaf0ff' : '#ff5560';
-    const rock = Math.sin(t * 3.2 + (e.phase || 0)) * 0.06;
+    const rock = Math.sin(t * 2.8 + (e.phase || 0)) * 0.055;
     ctx.save();
     ctx.rotate(rock);
     ctx.translate(0, Math.sin(t * 6.4 + (e.phase || 0)) * h * 0.02);
@@ -405,11 +405,14 @@ function drawEnemyFallback(ctx, e, kind, sent, w, h, t, pulse) {
   } else if (kind === 'golem') {
     const armCol = sent ? '#55dde8' : '#3cbc48';
     const armDark = sent ? '#2a8890' : '#1e7a28';
-    const corePulse = 0.85 + 0.15 * Math.sin(t * 6 + (e.phase || 0));
+    const ph = t * 3.2 + (e.phase || 0);
+    const corePulse = 0.85 + 0.15 * Math.sin(ph);
     const coreCol = sent ? '#aef8ff' : '#ffe033';
-    const spin = t * 2.8 + (e.phase || 0);
+    // soft sway only — fixed cross, no continuous spin
+    const sway = Math.sin(ph) * 0.12;
     ctx.save();
-    ctx.rotate(spin);
+    ctx.rotate(sway);
+    ctx.translate(0, Math.sin(ph) * h * 0.02);
     for (let i = 0; i < 4; i++) {
       ctx.save();
       ctx.rotate((i * Math.PI) / 2);
@@ -417,35 +420,36 @@ function drawEnemyFallback(ctx, e, kind, sent, w, h, t, pulse) {
       fillTri([[w * 0.1, -h * 0.06], [w * 0.42, -h * 0.06], [w * 0.42, h * 0.06], [w * 0.1, h * 0.06]], armCol);
       ctx.restore();
     }
-    ctx.restore();
     const cs = w * 0.14 * corePulse;
     fillTri([[-cs, -cs], [cs, -cs], [cs, cs], [-cs, cs]], coreCol);
+    ctx.restore();
   } else if (kind === 'boss') {
     const g0 = sent ? '#88c8d8' : '#b0b4bc';
     const g1 = sent ? '#4a7888' : '#6a6e78';
     const g2 = sent ? '#2a4858' : '#3a3e48';
-    const pulse = 0.55 + 0.45 * Math.sin(t * 2.5 + (e.phase || 0));
+    const ph = t * 2.5 + (e.phase || 0);
+    const pulse = 0.55 + 0.45 * Math.sin(ph);
     const accent = sent ? '#66eef8' : '#e02830';
+    const sway = Math.sin(ph) * 0.05;
+    ctx.save();
+    ctx.rotate(sway);
+    ctx.translate(0, Math.sin(ph) * h * 0.015);
     fillTri([[-w * 0.48, -h * 0.42], [w * 0.48, -h * 0.42], [w * 0.48, h * 0.42], [-w * 0.48, h * 0.42]], g2);
     fillTri([[-w * 0.42, -h * 0.3], [w * 0.1, -h * 0.35], [w * 0.15, h * 0.3], [-w * 0.35, h * 0.28]], g1);
     fillTri([[-w * 0.15, -h * 0.18], [w * 0.2, -h * 0.15], [w * 0.18, h * 0.18], [-w * 0.12, h * 0.15]], g0);
     fillTri([[-w * 0.55, -h * 0.15], [-w * 0.35, -h * 0.15], [-w * 0.35, h * 0.15], [-w * 0.55, h * 0.15]], g1);
     fillTri([[w * 0.25, -h * 0.5], [w * 0.48, -h * 0.5], [w * 0.48, -h * 0.2], [w * 0.25, -h * 0.22]], g1);
-    // pulsing accent + slow turret tip
+    // pulsing accent + fixed turret tip (no spin)
     const as = 0.06 + 0.04 * pulse;
     fillTri([[-w * as, -h * as], [w * as, -h * as], [w * as, h * as], [-w * as, h * as]], accent);
-    const tur = t * 0.9 + (e.phase || 0);
-    ctx.save();
-    ctx.translate(w * 0.32, -h * 0.35);
-    ctx.rotate(tur);
-    fillTri([[0, -h * 0.04], [w * 0.18, -h * 0.04], [w * 0.18, h * 0.04], [0, h * 0.04]], accent);
+    fillTri([[w * 0.28, -h * 0.38], [w * 0.48, -h * 0.38], [w * 0.48, -h * 0.3], [w * 0.28, -h * 0.3]], accent);
     ctx.restore();
   } else if (kind === 'mech') {
     const body = sent ? '#88e8f8' : '#f4f4f8';
     const tip = sent ? '#c8f8ff' : '#ffffff';
     const edge = sent ? '#2a7088' : '#404050';
     const flick = 0.5 + 0.5 * Math.abs(Math.sin(t * 14 + (e.phase || 0)));
-    const bank = Math.sin(t * 4 + (e.phase || 0)) * 0.08;
+    const bank = Math.sin(t * 3.2 + (e.phase || 0)) * 0.07;
     ctx.save();
     ctx.rotate(bank);
     fillTri([[-w * 0.55, 0], [w * 0.5, -h * 0.48], [w * 0.5, h * 0.48]], body);
@@ -462,8 +466,8 @@ function drawEnemyFallback(ctx, e, kind, sent, w, h, t, pulse) {
     const disc = sent ? '#88e8f0' : '#ffd428';
     const discShade = sent ? '#3a98a8' : '#c8a010';
     const dome = sent ? '#1a4050' : '#1a3a22';
-    const bob = Math.sin(t * 4.5 + (e.phase || 0)) * h * 0.06;
-    const tilt = Math.sin(t * 4.5 + (e.phase || 0)) * 0.12;
+    const bob = Math.sin(t * 3.5 + (e.phase || 0)) * h * 0.05;
+    const tilt = Math.sin(t * 3.5 + (e.phase || 0)) * 0.1;
     ctx.save();
     ctx.translate(0, bob);
     ctx.rotate(tilt);
@@ -474,10 +478,12 @@ function drawEnemyFallback(ctx, e, kind, sent, w, h, t, pulse) {
   } else if (kind === 'swarm') {
     const body = sent ? '#66e8f8' : '#ff2a3a';
     const hot = sent ? '#c8f8ff' : '#ff8890';
-    const flap = 1 + 0.15 * Math.sin(t * 16 + (e.phase || 0));
-    const tumble = Math.sin(t * 9 + (e.phase || 0)) * 0.35;
+    const ph = t * 3.8 + (e.phase || 0);
+    const flap = 1 + 0.08 * Math.sin(ph * 2);
+    const sway = Math.sin(ph) * 0.12; // soft rock — no tumble
     ctx.save();
-    ctx.rotate(tumble);
+    ctx.translate(0, Math.sin(ph) * h * 0.04);
+    ctx.rotate(sway);
     fillTri([[-w * 0.45, 0], [w * 0.15, -h * 0.2 * flap], [w * 0.5, -h * 0.35 * flap], [-w * 0.05, 0]], body);
     fillTri([[-w * 0.45, 0], [-w * 0.05, 0], [w * 0.5, h * 0.35 * flap], [w * 0.15, h * 0.2 * flap]], hot);
     ctx.restore();
@@ -486,7 +492,7 @@ function drawEnemyFallback(ctx, e, kind, sent, w, h, t, pulse) {
     const red = sent ? '#3aa8c0' : '#e01828';
     const redDark = sent ? '#1a6070' : '#8a0c18';
     const glow = 0.5 + 0.5 * Math.sin(t * 8 + (e.phase || 0));
-    const bank = Math.sin(t * 5 + (e.phase || 0)) * 0.1;
+    const bank = Math.sin(t * 3.5 + (e.phase || 0)) * 0.08;
     ctx.save();
     ctx.rotate(bank);
     fillTri([[-w * 0.55, 0], [w * 0.15, -h * 0.42], [w * 0.15, h * 0.42]], white);
@@ -502,9 +508,11 @@ function drawEnemyFallback(ctx, e, kind, sent, w, h, t, pulse) {
     const body = sent ? '#7ab0c0' : '#9aa0a8';
     const bodyDark = sent ? '#3a6878' : '#4a4e58';
     const eye = sent ? '#66eef8' : '#e02028';
-    const walk = Math.sin(t * 10 + (e.phase || 0));
-    const bob = Math.abs(Math.sin(t * 20 + (e.phase || 0) * 2)) * h * 0.03;
+    const walk = Math.sin(t * 5.5 + (e.phase || 0));
+    const bob = Math.sin(t * 5.5 + (e.phase || 0)) * h * 0.03;
+    const sway = Math.sin(t * 5.5 + (e.phase || 0)) * 0.08;
     ctx.save();
+    ctx.rotate(sway);
     ctx.translate(0, -bob);
     fillTri([[-w * 0.28, -h * 0.42], [w * 0.28, -h * 0.42], [w * 0.28, h * 0.12], [-w * 0.28, h * 0.12]], bodyDark);
     fillTri([[-w * 0.22, -h * 0.38], [w * 0.22, -h * 0.38], [w * 0.18, h * 0.02], [-w * 0.18, h * 0.02]], body);
