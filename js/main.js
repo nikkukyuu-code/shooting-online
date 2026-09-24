@@ -107,7 +107,7 @@ els.btnFind.addEventListener('click', async () => {
   });
   try {
     const result = await net.findOpponent({
-      waitMs: 14000,
+      waitMs: 15000,
       onTick: (left) => {
         els.fieldFind.value = `待機中 ${Math.ceil(left / 1000)}秒`;
       },

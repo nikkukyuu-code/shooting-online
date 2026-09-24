@@ -97,7 +97,7 @@ export class Net {
   }
 
   /** Quick match: try shared lobby host, else become host and wait, then bot. */
-  async findOpponent({ waitMs = 14000, onTick } = {}) {
+  async findOpponent({ waitMs = 15000, onTick } = {}) {
     this.destroy();
     this._ensurePeerLib();
     const lobby = 'quick';
