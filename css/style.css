@@ -230,3 +230,266 @@ html, body {
   border-color: #8eb6ff;
   font-weight: 700;
 }
+
+/* ---- PT / deck / shop ---- */
+.menu-pt {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #0a1a30;
+  background: rgba(255, 220, 80, 0.88);
+  border: 1.5px solid rgba(180, 120, 0, 0.55);
+  padding: 6px 16px;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+}
+.menu-row {
+  display: flex;
+  gap: 8px;
+}
+.menu-row .menu-btn { flex: 1; }
+.menu-btn-sub {
+  background: linear-gradient(180deg, #f0f4ff, #d8e4f8);
+  border-color: #8aa8d0;
+  font-size: 0.95rem;
+}
+
+.sub-screen { overflow: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+.sub-panel {
+  position: relative;
+  z-index: 2;
+  margin: max(48px, env(safe-area-inset-top)) 12px 24px;
+  padding: 14px 12px 18px;
+  background: rgba(210, 210, 210, 0.88);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: calc(100% - 60px);
+}
+.sub-head h2 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #122;
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+.sub-desc {
+  text-align: center;
+  font-size: 0.78rem;
+  color: rgba(20,40,60,0.8);
+  margin-top: 4px;
+}
+.sub-hint {
+  font-size: 0.72rem;
+  text-align: center;
+  color: rgba(30,50,70,0.75);
+}
+#shop-pt { font-weight: 800; color: #8a5a00; }
+
+.deck-slots {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.deck-slot {
+  appearance: none;
+  border: 2px solid rgba(80,100,140,0.55);
+  background: rgba(255,255,255,0.92);
+  border-radius: 6px;
+  padding: 4px 2px 6px;
+  cursor: pointer;
+  min-height: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.deck-slot.selected {
+  border-color: #3a7cff;
+  box-shadow: 0 0 0 2px rgba(58,124,255,0.35);
+  background: #eef4ff;
+}
+.deck-slot img, .unit-card img {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  image-rendering: auto;
+}
+.deck-slot .slot-n {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #456;
+}
+.deck-slot .slot-name, .unit-card .unit-name {
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: #223;
+  text-align: center;
+  line-height: 1.15;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  max-height: 42vh;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  padding: 2px;
+}
+.shop-grid { max-height: 58vh; grid-template-columns: repeat(2, 1fr); }
+.unit-card {
+  appearance: none;
+  border: 1.5px solid rgba(100,110,130,0.5);
+  background: rgba(255,255,255,0.94);
+  border-radius: 6px;
+  padding: 8px 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+.unit-card:disabled { opacity: 0.7; cursor: default; }
+.unit-card.owned { border-color: #4a8; }
+.unit-card.in-deck { outline: 2px solid #3a7cff; }
+.unit-card .unit-price {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #8a5a00;
+}
+.unit-card .unit-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 0.58rem;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #3a7;
+  color: #fff;
+}
+.unit-card .rarity {
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+.rarity.common { color: #456; }
+.rarity.uncommon { color: #2a7a3a; }
+.rarity.rare { color: #2a5aad; }
+.rarity.epic { color: #7a2aad; }
+.rarity.legendary { color: #c27800; }
+
+/* ---- Victory celebration ---- */
+.end-overlay.victory {
+  background: radial-gradient(ellipse at 50% 40%, rgba(40,80,160,0.55), rgba(0,0,0,0.78));
+}
+.end-overlay.defeat {
+  background: rgba(20,0,0,0.72);
+}
+.vic-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  animation: vic-pop 0.55s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  z-index: 2;
+}
+.vic-jp {
+  font-size: 2.6rem;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  color: #ffe566;
+  text-shadow: 0 0 18px rgba(255,200,40,0.9), 0 3px 0 #a06000, 0 6px 16px #000;
+}
+.vic-en {
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.35em;
+  color: #fff;
+  opacity: 0.9;
+  text-shadow: 0 2px 6px #000;
+}
+@keyframes vic-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.12); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.vic-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.vic-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 45%, rgba(255,255,200,0.55), transparent 55%);
+  animation: vic-flash 0.7s ease-out both;
+}
+@keyframes vic-flash {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.vic-particle {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 8px;
+  height: 8px;
+  margin: -4px;
+  border-radius: 50%;
+  background: hsl(var(--hue, 40), 95%, 60%);
+  box-shadow: 0 0 8px hsl(var(--hue, 40), 95%, 60%);
+  animation: vic-spark 1.1s ease-out var(--delay, 0s) both;
+}
+@keyframes vic-spark {
+  0% { transform: translate(0,0) scale(0.2); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(1); opacity: 0; }
+}
+.pt-reward {
+  z-index: 2;
+  min-width: min(86vw, 300px);
+  padding: 14px 16px;
+  background: rgba(20, 24, 40, 0.88);
+  border: 2px solid rgba(255, 210, 80, 0.75);
+  border-radius: 10px;
+  box-shadow: 0 0 24px rgba(255, 180, 40, 0.35);
+  text-align: center;
+  animation: vic-pop 0.5s 0.25s both;
+}
+.pt-line {
+  color: #f5f5ff;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin: 4px 0;
+  text-shadow: 0 1px 3px #000;
+}
+.pt-arrow { color: #ffe566; font-size: 1.2rem; line-height: 1; }
+.pt-gain { color: #ffe566; font-size: 1.45rem; }
+.pt-gain-n, .pt-total-n, .pt-hp-n { font-variant-numeric: tabular-nums; }
+.pt-total { margin-top: 8px; font-size: 0.95rem; color: #bcd; }
+.end-overlay.victory #end-message {
+  font-size: 1.1rem;
+  font-weight: 700;
+  opacity: 0.9;
+  margin-top: -4px;
+}
+.end-overlay { gap: 16px; }

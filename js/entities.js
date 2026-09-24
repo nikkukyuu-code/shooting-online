@@ -56,19 +56,38 @@ export function createPlayer(side = 'self') {
 
 let _enemyUidSeq = 1;
 
+/** Base combat stats by tier. Catalog units map onto these via CATALOG.tier. */
+export const ENEMY_TIER_STATS = {
+  // Visual + hitbox sizes ×2 (drawEnemy uses e.w/e.h; player ship unchanged)
+  basic:  { w: 68,  h: 56,  hp: 4,  speedBase: 100, speedRand: 50, score: 10,  color: '#9aa0a8' },
+  elite:  { w: 92,  h: 76,  hp: 10, speedBase: 75,  speedRand: 35, score: 30,  color: '#f2f2f6' },
+  swarm:  { w: 52,  h: 40,  hp: 2,  speedBase: 150, speedRand: 55, score: 5,   color: '#ff2a3a' },
+  boss:   { w: 184, h: 116, hp: 70, speedBase: 34,  speedRand: 0,  score: 200, color: '#b0b4bc' },
+  mech:   { w: 176, h: 96,  hp: 28, speedBase: 42,  speedRand: 0,  score: 80,  color: '#f4f4f8' },
+  golem:  { w: 168, h: 140, hp: 36, speedBase: 28,  speedRand: 0,  score: 100, color: '#3cbc48' },
+  tank:   { w: 180, h: 88,  hp: 40, speedBase: 32,  speedRand: 0,  score: 110, color: '#e02028' },
+  drone:  { w: 56,  h: 44,  hp: 5,  speedBase: 130, speedRand: 40, score: 20,  color: '#ffd428' },
+};
+
+/** Optional runtime map kind→tier (filled by game from catalog). */
+let _kindTier = Object.create(null);
+export function setKindTier(map) {
+  _kindTier = map || Object.create(null);
+}
+
+export function resolveEnemyTier(kind) {
+  if (ENEMY_TIER_STATS[kind]) return kind;
+  if (_kindTier[kind] && ENEMY_TIER_STATS[_kindTier[kind]]) return _kindTier[kind];
+  return 'basic';
+}
+
 export function spawnEnemy(fieldW, fieldH, kind = 'basic') {
-  const types = {
-    // Visual + hitbox sizes ×2 (drawEnemy uses e.w/e.h; player ship unchanged)
-    basic:  { w: 68,  h: 56,  hp: 4,  speed: 100 + Math.random() * 50, score: 10,  color: '#9aa0a8' },
-    elite:  { w: 92,  h: 76,  hp: 10, speed: 75 + Math.random() * 35,  score: 30,  color: '#f2f2f6' },
-    swarm:  { w: 52,  h: 40,  hp: 2,  speed: 150 + Math.random() * 55, score: 5,   color: '#ff2a3a' },
-    boss:   { w: 184, h: 116, hp: 70, speed: 34, score: 200, color: '#b0b4bc' },
-    mech:   { w: 176, h: 96,  hp: 28, speed: 42, score: 80,  color: '#f4f4f8' },
-    golem:  { w: 168, h: 140, hp: 36, speed: 28, score: 100, color: '#3cbc48' },
-    tank:   { w: 180, h: 88,  hp: 40, speed: 32, score: 110, color: '#e02028' },
-    drone:  { w: 56,  h: 44,  hp: 5,  speed: 130 + Math.random() * 40, score: 20, color: '#ffd428' },
+  const tier = resolveEnemyTier(kind);
+  const base = ENEMY_TIER_STATS[tier] || ENEMY_TIER_STATS.basic;
+  const t = {
+    w: base.w, h: base.h, hp: base.hp, score: base.score, color: base.color,
+    speed: base.speedBase + Math.random() * (base.speedRand || 0),
   };
-  const t = types[kind] || types.basic;
   return {
     kind,
     _uid: _enemyUidSeq++,

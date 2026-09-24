@@ -5,3 +5,6 @@ node_modules/
 tools/__pycache__/
 tools/_previews/
 tools/_sheet_cells.png
+tools/_overview.png
+tools/_cells_overview.png
+tools/_catalog_boxes.png

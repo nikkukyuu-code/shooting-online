@@ -287,7 +287,8 @@ function drawHpPip(ctx, e) {
 /** User-art enemy sprites: static frame 0 only (assets/enemies/<kind>/0.png).
  * Sourced from tools/source_enemy_sheet.png via tools/extract_user_enemy_sprites.py.
  * No frame cycling / no ゆらゆら sway — single static pose per kind. */
-const ENEMY_KINDS = ['basic', 'drone', 'elite', 'mech', 'tank', 'golem', 'swarm', 'boss'];
+/** All drawable enemy kind ids (classic 8 + shop catalog). Extended at runtime via registerEnemyKinds. */
+let ENEMY_KINDS = ['basic', 'drone', 'elite', 'mech', 'tank', 'golem', 'swarm', 'boss'];
 const ENEMY_STATIC_FRAME = 0;
 /** @type {Record<string, HTMLImageElement[]>} */
 const enemySprites = Object.create(null);
@@ -296,30 +297,32 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=1.5.48`;
+  return `assets/enemies/${kind}/${frame}.png?v=1.5.49`;
+}
+
+function loadKindSprite(kind) {
+  if (enemySprites[kind] && enemySprites[kind][ENEMY_STATIC_FRAME]) return;
+  enemySprites[kind] = [];
+  const img = new Image();
+  img.decoding = 'async';
+  img.src = enemyAssetUrl(kind, ENEMY_STATIC_FRAME);
+  enemySprites[kind][ENEMY_STATIC_FRAME] = img;
 }
 
 export function preloadEnemySprites() {
-  if (enemySpritesLoading || enemySpritesReady) return;
+  if (enemySpritesLoading) return;
   enemySpritesLoading = true;
-  let pending = 0;
-  let loaded = 0;
-  for (const kind of ENEMY_KINDS) {
-    enemySprites[kind] = [];
-    pending++;
-    const img = new Image();
-    img.decoding = 'async';
-    img.onload = () => {
-      loaded++;
-      if (loaded >= pending) enemySpritesReady = true;
-    };
-    img.onerror = () => {
-      loaded++;
-      if (loaded >= pending) enemySpritesReady = true;
-    };
-    img.src = enemyAssetUrl(kind, ENEMY_STATIC_FRAME);
-    enemySprites[kind][ENEMY_STATIC_FRAME] = img;
-  }
+  for (const kind of ENEMY_KINDS) loadKindSprite(kind);
+  enemySpritesReady = true;
+  enemySpritesLoading = false;
+}
+
+export function registerEnemyKinds(ids) {
+  if (!Array.isArray(ids) || !ids.length) return;
+  const set = new Set(ENEMY_KINDS);
+  for (const id of ids) if (id) set.add(id);
+  ENEMY_KINDS = [...set];
+  for (const id of ids) if (id) loadKindSprite(id);
 }
 
 // Kick off load as soon as this module evaluates
@@ -411,7 +414,10 @@ function drawEnemy(ctx, e) {
 
   ctx.shadowBlur = 0;
   // HP pip: same kinds as pre-sprite (skip tiny swarm + basic)
-  if (kind !== 'swarm' && kind !== 'basic') drawHpPip(ctx, e);
+  // Skip HP pip for tiny tiers (basic/swarm) — catalog kinds may share those tiers
+  const tiny = kind === 'swarm' || kind === 'basic'
+    || (e.w && e.w <= 70 && e.h && e.h <= 60);
+  if (!tiny) drawHpPip(ctx, e);
 
   if (sent) {
     const labelA = appearT > 0 ? (0.55 + 0.45 * (0.5 + 0.5 * Math.sin(t * 18))) : 0.9;

@@ -1,12 +1,22 @@
-import { VERSION_LABEL } from './version.js?v=1.5.48';
-import { Net } from './net.js?v=1.5.48';
-import { Game } from './game.js?v=1.5.48';
+import { VERSION_LABEL } from './version.js?v=1.5.49';
+import { Net } from './net.js?v=1.5.49';
+import { Game } from './game.js?v=1.5.49';
+import { CATALOG, CATALOG_BY_ID } from './catalog.js?v=1.5.49';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=1.5.49';
+import { registerEnemyKinds } from './render.js?v=1.5.49';
+import { ALL_KIND_IDS } from './catalog.js?v=1.5.49';
+import { setKindTier } from './entities.js?v=1.5.49';
+
+registerEnemyKinds(ALL_KIND_IDS);
+setKindTier(Object.fromEntries(ALL_KIND_IDS.map((id) => [id, (CATALOG_BY_ID[id] && CATALOG_BY_ID[id].tier) || id])));
 
 const $ = (sel) => document.querySelector(sel);
 
 const screens = {
   menu: $('#screen-menu'),
   game: $('#screen-game'),
+  deck: $('#screen-deck'),
+  shop: $('#screen-shop'),
 };
 
 const els = {
@@ -14,6 +24,10 @@ const els = {
   btnFind: $('#btn-find'),
   btnCreate: $('#btn-create'),
   btnStart: $('#btn-start'),
+  btnDeck: $('#btn-deck'),
+  btnShop: $('#btn-shop'),
+  btnDeckBack: $('#btn-deck-back'),
+  btnShopBack: $('#btn-shop-back'),
   fieldFind: $('#field-find-status'),
   fieldCode: $('#field-room-code'),
   inputRoom: $('#input-room-name'),
@@ -23,15 +37,22 @@ const els = {
   endMessage: $('#end-message'),
   btnAgain: $('#btn-again'),
   canvas: $('#game'),
+  menuPt: $('#menu-pt'),
+  shopPt: $('#shop-pt'),
+  deckSlots: $('#deck-slots'),
+  deckOwned: $('#deck-owned'),
+  deckHint: $('#deck-hint'),
+  shopList: $('#shop-list'),
 };
 
 let net = null;
 let game = null;
 let busy = false;
+let selectedDeckSlot = 0;
 
 function show(screen) {
-  Object.values(screens).forEach((s) => s.classList.remove('active'));
-  screens[screen].classList.add('active');
+  Object.values(screens).forEach((s) => s && s.classList.remove('active'));
+  if (screens[screen]) screens[screen].classList.add('active');
 }
 
 function isHostingWaiting() {
@@ -57,7 +78,8 @@ function setBusy(v) {
   if (els.btnCpu) els.btnCpu.disabled = v;
   els.btnFind.disabled = v;
   els.btnCreate.disabled = v;
-  // Keep Start disabled while host is waiting for a guest
+  if (els.btnDeck) els.btnDeck.disabled = v;
+  if (els.btnShop) els.btnShop.disabled = v;
   els.btnStart.disabled = v || isHostingWaiting();
 }
 
@@ -72,12 +94,124 @@ function cleanupGame() {
   }
 }
 
+function refreshPtDisplay(meta) {
+  const m = meta || loadMeta();
+  const label = `PT: ${m.pt.toLocaleString('ja-JP')}`;
+  if (els.menuPt) els.menuPt.textContent = label;
+  if (els.shopPt) els.shopPt.textContent = label;
+}
+
+function spriteUrl(id) {
+  return `assets/enemies/${id}/0.png?v=1.5.49`;
+}
+
+function unitName(id) {
+  return (CATALOG_BY_ID[id] && CATALOG_BY_ID[id].name) || id;
+}
+
+function renderDeckScreen() {
+  const meta = loadMeta();
+  refreshPtDisplay(meta);
+  if (!els.deckSlots || !els.deckOwned) return;
+
+  els.deckSlots.innerHTML = '';
+  for (let i = 0; i < DECK_SIZE; i++) {
+    const id = meta.deck[i];
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'deck-slot' + (i === selectedDeckSlot ? ' selected' : '');
+    btn.dataset.slot = String(i);
+    btn.innerHTML = `
+      <span class="slot-n">#${i + 1}</span>
+      <img src="${spriteUrl(id)}" alt="" width="52" height="52" loading="lazy" />
+      <span class="slot-name">${unitName(id)}</span>
+    `;
+    btn.addEventListener('click', () => {
+      selectedDeckSlot = i;
+      renderDeckScreen();
+      if (els.deckHint) els.deckHint.textContent = `スロット ${i + 1} を選択中 — 下の所持ユニットをタップで入れ替え`;
+    });
+    els.deckSlots.appendChild(btn);
+  }
+
+  els.deckOwned.innerHTML = '';
+  const ownedUnits = CATALOG.filter((u) => meta.owned.includes(u.id));
+  for (const u of ownedUnits) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'unit-card' + (meta.deck.includes(u.id) ? ' in-deck' : '');
+    btn.innerHTML = `
+      <img src="${spriteUrl(u.id)}" alt="" width="52" height="52" loading="lazy" />
+      <span class="unit-name">${u.name}</span>
+      <span class="rarity ${u.rarity}">${u.rarity}</span>
+    `;
+    btn.addEventListener('click', () => {
+      const res = setDeckSlot(loadMeta(), selectedDeckSlot, u.id);
+      if (res.ok) {
+        if (els.deckHint) els.deckHint.textContent = `スロット ${selectedDeckSlot + 1} を ${u.name} に変更`;
+        renderDeckScreen();
+        refreshPtDisplay(res.meta);
+      }
+    });
+    els.deckOwned.appendChild(btn);
+  }
+}
+
+function renderShopScreen() {
+  const meta = loadMeta();
+  refreshPtDisplay(meta);
+  if (!els.shopList) return;
+  els.shopList.innerHTML = '';
+
+  // Sort: unowned by price asc, then owned
+  const list = [...CATALOG].sort((a, b) => {
+    const ao = meta.owned.includes(a.id) ? 1 : 0;
+    const bo = meta.owned.includes(b.id) ? 1 : 0;
+    if (ao !== bo) return ao - bo;
+    return a.price - b.price;
+  });
+
+  for (const u of list) {
+    const owned = meta.owned.includes(u.id);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'unit-card' + (owned ? ' owned' : '');
+    btn.disabled = owned;
+    const priceLabel = owned ? '所持済' : (u.price <= 0 ? '無料' : `${u.price} PT`);
+    btn.innerHTML = `
+      ${owned ? '<span class="unit-badge">OWN</span>' : ''}
+      <img src="${spriteUrl(u.id)}" alt="" width="64" height="64" loading="lazy" />
+      <span class="unit-name">${u.name}</span>
+      <span class="rarity ${u.rarity}">${u.rarity}</span>
+      <span class="unit-price">${priceLabel}</span>
+    `;
+    if (!owned) {
+      btn.addEventListener('click', () => {
+        const cur = loadMeta();
+        if (cur.pt < u.price) {
+          alert(`PTが足りません（必要 ${u.price} / 所持 ${cur.pt}）`);
+          return;
+        }
+        const res = buyUnit(cur, u.id);
+        if (res.ok) {
+          refreshPtDisplay(res.meta);
+          renderShopScreen();
+        } else if (res.reason === 'pt') {
+          alert('PTが足りません');
+        }
+      });
+    }
+    els.shopList.appendChild(btn);
+  }
+}
+
 function goMenu() {
   cleanupGame();
   setBusy(false);
   els.fieldFind.value = '';
   els.fieldCode.value = '';
   restoreStartButton();
+  refreshPtDisplay();
   show('menu');
 }
 
@@ -91,7 +225,6 @@ function startGameSession({ bot = false } = {}) {
   });
   game.start({ net, bot });
 }
-
 
 els.btnCpu?.addEventListener('click', () => {
   if (busy) return;
@@ -134,7 +267,6 @@ els.btnFind.addEventListener('click', async () => {
     });
     els.fieldFind.value = result.mode === 'bot' ? 'CPU対戦' : 'マッチ成立';
     if (result.mode === 'peer') {
-      // Register BEFORE startGameSession so hello/beginMatch race is avoided
       net.on('connected', () => {
         if (game && game.waiting) game.beginMatch();
       });
@@ -167,8 +299,7 @@ els.btnCreate.addEventListener('click', async () => {
     els.inputRoom.value = room;
     els.fieldFind.value = '部屋コード表示中・相手待ち';
     setHostingWaitingUI(true);
-    show('menu'); // stay on menu so host can read/share the room code
-    // Only enter battle when a guest actually connects
+    show('menu');
     net.on('connected', () => {
       if (game) {
         if (game.waiting) game.beginMatch();
@@ -179,7 +310,6 @@ els.btnCreate.addEventListener('click', async () => {
       if (net.ready) game.beginMatch();
     });
     if (net.ready) {
-      // Guest already connected during create (rare)
       els.fieldFind.value = '相手が入室しました';
       startGameSession({ bot: false });
       game.beginMatch();
@@ -198,7 +328,6 @@ els.btnCreate.addEventListener('click', async () => {
 
 els.btnStart.addEventListener('click', async () => {
   if (busy) return;
-  // Host waiting for guest: do NOT destroy peer / self-join as guest
   if (net && net.role === 'host' && !game) {
     els.fieldFind.value = 'すでにホスト中・相手待ち（部屋コードを相手に伝えてください）';
     return;
@@ -241,16 +370,43 @@ els.btnAgain.addEventListener('click', () => {
   goMenu();
 });
 
-// Prevent pull-to-refresh / page scroll on mobile
+els.btnDeck?.addEventListener('click', () => {
+  if (busy) return;
+  selectedDeckSlot = 0;
+  renderDeckScreen();
+  show('deck');
+});
+
+els.btnShop?.addEventListener('click', () => {
+  if (busy) return;
+  renderShopScreen();
+  show('shop');
+});
+
+els.btnDeckBack?.addEventListener('click', () => {
+  refreshPtDisplay();
+  show('menu');
+});
+
+els.btnShopBack?.addEventListener('click', () => {
+  refreshPtDisplay();
+  show('menu');
+});
+
+window.addEventListener('shooting-meta-updated', (ev) => {
+  refreshPtDisplay(ev.detail || loadMeta());
+});
+
 document.addEventListener('touchmove', (e) => {
   if (screens.game.classList.contains('active')) e.preventDefault();
 }, { passive: false });
 
-// Warm PeerJS
 window.addEventListener('load', () => {
+  // Ensure starters persisted
+  saveMeta(loadMeta());
+  refreshPtDisplay();
   show('menu');
 });
-
 
 async function loadVisits() {
   const verEl = document.getElementById('app-version');

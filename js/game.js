@@ -1,11 +1,27 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-} from './entities.js?v=1.5.48';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.48';
-import { sfx } from './audio.js?v=1.5.48';
+  setKindTier, resolveEnemyTier,
+} from './entities.js?v=1.5.49';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.49';
+import { sfx } from './audio.js?v=1.5.49';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.49';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE } from './meta.js?v=1.5.49';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
+
+// Register all catalog sprites + tier map once
+registerEnemyKinds(ALL_KIND_IDS);
+setKindTier(Object.fromEntries(ALL_KIND_IDS.map((id) => [id, (CATALOG_BY_ID[id] && CATALOG_BY_ID[id].tier) || id])));
+
+/** How many copies a send-item type spawns from the deck. */
+const SEND_COUNTS = {
+  send: 2,
+  send_mech: 1,
+  send_golem: 1,
+  send_tank: 1,
+  send_drone: 3,
+};
 
 /** Homing missile: limited turn rate + sticky lock-on (no instant snap). */
 const HOMING_TURN_RATE = 10.5; // rad/s (~9–12)
@@ -86,7 +102,7 @@ function steerEnemyHoming(b, tx, ty, dt) {
  * tx,ty = target ship position in field pixels.
  */
 function pushEnemyAttack(e, bullets, tx, ty) {
-  const kind = e.kind || 'basic';
+  const kind = resolveEnemyTier(e.kind || 'basic');
   const ox = e.x - (e.w || 20) * 0.4;
   const oy = e.y;
   const aim = Math.atan2(ty - oy, tx - ox);
@@ -180,6 +196,11 @@ export class Game {
     this._bot = null;
     this._raf = 0;
     this._onResize = () => { this.L = resizeCanvas(this.canvas); };
+    this._playerDeck = null; // length 5 unit ids
+    this._deckCursor = 0;
+    this._comDeck = COM_DECK.slice();
+    this._comDeckCursor = 0;
+    this._ptReward = null; // { gain, total, remainingHp } when COM win grants PT
   }
 
   resetLocal() {
@@ -207,6 +228,25 @@ export class Game {
     this.draggingShip = false;
     this.shipPointerId = null;
     this.ui.endOverlay.classList.add('hidden');
+    this._ptReward = null;
+    this._deckCursor = 0;
+    this._comDeckCursor = 0;
+    // Load equipped deck (always 5)
+    try {
+      const meta = loadMeta();
+      this._playerDeck = (meta.deck && meta.deck.length === DECK_SIZE)
+        ? meta.deck.slice()
+        : loadMeta().deck.slice();
+    } catch (_) {
+      this._playerDeck = ['basic', 'drone', 'elite', 'swarm', 'tank'];
+    }
+    this._comDeck = COM_DECK.slice();
+    // Clear victory celebration DOM if present
+    if (this.ui.endOverlay) {
+      this.ui.endOverlay.classList.remove('victory', 'defeat', 'pt-show');
+      const extras = this.ui.endOverlay.querySelectorAll('.vic-fx, .pt-reward, .vic-banner');
+      extras.forEach((el) => el.remove());
+    }
     this.setStatus(WAIT);
   }
 
@@ -531,6 +571,38 @@ export class Game {
     return e;
   }
 
+  /** Next unit id from the player's equipped deck (round-robin). */
+  nextPlayerDeckKind() {
+    const deck = this._playerDeck && this._playerDeck.length ? this._playerDeck : ['basic', 'drone', 'elite', 'swarm', 'tank'];
+    const kind = deck[this._deckCursor % deck.length];
+    this._deckCursor = (this._deckCursor + 1) % deck.length;
+    return kind;
+  }
+
+  nextComDeckKind() {
+    const deck = this._comDeck && this._comDeck.length ? this._comDeck : COM_DECK;
+    const kind = deck[this._comDeckCursor % deck.length];
+    this._comDeckCursor = (this._comDeckCursor + 1) % deck.length;
+    return kind;
+  }
+
+  /** Build spawn kind list for a send-* powerup from the equipped deck. */
+  kindsFromDeck(itemId, forCom = false) {
+    const n = SEND_COUNTS[itemId] || 1;
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      out.push(forCom ? this.nextComDeckKind() : this.nextPlayerDeckKind());
+    }
+    return out;
+  }
+
+  sendLabelForKinds(kinds, fallback) {
+    const names = kinds.map((k) => (CATALOG_BY_ID[k] && CATALOG_BY_ID[k].name) || k);
+    const uniq = [...new Set(names)];
+    if (uniq.length === 1) return `${fallback || '敵送信'}（${uniq[0]}×${kinds.length}）`;
+    return `${fallback || '敵送信'}（デッキ）`;
+  }
+
   /** Push sent enemies into bot field or net. kinds: string | string[] */
   sendToOpponent(kinds, statusLabel) {
     const list = Array.isArray(kinds) ? kinds : [kinds];
@@ -593,16 +665,9 @@ export class Game {
     } else if (id === 'laser') {
       p.activePower = 'laser';
       p.activeTimer = 4;
-    } else if (id === 'send') {
-      this.sendToOpponent(['swarm', 'swarm', 'elite'], meta?.label);
-    } else if (id === 'send_mech') {
-      this.sendToOpponent('mech', meta?.label);
-    } else if (id === 'send_golem') {
-      this.sendToOpponent('golem', meta?.label);
-    } else if (id === 'send_tank') {
-      this.sendToOpponent('tank', meta?.label);
-    } else if (id === 'send_drone') {
-      this.sendToOpponent(['drone', 'drone', 'drone', 'drone'], meta?.label);
+    } else if (id === 'send' || id === 'send_mech' || id === 'send_golem' || id === 'send_tank' || id === 'send_drone') {
+      const kinds = this.kindsFromDeck(id, false);
+      this.sendToOpponent(kinds, this.sendLabelForKinds(kinds, meta?.label));
     } else if (id === 'spread') {
       // Shotgun fan burst
       const by = p.y * this.L.own.h;
@@ -624,7 +689,7 @@ export class Game {
       let hits = 0;
       for (const e of this.state.enemies) {
         e.hp -= 28;
-        this.state.fx.push(spawnExplosion(e.x, e.y, e.kind === 'boss'));
+        this.state.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
         hits++;
       }
       this.state.bullets = this.state.bullets.filter((b) => b.owner === 'player');
@@ -976,7 +1041,7 @@ export class Game {
         } else {
           const targetX = e.holdX + surge * 0.85;
           e.x += (targetX - e.x) * Math.min(1, 5 * dt);
-          e.y = e.holdY + Math.sin(e.phase) * (e.kind === 'swarm' || e.kind === 'drone' ? 28 : 18);
+          e.y = e.holdY + Math.sin(e.phase) * ((() => { const t = resolveEnemyTier(e.kind); return (t === 'swarm' || t === 'drone') ? 28 : 18; })());
         }
       } else {
         // Drift left, but surge forward/back so they don't only slide one way
@@ -994,14 +1059,17 @@ export class Game {
       const onScreen = e.x < fw + 10;
       const parked = e.sent ? e.x <= (e.holdX || fw) + 8 : true;
       if (e.fireCd <= 0 && onScreen && parked) {
-        e.fireCd = e.sent
-          ? ((e.kind === 'boss' || e.kind === 'tank' || e.kind === 'mech') ? 0.95
-            : (e.kind === 'golem' || e.kind === 'elite') ? 1.2
-            : 1.55 + Math.random() * 0.4)
-          : ((e.kind === 'boss' || e.kind === 'tank') ? 1.15
-            : (e.kind === 'mech' || e.kind === 'golem') ? 1.4 + Math.random() * 0.4
-            : e.kind === 'elite' ? 1.7 + Math.random() * 0.5
-            : 2.25 + Math.random() * 0.8);
+        {
+          const tier = resolveEnemyTier(e.kind);
+          e.fireCd = e.sent
+            ? ((tier === 'boss' || tier === 'tank' || tier === 'mech') ? 0.95
+              : (tier === 'golem' || tier === 'elite') ? 1.2
+              : 1.55 + Math.random() * 0.4)
+            : ((tier === 'boss' || tier === 'tank') ? 1.15
+              : (tier === 'mech' || tier === 'golem') ? 1.4 + Math.random() * 0.4
+              : tier === 'elite' ? 1.7 + Math.random() * 0.5
+              : 2.25 + Math.random() * 0.8);
+        }
         pushEnemyAttack(e, S.bullets, P.x, P.y * fh);
       }
     }
@@ -1047,10 +1115,10 @@ export class Game {
     const remain = [];
     for (const e of S.enemies) {
       if (e.hp <= 0) {
-        S.fx.push(spawnExplosion(e.x, e.y, e.kind === 'boss'));
+        S.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
         sfx.explode();
         P.score += e.score;
-        if (Math.random() < (e.kind === 'boss' ? 1 : 0.35)) {
+        if (Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : 0.35)) {
           S.items.push(spawnItem(e.x, e.y));
         }
         // Damage bot passively a bit when scoring? No — only via powers / race.
@@ -1374,7 +1442,7 @@ export class Game {
         } else {
           const targetX = e.holdX + surge * 0.85;
           e.x += (targetX - e.x) * Math.min(1, 5 * dt);
-          e.y = e.holdY + Math.sin(e.phase) * (e.kind === 'swarm' || e.kind === 'drone' ? 28 : 18);
+          e.y = e.holdY + Math.sin(e.phase) * ((() => { const t = resolveEnemyTier(e.kind); return (t === 'swarm' || t === 'drone') ? 28 : 18; })());
         }
       } else {
         const advance = e.speed + Math.cos(e.surgePhase) * (e.speed * 0.55);
@@ -1389,8 +1457,8 @@ export class Game {
       const parked = e.sent ? e.x <= (e.holdX || fw) + 8 : true;
       if (e.fireCd <= 0 && parked) {
         e.fireCd = e.sent
-          ? ((e.kind === 'elite' || e.kind === 'boss' || e.kind === 'mech' || e.kind === 'tank') ? 1.1 : 1.55)
-          : ((e.kind === 'elite' || e.kind === 'boss' || e.kind === 'mech' || e.kind === 'tank' || e.kind === 'golem') ? 1.7 : 2.25);
+          ? ((['elite','boss','mech','tank'].includes(resolveEnemyTier(e.kind))) ? 1.1 : 1.55)
+          : ((['elite','boss','mech','tank','golem'].includes(resolveEnemyTier(e.kind))) ? 1.7 : 2.25);
         pushEnemyAttack(e, B.bullets, shipX, B.y * fh);
       }
     }
@@ -1419,8 +1487,8 @@ export class Game {
     const kept = [];
     for (const e of B.enemies) {
       if (e.hp <= 0) {
-        B.fx.push(spawnExplosion(e.x, e.y, e.kind === 'boss'));
-        if (B.items.length < MAX_ITEM_SLOTS && Math.random() < (e.kind === 'boss' ? 1 : 0.4)) {
+        B.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
+        if (B.items.length < MAX_ITEM_SLOTS && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : 0.4)) {
           let dropId = pickPowerupId();
           // COM never gets direct (looks like player's own upward laser)
           if (dropId === 'direct') dropId = 'laser';
@@ -1547,22 +1615,12 @@ export class Game {
         if (!this.state.meteors) this.state.meteors = [];
         this.rainMeteors(this.state.meteors, fw, fh, this.state.player.y, 5, this.state.player.x);
       } else if (id === 'send' || id === 'send_mech' || id === 'send_golem' || id === 'send_tank' || id === 'send_drone') {
-        const map = {
-          send: ['swarm', 'swarm', 'elite'],
-          send_mech: ['mech'],
-          send_golem: ['golem'],
-          send_tank: ['tank'],
-          send_drone: ['drone', 'drone', 'drone', 'drone'],
-        };
-        const labels = {
-          send: 'COM敵送信', send_mech: 'COM戦艦', send_golem: 'COM要塞',
-          send_tank: 'COMガンシップ', send_drone: 'COM無人機',
-        };
+        const kinds = this.kindsFromDeck(id, true);
         const fw = this.L.own.w, fh = this.L.own.h;
-        for (const kind of map[id]) {
+        for (const kind of kinds) {
           this.state.enemies.push(this.markSentEnemy(spawnEnemy(fw, fh, kind), fw, fh));
         }
-        this.setStatus(labels[id]);
+        this.setStatus(this.sendLabelForKinds(kinds, 'COM敵送信'));
         setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1400);
       }
     };
@@ -1623,10 +1681,123 @@ export class Game {
     const msg = won ? 'あなたの勝ちです' : 'あなたの負けです';
     if (won) sfx.win(); else sfx.lose();
     this.setStatus(msg);
-    this.ui.endMessage.textContent = msg;
-    this.ui.endOverlay.classList.remove('hidden');
+
+    // PT only on COM (CPU) victory: remaining HP (0–100) → PT
+    this._ptReward = null;
+    if (won && this.useBot) {
+      const hp = Math.max(0, Math.floor(this.state.player?.hp ?? 0));
+      try {
+        const result = grantComVictoryPt(loadMeta(), hp);
+        this._ptReward = { gain: result.gain, total: result.total, remainingHp: hp };
+      } catch (e) {
+        console.warn('PT grant failed', e);
+        this._ptReward = { gain: hp, total: hp, remainingHp: hp };
+      }
+    }
+
+    this.showEndCelebration(won);
     if (this.net && !this.useBot) {
       this.net.send({ type: 'over', youWin: !won });
     }
   }
+
+  /**
+   * Victory / defeat end overlay.
+   * Victory: big 勝利 banner, particles, flash.
+   * COM win also animates 「残りライフ N → +N PT」 count-up then total PT.
+   */
+  showEndCelebration(won) {
+    const ov = this.ui.endOverlay;
+    const msgEl = this.ui.endMessage;
+    if (!ov || !msgEl) return;
+
+    // Clear prior celebration nodes
+    ov.querySelectorAll('.vic-fx, .pt-reward, .vic-banner').forEach((el) => el.remove());
+    ov.classList.remove('victory', 'defeat', 'pt-show', 'hidden');
+    ov.classList.add(won ? 'victory' : 'defeat');
+
+    if (won) {
+      msgEl.innerHTML = '';
+      const banner = document.createElement('div');
+      banner.className = 'vic-banner';
+      banner.innerHTML = '<span class="vic-jp">勝利</span><span class="vic-en">YOU WIN</span>';
+      ov.insertBefore(banner, msgEl);
+
+      const fx = document.createElement('div');
+      fx.className = 'vic-fx';
+      fx.setAttribute('aria-hidden', 'true');
+      // Spark particles
+      for (let i = 0; i < 28; i++) {
+        const p = document.createElement('span');
+        p.className = 'vic-particle';
+        const ang = (i / 28) * Math.PI * 2;
+        const dist = 40 + (i % 7) * 18;
+        p.style.setProperty('--dx', `${Math.cos(ang) * dist}px`);
+        p.style.setProperty('--dy', `${Math.sin(ang) * dist - 30}px`);
+        p.style.setProperty('--delay', `${(i % 10) * 0.05}s`);
+        p.style.setProperty('--hue', `${(i * 23) % 360}`);
+        fx.appendChild(p);
+      }
+      const flash = document.createElement('div');
+      flash.className = 'vic-flash';
+      fx.appendChild(flash);
+      ov.insertBefore(fx, banner);
+
+      msgEl.textContent = 'あなたの勝ちです';
+
+      if (this._ptReward) {
+        ov.classList.add('pt-show');
+        const box = document.createElement('div');
+        box.className = 'pt-reward';
+        const hp = this._ptReward.remainingHp;
+        const gain = this._ptReward.gain;
+        const total = this._ptReward.total;
+        box.innerHTML = `
+          <div class="pt-line pt-hp">残りライフ <strong class="pt-hp-n">0</strong></div>
+          <div class="pt-line pt-arrow">↓</div>
+          <div class="pt-line pt-gain">+<strong class="pt-gain-n">0</strong> PT</div>
+          <div class="pt-line pt-total">所持 PT <strong class="pt-total-n">0</strong></div>
+        `;
+        // Insert before the menu button
+        const btn = ov.querySelector('#btn-again') || ov.querySelector('.menu-btn');
+        if (btn) ov.insertBefore(box, btn);
+        else ov.appendChild(box);
+
+        // Count-up animation
+        const hpEl = box.querySelector('.pt-hp-n');
+        const gainEl = box.querySelector('.pt-gain-n');
+        const totalEl = box.querySelector('.pt-total-n');
+        const prevTotal = Math.max(0, total - gain);
+        const dur = 1100;
+        const t0 = performance.now();
+        const step = (now) => {
+          const u = Math.min(1, (now - t0) / dur);
+          const ease = 1 - Math.pow(1 - u, 3);
+          if (hpEl) hpEl.textContent = String(Math.round(hp * Math.min(1, ease / 0.45)));
+          if (u > 0.35 && gainEl) {
+            const gU = Math.min(1, (u - 0.35) / 0.4);
+            gainEl.textContent = String(Math.round(gain * gU));
+          }
+          if (u > 0.55 && totalEl) {
+            const tU = Math.min(1, (u - 0.55) / 0.45);
+            totalEl.textContent = String(Math.round(prevTotal + gain * tU));
+          }
+          if (u < 1) requestAnimationFrame(step);
+          else {
+            if (hpEl) hpEl.textContent = String(hp);
+            if (gainEl) gainEl.textContent = String(gain);
+            if (totalEl) totalEl.textContent = String(total);
+            // Notify title PT display if callback provided
+            try {
+              window.dispatchEvent(new CustomEvent('shooting-meta-updated', { detail: loadMeta() }));
+            } catch (_) {}
+          }
+        };
+        requestAnimationFrame(step);
+      }
+    } else {
+      msgEl.textContent = 'あなたの負けです';
+    }
+  }
 }
+
