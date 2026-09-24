@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""Generate 5 low-poly turntable PNG frames per enemy kind."""
+"""Generate 5 low-poly PNG frames per enemy kind with DISTINCT animations.
+
+Not a shared turntable: each kind gets motion that fits its design
+(walk / hover / thrust / rock / arm-spin / flutter / station pulse).
+"""
 from __future__ import annotations
 import math
 import os
 from PIL import Image, ImageDraw
 
 OUT = os.path.join(os.path.dirname(__file__), '..', 'assets', 'enemies')
-SIZE = 128  # square canvas; game scales via e.w/e.h
+SIZE = 128
 FRAMES = 5
-ANGLES = [i * (360 / FRAMES) for i in range(FRAMES)]  # 0,72,144,216,288
 
 
 def vadd(a, b):
@@ -36,11 +39,25 @@ def vnorm(a):
     return (a[0] / L, a[1] / L, a[2] / L)
 
 
+def rotate_x(p, deg):
+    r = math.radians(deg)
+    c, s = math.cos(r), math.sin(r)
+    x, y, z = p
+    return (x, y * c - z * s, y * s + z * c)
+
+
 def rotate_y(p, deg):
     r = math.radians(deg)
     c, s = math.cos(r), math.sin(r)
     x, y, z = p
     return (x * c + z * s, y, -x * s + z * c)
+
+
+def rotate_z(p, deg):
+    r = math.radians(deg)
+    c, s = math.cos(r), math.sin(r)
+    x, y, z = p
+    return (x * c - y * s, x * s + y * c, z)
 
 
 def hex_rgb(h):
@@ -52,6 +69,10 @@ def shade(rgb, factor):
     return tuple(max(0, min(255, int(c * factor))) for c in rgb)
 
 
+def lerp_rgb(a, b, t):
+    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+
 def tri(a, b, c, color):
     return (a, b, c, color)
 
@@ -61,20 +82,18 @@ def box(cx, cy, cz, sx, sy, sz, color):
     x0, x1 = cx - sx, cx + sx
     y0, y1 = cy - sy, cy + sy
     z0, z1 = cz - sz, cz + sz
-    # 8 corners
     p = [
         (x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0),
         (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1),
     ]
     faces = [
-        (0, 1, 2, 3),  # -Z
-        (5, 4, 7, 6),  # +Z
-        (4, 0, 3, 7),  # -X
-        (1, 5, 6, 2),  # +X
-        (3, 2, 6, 7),  # +Y
-        (4, 5, 1, 0),  # -Y
+        (0, 1, 2, 3),
+        (5, 4, 7, 6),
+        (4, 0, 3, 7),
+        (1, 5, 6, 2),
+        (3, 2, 6, 7),
+        (4, 5, 1, 0),
     ]
-    # Face shade factors for flat look
     face_f = [0.72, 0.95, 0.80, 0.88, 1.05, 0.55]
     out = []
     base = hex_rgb(color) if isinstance(color, str) else color
@@ -86,7 +105,6 @@ def box(cx, cy, cz, sx, sy, sz, color):
 
 
 def pyramid(apex, base_pts, color):
-    """Triangular/quad pyramid sides + base."""
     out = []
     base = hex_rgb(color) if isinstance(color, str) else color
     n = len(base_pts)
@@ -95,7 +113,6 @@ def pyramid(apex, base_pts, color):
         b = base_pts[(i + 1) % n]
         f = 0.7 + 0.25 * ((i % 3) / 2)
         out.append(tri(apex, a, b, shade(base, f)))
-    # base
     if n == 3:
         out.append(tri(base_pts[0], base_pts[2], base_pts[1], shade(base, 0.5)))
     elif n == 4:
@@ -104,32 +121,85 @@ def pyramid(apex, base_pts, color):
     return out
 
 
-def mesh_basic():
-    """Gray bipedal mech — low poly walker facing -X (toward player in game)."""
+def xform_tris(tris, fn):
+    return [(fn(a), fn(b), fn(c), col) for a, b, c, col in tris]
+
+
+def translate_tris(tris, dx, dy, dz):
+    return xform_tris(tris, lambda p: (p[0] + dx, p[1] + dy, p[2] + dz))
+
+
+def rotate_tris(tris, axis, deg):
+    rot = {'x': rotate_x, 'y': rotate_y, 'z': rotate_z}[axis]
+    return xform_tris(tris, lambda p: rot(p, deg))
+
+
+def scale_tris(tris, sx, sy=None, sz=None):
+    sy = sx if sy is None else sy
+    sz = sx if sz is None else sz
+    return xform_tris(tris, lambda p: (p[0] * sx, p[1] * sy, p[2] * sz))
+
+
+def recolor_tris(tris, factor=None, absolute=None):
+    out = []
+    for a, b, c, col in tris:
+        rgb = col if isinstance(col, tuple) else hex_rgb(col)
+        if absolute is not None:
+            rgb = absolute if isinstance(absolute, tuple) else hex_rgb(absolute)
+        elif factor is not None:
+            rgb = shade(rgb, factor)
+        out.append((a, b, c, rgb))
+    return out
+
+
+# ---------- per-kind animated meshes (phase in [0,1)) ----------
+
+def mesh_basic(phase):
+    """WALK: alternate legs, slight body bob. Facing -X."""
     g = '#9aa0a8'
     gd = '#5a5e68'
     eye = '#e02028'
+    # phase 0..1 → walk cycle; legs opposite
+    ang = phase * 2 * math.pi
+    leg_swing = math.sin(ang) * 0.14   # Z offset of feet in walk plane
+    leg_lift_l = max(0.0, math.sin(ang)) * 0.08
+    leg_lift_r = max(0.0, -math.sin(ang)) * 0.08
+    bob = abs(math.sin(ang * 2)) * 0.04  # double-frequency body bob
+
     tris = []
-    tris += box(0, 0.15, 0, 0.28, 0.32, 0.22, g)       # torso
-    tris += box(0, 0.55, 0, 0.22, 0.14, 0.18, g)       # head
-    tris += box(-0.45, 0.1, 0, 0.22, 0.06, 0.06, gd)   # gun arm left
-    tris += box(0.38, 0.05, 0, 0.1, 0.12, 0.1, gd)     # right arm
-    tris += box(-0.12, -0.45, 0.08, 0.1, 0.28, 0.1, gd)  # left leg
-    tris += box(0.12, -0.45, -0.08, 0.1, 0.28, 0.1, gd) # right leg
-    tris += box(-0.12, -0.72, 0.08, 0.14, 0.06, 0.12, gd)  # left foot
-    tris += box(0.12, -0.72, -0.08, 0.14, 0.06, 0.12, gd)
-    # eye gem
-    tris += box(-0.05, 0.55, 0.2, 0.06, 0.06, 0.04, eye)
+    body = []
+    body += box(0, 0.15 + bob, 0, 0.28, 0.32, 0.22, g)
+    body += box(0, 0.55 + bob, 0, 0.22, 0.14, 0.18, g)
+    body += box(-0.45, 0.1 + bob, 0, 0.22, 0.06, 0.06, gd)
+    body += box(0.38, 0.05 + bob, 0, 0.1, 0.12, 0.1, gd)
+    body += box(-0.05, 0.55 + bob, 0.2, 0.06, 0.06, 0.04, eye)
+    # slight lean into stride
+    lean = math.sin(ang) * 3.0
+    tris += rotate_tris(body, 'z', lean)
+
+    # left leg (forward when sin>0)
+    ll = []
+    ll += box(-0.12, -0.45 + bob + leg_lift_l, 0.08 + leg_swing, 0.1, 0.28, 0.1, gd)
+    ll += box(-0.12, -0.72 + bob + leg_lift_l, 0.08 + leg_swing, 0.14, 0.06, 0.12, gd)
+    tris += ll
+    # right leg opposite
+    rl = []
+    rl += box(0.12, -0.45 + bob + leg_lift_r, -0.08 - leg_swing, 0.1, 0.28, 0.1, gd)
+    rl += box(0.12, -0.72 + bob + leg_lift_r, -0.08 - leg_swing, 0.14, 0.06, 0.12, gd)
+    tris += rl
     return tris
 
 
-def mesh_drone():
-    """Yellow UFO + green dome."""
+def mesh_drone(phase):
+    """HOVER: tilt L/R + vertical bob + rim light pulse."""
+    ang = phase * 2 * math.pi
+    bob = math.sin(ang) * 0.07
+    tilt = math.sin(ang) * 8.0  # bank Z
+    pulse = 0.5 + 0.5 * math.sin(ang)  # 0..1 rim brighten
+
     tris = []
-    # saucer as flat octagon-ish extruded
     r, h = 0.55, 0.08
-    top = []
-    bot = []
+    top, bot = [], []
     n = 8
     for i in range(n):
         a = 2 * math.pi * i / n
@@ -137,121 +207,229 @@ def mesh_drone():
         bot.append((0.85 * r * math.cos(a), -h, 0.85 * r * math.sin(a)))
     yel = hex_rgb('#ffd428')
     yd = hex_rgb('#c8a010')
+    rim_hot = hex_rgb('#fff0a0')
     for i in range(n):
         t0, t1 = top[i], top[(i + 1) % n]
         b0, b1 = bot[i], bot[(i + 1) % n]
         f = 0.75 + 0.2 * ((i % 4) / 3)
-        tris.append(tri(t0, t1, b1, shade(yel, f)))
-        tris.append(tri(t0, b1, b0, shade(yd, f * 0.9)))
-    # top cap
+        # pulse every other rim segment
+        if i % 2 == 0:
+            col_t = lerp_rgb(shade(yel, f), shade(rim_hot, 1.05), pulse * 0.7)
+            col_b = lerp_rgb(shade(yd, f * 0.9), shade(rim_hot, 0.9), pulse * 0.5)
+        else:
+            col_t = shade(yel, f)
+            col_b = shade(yd, f * 0.9)
+        tris.append(tri(t0, t1, b1, col_t))
+        tris.append(tri(t0, b1, b0, col_b))
     tip = (0, h + 0.02, 0)
     for i in range(n):
         tris.append(tri(tip, top[i], top[(i + 1) % n], shade(yel, 1.05)))
-    # dome
+
     green = '#2e5a34'
     gd = '#1a3a22'
     tris += box(0, 0.28, 0, 0.18, 0.16, 0.18, green)
     tris += box(0, 0.42, 0, 0.12, 0.08, 0.12, gd)
+
+    tris = translate_tris(tris, 0, bob, 0)
+    tris = rotate_tris(tris, 'z', tilt)
+    # tiny yaw wiggle, not a spin
+    tris = rotate_tris(tris, 'y', math.sin(ang * 0.5) * 6.0)
     return tris
 
 
-def mesh_elite():
-    """White/red arrow fighter pointing -X."""
+def mesh_elite(phase):
+    """FLIGHT: engine glow pulse + slight bank. Nose stays -X readable."""
+    ang = phase * 2 * math.pi
+    bank = math.sin(ang) * 7.0
+    pitch = math.sin(ang * 2) * 3.0
+    glow = 0.5 + 0.5 * math.sin(ang)  # engine pulse
+
     white = '#f2f2f6'
     red = '#e01828'
     tris = []
-    # nose pyramid pointing -X
     apex = (-0.7, 0, 0)
     base = [(0.1, 0.35, 0.2), (0.1, 0.35, -0.2), (0.1, -0.35, -0.2), (0.1, -0.35, 0.2)]
     tris += pyramid(apex, base, white)
-    # rear red block
     tris += box(0.4, 0, 0, 0.28, 0.28, 0.18, red)
-    tris += box(0.55, 0.18, 0, 0.12, 0.1, 0.08, '#8a0c18')
-    tris += box(0.55, -0.18, 0, 0.12, 0.1, 0.08, '#8a0c18')
-    # cockpit
     tris += box(-0.15, 0.08, 0, 0.12, 0.08, 0.1, '#304050')
+
+    # engines — grow + brighten with pulse
+    eng_col = lerp_rgb(hex_rgb('#8a0c18'), hex_rgb('#ff6040'), glow)
+    eng_hot = lerp_rgb(hex_rgb('#ff4020'), hex_rgb('#ffee88'), glow)
+    es = 0.10 + 0.04 * glow
+    el = 0.12 + 0.08 * glow
+    tris += box(0.55 + el * 0.3, 0.18, 0, el, es, es * 0.8, eng_col)
+    tris += box(0.55 + el * 0.3, -0.18, 0, el, es, es * 0.8, eng_col)
+    # exhaust plume (brighter when pulsed)
+    plume = 0.08 + 0.14 * glow
+    tris += box(0.72 + plume * 0.4, 0.18, 0, plume, 0.05, 0.05, eng_hot)
+    tris += box(0.72 + plume * 0.4, -0.18, 0, plume, 0.05, 0.05, eng_hot)
+
+    tris = rotate_tris(tris, 'x', bank)  # roll
+    tris = rotate_tris(tris, 'z', pitch)
     return tris
 
 
-def mesh_mech():
-    """White triangle ship pointing -X."""
+def mesh_mech(phase):
+    """FLIGHT: thruster flicker + slight pitch/roll. Triangle stays nose-left."""
+    ang = phase * 2 * math.pi
+    # flicker: non-smooth pulse via multi-sine
+    flick = 0.55 + 0.45 * abs(math.sin(ang * 2.3 + 0.4)) * (0.7 + 0.3 * math.sin(ang * 5.1))
+    roll = math.sin(ang) * 6.0
+    pitch = math.cos(ang) * 4.0
+
     white = '#f4f4f8'
     edge = '#606070'
+    tris = []
     apex = (-0.7, 0, 0)
     base = [(0.55, 0.45, 0.15), (0.55, 0.45, -0.15), (0.55, -0.45, -0.15), (0.55, -0.45, 0.15)]
-    tris = pyramid(apex, base, white)
+    tris += pyramid(apex, base, white)
     tris += box(0.55, 0, 0, 0.08, 0.2, 0.12, edge)
-    # inner facet highlight via thin top ridge
     tris += box(-0.1, 0.05, 0, 0.35, 0.04, 0.06, '#ffffff')
+
+    # thruster nozzle + flame
+    thr_base = lerp_rgb(hex_rgb('#404858'), hex_rgb('#88a0c0'), flick * 0.4)
+    thr_hot = lerp_rgb(hex_rgb('#ff8844'), hex_rgb('#ffe8a0'), flick)
+    tris += box(0.68, 0, 0, 0.06, 0.1, 0.08, thr_base)
+    fl = 0.1 + 0.18 * flick
+    fw = 0.04 + 0.05 * flick
+    tris += box(0.68 + fl * 0.55, 0, 0, fl, fw, fw * 0.85, thr_hot)
+    # secondary stutter plume
+    if flick > 0.7:
+        tris += box(0.68 + fl * 1.1, 0, 0, fl * 0.45, fw * 0.6, fw * 0.5, shade(thr_hot, 1.15))
+
+    tris = rotate_tris(tris, 'x', roll)
+    tris = rotate_tris(tris, 'z', pitch)
     return tris
 
 
-def mesh_tank():
-    """Large red wedge pointing -X."""
+def mesh_tank(phase):
+    """HEAVY: slow body rock + tread advance bob. Weight-forward wedge."""
+    ang = phase * 2 * math.pi
+    rock = math.sin(ang) * 4.0          # slow roll feel
+    pitch = math.sin(ang + 0.8) * 2.5
+    bob = math.sin(ang * 2) * 0.025     # tread advance thud
+    # tread "advance" — shift side plates slightly
+    tread = math.sin(ang) * 0.04
+
     red = '#e02028'
     dark = '#8a1018'
+    tris = []
     apex = (-0.75, 0, 0)
     base = [(0.55, 0.4, 0.25), (0.55, 0.4, -0.25), (0.55, -0.4, -0.25), (0.55, -0.4, 0.25)]
-    tris = pyramid(apex, base, red)
-    tris += box(0.55, 0, 0, 0.1, 0.22, 0.18, dark)
-    tris += box(0.1, 0, 0.02, 0.35, 0.08, 0.08, '#ff5560')
+    body = pyramid(apex, base, red)
+    body += box(0.55, 0, 0, 0.1, 0.22, 0.18, dark)
+    body += box(0.1, 0, 0.02, 0.35, 0.08, 0.08, '#ff5560')
+    # side tread blocks
+    body += box(0.05, -0.42, 0.28 + tread, 0.4, 0.08, 0.08, dark)
+    body += box(0.05, -0.42, -0.28 - tread, 0.4, 0.08, 0.08, dark)
+    # front plow accent
+    body += box(-0.55, -0.15, 0, 0.12, 0.1, 0.22, '#ff3040')
+
+    tris = translate_tris(body, 0, bob, 0)
+    tris = rotate_tris(tris, 'x', rock)
+    tris = rotate_tris(tris, 'z', pitch)
     return tris
 
 
-def mesh_golem():
-    """Green cross + yellow core (will look like spinning when frames rotate)."""
+def mesh_golem(phase):
+    """ARM SPIN: cross rotates around core + core pulse. Rotation OK here."""
+    ang = phase * 360.0  # full arm rotation over the 5 frames (72° steps)
+    pulse = 0.5 + 0.5 * math.sin(phase * 2 * math.pi)
+
     green = '#3cbc48'
     gd = '#1e7a28'
-    yel = '#ffe033'
-    tris = []
-    # four arms along X/Z
-    tris += box(0.35, 0, 0, 0.35, 0.1, 0.12, green)
-    tris += box(-0.35, 0, 0, 0.35, 0.1, 0.12, green)
-    tris += box(0, 0, 0.35, 0.12, 0.1, 0.35, gd)
-    tris += box(0, 0, -0.35, 0.12, 0.1, 0.35, gd)
-    # tip pads
+    yel = lerp_rgb(hex_rgb('#ffe033'), hex_rgb('#fff8c0'), pulse)
+    core_hot = lerp_rgb(hex_rgb('#fff8a0'), hex_rgb('#ffffff'), pulse)
+
+    arms = []
+    arms += box(0.35, 0, 0, 0.35, 0.1, 0.12, green)
+    arms += box(-0.35, 0, 0, 0.35, 0.1, 0.12, green)
+    arms += box(0, 0, 0.35, 0.12, 0.1, 0.35, gd)
+    arms += box(0, 0, -0.35, 0.12, 0.1, 0.35, gd)
     for dx, dz in ((0.65, 0), (-0.65, 0), (0, 0.65), (0, -0.65)):
-        tris += box(dx, 0, dz, 0.1, 0.14, 0.1, gd)
-    # core
-    tris += box(0, 0, 0, 0.22, 0.22, 0.22, yel)
-    tris += box(0, 0, 0, 0.12, 0.12, 0.12, '#fff8a0')
-    return tris
+        arms += box(dx, 0, dz, 0.1, 0.14, 0.1, gd)
+    arms = rotate_tris(arms, 'y', ang)
+
+    # core scales slightly with pulse; does NOT spin with arms
+    cs = 0.20 + 0.05 * pulse
+    cis = 0.10 + 0.04 * pulse
+    core = []
+    core += box(0, 0, 0, cs, cs, cs, yel)
+    core += box(0, 0, 0, cis, cis, cis, core_hot)
+
+    return arms + core
 
 
-def mesh_swarm():
-    """Small red crescent / boomerang pointing -X."""
+def mesh_swarm(phase):
+    """FLUTTER/tumble: crescent flaps/flips like a boomerang shard."""
+    ang = phase * 2 * math.pi
+    # chaotic multi-axis tumble — NOT a clean Y turntable
+    flip = math.sin(ang) * 35.0 + math.sin(ang * 2.3) * 12.0
+    yaw = math.cos(ang * 1.4) * 18.0
+    roll = math.sin(ang * 1.7 + 0.5) * 25.0
+    bob = math.sin(ang * 2) * 0.06
+    # wing flap: scale Y of crescent tips
+    flap = 1.0 + 0.18 * math.sin(ang * 2)
+
     red = '#ff2a3a'
     hot = '#ff8890'
     tris = []
-    # upper wing
     apex = (-0.55, 0, 0)
-    up = [(0.45, 0.35, 0.08), (0.45, 0.15, -0.05), (-0.05, 0.05, 0.05)]
+    up = [(0.45, 0.35 * flap, 0.08), (0.45, 0.15 * flap, -0.05), (-0.05, 0.05, 0.05)]
     tris += pyramid(apex, up, red)
-    # lower wing
-    lo = [(0.45, -0.35, 0.08), (-0.05, -0.05, 0.05), (0.45, -0.15, -0.05)]
+    lo = [(0.45, -0.35 * flap, 0.08), (-0.05, -0.05, 0.05), (0.45, -0.15 * flap, -0.05)]
     tris += pyramid(apex, lo, hot)
-    # body connector
     tris += box(0.1, 0, 0, 0.2, 0.08, 0.08, '#c01828')
+
+    tris = translate_tris(tris, 0, bob, 0)
+    tris = rotate_tris(tris, 'z', flip)
+    tris = rotate_tris(tris, 'y', yaw)
+    tris = rotate_tris(tris, 'x', roll)
     return tris
 
 
-def mesh_boss():
-    """Gray chunky asymmetric station."""
+def mesh_boss(phase):
+    """STATION: slow power/light pulse + one turret rotates slowly. No body spin."""
+    ang = phase * 2 * math.pi
+    pulse = 0.5 + 0.5 * math.sin(ang)
+    turret_yaw = phase * 72.0  # slow: 72° over full cycle (one step per frame)
+
     g0, g1, g2 = '#b0b4bc', '#6a6e78', '#3a3e48'
-    accent = '#e02830'
+    accent = lerp_rgb(hex_rgb('#e02830'), hex_rgb('#ff8890'), pulse)
+    accent2 = lerp_rgb(hex_rgb('#e02830'), hex_rgb('#ffcc40'), pulse * 0.8)
+
     tris = []
+    # main hull — static facing
     tris += box(0, 0, 0, 0.55, 0.35, 0.4, g1)
     tris += box(-0.15, 0, 0.1, 0.35, 0.28, 0.28, g0)
-    tris += box(-0.6, 0, 0, 0.15, 0.18, 0.2, g2)   # nose
-    tris += box(0.4, 0.4, -0.1, 0.18, 0.2, 0.15, g1)  # top tower
-    tris += box(0.45, -0.35, 0.15, 0.2, 0.18, 0.18, g2)  # bottom pod
-    tris += box(0.1, 0.45, 0, 0.08, 0.12, 0.08, g2)  # mast
+    tris += box(-0.6, 0, 0, 0.15, 0.18, 0.2, g2)
+    tris += box(0.45, -0.35, 0.15, 0.2, 0.18, 0.18, g2)
+    # pulsing accent lights on hull
     tris += box(-0.1, 0, 0.35, 0.1, 0.1, 0.06, accent)
-    tris += box(0.25, -0.2, 0.35, 0.08, 0.08, 0.06, accent)
+    tris += box(0.25, -0.2, 0.35, 0.08, 0.08, 0.06, accent2)
+    # reactor glow panel (brightens)
+    glow_sz = 0.12 + 0.04 * pulse
+    tris += box(0.05, 0.05, -0.38, glow_sz, glow_sz * 0.7, 0.04, accent2)
+
+    # top tower + rotating turret segment
+    tower = []
+    tower += box(0.4, 0.4, -0.1, 0.18, 0.2, 0.15, g1)
+    tower += box(0.1, 0.45, 0, 0.08, 0.12, 0.08, g2)
+    # barrel on mast that rotates
+    barrel = box(0.1, 0.58, 0.18, 0.05, 0.05, 0.22, accent)
+    barrel = translate_tris(barrel, -0.1, -0.58, 0)  # to origin of mast tip
+    barrel = rotate_tris(barrel, 'y', turret_yaw)
+    barrel = translate_tris(barrel, 0.1, 0.58, 0)
+    tris += tower
+    tris += barrel
+
+    # very slight station "power hum" bob — subtle
+    tris = translate_tris(tris, 0, pulse * 0.015, 0)
     return tris
 
 
-MESHES = {
+KIND_BUILDERS = {
     'basic': mesh_basic,
     'drone': mesh_drone,
     'elite': mesh_elite,
@@ -262,41 +440,37 @@ MESHES = {
     'boss': mesh_boss,
 }
 
+# Fixed fit scales so bob/tilt doesn't resize the sprite between frames.
+# Tuned so each kind fills ~78% of the 128 canvas at rest pose.
+KIND_SCALE = {
+    'basic': 58,
+    'drone': 72,
+    'elite': 62,
+    'mech': 60,
+    'tank': 58,
+    'golem': 68,
+    'swarm': 70,
+    'boss': 55,
+}
+
 
 def project(p, scale, cx, cy):
-    # simple perspective-ish orthographic with slight depth foreshortening
     x, y, z = p
-    # camera looks from +Z toward origin; game enemies face -X so side view at angle 0
-    # At angle 0 we want left-facing silhouette: use X as horizontal, Y vertical
     px = cx + x * scale
     py = cy - y * scale
-    depth = z  # for sorting
+    depth = z
     return px, py, depth
 
 
-def render_frame(tris, angle_deg, size=SIZE):
+def render_frame(tris, scale, size=SIZE):
     img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img, 'RGBA')
     light = vnorm((0.4, 0.7, 0.55))
-    rotated = []
-    for a, b, c, col in tris:
-        ra, rb, rc = rotate_y(a, angle_deg), rotate_y(b, angle_deg), rotate_y(c, angle_deg)
-        rotated.append((ra, rb, rc, col))
-
-    # auto-fit scale
-    xs, ys = [], []
-    for a, b, c, _ in rotated:
-        for p in (a, b, c):
-            xs.append(p[0])
-            ys.append(p[1])
-    span = max(max(xs) - min(xs), max(ys) - min(ys), 0.01)
-    scale = size * 0.78 / span
     cx = cy = size / 2
 
     faces = []
-    for a, b, c, col in rotated:
+    for a, b, c, col in tris:
         n = vnorm(vcross(vsub(b, a), vsub(c, a)))
-        # backface cull (camera from +Z roughly, but after Y-rot camera is orthographic along Z)
         if n[2] < -0.05:
             continue
         ndot = max(0.0, vdot(n, light))
@@ -308,10 +482,9 @@ def render_frame(tris, angle_deg, size=SIZE):
         depth = (pa[2] + pb[2] + pc[2]) / 3
         faces.append((depth, [(pa[0], pa[1]), (pb[0], pb[1]), (pc[0], pc[1])], rgb + (255,)))
 
-    faces.sort(key=lambda f: f[0])  # far to near
+    faces.sort(key=lambda f: f[0])
     for _, pts, rgba in faces:
         draw.polygon(pts, fill=rgba)
-        # hard edge outline (slightly darker)
         edge = shade(rgba[:3], 0.55) + (220,)
         draw.line(pts + [pts[0]], fill=edge, width=1)
 
@@ -320,16 +493,18 @@ def render_frame(tris, angle_deg, size=SIZE):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    for kind, builder in MESHES.items():
+    for kind, builder in KIND_BUILDERS.items():
         kind_dir = os.path.join(OUT, kind)
         os.makedirs(kind_dir, exist_ok=True)
-        tris = builder()
-        for i, ang in enumerate(ANGLES):
-            img = render_frame(tris, ang)
+        scale = KIND_SCALE[kind]
+        for i in range(FRAMES):
+            phase = i / FRAMES  # 0, 0.2, 0.4, 0.6, 0.8
+            tris = builder(phase)
+            img = render_frame(tris, scale)
             path = os.path.join(kind_dir, f'{i}.png')
             img.save(path, 'PNG')
-            print('wrote', path, 'angle', ang)
-    print('done', FRAMES, 'frames x', len(MESHES), 'kinds')
+            print('wrote', path, 'phase', round(phase, 2))
+    print('done', FRAMES, 'frames x', len(KIND_BUILDERS), 'kinds (per-kind anim)')
 
 
 if __name__ == '__main__':

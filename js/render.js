@@ -284,11 +284,22 @@ function drawHpPip(ctx, e) {
   ctx.strokeRect(-e.w * 0.45, -e.h * 0.78, e.w * 0.9, 6);
 }
 
-/** Low-poly enemy sprites: 5 turntable frames per kind (assets/enemies/<kind>/0..4.png). */
+/** Low-poly enemy sprites: 5 per-kind anim frames (assets/enemies/<kind>/0..4.png).
+ * Motions: walk / hover / thrust / rock / arm-spin / flutter / station — not a shared turntable. */
 const ENEMY_KINDS = ['basic', 'drone', 'elite', 'mech', 'tank', 'golem', 'swarm', 'boss'];
 const ENEMY_FRAME_COUNT = 5;
-/** ms per frame → full spin ≈ 5 * 110 = 550ms */
-const ENEMY_FRAME_MS = 110;
+/** ms per frame, tuned per kind (tank/boss slower; swarm/golem faster). */
+const ENEMY_FRAME_MS = {
+  basic: 100,   // walk cycle
+  drone: 130,   // hover tilt/bob
+  elite: 95,    // engine pulse + bank
+  mech: 85,     // thruster flicker
+  tank: 170,    // heavy rock
+  golem: 75,    // arm spin
+  swarm: 60,    // flutter/tumble
+  boss: 200,    // station pulse / slow turret
+};
+const ENEMY_FRAME_MS_DEFAULT = 110;
 /** @type {Record<string, HTMLImageElement[]>} */
 const enemySprites = Object.create(null);
 let enemySpritesReady = false;
@@ -327,17 +338,22 @@ export function preloadEnemySprites() {
 // Kick off load as soon as this module evaluates
 preloadEnemySprites();
 
-function enemyFrameIndex(e) {
+function enemyFrameMs(kind) {
+  return ENEMY_FRAME_MS[kind] || ENEMY_FRAME_MS_DEFAULT;
+}
+
+function enemyFrameIndex(e, kind) {
   const t = performance.now();
-  // Desync by spawn x so packs don't twirl in lockstep
+  const ms = enemyFrameMs(kind || e.kind || 'basic');
+  // Desync by spawn x so packs don't animate in lockstep
   const offset = (typeof e.x === 'number' ? e.x : 0) * 0.07;
-  return Math.floor((t + offset * ENEMY_FRAME_MS) / ENEMY_FRAME_MS) % ENEMY_FRAME_COUNT;
+  return Math.floor((t + offset * ms) / ms) % ENEMY_FRAME_COUNT;
 }
 
 function drawEnemySprite(ctx, e, kind) {
   const frames = enemySprites[kind];
   if (!frames) return false;
-  const img = frames[enemyFrameIndex(e)];
+  const img = frames[enemyFrameIndex(e, kind)];
   if (!img || !img.complete || !img.naturalWidth) return false;
   const sent = !!e.sent;
   const w = e.w, h = e.h;
@@ -375,15 +391,21 @@ function drawEnemyFallback(ctx, e, kind, sent, w, h, t, pulse) {
     const body = sent ? '#66ddee' : '#e02028';
     const shade = sent ? '#2a8aaa' : '#8a1018';
     const lite = sent ? '#aaf0ff' : '#ff5560';
+    const rock = Math.sin(t * 3.2 + (e.phase || 0)) * 0.06;
+    ctx.save();
+    ctx.rotate(rock);
+    ctx.translate(0, Math.sin(t * 6.4 + (e.phase || 0)) * h * 0.02);
     fillTri([[-w * 0.58, 0], [w * 0.52, -h * 0.48], [w * 0.52, h * 0.48]], shade);
     fillTri([[-w * 0.58, 0], [w * 0.52, -h * 0.28], [w * 0.2, 0]], body);
     fillTri([[-w * 0.58, 0], [w * 0.2, 0], [w * 0.52, h * 0.28]], lite);
     ctx.beginPath();
     ctx.moveTo(-w * 0.58, 0); ctx.lineTo(w * 0.52, -h * 0.48); ctx.lineTo(w * 0.52, h * 0.48);
     ctx.closePath(); strokeDark(2);
+    ctx.restore();
   } else if (kind === 'golem') {
     const armCol = sent ? '#55dde8' : '#3cbc48';
     const armDark = sent ? '#2a8890' : '#1e7a28';
+    const corePulse = 0.85 + 0.15 * Math.sin(t * 6 + (e.phase || 0));
     const coreCol = sent ? '#aef8ff' : '#ffe033';
     const spin = t * 2.8 + (e.phase || 0);
     ctx.save();
@@ -396,54 +418,94 @@ function drawEnemyFallback(ctx, e, kind, sent, w, h, t, pulse) {
       ctx.restore();
     }
     ctx.restore();
-    fillTri([[-w * 0.14, -h * 0.14], [w * 0.14, -h * 0.14], [w * 0.14, h * 0.14], [-w * 0.14, h * 0.14]], coreCol);
+    const cs = w * 0.14 * corePulse;
+    fillTri([[-cs, -cs], [cs, -cs], [cs, cs], [-cs, cs]], coreCol);
   } else if (kind === 'boss') {
     const g0 = sent ? '#88c8d8' : '#b0b4bc';
     const g1 = sent ? '#4a7888' : '#6a6e78';
     const g2 = sent ? '#2a4858' : '#3a3e48';
+    const pulse = 0.55 + 0.45 * Math.sin(t * 2.5 + (e.phase || 0));
     const accent = sent ? '#66eef8' : '#e02830';
     fillTri([[-w * 0.48, -h * 0.42], [w * 0.48, -h * 0.42], [w * 0.48, h * 0.42], [-w * 0.48, h * 0.42]], g2);
     fillTri([[-w * 0.42, -h * 0.3], [w * 0.1, -h * 0.35], [w * 0.15, h * 0.3], [-w * 0.35, h * 0.28]], g1);
     fillTri([[-w * 0.15, -h * 0.18], [w * 0.2, -h * 0.15], [w * 0.18, h * 0.18], [-w * 0.12, h * 0.15]], g0);
     fillTri([[-w * 0.55, -h * 0.15], [-w * 0.35, -h * 0.15], [-w * 0.35, h * 0.15], [-w * 0.55, h * 0.15]], g1);
     fillTri([[w * 0.25, -h * 0.5], [w * 0.48, -h * 0.5], [w * 0.48, -h * 0.2], [w * 0.25, -h * 0.22]], g1);
-    fillTri([[-w * 0.1, -h * 0.08], [w * 0.05, -h * 0.08], [w * 0.05, h * 0.08], [-w * 0.1, h * 0.08]], accent);
+    // pulsing accent + slow turret tip
+    const as = 0.06 + 0.04 * pulse;
+    fillTri([[-w * as, -h * as], [w * as, -h * as], [w * as, h * as], [-w * as, h * as]], accent);
+    const tur = t * 0.9 + (e.phase || 0);
+    ctx.save();
+    ctx.translate(w * 0.32, -h * 0.35);
+    ctx.rotate(tur);
+    fillTri([[0, -h * 0.04], [w * 0.18, -h * 0.04], [w * 0.18, h * 0.04], [0, h * 0.04]], accent);
+    ctx.restore();
   } else if (kind === 'mech') {
     const body = sent ? '#88e8f8' : '#f4f4f8';
     const tip = sent ? '#c8f8ff' : '#ffffff';
     const edge = sent ? '#2a7088' : '#404050';
+    const flick = 0.5 + 0.5 * Math.abs(Math.sin(t * 14 + (e.phase || 0)));
+    const bank = Math.sin(t * 4 + (e.phase || 0)) * 0.08;
+    ctx.save();
+    ctx.rotate(bank);
     fillTri([[-w * 0.55, 0], [w * 0.5, -h * 0.48], [w * 0.5, h * 0.48]], body);
     fillTri([[-w * 0.55, 0], [w * 0.15, -h * 0.18], [w * 0.15, h * 0.18]], tip);
     fillTri([[w * 0.42, -h * 0.12], [w * 0.55, -h * 0.12], [w * 0.55, h * 0.12], [w * 0.42, h * 0.12]], edge);
+    // thruster flicker
+    const fl = w * (0.08 + 0.12 * flick);
+    fillTri([[w * 0.55, -h * 0.06], [w * 0.55 + fl, 0], [w * 0.55, h * 0.06]], sent ? '#aef8ff' : '#ffb060');
     ctx.beginPath();
     ctx.moveTo(-w * 0.55, 0); ctx.lineTo(w * 0.5, -h * 0.48); ctx.lineTo(w * 0.5, h * 0.48);
     ctx.closePath(); strokeDark(2);
+    ctx.restore();
   } else if (kind === 'drone') {
     const disc = sent ? '#88e8f0' : '#ffd428';
     const discShade = sent ? '#3a98a8' : '#c8a010';
     const dome = sent ? '#1a4050' : '#1a3a22';
+    const bob = Math.sin(t * 4.5 + (e.phase || 0)) * h * 0.06;
+    const tilt = Math.sin(t * 4.5 + (e.phase || 0)) * 0.12;
+    ctx.save();
+    ctx.translate(0, bob);
+    ctx.rotate(tilt);
     fillTri([[-w * 0.48, 0], [0, -h * 0.22], [w * 0.48, 0], [0, h * 0.28]], discShade);
     fillTri([[-w * 0.42, -h * 0.02], [0, -h * 0.18], [w * 0.42, -h * 0.02], [0, h * 0.12]], disc);
     fillTri([[-w * 0.18, -h * 0.08], [0, -h * 0.38], [w * 0.18, -h * 0.08]], dome);
+    ctx.restore();
   } else if (kind === 'swarm') {
     const body = sent ? '#66e8f8' : '#ff2a3a';
     const hot = sent ? '#c8f8ff' : '#ff8890';
-    fillTri([[-w * 0.45, 0], [w * 0.15, -h * 0.2], [w * 0.5, -h * 0.35], [-w * 0.05, 0]], body);
-    fillTri([[-w * 0.45, 0], [-w * 0.05, 0], [w * 0.5, h * 0.35], [w * 0.15, h * 0.2]], hot);
+    const flap = 1 + 0.15 * Math.sin(t * 16 + (e.phase || 0));
+    const tumble = Math.sin(t * 9 + (e.phase || 0)) * 0.35;
+    ctx.save();
+    ctx.rotate(tumble);
+    fillTri([[-w * 0.45, 0], [w * 0.15, -h * 0.2 * flap], [w * 0.5, -h * 0.35 * flap], [-w * 0.05, 0]], body);
+    fillTri([[-w * 0.45, 0], [-w * 0.05, 0], [w * 0.5, h * 0.35 * flap], [w * 0.15, h * 0.2 * flap]], hot);
+    ctx.restore();
   } else if (kind === 'elite') {
     const white = sent ? '#b8f0fa' : '#f2f2f6';
     const red = sent ? '#3aa8c0' : '#e01828';
     const redDark = sent ? '#1a6070' : '#8a0c18';
+    const glow = 0.5 + 0.5 * Math.sin(t * 8 + (e.phase || 0));
+    const bank = Math.sin(t * 5 + (e.phase || 0)) * 0.1;
+    ctx.save();
+    ctx.rotate(bank);
     fillTri([[-w * 0.55, 0], [w * 0.15, -h * 0.42], [w * 0.15, h * 0.42]], white);
     fillTri([[w * 0.1, -h * 0.42], [w * 0.52, -h * 0.28], [w * 0.52, h * 0.28], [w * 0.1, h * 0.42]], red);
     fillTri([[w * 0.38, -h * 0.22], [w * 0.54, -h * 0.22], [w * 0.54, -h * 0.08], [w * 0.38, -h * 0.08]], redDark);
     fillTri([[w * 0.38, h * 0.08], [w * 0.54, h * 0.08], [w * 0.54, h * 0.22], [w * 0.38, h * 0.22]], redDark);
+    const pl = w * (0.06 + 0.1 * glow);
+    fillTri([[w * 0.54, -h * 0.18], [w * 0.54 + pl, -h * 0.15], [w * 0.54, -h * 0.12]], sent ? '#aef8ff' : '#ff8844');
+    fillTri([[w * 0.54, h * 0.12], [w * 0.54 + pl, h * 0.15], [w * 0.54, h * 0.18]], sent ? '#aef8ff' : '#ff8844');
+    ctx.restore();
   } else {
-    // basic — faceted gray biped
+    // basic — faceted gray biped walk
     const body = sent ? '#7ab0c0' : '#9aa0a8';
     const bodyDark = sent ? '#3a6878' : '#4a4e58';
     const eye = sent ? '#66eef8' : '#e02028';
     const walk = Math.sin(t * 10 + (e.phase || 0));
+    const bob = Math.abs(Math.sin(t * 20 + (e.phase || 0) * 2)) * h * 0.03;
+    ctx.save();
+    ctx.translate(0, -bob);
     fillTri([[-w * 0.28, -h * 0.42], [w * 0.28, -h * 0.42], [w * 0.28, h * 0.12], [-w * 0.28, h * 0.12]], bodyDark);
     fillTri([[-w * 0.22, -h * 0.38], [w * 0.22, -h * 0.38], [w * 0.18, h * 0.02], [-w * 0.18, h * 0.02]], body);
     fillTri([[-w * 0.18, -h * 0.52], [w * 0.18, -h * 0.52], [w * 0.18, -h * 0.36], [-w * 0.18, -h * 0.36]], body);
@@ -452,7 +514,9 @@ function drawEnemyFallback(ctx, e, kind, sent, w, h, t, pulse) {
     const legLift = walk * h * 0.06;
     fillTri([[-w * 0.2, h * 0.08 + legLift], [-w * 0.06, h * 0.08 + legLift], [-w * 0.06, h * 0.4 + legLift], [-w * 0.2, h * 0.4 + legLift]], bodyDark);
     fillTri([[w * 0.04, h * 0.08 - legLift], [w * 0.18, h * 0.08 - legLift], [w * 0.18, h * 0.4 - legLift], [w * 0.04, h * 0.4 - legLift]], bodyDark);
+    ctx.restore();
   }
+
 }
 
 function drawEnemy(ctx, e) {
