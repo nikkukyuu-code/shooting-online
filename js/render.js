@@ -297,7 +297,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=1.5.57`;
+  return `assets/enemies/${kind}/${frame}.png?v=1.5.58`;
 }
 
 function loadKindSprite(kind) {
@@ -537,14 +537,13 @@ function drawLaserTelegraph(ctx, e, t) {
   // Muzzle on the left (shots fly toward player)
   const mx = -w * 0.42;
   const my = 0;
-  const aimX = (e.laserAimX != null ? e.laserAimX : e.x - 200) - e.x;
-  const aimY = (e.laserAimY != null ? e.laserAimY : e.y) - e.y;
-  const ang = Math.atan2(aimY, aimX);
-  const beamLen = Math.max(80, Math.hypot(aimX, aimY));
+  // Fixed horizontal warning beam leftward — never aim at player Y.
+  const ang = Math.PI; // straight left
+  const beamLen = Math.max(220, (e.laserAimX != null ? Math.abs(e.laserAimX - e.x) : 320));
   const flash = u > 0.75 ? (0.55 + 0.45 * Math.sin(t * 40)) : (0.35 + 0.25 * Math.sin(t * 18));
 
   ctx.save();
-  // Warning aim line (dashed / flickering)
+  // Warning aim line (dashed / flickering) — always horizontal
   ctx.translate(mx, my);
   ctx.rotate(ang);
   ctx.globalAlpha = 0.35 + 0.55 * u;
@@ -831,28 +830,30 @@ function drawBullet(ctx, b) {
     ctx.shadowBlur = 0;
 
     if (laser) {
-      // Fast cyan/amber laser pulse streak
-      const len = 22;
-      ctx.strokeStyle = 'rgba(255,120,60,0.35)';
+      // Fast cyan laser pulse streak (distinct from orange missiles)
+      const len = 26;
+      // Force horizontal draw for enemy lasers (vy must be 0)
+      const lx = -1, ly = 0;
+      ctx.strokeStyle = 'rgba(40,180,255,0.35)';
       ctx.lineWidth = 6;
       ctx.beginPath();
-      ctx.moveTo(b.x - ux * len, b.y - uy * len);
-      ctx.lineTo(b.x + ux * len * 0.4, b.y + uy * len * 0.4);
+      ctx.moveTo(b.x - lx * len, b.y - ly * len);
+      ctx.lineTo(b.x + lx * len * 0.4, b.y + ly * len * 0.4);
       ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,200,90,0.95)';
+      ctx.strokeStyle = 'rgba(80,220,255,0.95)';
       ctx.lineWidth = 3.2;
       ctx.beginPath();
-      ctx.moveTo(b.x - ux * len * 0.85, b.y - uy * len * 0.85);
-      ctx.lineTo(b.x + ux * 6, b.y + uy * 6);
+      ctx.moveTo(b.x - lx * len * 0.85, b.y - ly * len * 0.85);
+      ctx.lineTo(b.x + lx * 6, b.y + ly * 6);
       ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,255,230,0.95)';
+      ctx.strokeStyle = 'rgba(220,255,255,0.95)';
       ctx.lineWidth = 1.4;
       ctx.beginPath();
-      ctx.moveTo(b.x - ux * 8, b.y - uy * 8);
-      ctx.lineTo(b.x + ux * 5, b.y + uy * 5);
+      ctx.moveTo(b.x - lx * 8, b.y - ly * 8);
+      ctx.lineTo(b.x + lx * 5, b.y + ly * 5);
       ctx.stroke();
     } else if (homing) {
-      // Limited-homing missile — orange/red diamond + short trail
+      // Limited-homing missile — orange/red diamond + thicker trail (not a laser)
       const trail = (Array.isArray(b.trail) && b.trail.length > 1) ? b.trail : null;
       if (trail) {
         ctx.beginPath();
@@ -861,22 +862,22 @@ function drawBullet(ctx, b) {
         ctx.lineTo(b.x, b.y);
         const g0 = trail[0];
         const ribbon = ctx.createLinearGradient(g0.x, g0.y, b.x, b.y);
-        ribbon.addColorStop(0, 'rgba(255,80,40,0)');
-        ribbon.addColorStop(0.5, 'rgba(255,100,50,0.2)');
-        ribbon.addColorStop(1, 'rgba(255,160,80,0.55)');
+        ribbon.addColorStop(0, 'rgba(255,60,20,0)');
+        ribbon.addColorStop(0.45, 'rgba(255,90,40,0.28)');
+        ribbon.addColorStop(1, 'rgba(255,150,60,0.7)');
         ctx.strokeStyle = ribbon;
-        ctx.lineWidth = 4.5;
+        ctx.lineWidth = 6;
         ctx.stroke();
       } else {
-        const ribbonLen = 48;
+        const ribbonLen = 58;
         const rx0 = b.x - ux * ribbonLen;
         const ry0 = b.y - uy * ribbonLen;
         const ribbon = ctx.createLinearGradient(rx0, ry0, b.x, b.y);
-        ribbon.addColorStop(0, 'rgba(255,80,40,0)');
-        ribbon.addColorStop(0.5, 'rgba(255,100,50,0.2)');
-        ribbon.addColorStop(1, 'rgba(255,160,80,0.55)');
+        ribbon.addColorStop(0, 'rgba(255,60,20,0)');
+        ribbon.addColorStop(0.45, 'rgba(255,90,40,0.28)');
+        ribbon.addColorStop(1, 'rgba(255,150,60,0.7)');
         ctx.strokeStyle = ribbon;
-        ctx.lineWidth = 4.5;
+        ctx.lineWidth = 6;
         ctx.beginPath();
         ctx.moveTo(rx0, ry0);
         ctx.lineTo(b.x, b.y);
@@ -885,22 +886,22 @@ function drawBullet(ctx, b) {
       ctx.save();
       ctx.translate(b.x, b.y);
       ctx.rotate(ang);
-      ctx.fillStyle = 'rgba(255,180,100,0.95)';
-      ctx.strokeStyle = 'rgba(255,90,40,0.9)';
-      ctx.lineWidth = 1;
+      ctx.fillStyle = 'rgba(255,160,70,0.98)';
+      ctx.strokeStyle = 'rgba(255,70,30,0.95)';
+      ctx.lineWidth = 1.2;
       ctx.beginPath();
-      ctx.moveTo(7, 0);
-      ctx.lineTo(0, 3.0);
-      ctx.lineTo(-4, 0);
-      ctx.lineTo(0, -3.0);
+      ctx.moveTo(9, 0);
+      ctx.lineTo(0, 3.8);
+      ctx.lineTo(-5, 0);
+      ctx.lineTo(0, -3.8);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = '#fff8e8';
       ctx.beginPath();
-      ctx.moveTo(7, 0);
-      ctx.lineTo(2.5, 1.2);
-      ctx.lineTo(2.5, -1.2);
+      ctx.moveTo(9, 0);
+      ctx.lineTo(3, 1.4);
+      ctx.lineTo(3, -1.4);
       ctx.closePath();
       ctx.fill();
       ctx.restore();

@@ -2,11 +2,11 @@ import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=1.5.57';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.57';
-import { sfx } from './audio.js?v=1.5.57';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.57';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE } from './meta.js?v=1.5.57';
+} from './entities.js?v=1.5.58';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.58';
+import { sfx } from './audio.js?v=1.5.58';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.58';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE } from './meta.js?v=1.5.58';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';
@@ -83,6 +83,8 @@ const ENEMY_HOMING_TURN = 7.0; // rad/s — weaker than player (10.5)
 const ENEMY_HOMING_SPD = 280;
 
 function steerEnemyHoming(b, tx, ty, dt) {
+  // Hard guard: lasers never home, even if homing/homeT was set by mistake.
+  if (b.laser) return;
   if (!b.homing || b.owner !== 'enemy') return;
   if (typeof b.homeT === 'number') {
     if (b.homeT <= 0) return;
@@ -109,21 +111,17 @@ function pushEnemyAttack(e, bullets, tx, ty) {
   const kind = resolveEnemyTier(e.kind || 'basic');
   const ox = e.x - (e.w || 20) * 0.4;
   const oy = e.y;
-  // Missiles may aim at live target; lasers never chase / home.
+  // Missiles may aim at live target; lasers NEVER use player tx/ty for direction.
   const missileAim = Math.atan2(ty - oy, tx - ox);
-  const hasLockedLaserAim = e.laserAimX != null && e.laserAimY != null;
-  // Locked telegraph aim, else straight left (toward player side; vy≈0).
-  const laserBaseAim = hasLockedLaserAim
-    ? Math.atan2(e.laserAimY - oy, e.laserAimX - ox)
-    : Math.PI;
 
   const fireNormal = (vx, vy, dmg = 2) => {
     bullets.push(spawnBullet(ox, oy, vx, vy, 'enemy', false, dmg));
   };
-  const fireLaser = (spd = 480, dmg = 2, angOff = 0) => {
-    const a = laserBaseAim + angOff;
+  // Always straight horizontal toward player side: vx < 0, vy === 0.
+  // yOff = parallel beam spawn offset in px (not aim angle / not player Y).
+  const fireLaser = (spd = 480, dmg = 2, yOff = 0) => {
     bullets.push(spawnBullet(
-      ox, oy, Math.cos(a) * spd, Math.sin(a) * spd,
+      ox, oy + yOff, -Math.abs(spd), 0,
       'enemy', false, dmg, { laser: true, life: 2.0 },
     ));
   };
@@ -152,15 +150,15 @@ function pushEnemyAttack(e, bullets, tx, ty) {
     fireNormal(-150, 36, 1);
     if (Math.random() < 0.6) fireMissile(0.5);
   } else if (kind === 'mech') {
-    fireLaser(520, 2, -0.06);
-    fireLaser(500, 2, 0.06);
+    fireLaser(520, 2, -8);
+    fireLaser(500, 2, 8);
     fireMissile(0.6, 0.25);
     fireNormal(-145, -48, 1);
     fireNormal(-145, 48, 1);
   } else if (kind === 'golem') {
-    fireLaser(460, 2, -0.14);
+    fireLaser(460, 2, -12);
     fireLaser(480, 2, 0);
-    fireLaser(460, 2, 0.14);
+    fireLaser(460, 2, 12);
     if (Math.random() < 0.35) fireMissile(0.45);
   } else if (kind === 'tank') {
     fireLaser(510, 2);
@@ -169,8 +167,8 @@ function pushEnemyAttack(e, bullets, tx, ty) {
     fireNormal(-185, 55, 2);
     if (Math.random() < 0.45) fireMissile(0.48);
   } else if (kind === 'boss') {
-    fireLaser(540, 3, -0.08);
-    fireLaser(520, 2, 0.08);
+    fireLaser(540, 3, -10);
+    fireLaser(520, 2, 10);
     fireMissile(0.65, 0.2);
     fireMissile(0.5, 0.45);
     fireNormal(-170, -40, 2);
@@ -191,10 +189,10 @@ const LASER_TELE_DUR = 0.55;
 function tickEnemyLaserFire(e, bullets, tx, ty, dt, canFire, computeReload) {
   if (e.laserTeleT > 0) {
     e.laserTeleT = Math.max(0, e.laserTeleT - dt);
-    // Aim locked at charge start — do not track player during telegraph.
+    // Telegraph is fixed horizontal — never track player.
     if (e.laserTeleT <= 0) {
       e.laserTeleT = 0;
-      // Lasers use e.laserAim*; missiles still get live tx/ty for limited home.
+      // Missiles still get live tx/ty for limited home; lasers ignore them.
       pushEnemyAttack(e, bullets, tx, ty);
       e.laserAimX = undefined;
       e.laserAimY = undefined;
@@ -209,9 +207,9 @@ function tickEnemyLaserFire(e, bullets, tx, ty, dt, canFire, computeReload) {
   if (e.sent && isLargeEnemy(e) && enemyAttackUsesLaser(e.kind)) {
     e.laserTeleT = LASER_TELE_DUR;
     e.laserTeleMax = LASER_TELE_DUR;
-    // Lock aim once at charge start (warning beam stays fixed).
-    e.laserAimX = tx;
-    e.laserAimY = ty;
+    // Fixed horizontal warning beam from muzzle leftward (NOT player aim).
+    e.laserAimX = e.x - 400;
+    e.laserAimY = e.y;
     e.fireCd = 0;
     return false;
   }
@@ -1130,7 +1128,7 @@ export class Game {
     for (const b of S.bullets) {
       if (b.homing && b.owner === 'player') {
         steerHomingBullet(b, S.enemies, dt, fw);
-      } else if (b.homing && b.owner === 'enemy') {
+      } else if (b.homing && b.owner === 'enemy' && !b.laser) {
         steerEnemyHoming(b, P.x, pyAim, dt);
       }
       b.x += b.vx * dt;
@@ -1515,7 +1513,7 @@ export class Game {
     }
     const botPy = B.y * fh;
     for (const b of B.bullets) {
-      if (b.homing && b.owner === 'enemy') {
+      if (b.homing && b.owner === 'enemy' && !b.laser) {
         steerEnemyHoming(b, shipX, botPy, dt);
       }
       b.x += b.vx * dt;

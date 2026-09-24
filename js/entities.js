@@ -149,15 +149,17 @@ export function spawnEnemy(fieldW, fieldH, kind = 'basic') {
 
 export function spawnBullet(x, y, vx, vy, owner = 'player', homing = false, dmg = 1, opts = {}) {
   const laser = !!opts.laser;
+  // Lasers are never homing and never get homeT.
+  const useHoming = laser ? false : !!homing;
   const b = {
     x, y, vx, vy,
-    r: laser ? 2.5 : (homing ? 4 : 3),
-    owner, homing, dmg,
+    r: laser ? 2.5 : (useHoming ? 4 : 3),
+    owner, homing: useHoming, dmg,
     life: opts.life != null ? opts.life : (laser ? 2.2 : 3),
     laser,
   };
   // Limited-homing: steer only while homeT > 0, then fly straight
-  if (homing && opts.homeT != null) {
+  if (useHoming && opts.homeT != null) {
     b.homeT = opts.homeT;
     b.homeMax = opts.homeMax != null ? opts.homeMax : opts.homeT;
   }
