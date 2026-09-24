@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""DEPRECATED — low-poly generator kept for reference only.
+Primary enemy art is produced by tools/extract_user_enemy_sprites.py
+from tools/source_enemy_sheet.png (user-supplied sheet).
+"""
 """Generate 5 low-poly PNG frames per enemy kind with gentle ゆらゆら sway.
 
 No full spins / arm turntables / tumble flips. Each kind keeps light flavor

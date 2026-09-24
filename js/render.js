@@ -284,8 +284,9 @@ function drawHpPip(ctx, e) {
   ctx.strokeRect(-e.w * 0.45, -e.h * 0.78, e.w * 0.9, 6);
 }
 
-/** Low-poly enemy sprites: 5 per-kind anim frames (assets/enemies/<kind>/0..4.png).
- * Motions: gentle ゆらゆら sway/bob — no full spins, arm turntables, or tumble flips. */
+/** User-art enemy sprites: 5 per-kind anim frames (assets/enemies/<kind>/0..4.png).
+ * Sourced from tools/source_enemy_sheet.png via tools/extract_user_enemy_sprites.py.
+ * Motions: gentle ゆらゆら sway/bob baked into frames — no full spins. */
 const ENEMY_KINDS = ['basic', 'drone', 'elite', 'mech', 'tank', 'golem', 'swarm', 'boss'];
 const ENEMY_FRAME_COUNT = 5;
 /** ms per frame — calm sway (~120–160ms). */
@@ -306,8 +307,8 @@ let enemySpritesReady = false;
 let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
-  // Relative to page (GitHub Pages root of this repo)
-  return `assets/enemies/${kind}/${frame}.png`;
+  // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
+  return `assets/enemies/${kind}/${frame}.png?v=1.5.43`;
 }
 
 export function preloadEnemySprites() {
@@ -371,160 +372,27 @@ function drawEnemySprite(ctx, e, kind) {
   return true;
 }
 
-/** Flat-shaded geometric fallback if a sprite is missing. */
+/** Simple placeholder if a sprite fails to load — not the primary look. */
 function drawEnemyFallback(ctx, e, kind, sent, w, h, t, pulse) {
-  const strokeDark = (lw = 1.5) => {
-    ctx.strokeStyle = sent ? 'rgba(40,80,100,0.9)' : 'rgba(20,20,28,0.95)';
-    ctx.lineWidth = lw;
-    ctx.stroke();
-  };
-  const fillTri = (pts, col) => {
-    ctx.fillStyle = col;
-    ctx.beginPath();
-    ctx.moveTo(pts[0][0], pts[0][1]);
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-    ctx.closePath();
-    ctx.fill();
-  };
-
-  if (kind === 'tank') {
-    const body = sent ? '#66ddee' : '#e02028';
-    const shade = sent ? '#2a8aaa' : '#8a1018';
-    const lite = sent ? '#aaf0ff' : '#ff5560';
-    const rock = Math.sin(t * 2.8 + (e.phase || 0)) * 0.055;
-    ctx.save();
-    ctx.rotate(rock);
-    ctx.translate(0, Math.sin(t * 6.4 + (e.phase || 0)) * h * 0.02);
-    fillTri([[-w * 0.58, 0], [w * 0.52, -h * 0.48], [w * 0.52, h * 0.48]], shade);
-    fillTri([[-w * 0.58, 0], [w * 0.52, -h * 0.28], [w * 0.2, 0]], body);
-    fillTri([[-w * 0.58, 0], [w * 0.2, 0], [w * 0.52, h * 0.28]], lite);
-    ctx.beginPath();
-    ctx.moveTo(-w * 0.58, 0); ctx.lineTo(w * 0.52, -h * 0.48); ctx.lineTo(w * 0.52, h * 0.48);
-    ctx.closePath(); strokeDark(2);
-    ctx.restore();
-  } else if (kind === 'golem') {
-    const armCol = sent ? '#55dde8' : '#3cbc48';
-    const armDark = sent ? '#2a8890' : '#1e7a28';
-    const ph = t * 3.2 + (e.phase || 0);
-    const corePulse = 0.85 + 0.15 * Math.sin(ph);
-    const coreCol = sent ? '#aef8ff' : '#ffe033';
-    // soft sway only — fixed cross, no continuous spin
-    const sway = Math.sin(ph) * 0.12;
-    ctx.save();
-    ctx.rotate(sway);
-    ctx.translate(0, Math.sin(ph) * h * 0.02);
-    for (let i = 0; i < 4; i++) {
-      ctx.save();
-      ctx.rotate((i * Math.PI) / 2);
-      fillTri([[w * 0.06, -h * 0.1], [w * 0.48, -h * 0.1], [w * 0.48, h * 0.1], [w * 0.06, h * 0.1]], armDark);
-      fillTri([[w * 0.1, -h * 0.06], [w * 0.42, -h * 0.06], [w * 0.42, h * 0.06], [w * 0.1, h * 0.06]], armCol);
-      ctx.restore();
-    }
-    const cs = w * 0.14 * corePulse;
-    fillTri([[-cs, -cs], [cs, -cs], [cs, cs], [-cs, cs]], coreCol);
-    ctx.restore();
-  } else if (kind === 'boss') {
-    const g0 = sent ? '#88c8d8' : '#b0b4bc';
-    const g1 = sent ? '#4a7888' : '#6a6e78';
-    const g2 = sent ? '#2a4858' : '#3a3e48';
-    const ph = t * 2.5 + (e.phase || 0);
-    const pulse = 0.55 + 0.45 * Math.sin(ph);
-    const accent = sent ? '#66eef8' : '#e02830';
-    const sway = Math.sin(ph) * 0.05;
-    ctx.save();
-    ctx.rotate(sway);
-    ctx.translate(0, Math.sin(ph) * h * 0.015);
-    fillTri([[-w * 0.48, -h * 0.42], [w * 0.48, -h * 0.42], [w * 0.48, h * 0.42], [-w * 0.48, h * 0.42]], g2);
-    fillTri([[-w * 0.42, -h * 0.3], [w * 0.1, -h * 0.35], [w * 0.15, h * 0.3], [-w * 0.35, h * 0.28]], g1);
-    fillTri([[-w * 0.15, -h * 0.18], [w * 0.2, -h * 0.15], [w * 0.18, h * 0.18], [-w * 0.12, h * 0.15]], g0);
-    fillTri([[-w * 0.55, -h * 0.15], [-w * 0.35, -h * 0.15], [-w * 0.35, h * 0.15], [-w * 0.55, h * 0.15]], g1);
-    fillTri([[w * 0.25, -h * 0.5], [w * 0.48, -h * 0.5], [w * 0.48, -h * 0.2], [w * 0.25, -h * 0.22]], g1);
-    // pulsing accent + fixed turret tip (no spin)
-    const as = 0.06 + 0.04 * pulse;
-    fillTri([[-w * as, -h * as], [w * as, -h * as], [w * as, h * as], [-w * as, h * as]], accent);
-    fillTri([[w * 0.28, -h * 0.38], [w * 0.48, -h * 0.38], [w * 0.48, -h * 0.3], [w * 0.28, -h * 0.3]], accent);
-    ctx.restore();
-  } else if (kind === 'mech') {
-    const body = sent ? '#88e8f8' : '#f4f4f8';
-    const tip = sent ? '#c8f8ff' : '#ffffff';
-    const edge = sent ? '#2a7088' : '#404050';
-    const flick = 0.5 + 0.5 * Math.abs(Math.sin(t * 14 + (e.phase || 0)));
-    const bank = Math.sin(t * 3.2 + (e.phase || 0)) * 0.07;
-    ctx.save();
-    ctx.rotate(bank);
-    fillTri([[-w * 0.55, 0], [w * 0.5, -h * 0.48], [w * 0.5, h * 0.48]], body);
-    fillTri([[-w * 0.55, 0], [w * 0.15, -h * 0.18], [w * 0.15, h * 0.18]], tip);
-    fillTri([[w * 0.42, -h * 0.12], [w * 0.55, -h * 0.12], [w * 0.55, h * 0.12], [w * 0.42, h * 0.12]], edge);
-    // thruster flicker
-    const fl = w * (0.08 + 0.12 * flick);
-    fillTri([[w * 0.55, -h * 0.06], [w * 0.55 + fl, 0], [w * 0.55, h * 0.06]], sent ? '#aef8ff' : '#ffb060');
-    ctx.beginPath();
-    ctx.moveTo(-w * 0.55, 0); ctx.lineTo(w * 0.5, -h * 0.48); ctx.lineTo(w * 0.5, h * 0.48);
-    ctx.closePath(); strokeDark(2);
-    ctx.restore();
-  } else if (kind === 'drone') {
-    const disc = sent ? '#88e8f0' : '#ffd428';
-    const discShade = sent ? '#3a98a8' : '#c8a010';
-    const dome = sent ? '#1a4050' : '#1a3a22';
-    const bob = Math.sin(t * 3.5 + (e.phase || 0)) * h * 0.05;
-    const tilt = Math.sin(t * 3.5 + (e.phase || 0)) * 0.1;
-    ctx.save();
-    ctx.translate(0, bob);
-    ctx.rotate(tilt);
-    fillTri([[-w * 0.48, 0], [0, -h * 0.22], [w * 0.48, 0], [0, h * 0.28]], discShade);
-    fillTri([[-w * 0.42, -h * 0.02], [0, -h * 0.18], [w * 0.42, -h * 0.02], [0, h * 0.12]], disc);
-    fillTri([[-w * 0.18, -h * 0.08], [0, -h * 0.38], [w * 0.18, -h * 0.08]], dome);
-    ctx.restore();
-  } else if (kind === 'swarm') {
-    const body = sent ? '#66e8f8' : '#ff2a3a';
-    const hot = sent ? '#c8f8ff' : '#ff8890';
-    const ph = t * 3.8 + (e.phase || 0);
-    const flap = 1 + 0.08 * Math.sin(ph * 2);
-    const sway = Math.sin(ph) * 0.12; // soft rock — no tumble
-    ctx.save();
-    ctx.translate(0, Math.sin(ph) * h * 0.04);
-    ctx.rotate(sway);
-    fillTri([[-w * 0.45, 0], [w * 0.15, -h * 0.2 * flap], [w * 0.5, -h * 0.35 * flap], [-w * 0.05, 0]], body);
-    fillTri([[-w * 0.45, 0], [-w * 0.05, 0], [w * 0.5, h * 0.35 * flap], [w * 0.15, h * 0.2 * flap]], hot);
-    ctx.restore();
-  } else if (kind === 'elite') {
-    const white = sent ? '#b8f0fa' : '#f2f2f6';
-    const red = sent ? '#3aa8c0' : '#e01828';
-    const redDark = sent ? '#1a6070' : '#8a0c18';
-    const glow = 0.5 + 0.5 * Math.sin(t * 8 + (e.phase || 0));
-    const bank = Math.sin(t * 3.5 + (e.phase || 0)) * 0.08;
-    ctx.save();
-    ctx.rotate(bank);
-    fillTri([[-w * 0.55, 0], [w * 0.15, -h * 0.42], [w * 0.15, h * 0.42]], white);
-    fillTri([[w * 0.1, -h * 0.42], [w * 0.52, -h * 0.28], [w * 0.52, h * 0.28], [w * 0.1, h * 0.42]], red);
-    fillTri([[w * 0.38, -h * 0.22], [w * 0.54, -h * 0.22], [w * 0.54, -h * 0.08], [w * 0.38, -h * 0.08]], redDark);
-    fillTri([[w * 0.38, h * 0.08], [w * 0.54, h * 0.08], [w * 0.54, h * 0.22], [w * 0.38, h * 0.22]], redDark);
-    const pl = w * (0.06 + 0.1 * glow);
-    fillTri([[w * 0.54, -h * 0.18], [w * 0.54 + pl, -h * 0.15], [w * 0.54, -h * 0.12]], sent ? '#aef8ff' : '#ff8844');
-    fillTri([[w * 0.54, h * 0.12], [w * 0.54 + pl, h * 0.15], [w * 0.54, h * 0.18]], sent ? '#aef8ff' : '#ff8844');
-    ctx.restore();
-  } else {
-    // basic — faceted gray biped walk
-    const body = sent ? '#7ab0c0' : '#9aa0a8';
-    const bodyDark = sent ? '#3a6878' : '#4a4e58';
-    const eye = sent ? '#66eef8' : '#e02028';
-    const walk = Math.sin(t * 5.5 + (e.phase || 0));
-    const bob = Math.sin(t * 5.5 + (e.phase || 0)) * h * 0.03;
-    const sway = Math.sin(t * 5.5 + (e.phase || 0)) * 0.08;
-    ctx.save();
-    ctx.rotate(sway);
-    ctx.translate(0, -bob);
-    fillTri([[-w * 0.28, -h * 0.42], [w * 0.28, -h * 0.42], [w * 0.28, h * 0.12], [-w * 0.28, h * 0.12]], bodyDark);
-    fillTri([[-w * 0.22, -h * 0.38], [w * 0.22, -h * 0.38], [w * 0.18, h * 0.02], [-w * 0.18, h * 0.02]], body);
-    fillTri([[-w * 0.18, -h * 0.52], [w * 0.18, -h * 0.52], [w * 0.18, -h * 0.36], [-w * 0.18, -h * 0.36]], body);
-    fillTri([[-w * 0.52, -h * 0.12], [-w * 0.24, -h * 0.12], [-w * 0.24, -h * 0.02], [-w * 0.52, -h * 0.02]], bodyDark);
-    fillTri([[-w * 0.08, -h * 0.28], [w * 0.06, -h * 0.28], [w * 0.06, -h * 0.14], [-w * 0.08, -h * 0.14]], eye);
-    const legLift = walk * h * 0.06;
-    fillTri([[-w * 0.2, h * 0.08 + legLift], [-w * 0.06, h * 0.08 + legLift], [-w * 0.06, h * 0.4 + legLift], [-w * 0.2, h * 0.4 + legLift]], bodyDark);
-    fillTri([[w * 0.04, h * 0.08 - legLift], [w * 0.18, h * 0.08 - legLift], [w * 0.18, h * 0.4 - legLift], [w * 0.04, h * 0.4 - legLift]], bodyDark);
-    ctx.restore();
-  }
-
+  const body = sent ? 'rgba(80,200,220,0.85)' : 'rgba(200,60,70,0.85)';
+  const rim = sent ? 'rgba(180,240,255,0.95)' : 'rgba(255,200,200,0.9)';
+  const bob = Math.sin(t * 3.2 + (e.phase || 0)) * h * 0.03;
+  ctx.save();
+  ctx.translate(0, bob);
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, w * 0.48, h * 0.42, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = rim;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // tiny kind initial so missing assets are obvious in debug
+  ctx.fillStyle = rim;
+  ctx.font = `bold ${Math.max(8, Math.floor(h * 0.35))}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText((kind || '?')[0].toUpperCase(), 0, 0);
+  ctx.restore();
 }
 
 function drawEnemy(ctx, e) {

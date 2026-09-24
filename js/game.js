@@ -1,8 +1,8 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField,
-} from './entities.js?v=1.5.42';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.42';
-import { sfx } from './audio.js?v=1.5.42';
+} from './entities.js?v=1.5.43';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS } from './render.js?v=1.5.43';
+import { sfx } from './audio.js?v=1.5.43';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';

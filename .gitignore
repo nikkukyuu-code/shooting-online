@@ -2,3 +2,6 @@
 node_modules/
 *.log
 .venv/
+tools/__pycache__/
+tools/_previews/
+tools/_sheet_cells.png
