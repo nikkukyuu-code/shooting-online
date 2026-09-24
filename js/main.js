@@ -1,6 +1,6 @@
-import { VERSION_LABEL } from './version.js?v=1.5.30';
-import { Net } from './net.js?v=1.5.30';
-import { Game } from './game.js?v=1.5.30';
+import { VERSION_LABEL } from './version.js?v=1.5.31';
+import { Net } from './net.js?v=1.5.31';
+import { Game } from './game.js?v=1.5.31';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -145,19 +145,24 @@ els.btnCreate.addEventListener('click', async () => {
     const room = await net.createRoom(preferred);
     els.fieldCode.value = room;
     els.inputRoom.value = room;
-    els.fieldFind.value = '参加者待ち';
-    // Register BEFORE startGameSession so connected fires into beginMatch
+    els.fieldFind.value = '部屋コード表示中・相手待ち';
+    show('menu'); // stay on menu so host can read/share the room code
+    // Only enter battle when a guest actually connects
     net.on('connected', () => {
-      if (game && game.waiting) game.beginMatch();
-    });
-    startGameSession({ bot: false });
-    if (net.ready) game.beginMatch();
-    // Optional: after long wait offer bot
-    setTimeout(() => {
-      if (game && game.waiting && net && !net.ready) {
-        // stay waiting — user can stop
+      if (game) {
+        if (game.waiting) game.beginMatch();
+        return;
       }
-    }, 20000);
+      els.fieldFind.value = '相手が入室しました';
+      startGameSession({ bot: false });
+      if (net.ready) game.beginMatch();
+    });
+    if (net.ready) {
+      // Guest already connected during create (rare)
+      els.fieldFind.value = '相手が入室しました';
+      startGameSession({ bot: false });
+      game.beginMatch();
+    }
   } catch (e) {
     console.error(e);
     els.fieldCode.value = '';
