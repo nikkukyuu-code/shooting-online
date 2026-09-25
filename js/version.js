@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-09-26 01:48:17';
+export const VERSION_LABEL = '2026-09-26 01:55:34';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1790354897012;
-export const BUILD_NOTE = 'CPU対戦を普通/強いの2段階に。強いは勝利PT×3。ショップ価格をそれに合わせて調整';
+export const BUILD_TIME = 1790355334376;
+export const BUILD_NOTE = 'タイトル周りのレイアウトを整理（ヒーロー余白・CPU選択のコンパクト化）';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

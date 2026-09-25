@@ -114,25 +114,25 @@ html, body {
   position: relative;
   flex: 0 0 auto;
   width: 100%;
-  height: clamp(190px, 32vh, 300px);
+  height: clamp(210px, 34vh, 300px);
   z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
   pointer-events: none;
-  padding: max(40px, calc(env(safe-area-inset-top, 0px) + 32px)) 4px 2px;
+  padding: max(44px, calc(env(safe-area-inset-top, 0px) + 36px)) 4px 6px;
   overflow: hidden;
 }
 .menu-hero-art {
   position: absolute;
   left: 50%;
-  top: 8%;
+  top: 4%;
   transform: translateX(-50%);
   width: min(108%, 520px);
-  height: 78%;
+  height: 72%;
   object-fit: contain;
-  object-position: center center;
+  object-position: center top;
   filter: drop-shadow(0 0 18px rgba(60, 140, 255, 0.35));
   animation: hero-pulse 5s ease-in-out infinite alternate;
   pointer-events: none;
@@ -145,10 +145,10 @@ html, body {
   position: relative;
   z-index: 1;
   text-align: center;
-  padding: 2px 8px 4px;
+  padding: 4px 10px 6px;
   width: 100%;
   max-width: 360px;
-  background: linear-gradient(180deg, transparent 0%, rgba(4, 6, 20, 0.45) 35%, rgba(4, 6, 20, 0.72) 100%);
+  background: linear-gradient(180deg, transparent 0%, rgba(4, 6, 20, 0.35) 40%, rgba(4, 6, 20, 0.7) 100%);
   border-radius: 0 0 14px 14px;
 }
 
@@ -179,11 +179,12 @@ html, body {
   width: 100%;
 }
 .game-title {
-  font-size: clamp(1.45rem, 6.8vw, 2rem);
+  font-size: clamp(1.35rem, 6.2vw, 1.85rem);
   font-weight: 900;
-  letter-spacing: 0.12em;
-  line-height: 1.25;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
   color: #e8f4ff;
+  white-space: nowrap;
   text-shadow:
     0 0 12px rgba(80, 180, 255, 0.85),
     0 0 28px rgba(120, 80, 255, 0.55),
@@ -192,24 +193,26 @@ html, body {
   animation: title-glow 2.8s ease-in-out infinite alternate;
 }
 .game-subtitle {
-  margin-top: 6px;
-  font-size: 0.72rem;
+  margin-top: 4px;
+  font-size: 0.7rem;
   font-weight: 800;
-  letter-spacing: 0.42em;
+  letter-spacing: 0.28em;
   color: rgba(140, 220, 255, 0.92);
-  text-indent: 0.42em;
+  text-indent: 0.28em;
+  white-space: nowrap;
   text-shadow: 0 0 10px rgba(60, 180, 255, 0.6), 0 1px 3px #000;
 }
 .game-intro {
-  margin: 8px auto 0;
-  max-width: 18.5em;
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  line-height: 1.55;
-  color: rgba(170, 190, 220, 0.78);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
-  pointer-events: none;
+  /* SEO copy — keep in DOM, don't crowd the title art */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 @keyframes title-glow {
   0% {
@@ -530,12 +533,12 @@ html, body {
 .cpu-diff-block {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   margin: 0;
 }
 .cpu-diff-title {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: 0.75rem;
   letter-spacing: 0.08em;
   color: rgba(200, 220, 255, 0.75);
   text-align: center;
@@ -544,17 +547,19 @@ html, body {
   gap: 8px;
 }
 .cpu-diff-row .menu-btn {
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 6px;
   line-height: 1.2;
-  min-height: 2.6em;
+  min-height: 0;
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 .cpu-pt-tag {
-  font-size: 0.72em;
-  opacity: 0.9;
+  font-size: 0.78em;
+  opacity: 0.95;
   font-weight: 700;
   letter-spacing: 0.04em;
 }
@@ -563,8 +568,8 @@ html, body {
 }
 .cpu-diff-hint {
   margin: 0;
-  font-size: 0.72rem;
-  line-height: 1.35;
+  font-size: 0.65rem;
+  line-height: 1.3;
   color: rgba(180, 200, 230, 0.7);
   text-align: center;
 }
@@ -1428,10 +1433,11 @@ html, body {
 /* Short height: shrink hero + tighten panel so チュートリアル + footer stay clear */
 @media (max-height: 760px) {
   .menu-hero {
-    height: clamp(140px, 26vh, 210px);
-    padding-top: max(34px, calc(env(safe-area-inset-top, 0px) + 26px));
+    height: clamp(168px, 28vh, 220px);
+    padding-top: max(36px, calc(env(safe-area-inset-top, 0px) + 28px));
   }
-  .menu-hero-art { top: 6%; height: 74%; }
+  .menu-hero-art { top: 4%; height: 70%; }
+  .cpu-diff-hint { display: none; }
   .menu-footer { gap: 6px; padding-top: 6px; }
   #screen-menu .menu-hint { font-size: 0.68rem; }
   .menu-panel { padding: 10px 11px 9px; gap: 6px; }
@@ -1439,9 +1445,10 @@ html, body {
 }
 @media (max-height: 720px) {
   .menu-hero {
-    height: clamp(120px, 22vh, 170px);
+    height: clamp(150px, 24vh, 190px);
   }
-  .menu-hero-art { height: 68%; top: 3%; }
+  .menu-hero-art { height: 68%; top: 2%; }
+  .cpu-diff-hint { display: none; }
   .menu-center { padding: 4px 0 6px; }
   .menu-panel { padding: 8px 10px 7px; gap: 4px; }
   #screen-menu .menu-btn { padding: 7px 8px; font-size: 0.88rem; }
@@ -1453,10 +1460,12 @@ html, body {
 }
 @media (max-height: 640px) {
   .menu-hero {
-    height: clamp(96px, 18vh, 130px);
-    padding-top: max(28px, calc(env(safe-area-inset-top, 0px) + 20px));
+    height: clamp(130px, 22vh, 160px);
+    padding-top: max(30px, calc(env(safe-area-inset-top, 0px) + 22px));
   }
-  .menu-hero-art { height: 62%; top: 2%; }
+  .menu-hero-art { height: 64%; top: 2%; }
+  .cpu-diff-hint { display: none; }
+  .game-subtitle { letter-spacing: 0.2em; text-indent: 0.2em; }
   .menu-center { padding: 2px 0 4px; }
   .menu-panel { padding: 6px 8px 6px; gap: 3px; }
   #screen-menu .menu-btn { padding: 6px 6px; font-size: 0.84rem; }
