@@ -1,11 +1,11 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME } from './version.js?v=1.5.81';
-import { Net } from './net.js?v=1.5.78';
-import { Game } from './game.js?v=1.5.78';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=1.5.78';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=1.5.78';
-import { registerEnemyKinds } from './render.js?v=1.5.78';
-import { ALL_KIND_IDS } from './catalog.js?v=1.5.78';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=1.5.78';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME } from './version.js?v=1.5.83';
+import { Net } from './net.js?v=1.5.83';
+import { Game } from './game.js?v=1.5.83';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=1.5.83';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=1.5.83';
+import { registerEnemyKinds } from './render.js?v=1.5.83';
+import { ALL_KIND_IDS } from './catalog.js?v=1.5.83';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=1.5.83';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -123,7 +123,7 @@ function refreshPtDisplay(meta) {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=1.5.78`;
+  return `assets/enemies/${id}/0.png?v=1.5.83`;
 }
 
 function unitName(id) {
@@ -703,19 +703,40 @@ async function loadVisits() {
   startVersionBadge();
   const el = document.getElementById('app-visits');
   if (!el) return;
+  const LAST_KEY = 'shootingOnline_visitLast';
+  const readLast = () => {
+    try {
+      const n = Number(localStorage.getItem(LAST_KEY));
+      return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+    } catch (_) {
+      return 0;
+    }
+  };
+  const writeLast = (n) => {
+    try {
+      const prev = readLast();
+      if (n > prev) localStorage.setItem(LAST_KEY, String(n));
+    } catch (_) { /* ignore */ }
+  };
+  const show = (n, suffix = '') => {
+    el.textContent = 'アクセス' + suffix + ' ' + n.toLocaleString('ja-JP');
+  };
+  const last = readLast();
+  if (last > 0) show(last); // keep previous visible while fetching
   try {
-    const r = await fetch('https://abacus.jasoncameron.dev/hit/nikkukyuu/shooting-online', { cache: 'no-store' });
+    const url = 'https://abacus.jasoncameron.dev/hit/nikkukyuu/shooting-online?_=' + Date.now();
+    const r = await fetch(url, { cache: 'no-store' });
     if (!r.ok) throw new Error('counter ' + r.status);
     const d = await r.json();
     const n = typeof d.value === 'number' ? d.value : Number(d.value);
-    el.textContent = 'アクセス ' + (Number.isFinite(n) ? n.toLocaleString('ja-JP') : '—');
+    if (!Number.isFinite(n)) throw new Error('bad counter value');
+    const best = Math.max(Math.floor(n), last);
+    writeLast(best);
+    show(best);
   } catch (e) {
-    try {
-      const key = 'shooting-online-local-visits';
-      const n = (Number(localStorage.getItem(key)) || 0) + 1;
-      localStorage.setItem(key, String(n));
-      el.textContent = 'アクセス(端末) ' + n.toLocaleString('ja-JP');
-    } catch (_) {
+    if (last > 0) {
+      show(last);
+    } else {
       el.textContent = 'アクセス —';
     }
   }
