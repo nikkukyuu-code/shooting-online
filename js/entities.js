@@ -27,8 +27,8 @@ export const POWERUPS = [
   { id: 'barrier',    label: 'バリア',        effect: '一定時間ダメージを防ぐ',     desc: '約5.5秒、自機のまわりにエネルギーシールドを展開。敵弾と体当たりのダメージを防ぐ（攻撃はしない）。', color: '#6cf0ff', icon: '盾' },
 ];
 
-/** Shared direct-attack pose/beam window (seconds). Exactly 2× old 3.6. */
-export const DIRECT_DURATION = 7.2;
+/** Shared direct-attack pose/beam window (seconds). Thick continuous beam + HUD countdown. */
+export const DIRECT_DURATION = 6;
 
 export function powerupMeta(id) {
   return POWERUPS.find((p) => p.id === id) || POWERUPS[0];

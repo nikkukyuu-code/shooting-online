@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260926025456';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260926030107';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260926025456`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260926030107`;
 }
 
 function loadKindSprite(kind) {
@@ -1879,6 +1879,47 @@ function drawDamageNumbers(ctx, L, nums) {
 }
 
 
+
+function drawDirectTimerHud(ctx, L, localState) {
+  const pl = localState.player;
+  const ownOn = pl && pl.activePower === 'direct' && pl.activeTimer > 0;
+  const inOn = localState.incomingDirect && localState.incomingDirect > 0;
+  if (!ownOn && !inOn) return;
+  const rem = ownOn ? pl.activeTimer : localState.incomingDirect;
+  const sec = Math.max(0, rem).toFixed(1);
+  const label = ownOn
+    ? `直接攻撃 残り ${sec}秒`
+    : `敵の直接攻撃！ 残り ${sec}秒`;
+  const fs = Math.max(15, Math.floor(L.own.w * 0.055));
+  const x = L.own.x + L.own.w * 0.5;
+  const y = L.own.y + Math.max(22, L.own.h * 0.08);
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `900 ${fs}px "Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif`;
+  // Plate behind text
+  const tw = ctx.measureText(label).width;
+  const padX = 14;
+  const padY = 8;
+  ctx.fillStyle = ownOn ? 'rgba(80,0,10,0.72)' : 'rgba(40,0,70,0.78)';
+  ctx.strokeStyle = ownOn ? 'rgba(255,80,100,0.85)' : 'rgba(180,100,255,0.9)';
+  ctx.lineWidth = 2;
+  const bx = x - tw * 0.5 - padX;
+  const by = y - fs * 0.55 - padY * 0.35;
+  const bw = tw + padX * 2;
+  const bh = fs + padY * 1.4;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, 8);
+  else ctx.rect(bx, by, bw, bh);
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowColor = ownOn ? '#ff2040' : '#a040ff';
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = ownOn ? '#ffe8f0' : '#f0e0ff';
+  ctx.fillText(label, x, y);
+  ctx.restore();
+}
+
 /** Keep beam fully opaque for most of DIRECT_DURATION; fade only in last ~0.5s. */
 function directBeamLifeRatio(remaining) {
   if (!(remaining > 0)) return 0;
@@ -1887,75 +1928,81 @@ function directBeamLifeRatio(remaining) {
 }
 
 function drawDirectBeam(ctx, x0, y0, x1, y1, lifeRatio = 1, tint = 'own') {
-  // Straight-line staccato bolts only (no sideways jitter = no "homing" look)
+  // Continuous thick pillar end-to-end (not sparse short bolts).
   // tint: 'own' = red upward (player), 'incoming' = purple downward (opponent)
   const now = performance.now();
-  const dx = x1 - x0;
-  const dy = y1 - y0;
-  const len = Math.hypot(dx, dy) || 1;
-  const ux = dx / len;
-  const uy = dy / len;
-  const boltLen = Math.max(16, Math.min(30, len * 0.1));
-  const gap = boltLen * 0.5;
-  const n = Math.max(4, Math.floor(len / (boltLen + gap)));
   const baseA = Math.max(0.3, Math.min(1, lifeRatio));
   const isIn = tint === 'incoming';
   const glow = isIn ? '#a040ff' : '#ff2040';
   const outer = isIn ? '#c060ff' : '#ff3355';
-  const core = isIn ? '#f0e8ff' : '#ffe8f0';
+  const mid = isIn ? '#e0a0ff' : '#ff6688';
+  const core = isIn ? '#f8f0ff' : '#ffe8f0';
+  // Gentle pulse so it flickers but stays fully connected
+  const pulse = 0.88 + 0.12 * Math.sin(now / 55);
+  const flicker = 0.92 + 0.08 * Math.sin(now / 28);
 
   ctx.save();
   ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
   ctx.shadowColor = glow;
 
-  for (let i = 0; i < n; i++) {
-    const phase = (now / 28 + i * 1.7) % 1;
-    if (phase > 0.58) continue;
-    const t0 = i / n;
-    const t1 = Math.min(1, t0 + boltLen / len);
-    const ax = x0 + ux * len * t0;
-    const ay = y0 + uy * len * t0;
-    const bx = x0 + ux * len * t1;
-    const by = y0 + uy * len * t1;
-    const a = baseA * (0.55 + 0.45 * (1 - phase / 0.58));
+  // Wide outer glow pillar
+  ctx.globalAlpha = baseA * 0.55 * pulse;
+  ctx.strokeStyle = glow;
+  ctx.lineWidth = 18;
+  ctx.shadowBlur = 28;
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y1);
+  ctx.stroke();
 
-    ctx.globalAlpha = a * 0.85;
-    ctx.strokeStyle = outer;
-    ctx.lineWidth = 7;
-    ctx.shadowBlur = 14;
-    ctx.beginPath();
-    ctx.moveTo(ax, ay);
-    ctx.lineTo(bx, by);
-    ctx.stroke();
+  // Mid thickness
+  ctx.globalAlpha = baseA * 0.85 * flicker;
+  ctx.strokeStyle = outer;
+  ctx.lineWidth = 14;
+  ctx.shadowBlur = 18;
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y1);
+  ctx.stroke();
 
-    ctx.globalAlpha = a;
-    ctx.strokeStyle = core;
-    ctx.lineWidth = 2.5;
-    ctx.shadowBlur = 6;
-    ctx.beginPath();
-    ctx.moveTo(ax, ay);
-    ctx.lineTo(bx, by);
-    ctx.stroke();
+  // Bright mid core
+  ctx.globalAlpha = baseA * 0.95;
+  ctx.strokeStyle = mid;
+  ctx.lineWidth = 7;
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y1);
+  ctx.stroke();
+
+  // Hot white core — always continuous
+  ctx.globalAlpha = baseA;
+  ctx.strokeStyle = core;
+  ctx.lineWidth = 5.5;
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y1);
+  ctx.stroke();
+
+  // Impact spark at endpoint
+  const spark = 14 + 10 * Math.sin(now / 30);
+  const g = ctx.createRadialGradient(x1, y1, 0, x1, y1, spark);
+  g.addColorStop(0, 'rgba(255,255,255,0.98)');
+  if (isIn) {
+    g.addColorStop(0.35, 'rgba(180,100,255,0.7)');
+    g.addColorStop(1, 'rgba(120,0,200,0)');
+  } else {
+    g.addColorStop(0.35, 'rgba(255,90,110,0.7)');
+    g.addColorStop(1, 'rgba(255,0,40,0)');
   }
-
-  if ((now / 50) % 1 < 0.7) {
-    const spark = 10 + 8 * Math.sin(now / 30);
-    const g = ctx.createRadialGradient(x1, y1, 0, x1, y1, spark);
-    g.addColorStop(0, 'rgba(255,255,255,0.95)');
-    if (isIn) {
-      g.addColorStop(0.35, 'rgba(180,100,255,0.6)');
-      g.addColorStop(1, 'rgba(120,0,200,0)');
-    } else {
-      g.addColorStop(0.35, 'rgba(255,90,110,0.6)');
-      g.addColorStop(1, 'rgba(255,0,40,0)');
-    }
-    ctx.globalAlpha = baseA;
-    ctx.fillStyle = g;
-
-    ctx.beginPath();
-    ctx.arc(x1, y1, spark, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  ctx.globalAlpha = baseA;
+  ctx.fillStyle = g;
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.arc(x1, y1, spark, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 
@@ -2439,7 +2486,8 @@ export function drawField(ctx, area, snap, opts = {}) {
     // Own-pane part of upward direct beam
     if (facingUp) {
       const lr = directBeamLifeRatio(snap.player.activeTimer);
-      drawDirectBeam(ctx, px, py - 16, px, 8, lr);
+      // Continuous column from ship to top of own field
+      drawDirectBeam(ctx, px, py - 12, px, 2, lr);
     }
   }
 
@@ -2501,24 +2549,26 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
   // 2) MIDDLE — player's own gameplay field (display)
   drawField(ctx, L.own, localSnap, { darkened: false });
 
-  // Cross-pane direct-attack beam (own ship → opponent)
+  // Cross-pane direct-attack beam (own ship → deep into opponent pane)
   const pl = localState.player;
   if (pl && pl.activePower === 'direct' && pl.activeTimer > 0) {
     const px = L.own.x + (pl.x || 48);
     const py = L.own.y + (pl.y <= 1 ? pl.y * L.own.h : pl.y);
     const lr = directBeamLifeRatio(pl.activeTimer);
-    // Straight UP only (same X) — never slant toward opponent ship
-    drawDirectBeam(ctx, px, L.own.y + 4, px, L.opp.y + L.opp.h * 0.45, lr);
+    // Straight UP from ship through own pane into most of opp pane
+    drawDirectBeam(ctx, px, py - 8, px, L.opp.y + L.opp.h * 0.12, lr);
   }
-  // Incoming: FROM opponent pane DOWN onto us. Spark must be at the TOP
-  // (never at our ship — that looked like we were firing upward with no item).
+  // Incoming: thick purple pillar FROM opponent pane DOWN onto our ship.
+  // Endpoint (spark) = opponent side so it never looks like we fired.
   if (localState.incomingDirect && localState.incomingDirect > 0) {
     const lr = directBeamLifeRatio(localState.incomingDirect);
     const px = L.own.x + (pl.x || 48);
     const py = L.own.y + (pl.y <= 1 ? pl.y * L.own.h : pl.y);
-    // Endpoint (spark) = opponent side; start = just above our ship
-    drawDirectBeam(ctx, px, py - 10, px, L.opp.y + 12, lr, 'incoming');
+    drawDirectBeam(ctx, px, py - 6, px, L.opp.y + L.opp.h * 0.1, lr, 'incoming');
   }
+
+  // Direct-attack remaining-seconds HUD (own or incoming)
+  drawDirectTimerHud(ctx, L, localState);
 
 
   drawDamageFlash(ctx, L, localState.damageFlash);

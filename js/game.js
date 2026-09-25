@@ -3,13 +3,13 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260926025456';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260926025456';
-import { sfx } from './audio.js?v=20260926025456';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260926025456';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=20260926025456';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260926025456';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260926025456';
+} from './entities.js?v=20260926030107';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260926030107';
+import { sfx } from './audio.js?v=20260926030107';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260926030107';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=20260926030107';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260926030107';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260926030107';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1875,6 +1875,7 @@ export class Game {
             B.fx.unshift(spawnHealFx(48, B.y * fh, dropId === 'heal_big'));
           } else {
             B.items.push(dropId);
+            if (dropId === 'direct' && B._directHeldSince == null) B._directHeldSince = B.time;
           }
         }
       } else if (e.x > -40) {
@@ -1952,9 +1953,9 @@ export class Game {
         if (l >= 0) return l;
       }
       // Prefer direct often so player sees purple incoming beam in CPU matches
-      if (playerHp >= 35) {
+      if (playerHp >= 30) {
         const d = B.items.findIndex((id) => id === 'direct');
-        if (d >= 0 && Math.random() < 0.55) return d;
+        if (d >= 0 && Math.random() < 0.8) return d;
       }
       if (playerHp > 55) {
         // direct first among heavies (before send/meteor)
@@ -1972,7 +1973,9 @@ export class Game {
       if (!B.items.length && Math.random() < _cp.seedItemChance) {
         const pool = ['homing', 'laser', 'spread', 'bomb', 'shock', 'rapid', 'meteor', 'send', 'send_mech', 'send_golem', 'send_tank', 'send_drone', 'heal', 'direct',
           'pbeam', 'option', 'cluster', 'blackhole', 'freeze', 'reflect', 'barrier'];
-        B.items.push(pool[(Math.random() * pool.length) | 0]);
+        const seeded = pool[(Math.random() * pool.length) | 0];
+        B.items.push(seeded);
+        if (seeded === 'direct' && B._directHeldSince == null) B._directHeldSince = B.time;
       }
       const idx = pickBestItem();
       if (idx == null || idx < 0) return;
@@ -1996,6 +1999,7 @@ export class Game {
         B.activePower = 'direct';
         B.activeTimer = DIRECT_DURATION;
         B.directBeam = DIRECT_DURATION;
+        B._directHeldSince = null;
         this.state.incomingDirect = DIRECT_DURATION;
         this.applyPlayerDamage(dmg, 'direct');
         this.state.player.invuln = Math.max(this.state.player.invuln || 0, 0.6);
@@ -2067,7 +2071,22 @@ export class Game {
       B.powerCd = 0;
       tryUse(true);
     }
-
+    // Force-use direct if held ~8s after pickup (so purple beam actually shows)
+    if (
+      playerHp >= 30
+      && B._directHeldSince != null
+      && (B.time - B._directHeldSince) >= 8
+      && B.items.includes('direct')
+      && !(B.activePower === 'direct' && B.activeTimer > 0)
+    ) {
+      const di = B.items.indexOf('direct');
+      if (di >= 0) {
+        B.powerCd = 0;
+        const held = B.items.splice(di, 1)[0];
+        B.items.unshift(held);
+        tryUse(true);
+      }
+    }
 
     if (!B.meteors) B.meteors = [];
     for (const m of B.meteors) {
