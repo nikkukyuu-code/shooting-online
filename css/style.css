@@ -114,8 +114,7 @@ html, body {
   position: relative;
   flex: 0 1 auto;
   width: 100%;
-  height: clamp(128px, 20vh, 168px);
-  min-height: 112px;
+  height: clamp(136px, 22vh, 176px0px;
   max-height: 40%;
   z-index: 2;
   display: flex;
@@ -129,10 +128,10 @@ html, body {
 .menu-hero-art {
   position: absolute;
   left: 50%;
-  top: 2%;
+  top: 0;
   transform: translateX(-50%);
-  width: min(100%, 420px);
-  height: 68%;
+  width: min(96%, 380px);
+  height: 58%;
   object-fit: contain;
   object-position: center top;
   filter: drop-shadow(0 0 14px rgba(60, 140, 255, 0.35));
@@ -145,12 +144,13 @@ html, body {
 }
 .menu-hero .menu-brand {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   text-align: center;
-  padding: 2px 8px 4px;
+  padding: 8px 10px 6px;
+  margin-top: auto;
   width: 100%;
   max-width: 340px;
-  background: linear-gradient(180deg, transparent 0%, rgba(4, 6, 20, 0.4) 45%, rgba(4, 6, 20, 0.75) 100%);
+  background: linear-gradient(180deg, transparent 0%, rgba(4, 6, 20, 0.55) 28%, rgba(4, 6, 20, 0.88) 100%);
   border-radius: 0 0 12px 12px;
 }
 
