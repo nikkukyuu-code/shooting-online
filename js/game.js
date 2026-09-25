@@ -3,13 +3,13 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260926011334';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260926011334';
-import { sfx } from './audio.js?v=20260926011334';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260926011334';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=20260926011334';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=20260926011334';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260926011334';
+} from './entities.js?v=20260926011531';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260926011531';
+import { sfx } from './audio.js?v=20260926011531';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260926011531';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=20260926011531';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=20260926011531';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260926011531';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -750,7 +750,7 @@ export class Game {
     e.x = fw + 24 + Math.random() * 50;
     e.y = e.holdY;
     // Fight a bit more often once in the right zone
-    e.fireCd = Math.min(e.fireCd || 1, 1.0 + Math.random() * 0.7);
+    e.fireCd = Math.min(e.fireCd || 1, 0.6 + Math.random() * 0.5);
     // Appear FX (~0.9s blink/pop) — visual only; synced via serializeField.at
     e.appearT = 0.9;
     e.appearMax = 0.9;
@@ -1244,7 +1244,7 @@ export class Game {
         S.bullets.push(spawnBullet(
           P.x + 16, by,
           Math.cos(fan) * spd0, Math.sin(fan) * spd0 + ((n % 5) - 2) * 18,
-          'player', true, 4,
+          'player', true, 3,
         ));
         sfx.shot();
       } else if (P.activePower === 'rapid') {
@@ -1419,7 +1419,7 @@ export class Game {
           continue;
         }
         if (P.invuln <= 0) {
-          const hitDmg = b.homing ? 2 : 4; // softened: was 3/5 (earlier 4/6)
+          const hitDmg = b.homing ? 3 : 5; // v1.5.72: was 4/6 (field enemies; COM ship nerfed separately)
           this.applyPlayerDamage(hitDmg, 'bullet');
           P.invuln = 0.75;
           b.life = 0;
@@ -1568,11 +1568,11 @@ export class Game {
 
     if (urgent && urgentScore > 0.4) B.reactDelay += dt;
     else B.reactDelay = Math.max(0, B.reactDelay - dt * 2.2);
-    const reacted = B.reactDelay > 0.14; // ~140ms — skilled human
+    const reacted = B.reactDelay > 0.32; // ~320ms — slower COM
 
     // Rare wrong-way panic (keeps it human, not a wall)
-    if (reacted && urgent && B.humanPanic <= 0 && Math.random() < 0.006) {
-      B.humanPanic = 0.18 + Math.random() * 0.15;
+    if (reacted && urgent && B.humanPanic <= 0 && Math.random() < 0.03) {
+      B.humanPanic = 0.28 + Math.random() * 0.25;
       B.dodgeDir = urgent.yN >= B.y ? -1 : 1;
     }
     if (B.humanPanic > 0) B.humanPanic -= dt;
@@ -1615,11 +1615,11 @@ export class Game {
     wantY = Math.max(0.07, Math.min(0.93, wantY));
 
     // Snappy enough to feel skilled, not teleporty
-    const maxSpeed = dodging ? 2.1 : 1.15;
-    const accel = dodging ? 11 : 4.5;
-    const desiredVel = Math.max(-maxSpeed, Math.min(maxSpeed, (wantY - B.y) * (dodging ? 7.5 : 3.8)));
+    const maxSpeed = dodging ? 1.45 : 0.85;
+    const accel = dodging ? 7 : 3.2;
+    const desiredVel = Math.max(-maxSpeed, Math.min(maxSpeed, (wantY - B.y) * (dodging ? 5.2 : 2.6)));
     B.moveVel += (desiredVel - B.moveVel) * Math.min(1, accel * dt);
-    B.moveVel += (Math.random() - 0.5) * 0.015;
+    B.moveVel += (Math.random() - 0.5) * 0.04;
     B.y += B.moveVel * dt;
     B.y = Math.max(0.07, Math.min(0.93, B.y));
 
@@ -1662,12 +1662,16 @@ export class Game {
     B.x = Math.max(fw * 0.06, Math.min(fw * 0.55, B.x));
     shipX = B.x;
 
-    B.aimNoise += ((Math.random() - 0.5) * 0.06 - B.aimNoise) * Math.min(1, 2.2 * dt);
+    B.aimNoise += ((Math.random() - 0.5) * 0.14 - B.aimNoise) * Math.min(1, 1.6 * dt);
 
     // --- Fire control: lead aim, burst when aligned, powers ---
     B.fireCd -= dt;
     const aligned = focus && Math.abs(focus.y / fh - (B.y + (B.aimNoise || 0))) < (dodging ? 0.1 : 0.12);
-    const fireRate = B.activePower === 'homing' ? 0.12 : B.activePower === 'rapid' ? 0.09 : (aligned ? 0.14 : 0.2);
+    // Offense matches the player exactly (same rates / damage) — fairness.
+    // Softness comes from reaction / aim / movement / items elsewhere.
+    const fireRate = B.activePower === 'homing' ? 0.16
+      : B.activePower === 'rapid' ? 0.1
+      : 0.28;
     if (B.fireCd <= 0) {
       B.fireCd = fireRate;
       const by = B.y * fh;
@@ -1675,29 +1679,19 @@ export class Game {
         B._homingShotN = (B._homingShotN || 0) + 1;
         const n = B._homingShotN;
         const fan = ((n % 5) - 2) * 0.09 + (Math.random() - 0.5) * 0.05;
-        const spd0 = 360;
+        const spd0 = 320;
         B.bullets.push(spawnBullet(
           shipX + 16, by,
           Math.cos(fan) * spd0, Math.sin(fan) * spd0 + ((n % 5) - 2) * 18,
-          'player', true, 4,
+          'player', true, 3,
         ));
       } else if (B.activePower === 'rapid') {
         B.bullets.push(spawnBullet(shipX + 16, by, 520, 0, 'player', false, 3));
         B.bullets.push(spawnBullet(shipX + 16, by - 6, 500, -30, 'player', false, 2));
         B.bullets.push(spawnBullet(shipX + 16, by + 6, 500, 30, 'player', false, 2));
       } else {
-        // slight lead on vertical velocity of focus
-        let vy = 0;
-        if (focus && aligned) {
-          const lead = Math.sin(focus.phase || 0) * 4;
-          vy = lead;
-        }
-        // v1.5.75: COM normal shot matches player bump (aligned 3→4, else 2→3)
-        B.bullets.push(spawnBullet(shipX + 16, by, 430, vy, 'player', false, aligned ? 4 : 3));
-        if (aligned && focus && LARGE_ENEMY_TIERS.has(resolveEnemyTier(focus.kind))) {
-          B.bullets.push(spawnBullet(shipX + 16, by - 7, 400, -8, 'player', false, 1));
-          B.bullets.push(spawnBullet(shipX + 16, by + 7, 400, 8, 'player', false, 1));
-        }
+        // Same normal shot as the player (no bonus side shots)
+        B.bullets.push(spawnBullet(shipX + 16, by, 420, 0, 'player', false, 4));
       }
     }
 
@@ -1708,8 +1702,8 @@ export class Game {
         B.laserCd = 0.07;
         const by = B.y * fh;
         for (const e of B.enemies) {
-          if (e.x > shipX && Math.abs(e.y - by) < 16) {
-            e.hp -= 2.2;
+          if (e.x > shipX && Math.abs(e.y - by) < (e.h * 0.55 + 8)) {
+            e.hp -= 1.05; // match player laser tick
             if (Math.random() < 0.08) B.fx.push(spawnExplosion(e.x, e.y));
           }
         }
@@ -1900,17 +1894,16 @@ export class Game {
 
     const tryUse = (force = false) => {
       if (B.powerCd > 0 && !force) return;
-      // Seed inventory so COM always has something to think with
-      if (!B.items.length) {
+      // Softened: only sometimes seed a free item (was always + often a second)
+      if (!B.items.length && Math.random() < 0.35) {
         const pool = ['homing', 'laser', 'spread', 'bomb', 'shock', 'rapid', 'meteor', 'send', 'send_mech', 'send_golem', 'send_tank', 'send_drone', 'heal',
           'pbeam', 'option', 'cluster', 'blackhole', 'freeze', 'reflect', 'barrier'];
         B.items.push(pool[(Math.random() * pool.length) | 0]);
-        if (Math.random() < 0.5) B.items.push(pool[(Math.random() * pool.length) | 0]);
       }
       const idx = pickBestItem();
       if (idx == null || idx < 0) return;
       const id = B.items.splice(idx, 1)[0];
-      B.powerCd = 3.2 + Math.random() * 1.8;
+      B.powerCd = 5.5 + Math.random() * 2.5;
 
       if (id === 'homing') {
         B.activePower = 'homing';

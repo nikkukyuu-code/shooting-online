@@ -5,10 +5,10 @@
  * Rules kept from the original enemy AI:
  *  - Lasers are ALWAYS horizontal (vy = 0) and never track the player.
  *  - Homing missiles use limited homing (homeT) via steerEnemyHoming in game.js.
- *  - Player-hit damage per projectile: homing 2, everything else 4 (see game.js).
+ *  - Player-hit damage per projectile: homing 3, everything else 5 (see game.js).
  */
-import { spawnBullet, resolveEnemyTier, isLargeEnemy, isWaveKind } from './entities.js?v=20260926011334';
-import { unitAttackLoadout } from './catalog.js?v=20260926011334';
+import { spawnBullet, resolveEnemyTier, isLargeEnemy, isWaveKind } from './entities.js?v=20260926011531';
+import { unitAttackLoadout } from './catalog.js?v=20260926011531';
 
 const PI = Math.PI;
 const TAU = PI * 2;
@@ -276,7 +276,7 @@ export function fireLoadoutVolley(e, bullets, tx, ty) {
 /** Post-volley reload in seconds (±8% jitter so a group doesn't fire in lockstep). */
 export function loadoutReload(e) {
   const lo = loadoutOf(e);
-  return lo.iv * (1.10 + Math.random() * 0.20); // slightly slower fire vs player
+  return lo.iv * (0.92 + Math.random() * 0.16);
 }
 
 /** Run delayed follow-up shots (burst / stream / spiral / pulse / sweep / salvo). */
