@@ -31,6 +31,10 @@ html, body {
 #screen-menu {
   overflow: hidden;
 }
+#screen-menu.screen.active {
+  display: flex;
+  flex-direction: column;
+}
 .sky {
   position: absolute;
   inset: 0;
@@ -105,13 +109,12 @@ html, body {
   100% { opacity: 1; }
 }
 
-/* Title hero — fills the upper blank with space-battle art + glowing title */
+/* Title hero — flex header; fills upper blank with space-battle art + glowing title */
 .menu-hero {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: clamp(220px, 40vh, 360px);
+  position: relative;
+  flex: 0 0 auto;
+  width: 100%;
+  height: clamp(190px, 32vh, 300px);
   z-index: 2;
   display: flex;
   flex-direction: column;
@@ -149,22 +152,25 @@ html, body {
   border-radius: 0 0 14px 14px;
 }
 
-/* Menu panel sits just under the hero */
+/* Menu panel: grows between hero and footer; scrolls on short phones */
 .menu-center {
-  position: absolute;
-  left: 50%;
-  top: clamp(220px, 40vh, 360px);
-  bottom: auto;
-  transform: translate(-50%, -6px);
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
   width: min(86vw, 320px);
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 0;
   z-index: 2;
-  max-height: calc(100% - clamp(220px, 40vh, 360px) - max(56px, calc(env(safe-area-inset-bottom, 0px) + 48px)));
+  overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 8px 0 12px;
+  box-sizing: border-box;
 }
 
 .menu-brand {
@@ -296,12 +302,13 @@ html, body {
 #screen-menu .menu-field:focus { outline: 2px solid rgba(100, 200, 255, 0.7); }
 
 .menu-hint {
-  position: absolute;
-  bottom: 18px;
-  left: 12px;
-  right: 12px;
+  position: static;
+  margin: 0;
+  width: 100%;
+  max-width: 340px;
   text-align: center;
   font-size: 0.72rem;
+  line-height: 1.35;
   color: rgba(30,50,70,0.75);
   text-shadow: 0 1px 0 rgba(255,255,255,0.5);
 }
@@ -388,11 +395,25 @@ html, body {
 }
 
 
+/* Footer: natural height in the flex column — never crushed by the panel */
+.menu-footer {
+  position: relative;
+  flex: 0 0 auto;
+  width: 100%;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px));
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent 0%, rgba(4, 6, 18, 0.45) 40%, rgba(4, 6, 18, 0.7) 100%);
+}
+.menu-footer .app-meta { pointer-events: auto; }
+
 .app-meta {
-  position: absolute;
-  bottom: max(14px, calc(env(safe-area-inset-bottom, 0px) + 10px));
-  left: 50%;
-  transform: translateX(-50%);
+  position: static;
+  transform: none;
   text-align: center;
   font-size: 0.78rem;
   font-weight: 600;
@@ -405,7 +426,7 @@ html, body {
   border: 1px solid rgba(80, 160, 255, 0.3);
   border-radius: 4px;
   width: max-content;
-  max-width: calc(100% - 24px);
+  max-width: calc(100% - 8px);
   box-sizing: border-box;
   white-space: nowrap;
 }
@@ -450,8 +471,6 @@ html, body {
   0%, 100% { opacity: 1; filter: brightness(1); }
   50% { opacity: 0.72; filter: brightness(1.35); }
 }
-.menu-hint { bottom: max(48px, calc(env(safe-area-inset-bottom, 0px) + 42px)); }
-
 .game-version {
   pointer-events: none;
   position: absolute;
@@ -1143,33 +1162,46 @@ html, body {
 }
 
 
-/* Short height: shrink hero so panel + hint stay usable */
+/* Short height: shrink hero + tighten panel so チュートリアル + footer stay clear */
 @media (max-height: 760px) {
   .menu-hero {
-    height: clamp(168px, 32vh, 260px);
+    height: clamp(140px, 26vh, 210px);
     padding-top: max(34px, calc(env(safe-area-inset-top, 0px) + 26px));
   }
   .menu-hero-art { top: 6%; height: 74%; }
-  .menu-center {
-    top: clamp(168px, 32vh, 260px);
-    transform: translate(-50%, -2px);
-    max-height: calc(100% - clamp(168px, 32vh, 260px) - max(58px, calc(env(safe-area-inset-bottom, 0px) + 50px)));
-  }
+  .menu-footer { gap: 6px; padding-top: 6px; }
+  #screen-menu .menu-hint { font-size: 0.68rem; }
+  .menu-panel { padding: 10px 11px 9px; gap: 6px; }
+  #screen-menu .menu-btn { padding: 9px 8px; font-size: 0.94rem; }
 }
 @media (max-height: 720px) {
   .menu-hero {
-    height: clamp(140px, 27vh, 210px);
+    height: clamp(120px, 22vh, 170px);
   }
-  .menu-hero-art { height: 70%; top: 4%; }
-  .menu-center {
-    top: clamp(140px, 27vh, 210px);
-    max-height: calc(100% - clamp(140px, 27vh, 210px) - max(56px, calc(env(safe-area-inset-bottom, 0px) + 48px)));
+  .menu-hero-art { height: 68%; top: 3%; }
+  .menu-center { padding: 4px 0 6px; }
+  .menu-panel { padding: 8px 10px 7px; gap: 4px; }
+  #screen-menu .menu-btn { padding: 7px 8px; font-size: 0.88rem; }
+  #screen-menu .menu-btn-sub { font-size: 0.82rem; padding: 7px 6px; }
+  #screen-menu .menu-field { height: 22px; }
+  #screen-menu .menu-field.room-name { height: 25px; margin-top: 0; }
+  .menu-row { gap: 6px; }
+  .menu-footer { gap: 5px; padding: 6px 12px max(14px, calc(env(safe-area-inset-bottom, 0px) + 10px)); }
+}
+@media (max-height: 640px) {
+  .menu-hero {
+    height: clamp(96px, 18vh, 130px);
+    padding-top: max(28px, calc(env(safe-area-inset-top, 0px) + 20px));
   }
-  .menu-panel { padding: 9px 10px 8px; gap: 5px; }
-  #screen-menu .menu-btn { padding: 8px 8px; font-size: 0.9rem; }
-  #screen-menu .menu-btn-sub { font-size: 0.84rem; }
-  #screen-menu .menu-field { height: 24px; }
-  #screen-menu .menu-field.room-name { height: 27px; margin-top: 0; }
+  .menu-hero-art { height: 62%; top: 2%; }
+  .menu-center { padding: 2px 0 4px; }
+  .menu-panel { padding: 6px 8px 6px; gap: 3px; }
+  #screen-menu .menu-btn { padding: 6px 6px; font-size: 0.84rem; }
+  #screen-menu .menu-btn-sub { font-size: 0.78rem; padding: 6px 4px; }
+  #screen-menu .menu-field { height: 20px; }
+  #screen-menu .menu-field.room-name { height: 23px; }
+  .game-title { font-size: clamp(1.05rem, 5vw, 1.35rem); }
+  .game-subtitle { font-size: 0.58rem; margin-top: 2px; letter-spacing: 0.32em; }
 }
 
 /* v1.5.70 — hold-limit note above item intro lists */
