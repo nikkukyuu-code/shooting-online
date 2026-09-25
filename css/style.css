@@ -105,17 +105,66 @@ html, body {
   100% { opacity: 1; }
 }
 
+/* Title hero — fills the upper blank with space-battle art + glowing title */
+.menu-hero {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: clamp(220px, 40vh, 360px);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  pointer-events: none;
+  padding: max(40px, calc(env(safe-area-inset-top, 0px) + 32px)) 4px 2px;
+  overflow: hidden;
+}
+.menu-hero-art {
+  position: absolute;
+  left: 50%;
+  top: 8%;
+  transform: translateX(-50%);
+  width: min(108%, 520px);
+  height: 78%;
+  object-fit: contain;
+  object-position: center center;
+  filter: drop-shadow(0 0 18px rgba(60, 140, 255, 0.35));
+  animation: hero-pulse 5s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+@keyframes hero-pulse {
+  0% { filter: drop-shadow(0 0 12px rgba(60, 140, 255, 0.28)) brightness(0.96); }
+  100% { filter: drop-shadow(0 0 26px rgba(120, 100, 255, 0.5)) brightness(1.06); }
+}
+.menu-hero .menu-brand {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 2px 8px 4px;
+  width: 100%;
+  max-width: 360px;
+  background: linear-gradient(180deg, transparent 0%, rgba(4, 6, 20, 0.45) 35%, rgba(4, 6, 20, 0.72) 100%);
+  border-radius: 0 0 14px 14px;
+}
+
+/* Menu panel sits just under the hero */
 .menu-center {
   position: absolute;
   left: 50%;
-  top: 50%;
-  transform: translate(-50%, -48%);
+  top: clamp(220px, 40vh, 360px);
+  bottom: auto;
+  transform: translate(-50%, -6px);
   width: min(86vw, 320px);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 0;
   z-index: 2;
+  max-height: calc(100% - clamp(220px, 40vh, 360px) - max(56px, calc(env(safe-area-inset-bottom, 0px) + 48px)));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .menu-brand {
@@ -124,7 +173,7 @@ html, body {
   width: 100%;
 }
 .game-title {
-  font-size: clamp(1.35rem, 6.2vw, 1.85rem);
+  font-size: clamp(1.45rem, 6.8vw, 2rem);
   font-weight: 900;
   letter-spacing: 0.12em;
   line-height: 1.25;
@@ -1053,8 +1102,6 @@ html, body {
 /* Compact layout for short / narrow viewports (phone canvas ~390x700) */
 @media (max-height: 760px), (max-width: 420px) {
   .menu-center {
-    gap: 10px;
-    transform: translate(-50%, -46%);
     width: min(88vw, 320px);
   }
   .game-title { font-size: clamp(1.2rem, 5.5vw, 1.6rem); letter-spacing: 0.08em; }
@@ -1093,4 +1140,34 @@ html, body {
   .shop-grid { max-height: 34vh; min-height: min(160px, 28vh); }
   .items-intro-list { max-height: 24vh; }
   #zukan-items.items-intro-list { min-height: min(180px, 36vh); }
+}
+
+
+/* Short height: shrink hero so panel + hint stay usable */
+@media (max-height: 760px) {
+  .menu-hero {
+    height: clamp(168px, 32vh, 260px);
+    padding-top: max(34px, calc(env(safe-area-inset-top, 0px) + 26px));
+  }
+  .menu-hero-art { top: 6%; height: 74%; }
+  .menu-center {
+    top: clamp(168px, 32vh, 260px);
+    transform: translate(-50%, -2px);
+    max-height: calc(100% - clamp(168px, 32vh, 260px) - max(58px, calc(env(safe-area-inset-bottom, 0px) + 50px)));
+  }
+}
+@media (max-height: 720px) {
+  .menu-hero {
+    height: clamp(140px, 27vh, 210px);
+  }
+  .menu-hero-art { height: 70%; top: 4%; }
+  .menu-center {
+    top: clamp(140px, 27vh, 210px);
+    max-height: calc(100% - clamp(140px, 27vh, 210px) - max(56px, calc(env(safe-area-inset-bottom, 0px) + 48px)));
+  }
+  .menu-panel { padding: 9px 10px 8px; gap: 5px; }
+  #screen-menu .menu-btn { padding: 8px 8px; font-size: 0.9rem; }
+  #screen-menu .menu-btn-sub { font-size: 0.84rem; }
+  #screen-menu .menu-field { height: 24px; }
+  #screen-menu .menu-field.room-name { height: 27px; margin-top: 0; }
 }
