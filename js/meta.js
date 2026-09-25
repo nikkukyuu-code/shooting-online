@@ -1,5 +1,8 @@
-/** Persist PT / owned unlocks / deck (exactly 5 unique). localStorage key: shootingOnline_meta */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP } from './catalog.js?v=1.5.77';
+/** Persist PT / owned unlocks / deck (exactly 5 unique).
+ * localStorage key: shootingOnline_meta (NEVER rename — would wipe player PT).
+ * Backup key: shootingOnline_meta_bak. On every update, preserve pt; never clear storage.
+ */
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP } from './catalog.js?v=1.5.78';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;
@@ -208,18 +211,52 @@ function sanitize(raw) {
   return { pt, owned, deck };
 }
 
-export function loadMeta() {
+const META_BAK_KEY = META_KEY + '_bak';
+
+/** Read raw JSON from a storage key; null if missing/corrupt. Never throws. */
+function readRawMeta(key) {
   try {
-    const raw = JSON.parse(localStorage.getItem(META_KEY) || 'null');
-    return sanitize(raw);
+    const s = localStorage.getItem(key);
+    if (!s) return null;
+    const raw = JSON.parse(s);
+    return raw && typeof raw === 'object' ? raw : null;
   } catch (_) {
-    return defaultMeta();
+    return null;
   }
 }
 
-export function saveMeta(meta) {
+/**
+ * Load PT / owned / deck. Prefer primary key, then backup.
+ * Never writes on load — corrupt reads must not wipe saved PT.
+ */
+export function loadMeta() {
+  const raw = readRawMeta(META_KEY) || readRawMeta(META_BAK_KEY);
+  if (!raw) return defaultMeta();
+  return sanitize(raw);
+}
+
+/**
+ * Persist meta. PT safety:
+ * - Never change META_KEY (players would lose PT).
+ * - Keep a backup of the previous good blob.
+ * - Refuse accidental PT decreases unless opts.allowPtDecrease (shop buy only).
+ * Updates / migrations must only ADD fields or migrate IDs — never reset pt.
+ */
+export function saveMeta(meta, opts = {}) {
   const clean = sanitize(meta);
   try {
+    const prevRaw = localStorage.getItem(META_KEY);
+    if (prevRaw) {
+      try {
+        const prev = JSON.parse(prevRaw);
+        const prevPt = Math.floor(Number(prev && prev.pt));
+        if (Number.isFinite(prevPt) && prevPt >= 0 && prevPt > clean.pt && !opts.allowPtDecrease) {
+          // Guard: code bug / bad sanitize must not erase earned PT
+          clean.pt = prevPt;
+        }
+      } catch (_) { /* ignore corrupt prev; still backup string below */ }
+      try { localStorage.setItem(META_BAK_KEY, prevRaw); } catch (_) { /* ignore */ }
+    }
     localStorage.setItem(META_KEY, JSON.stringify(clean));
   } catch (_) { /* quota / private mode */ }
   return clean;
@@ -245,7 +282,7 @@ export function buyUnit(meta, id) {
     owned: [...meta.owned, id],
     deck: [...meta.deck],
   };
-  return { ok: true, meta: saveMeta(next), reason: 'bought' };
+  return { ok: true, meta: saveMeta(next, { allowPtDecrease: true }), reason: 'bought' };
 }
 
 /**
