@@ -1,11 +1,11 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME } from './version.js?v=1.5.83';
-import { Net } from './net.js?v=1.5.83';
-import { Game } from './game.js?v=1.5.83';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=1.5.83';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=1.5.83';
-import { registerEnemyKinds } from './render.js?v=1.5.83';
-import { ALL_KIND_IDS } from './catalog.js?v=1.5.83';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=1.5.83';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20260926001330';
+import { Net } from './net.js?v=20260926001330';
+import { Game } from './game.js?v=20260926001330';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=20260926001330';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=20260926001330';
+import { registerEnemyKinds } from './render.js?v=20260926001330';
+import { ALL_KIND_IDS } from './catalog.js?v=20260926001330';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20260926001330';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -123,7 +123,7 @@ function refreshPtDisplay(meta) {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=1.5.83`;
+  return `assets/enemies/${id}/0.png?v=20260926001330`;
 }
 
 function unitName(id) {
@@ -659,7 +659,7 @@ function renderVersionBadge() {
     if (fresh) {
       verEl.innerHTML = '';
       const label = document.createElement('span');
-      label.textContent = VERSION_LABEL;
+      label.textContent = formatVersionTime();
       const badge = document.createElement('span');
       badge.className = 'ver-badge';
       badge.textContent = '最新';
@@ -672,13 +672,13 @@ function renderVersionBadge() {
       }
       verEl.title = `${VERSION_LABEL} — 最新版（公開から5分以内）${BUILD_NOTE ? ' / ' + BUILD_NOTE : ''}`;
     } else {
-      verEl.textContent = VERSION_LABEL;
+      verEl.textContent = formatVersionTime();
       verEl.title = BUILD_NOTE ? `${VERSION_LABEL} — ${BUILD_NOTE}` : VERSION_LABEL;
     }
   }
   if (gameVer) {
     gameVer.classList.toggle('ver-latest', fresh);
-    gameVer.textContent = fresh ? `${VERSION_LABEL} · 最新` : VERSION_LABEL;
+    gameVer.textContent = fresh ? `${formatVersionTime()} · 最新` : formatVersionTime();
   }
   return fresh;
 }

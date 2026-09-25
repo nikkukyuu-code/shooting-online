@@ -11,7 +11,7 @@
  * Damage only lowers e.hp — death / drops / score stay in the game loops.
  * All items are intentionally weaker than ボム (28 to every enemy + full bullet clear).
  */
-import { spawnBullet, spawnExplosion, isLargeEnemy } from './entities.js?v=1.5.83';
+import { spawnBullet, spawnExplosion, isLargeEnemy } from './entities.js?v=20260926001330';
 
 export const EX_ATTACK_IDS = ['pbeam', 'option', 'cluster', 'blackhole', 'freeze', 'reflect', 'barrier'];
 export function isExAttackItem(id) { return EX_ATTACK_IDS.includes(id); }
