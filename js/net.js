@@ -96,7 +96,7 @@ export class Net {
     return this.roomName;
   }
 
-  /** Quick match: try shared lobby host, else become host and wait, then bot. */
+  /** Quick match: try shared lobby host, else become host and wait. No bot fallback. */
   async findOpponent({ waitMs = 15000, onTick } = {}) {
     this.destroy();
     this._ensurePeerLib();
@@ -161,15 +161,12 @@ export class Net {
       await sleep(200);
     }
 
-    // Bot fallback — destroy lobby peer so a second device is not stuck on a dead host
+    // No opponent — destroy lobby peer so a second device is not stuck on a dead host
     try { this.peer && this.peer.destroy(); } catch (_) {}
     this.peer = null;
     this.conn = null;
-    this.usingBot = true;
-    this.emit('status', { room: lobby, role: 'host', msg: 'CPU対戦を開始します' });
-    this.emit('connected', { bot: true });
-    this.ready = true;
-    return { mode: 'bot', room: lobby };
+    this.emit('status', { room: lobby, role: 'host', msg: '今は対戦相手がいません' });
+    return { mode: 'none', room: lobby };
   }
 
   send(msg) {

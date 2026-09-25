@@ -471,23 +471,24 @@ els.btnFind.addEventListener('click', async () => {
         els.fieldFind.value = `待機中 ${Math.ceil(left / 1000)}秒`;
       },
     });
-    els.fieldFind.value = result.mode === 'bot' ? 'CPU対戦' : 'マッチ成立';
     if (result.mode === 'peer') {
+      els.fieldFind.value = 'マッチ成立';
       net.on('connected', () => {
         if (game && game.waiting) game.beginMatch();
       });
       startGameSession({ bot: false });
       if (net.ready) game.beginMatch();
     } else {
-      startGameSession({ bot: true });
-      game.beginMatch();
+      // No human opponent — stay on menu (do not start COM)
+      els.fieldFind.value = '今は対戦相手がいません';
+      cleanupGame();
+      show('menu');
     }
   } catch (e) {
     console.error(e);
-    els.fieldFind.value = '失敗したのでCPU対戦';
-    net.usingBot = true;
-    startGameSession({ bot: true });
-    game.beginMatch();
+    els.fieldFind.value = '対戦相手を見つけられませんでした';
+    cleanupGame();
+    show('menu');
   } finally {
     setBusy(false);
   }
