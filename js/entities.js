@@ -80,15 +80,15 @@ let _enemyUidSeq = 1;
 /** Base combat stats by tier. Catalog units map onto these via CATALOG.tier. */
 export const ENEMY_TIER_STATS = {
   // Visual + hitbox sizes ×2 (drawEnemy uses e.w/e.h; player ship unchanged)
-  // v1.5.72: HP ≈1.75× for slower TTK (じっくり倒す)
-  basic:  { w: 68,  h: 56,  hp: 7,  speedBase: 100, speedRand: 50, score: 10,  color: '#9aa0a8' },
-  elite:  { w: 92,  h: 76,  hp: 18, speedBase: 75,  speedRand: 35, score: 30,  color: '#f2f2f6' },
-  swarm:  { w: 52,  h: 40,  hp: 4,  speedBase: 150, speedRand: 55, score: 5,   color: '#ff2a3a' },
-  boss:   { w: 184, h: 116, hp: 125, speedBase: 34,  speedRand: 0,  score: 200, color: '#b0b4bc' },
-  mech:   { w: 176, h: 96,  hp: 50, speedBase: 42,  speedRand: 0,  score: 80,  color: '#f4f4f8' },
-  golem:  { w: 168, h: 140, hp: 64, speedBase: 28,  speedRand: 0,  score: 100, color: '#3cbc48' },
-  tank:   { w: 180, h: 88,  hp: 70, speedBase: 32,  speedRand: 0,  score: 110, color: '#e02028' },
-  drone:  { w: 56,  h: 44,  hp: 9,  speedBase: 130, speedRand: 40, score: 20,  color: '#ffd428' },
+  // Softened from v1.5.72 HP (~18% lower) so enemies feel less tanky
+  basic:  { w: 68,  h: 56,  hp: 6,  speedBase: 100, speedRand: 50, score: 10,  color: '#9aa0a8' },
+  elite:  { w: 92,  h: 76,  hp: 15, speedBase: 75,  speedRand: 35, score: 30,  color: '#f2f2f6' },
+  swarm:  { w: 52,  h: 40,  hp: 3,  speedBase: 150, speedRand: 55, score: 5,   color: '#ff2a3a' },
+  boss:   { w: 184, h: 116, hp: 100, speedBase: 34,  speedRand: 0,  score: 200, color: '#b0b4bc' },
+  mech:   { w: 176, h: 96,  hp: 40, speedBase: 42,  speedRand: 0,  score: 80,  color: '#f4f4f8' },
+  golem:  { w: 168, h: 140, hp: 52, speedBase: 28,  speedRand: 0,  score: 100, color: '#3cbc48' },
+  tank:   { w: 180, h: 88,  hp: 56, speedBase: 32,  speedRand: 0,  score: 110, color: '#e02028' },
+  drone:  { w: 56,  h: 44,  hp: 7,  speedBase: 130, speedRand: 40, score: 20,  color: '#ffd428' },
 };
 
 /**
@@ -132,7 +132,7 @@ export function isLargeEnemy(e) {
   const tier = resolveEnemyTier(e.kind || 'basic');
   if (LARGE_ENEMY_TIERS.has(tier)) return true;
   if ((e.w || 0) >= 150 || (e.h || 0) >= 100) return true;
-  if ((e.maxHp || e.hp || 0) >= 48) return true; // v1.5.72: track raised mech floor
+  if ((e.maxHp || e.hp || 0) >= 40) return true; // track mech floor after HP soften
   return false;
 }
 

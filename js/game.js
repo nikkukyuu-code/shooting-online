@@ -3,13 +3,13 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260926010557';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260926010557';
-import { sfx } from './audio.js?v=20260926010557';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260926010557';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=20260926010557';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=20260926010557';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260926010557';
+} from './entities.js?v=20260926011334';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260926011334';
+import { sfx } from './audio.js?v=20260926011334';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260926011334';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=20260926011334';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=20260926011334';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260926011334';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -141,7 +141,7 @@ function pushEnemyAttack(e, bullets, tx, ty) {
   const fireMissile = (homeDur = 0.55, angJitter = 0.3) => {
     const a = missileAim + (Math.random() - 0.5) * angJitter;
     const spd = 230 + Math.random() * 30;
-    // Spawn dmg field lowered (was 3); player hit uses homing?4:6
+    // Spawn dmg field lowered (was 3); player hit uses softened 2/4
     bullets.push(spawnBullet(
       ox, oy, Math.cos(a) * spd, Math.sin(a) * spd,
       'enemy', true, 2,
@@ -750,7 +750,7 @@ export class Game {
     e.x = fw + 24 + Math.random() * 50;
     e.y = e.holdY;
     // Fight a bit more often once in the right zone
-    e.fireCd = Math.min(e.fireCd || 1, 0.6 + Math.random() * 0.5);
+    e.fireCd = Math.min(e.fireCd || 1, 1.0 + Math.random() * 0.7);
     // Appear FX (~0.9s blink/pop) — visual only; synced via serializeField.at
     e.appearT = 0.9;
     e.appearMax = 0.9;
@@ -1419,7 +1419,7 @@ export class Game {
           continue;
         }
         if (P.invuln <= 0) {
-          const hitDmg = b.homing ? 3 : 5; // v1.5.72: was 4/6
+          const hitDmg = b.homing ? 2 : 4; // softened: was 3/5 (earlier 4/6)
           this.applyPlayerDamage(hitDmg, 'bullet');
           P.invuln = 0.75;
           b.life = 0;
