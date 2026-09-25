@@ -42,7 +42,7 @@
   }
   </script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=20260926012753" />
+  <link rel="stylesheet" href="css/style.css?v=20260926014346" />
 </head>
 <body>
   <div id="app">
@@ -50,7 +50,7 @@
       <div class="sky sky-space" aria-hidden="true"></div>
       <div class="menu-pt" id="menu-pt" aria-live="polite">PT: 0</div>
       <div class="menu-hero">
-        <img class="menu-hero-art" src="assets/title-hero.svg?v=20260926012753" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
+        <img class="menu-hero-art" src="assets/title-hero.svg?v=20260926014346" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
         <header class="menu-brand">
           <h1 class="game-title">スペーストリックバトル</h1>
           <p class="game-subtitle">オンライン対戦</p>
@@ -87,12 +87,13 @@
       </div>
     </section>
 
-    <section id="screen-deck" class="screen sub-screen">
-      <div class="sky"></div>
+    <section id="screen-deck" class="screen sub-screen space-sub">
+      <div class="sky sky-space"></div>
       <div class="sub-panel">
         <header class="sub-head">
           <h2>デッキ編集</h2>
           <p class="sub-desc">送信する敵を<strong>5体・重複なし</strong>で装備</p>
+          <div class="sub-head-glow" aria-hidden="true"></div>
         </header>
         <h3 class="sub-section-title deck-equipped-heading">装備中デッキ</h3>
         <div id="deck-slots" class="deck-slots" aria-label="装備中デッキ"></div>
@@ -108,12 +109,13 @@
       </div>
     </section>
 
-    <section id="screen-shop" class="screen sub-screen">
-      <div class="sky"></div>
+    <section id="screen-shop" class="screen sub-screen space-sub">
+      <div class="sky sky-space"></div>
       <div class="sub-panel">
         <header class="sub-head">
           <h2>ショップ</h2>
-          <p class="sub-desc">PTで送信ユニットを解放　<span id="shop-pt">PT: 0</span></p>
+          <p class="sub-desc">PTで送信ユニットを解放</p>
+          <div class="shop-pt-pill" id="shop-pt" aria-live="polite">PT: 0</div>
         </header>
         <div id="shop-detail" class="unit-detail" aria-live="polite"></div>
         <div class="shop-buy-row">
@@ -129,8 +131,8 @@
       </div>
     </section>
 
-    <section id="screen-zukan" class="screen sub-screen">
-      <div class="sky"></div>
+    <section id="screen-zukan" class="screen sub-screen space-sub">
+      <div class="sky sky-space"></div>
       <div class="sub-panel">
         <header class="sub-head">
           <h2>図鑑</h2>
@@ -163,6 +165,6 @@
   </div>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script type="module" src="js/main.js?v=20260926012753"></script>
+  <script type="module" src="js/main.js?v=20260926014346"></script>
 </body>
 </html>

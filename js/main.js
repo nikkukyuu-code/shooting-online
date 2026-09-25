@@ -1,11 +1,11 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20260926012753';
-import { Net } from './net.js?v=20260926012753';
-import { Game } from './game.js?v=20260926012753';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=20260926012753';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=20260926012753';
-import { registerEnemyKinds } from './render.js?v=20260926012753';
-import { ALL_KIND_IDS } from './catalog.js?v=20260926012753';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20260926012753';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20260926014346';
+import { Net } from './net.js?v=20260926014346';
+import { Game } from './game.js?v=20260926014346';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=20260926014346';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=20260926014346';
+import { registerEnemyKinds } from './render.js?v=20260926014346';
+import { ALL_KIND_IDS } from './catalog.js?v=20260926014346';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20260926014346';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -123,7 +123,7 @@ function refreshPtDisplay(meta) {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20260926012753`;
+  return `assets/enemies/${id}/0.png?v=20260926014346`;
 }
 
 function unitName(id) {
@@ -204,7 +204,7 @@ function renderDeckScreen() {
     btn.setAttribute('aria-label', `装備中 スロット${i + 1} ${unitName(id)}`);
     btn.innerHTML = `
       <span class="slot-equipped">装備中 · ${i + 1}</span>
-      <img src="${spriteUrl(id)}" alt="" width="56" height="56" loading="lazy" />
+      <div class="slot-art"><img src="${spriteUrl(id)}" alt="" width="56" height="56" loading="lazy" /></div>
       <span class="slot-name">${unitName(id)}</span>
       <span class="slot-attack">${intro.attack.split('／')[0]}</span>
     `;
@@ -227,9 +227,10 @@ function renderDeckScreen() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'unit-card' + (inDeck ? ' in-deck' : '');
+    if (u.rarity) btn.dataset.rarity = u.rarity;
     btn.innerHTML = `
       ${inDeck ? `<span class="unit-badge equipped">装備中<span class="unit-badge-slot">スロット${deckSlot + 1}</span></span>` : ''}
-      <img src="${spriteUrl(u.id)}" alt="" width="64" height="64" loading="lazy" />
+      <div class="unit-art"><img src="${spriteUrl(u.id)}" alt="" width="64" height="64" loading="lazy" /></div>
       <span class="unit-name">${u.name}</span>
       <span class="unit-attack-chip">${intro.attack.split('／')[0]}</span>
       <span class="rarity ${u.rarity}">${rarityLabel(u.rarity)}</span>
@@ -328,10 +329,11 @@ function renderShopScreen() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'unit-card' + (owned ? ' owned' : '') + (selectedShopId === u.id ? ' selected-card' : '');
+    if (u.rarity) btn.dataset.rarity = u.rarity;
     const priceLabel = owned ? '所持済' : (u.price <= 0 ? '無料' : `${u.price} PT`);
     btn.innerHTML = `
       ${owned ? '<span class="unit-badge">所持</span>' : ''}
-      <img src="${spriteUrl(u.id)}" alt="" width="72" height="72" loading="lazy" />
+      <div class="unit-art"><img src="${spriteUrl(u.id)}" alt="" width="72" height="72" loading="lazy" /></div>
       <span class="unit-name">${u.name}</span>
       <span class="unit-attack-chip">${intro.attack.split('／')[0]}</span>
       <span class="rarity ${u.rarity}">${rarityLabel(u.rarity)}</span>
@@ -361,8 +363,9 @@ function renderZukanScreen() {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'unit-card' + (selectedZukanId === u.id ? ' selected-card' : '');
+      if (u.rarity) btn.dataset.rarity = u.rarity;
       btn.innerHTML = `
-        <img src="${spriteUrl(u.id)}" alt="" width="72" height="72" loading="lazy" />
+        <div class="unit-art"><img src="${spriteUrl(u.id)}" alt="" width="72" height="72" loading="lazy" /></div>
         <span class="unit-name">${u.name}</span>
         <span class="unit-attack-chip">${intro.attack.split('／')[0]}</span>
         <span class="rarity ${u.rarity}">${rarityLabel(u.rarity)}</span>
