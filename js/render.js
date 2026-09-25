@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260926024353';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260926025456';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260926024353`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260926025456`;
 }
 
 function loadKindSprite(kind) {
@@ -1878,6 +1878,14 @@ function drawDamageNumbers(ctx, L, nums) {
   ctx.restore();
 }
 
+
+/** Keep beam fully opaque for most of DIRECT_DURATION; fade only in last ~0.5s. */
+function directBeamLifeRatio(remaining) {
+  if (!(remaining > 0)) return 0;
+  if (remaining > 0.5) return 1;
+  return Math.max(0.35, remaining / 0.5);
+}
+
 function drawDirectBeam(ctx, x0, y0, x1, y1, lifeRatio = 1, tint = 'own') {
   // Straight-line staccato bolts only (no sideways jitter = no "homing" look)
   // tint: 'own' = red upward (player), 'incoming' = purple downward (opponent)
@@ -2430,7 +2438,7 @@ export function drawField(ctx, area, snap, opts = {}) {
     if (!darkened && snap.player) drawLaser(ctx, snap.player, fh);
     // Own-pane part of upward direct beam
     if (facingUp) {
-      const lr = Math.min(1, snap.player.activeTimer / 0.85);
+      const lr = directBeamLifeRatio(snap.player.activeTimer);
       drawDirectBeam(ctx, px, py - 16, px, 8, lr);
     }
   }
@@ -2498,14 +2506,14 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
   if (pl && pl.activePower === 'direct' && pl.activeTimer > 0) {
     const px = L.own.x + (pl.x || 48);
     const py = L.own.y + (pl.y <= 1 ? pl.y * L.own.h : pl.y);
-    const lr = Math.min(1, pl.activeTimer / 0.85);
+    const lr = directBeamLifeRatio(pl.activeTimer);
     // Straight UP only (same X) — never slant toward opponent ship
     drawDirectBeam(ctx, px, L.own.y + 4, px, L.opp.y + L.opp.h * 0.45, lr);
   }
   // Incoming: FROM opponent pane DOWN onto us. Spark must be at the TOP
   // (never at our ship — that looked like we were firing upward with no item).
   if (localState.incomingDirect && localState.incomingDirect > 0) {
-    const lr = Math.min(1, localState.incomingDirect / 0.85);
+    const lr = directBeamLifeRatio(localState.incomingDirect);
     const px = L.own.x + (pl.x || 48);
     const py = L.own.y + (pl.y <= 1 ? pl.y * L.own.h : pl.y);
     // Endpoint (spark) = opponent side; start = just above our ship

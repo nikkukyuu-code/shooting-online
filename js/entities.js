@@ -27,6 +27,9 @@ export const POWERUPS = [
   { id: 'barrier',    label: 'バリア',        effect: '一定時間ダメージを防ぐ',     desc: '約5.5秒、自機のまわりにエネルギーシールドを展開。敵弾と体当たりのダメージを防ぐ（攻撃はしない）。', color: '#6cf0ff', icon: '盾' },
 ];
 
+/** Shared direct-attack pose/beam window (seconds). Exactly 2× old 3.6. */
+export const DIRECT_DURATION = 7.2;
+
 export function powerupMeta(id) {
   return POWERUPS.find((p) => p.id === id) || POWERUPS[0];
 }
@@ -35,7 +38,7 @@ export function powerupMeta(id) {
 export function pickPowerupId() {
   const weighted = [
     ['homing', 2], ['laser', 2], ['spread', 3], ['bomb', 2], ['shock', 3], ['rapid', 3],
-    ['meteor', 2], ['send', 2.4], ['direct', 1],
+    ['meteor', 2], ['send', 2.4], ['direct', 2.5],
     // Heal a bit less common again (was 4.1 / 1.95)
     ['heal', 3.2], ['heal_big', 1.5],
     ['send_mech', 2.3], ['send_golem', 2.3], ['send_tank', 2.3], ['send_drone', 2.3],

@@ -1,15 +1,15 @@
 import {
-  POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
+  POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260926024353';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260926024353';
-import { sfx } from './audio.js?v=20260926024353';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260926024353';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=20260926024353';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260926024353';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260926024353';
+} from './entities.js?v=20260926025456';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260926025456';
+import { sfx } from './audio.js?v=20260926025456';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260926025456';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=20260926025456';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260926025456';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260926025456';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1043,7 +1043,7 @@ export class Game {
       const dmg = 8;
       p.activePower = 'direct';
       // Pose/beam window; shots keep flying until off-screen (pierce)
-      p.activeTimer = 3.6;
+      p.activeTimer = DIRECT_DURATION;
       p._directShotCd = 0;
       this.showItemBanner(meta);
       if (this.useBot) {
@@ -1124,7 +1124,7 @@ export class Game {
     if (msg.type === 'directHit') {
       // Incoming only — do NOT set player.activePower (that made it look like WE fired)
       const dmg = msg.dmg || 8;
-      this.state.incomingDirect = 0.85;
+      this.state.incomingDirect = DIRECT_DURATION;
       this.applyPlayerDamage(dmg, 'direct');
       this.state.player.invuln = 0.6;
       this.state.fx.push(spawnExplosion(this.state.player.x + 10, this.state.player.y * this.L.own.h, true));
@@ -1951,8 +1951,14 @@ export class Game {
         const l = B.items.findIndex((id) => id === 'laser' || id === 'homing' || id === 'bomb' || id === 'shock' || id === 'spread' || id === 'rapid' || isExAttackItem(id));
         if (l >= 0) return l;
       }
+      // Prefer direct often so player sees purple incoming beam in CPU matches
+      if (playerHp >= 35) {
+        const d = B.items.findIndex((id) => id === 'direct');
+        if (d >= 0 && Math.random() < 0.55) return d;
+      }
       if (playerHp > 55) {
-        const heavy = B.items.findIndex((id) => id === 'send_mech' || id === 'send_golem' || id === 'send_tank' || id === 'send_drone' || id === 'send' || id === 'meteor' || id === 'direct');
+        // direct first among heavies (before send/meteor)
+        const heavy = B.items.findIndex((id) => id === 'direct' || id === 'send_mech' || id === 'send_golem' || id === 'send_tank' || id === 'send_drone' || id === 'send' || id === 'meteor');
         if (heavy >= 0) return heavy;
       }
       // default: first offensive (direct allowed — shown as incoming purple beam, not own upward)
@@ -1964,7 +1970,7 @@ export class Game {
       if (B.powerCd > 0 && !force) return;
       // Softened: only sometimes seed a free item (was always + often a second)
       if (!B.items.length && Math.random() < _cp.seedItemChance) {
-        const pool = ['homing', 'laser', 'spread', 'bomb', 'shock', 'rapid', 'meteor', 'send', 'send_mech', 'send_golem', 'send_tank', 'send_drone', 'heal',
+        const pool = ['homing', 'laser', 'spread', 'bomb', 'shock', 'rapid', 'meteor', 'send', 'send_mech', 'send_golem', 'send_tank', 'send_drone', 'heal', 'direct',
           'pbeam', 'option', 'cluster', 'blackhole', 'freeze', 'reflect', 'barrier'];
         B.items.push(pool[(Math.random() * pool.length) | 0]);
       }
@@ -1983,10 +1989,14 @@ export class Game {
         B.hp = Math.min(B.maxHp || PLAYER_MAX_HP, B.hp + (id === 'heal_big' ? 50 : 25));
         B.fx.unshift(spawnHealFx(B.x || 48, B.y * fh, id === 'heal_big'));
       } else if (id === 'direct') {
-        // Incoming-only: purple downward beam on player (never set player.activePower)
+        // Incoming purple beam only on player pane (never set player.activePower).
+        // Set COM activePower so opponent-pane facing (snap.ap === 'direct') is reliable;
+        // updateBot only special-fires for homing/laser/rapid, so normal shots continue.
         const dmg = 8;
-        B.directBeam = 3.6;
-        this.state.incomingDirect = 3.6;
+        B.activePower = 'direct';
+        B.activeTimer = DIRECT_DURATION;
+        B.directBeam = DIRECT_DURATION;
+        this.state.incomingDirect = DIRECT_DURATION;
         this.applyPlayerDamage(dmg, 'direct');
         this.state.player.invuln = Math.max(this.state.player.invuln || 0, 0.6);
         const py = this.state.player.y * fh;
@@ -2082,6 +2092,7 @@ export class Game {
       fx: B.fx,
       meteors: B.meteors,
       directBeam: (B.directBeam || 0) > 0,
+      ap: B.activePower || null,
       px: B.x || shipX,
       py: B.y,
       php: B.hp,
