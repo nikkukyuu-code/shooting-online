@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=1.5.73';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=1.5.74';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -299,7 +299,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=1.5.73`;
+  return `assets/enemies/${kind}/${frame}.png?v=1.5.74`;
 }
 
 function loadKindSprite(kind) {
@@ -1011,7 +1011,12 @@ export const ITEM_ORB_R = 20;
 
 function drawItem(ctx, it) {
   const st = ITEM_STYLE[it.id] || { color: '#ffd24a', icon: '★' };
-  const R = ITEM_ORB_R;
+  const id = it.id;
+  // v1.5.74: bomb = flashiest orb (strongest item); heal / heal_big also stand out on the field
+  const isBomb = id === 'bomb';
+  const isHeal = id === 'heal' || id === 'heal_big';
+  const isHealBig = id === 'heal_big';
+  const R = isBomb ? ITEM_ORB_R * 1.35 : (isHealBig ? ITEM_ORB_R * 1.22 : (isHeal ? ITEM_ORB_R * 1.12 : ITEM_ORB_R));
   const now = performance.now() / 1000;
   ctx.save();
   ctx.translate(it.x, it.y);
@@ -1021,48 +1026,129 @@ function drawItem(ctx, it) {
     const pulse = 0.5 + 0.5 * Math.sin(now * Math.PI * 2 * hz);
     ctx.globalAlpha = 0.22 + 0.78 * pulse;
   }
-  // Soft colour halo
-  const halo = ctx.createRadialGradient(0, 0, R * 0.6, 0, 0, R * 1.75);
-  halo.addColorStop(0, st.color);
-  halo.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.globalAlpha *= 0.55;
-  ctx.fillStyle = halo;
-  ctx.beginPath();
-  ctx.arc(0, 0, R * 1.75, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha /= 0.55;
-  // Rotating dashed "pickup" ring — nothing else on the stage looks like this
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([6, 5]);
-  ctx.lineDashOffset = -now * 24;
-  ctx.beginPath();
-  ctx.arc(0, 0, R + 5, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.setLineDash([]);
+  // Always-on identity pulse for bomb / heal (independent of despawn blink)
+  const idPulse = 0.5 + 0.5 * Math.sin(now * Math.PI * 2 * (isBomb ? 2.2 : 1.6));
+
+  if (isBomb) {
+    // Outer flame corona — largest / hottest so the strongest item is unmistakable
+    const coronaR = R * (2.35 + 0.25 * idPulse);
+    const corona = ctx.createRadialGradient(0, 0, R * 0.35, 0, 0, coronaR);
+    corona.addColorStop(0, `rgba(255,240,180,${0.55 + 0.25 * idPulse})`);
+    corona.addColorStop(0.35, `rgba(255,120,30,${0.45 + 0.2 * idPulse})`);
+    corona.addColorStop(0.7, `rgba(255,40,0,${0.22 + 0.12 * idPulse})`);
+    corona.addColorStop(1, 'rgba(255,0,0,0)');
+    ctx.fillStyle = corona;
+    ctx.beginPath();
+    ctx.arc(0, 0, coronaR, 0, Math.PI * 2);
+    ctx.fill();
+    // Spinning dashed ring (thicker / faster)
+    ctx.strokeStyle = `rgba(255,220,120,${0.85 + 0.15 * idPulse})`;
+    ctx.lineWidth = 3.2;
+    ctx.setLineDash([8, 4]);
+    ctx.lineDashOffset = -now * 48;
+    ctx.beginPath();
+    ctx.arc(0, 0, R + 8 + 2 * idPulse, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Second counter-rotating ring
+    ctx.strokeStyle = `rgba(255,80,20,${0.55 + 0.25 * idPulse})`;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 6]);
+    ctx.lineDashOffset = now * 36;
+    ctx.beginPath();
+    ctx.arc(0, 0, R + 14 + 3 * idPulse, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  } else if (isHeal) {
+    // Soft green/cyan aura + expanding breath rings
+    const auraR = R * (2.05 + 0.18 * idPulse);
+    const aura = ctx.createRadialGradient(0, 0, R * 0.3, 0, 0, auraR);
+    aura.addColorStop(0, `rgba(180,255,220,${0.5 + 0.2 * idPulse})`);
+    aura.addColorStop(0.45, `rgba(40,255,140,${0.35 + 0.15 * idPulse})`);
+    aura.addColorStop(1, 'rgba(0,200,120,0)');
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(0, 0, auraR, 0, Math.PI * 2);
+    ctx.fill();
+    // Breath rings
+    for (let i = 0; i < (isHealBig ? 3 : 2); i++) {
+      const u = (now * 0.9 + i * 0.33) % 1;
+      const rr = R * (1.15 + 1.1 * u);
+      const aa = (1 - u) * (0.55 - i * 0.08);
+      ctx.strokeStyle = `rgba(${isHealBig ? '80,255,200' : '100,255,160'},${aa})`;
+      ctx.lineWidth = 2.2 - u;
+      ctx.beginPath();
+      ctx.arc(0, 0, rr, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    // Slow dashed pickup ring
+    ctx.strokeStyle = `rgba(220,255,240,${0.7 + 0.3 * idPulse})`;
+    ctx.lineWidth = 2.4;
+    ctx.setLineDash([5, 5]);
+    ctx.lineDashOffset = -now * 20;
+    ctx.beginPath();
+    ctx.arc(0, 0, R + 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  } else {
+    // Soft colour halo (default items)
+    const halo = ctx.createRadialGradient(0, 0, R * 0.6, 0, 0, R * 1.75);
+    halo.addColorStop(0, st.color);
+    halo.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.globalAlpha *= 0.55;
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(0, 0, R * 1.75, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha /= 0.55;
+    // Rotating dashed "pickup" ring — nothing else on the stage looks like this
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 5]);
+    ctx.lineDashOffset = -now * 24;
+    ctx.beginPath();
+    ctx.arc(0, 0, R + 5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
   // Glossy body in the item colour
   const body = ctx.createRadialGradient(-R * 0.35, -R * 0.4, R * 0.1, 0, 0, R);
-  body.addColorStop(0, '#ffffff');
-  body.addColorStop(0.35, st.color);
-  body.addColorStop(1, st.color);
+  if (isBomb) {
+    body.addColorStop(0, '#ffffff');
+    body.addColorStop(0.25, '#ffe090');
+    body.addColorStop(0.55, '#ff5522');
+    body.addColorStop(1, '#aa1800');
+  } else if (isHeal) {
+    body.addColorStop(0, '#ffffff');
+    body.addColorStop(0.3, isHealBig ? '#b8ffe0' : '#c8ffd8');
+    body.addColorStop(0.65, st.color);
+    body.addColorStop(1, isHealBig ? '#00aa66' : '#118844');
+  } else {
+    body.addColorStop(0, '#ffffff');
+    body.addColorStop(0.35, st.color);
+    body.addColorStop(1, st.color);
+  }
   ctx.fillStyle = body;
-  ctx.shadowColor = st.color;
-  ctx.shadowBlur = 10;
+  ctx.shadowColor = isBomb ? '#ff6620' : (isHeal ? '#44ff99' : st.color);
+  ctx.shadowBlur = isBomb ? 22 + 8 * idPulse : (isHeal ? 16 + 5 * idPulse : 10);
   ctx.beginPath();
   ctx.arc(0, 0, R, 0, Math.PI * 2);
   ctx.fill();
   ctx.shadowBlur = 0;
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = isBomb ? `rgba(255,240,180,${0.9 + 0.1 * idPulse})` : '#ffffff';
+  ctx.lineWidth = isBomb ? 3.4 : (isHeal ? 2.8 : 2.5);
   ctx.stroke();
   ctx.strokeStyle = 'rgba(0,0,0,0.45)';
   ctx.lineWidth = 1.2;
   ctx.beginPath();
   ctx.arc(0, 0, R - 2.2, 0, Math.PI * 2);
   ctx.stroke();
+
   // Icon — large, dark, fitted inside the orb (2-char icons shrink to fit)
+  // Bomb / heal: bigger, higher-contrast so they read at a glance
   const icon = String(st.icon || '★');
-  let fs = Math.round(R * 1.05);
+  let fs = Math.round(R * (isBomb ? 1.22 : (isHeal ? 1.18 : 1.05)));
   ctx.font = `900 ${fs}px "Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif`;
   const maxW = R * 1.5;
   const w = ctx.measureText(icon).width;
@@ -1072,11 +1158,25 @@ function drawItem(ctx, it) {
   }
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+  ctx.lineWidth = isBomb || isHeal ? 4 : 3;
+  ctx.strokeStyle = isBomb ? 'rgba(255,255,200,0.95)' : (isHeal ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.75)');
   ctx.strokeText(icon, 0, 1);
-  ctx.fillStyle = '#111';
+  ctx.fillStyle = isBomb ? '#2a0800' : (isHeal ? '#063318' : '#111');
   ctx.fillText(icon, 0, 1);
+
+  // Tiny rising sparkles for heal orbs (cheap, few particles)
+  if (isHeal) {
+    const n = isHealBig ? 6 : 4;
+    for (let i = 0; i < n; i++) {
+      const ang = (i / n) * Math.PI * 2 + now * 1.4;
+      const dist = R * (1.25 + 0.35 * Math.sin(now * 3 + i));
+      const sx = Math.cos(ang) * dist;
+      const sy = Math.sin(ang) * dist * 0.75 - 4 * Math.sin(now * 4 + i);
+      const a = 0.35 + 0.45 * (0.5 + 0.5 * Math.sin(now * 5 + i * 1.7));
+      ctx.fillStyle = `rgba(200,255,230,${a})`;
+      ctx.fillRect(sx - 1.5, sy - 1.5, 3, 3);
+    }
+  }
   ctx.restore();
 }
 
@@ -1214,12 +1314,12 @@ function drawShockFx(ctx, f) {
 }
 
 /* ---------- ボム (bomb) FX — the strongest item, most spectacular effect ---------- */
-const BOMB_CHARGE = 0.14;   // implosion before the visual detonation (damage is already applied)
-const BOMB_SWEEP1 = 0.34;   // 1st shockwave: centre → farthest corner
-const BOMB_SWEEP2 = 0.55;   // 2nd (trailing) shockwave
-const BOMB_DEBRIS = 30;
-const BOMB_EMBERS = 16;
-const BOMB_SMOKE = 7;
+const BOMB_CHARGE = 0.22;   // v1.5.74: longer implosion beat before detonation
+const BOMB_SWEEP1 = 0.42;   // 1st shockwave: centre → farthest corner
+const BOMB_SWEEP2 = 0.68;   // 2nd (trailing) shockwave
+const BOMB_DEBRIS = 40;
+const BOMB_EMBERS = 22;
+const BOMB_SMOKE = 10;
 
 /** Deterministic 0..1 hash so particles need no stored state (works for net snapshots too). */
 function bombRand(seed, i) {
@@ -1239,12 +1339,12 @@ function bombPaneFx(list, sc) {
     const age = Math.max(0, (f.m ?? f.max) - (f.l ?? f.life));
     const d = age - BOMB_CHARGE;
     if (d < 0) {
-      shake = Math.max(shake, 2 * (d + BOMB_CHARGE) / BOMB_CHARGE); // charge tremble
-      dark = Math.max(dark, 0.45 * (d + BOMB_CHARGE) / BOMB_CHARGE); // stage dims as energy gathers
+      shake = Math.max(shake, 3.5 * (d + BOMB_CHARGE) / BOMB_CHARGE); // charge tremble
+      dark = Math.max(dark, 0.62 * (d + BOMB_CHARGE) / BOMB_CHARGE); // stage dims as energy gathers
     } else {
-      if (d < 0.55) shake = Math.max(shake, 11 * Math.pow(1 - d / 0.55, 2));
-      if (d < 0.28) flash = Math.max(flash, 0.9 * (1 - d / 0.28));
-      if (d < 0.9) tint = Math.max(tint, 0.3 * (1 - d / 0.9));
+      if (d < 0.7) shake = Math.max(shake, 16 * Math.pow(1 - d / 0.7, 2));
+      if (d < 0.38) flash = Math.max(flash, 1.0 * (1 - d / 0.38)); // full white-out pulse
+      if (d < 1.15) tint = Math.max(tint, 0.42 * (1 - d / 1.15));
     }
   }
   const k = Math.max(0.5, Math.min(1.2, sc || 1));
@@ -1312,8 +1412,8 @@ function drawBombFx(ctx, f) {
 
     // 3) Double shockwave rings sweeping the whole stage
     const rings = [
-      { r: w1, a: Math.max(0, 1 - Math.max(0, d - BOMB_SWEEP1 * 0.6) / 0.35), w: 16, c: '255,170,50', core: '255,250,220' },
-      { r: R * easeOut3((d - 0.1) / BOMB_SWEEP2), a: d < 0.1 ? 0 : Math.max(0, 1 - Math.max(0, d - 0.1 - BOMB_SWEEP2 * 0.6) / 0.4), w: 9, c: '255,70,20', core: '255,200,120' },
+      { r: w1, a: Math.max(0, 1 - Math.max(0, d - BOMB_SWEEP1 * 0.6) / 0.4), w: 20, c: '255,170,50', core: '255,250,220' },
+      { r: R * easeOut3((d - 0.12) / BOMB_SWEEP2), a: d < 0.12 ? 0 : Math.max(0, 1 - Math.max(0, d - 0.12 - BOMB_SWEEP2 * 0.6) / 0.45), w: 12, c: '255,70,20', core: '255,200,120' },
     ];
     for (const rg of rings) {
       if (rg.a <= 0 || rg.r < 2) continue;
@@ -1345,8 +1445,8 @@ function drawBombFx(ctx, f) {
     }
 
     // 5) Fireball bloom — grows fast, rises into a mushroom-like cap, then cools
-    const fbU = Math.min(1, d / 0.3);
-    const fbR = (70 * easeOut3(fbU) + 14 * Math.min(1, d / 0.8)) * sc;
+    const fbU = Math.min(1, d / 0.32);
+    const fbR = (92 * easeOut3(fbU) + 20 * Math.min(1, d / 0.85)) * sc; // v1.5.74: bigger bloom
     const cool = Math.max(0, Math.min(1, (d - 0.35) / 0.7)); // 0 hot → 1 cooled
     const rise = 38 * sc * easeOut3(d / 1.0);
     const fbA = Math.max(0, 1 - Math.max(0, d - 0.55) / (life - 0.55));
@@ -1470,10 +1570,93 @@ function drawBombFx(ctx, f) {
   ctx.restore();
 }
 
+/* ---------- Heal / heal_big activation FX — rewarding, not as flashy as bomb ---------- */
+function drawHealFx(ctx, f) {
+  const age = Math.max(0, f.max - f.life);
+  const life = f.max || 0.9;
+  const t = Math.min(1, age / life);
+  const big = !!(f.a);
+  const cx = f.x, cy = f.y;
+  const sc = Math.max(0.45, Math.min(1.3, f.sc || 1));
+  const baseR = (f.r || (big ? 78 : 56)) * (f.sc ? 1 : sc); // r already scaled when drawn via drawField
+  const fade = t < 0.55 ? 1 : Math.max(0, 1 - (t - 0.55) / 0.45);
+  const seed = Math.round(cx * 5 + cy * 11) % 997;
+  const rnd = (i) => { const v = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453; return v - Math.floor(v); };
+  ctx.save();
+
+  // Soft cyan-green fill pulse
+  const grow = easeOut3(Math.min(1, age / 0.28));
+  const rg = ctx.createRadialGradient(cx, cy, 0, cx, cy, baseR * grow);
+  rg.addColorStop(0, `rgba(220,255,240,${0.55 * fade})`);
+  rg.addColorStop(0.4, `rgba(60,255,160,${0.32 * fade})`);
+  rg.addColorStop(1, `rgba(20,180,120,0)`);
+  ctx.fillStyle = rg;
+  ctx.beginPath();
+  ctx.arc(cx, cy, baseR * grow, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Expanding soft rings
+  const nRings = big ? 3 : 2;
+  for (let i = 0; i < nRings; i++) {
+    const st = i * 0.08;
+    const u = Math.max(0, Math.min(1, (age - st) / (life * 0.7)));
+    if (u <= 0) continue;
+    const rr = baseR * (0.35 + 0.9 * easeOut3(u));
+    const aa = (1 - u) * fade * (0.85 - i * 0.15);
+    ctx.strokeStyle = `rgba(${big ? '120,255,220' : '100,255,170'},${aa})`;
+    ctx.lineWidth = (big ? 5 : 3.5) * sc * (1 - u * 0.5);
+    ctx.beginPath();
+    ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = `rgba(255,255,255,${aa * 0.7})`;
+    ctx.lineWidth = 1.4 * sc;
+    ctx.beginPath();
+    ctx.arc(cx, cy, rr - 2 * sc, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Rising sparkles / plus bits
+  const n = big ? 14 : 10;
+  for (let i = 0; i < n; i++) {
+    const st = rnd(i) * 0.2;
+    const u = (age - st) / (life - st);
+    if (u <= 0 || u >= 1) continue;
+    const a = rnd(i + 20) * Math.PI * 2;
+    const dist = (18 + 55 * rnd(i + 40)) * sc * easeOut3(Math.min(1, u * 1.4));
+    const x = cx + Math.cos(a) * dist;
+    const y = cy + Math.sin(a) * dist * 0.7 - 50 * sc * u;
+    const al = Math.sin(Math.PI * u) * fade;
+    if (i % 3 === 0) {
+      ctx.fillStyle = `rgba(200,255,230,${al})`;
+      ctx.font = `900 ${Math.round(12 * sc)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('+', x, y);
+    } else {
+      ctx.fillStyle = `rgba(160,255,210,${al})`;
+      const s = (2 + (i % 3)) * sc;
+      ctx.fillRect(x - s / 2, y - s / 2, s, s);
+    }
+  }
+
+  // Bright core at the ship
+  const coreR = (22 + 18 * Math.sin(Math.min(1, age / 0.2) * Math.PI)) * sc * (big ? 1.2 : 1);
+  const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
+  cg.addColorStop(0, `rgba(255,255,255,${fade})`);
+  cg.addColorStop(0.45, `rgba(160,255,210,${0.75 * fade})`);
+  cg.addColorStop(1, 'rgba(40,200,120,0)');
+  ctx.fillStyle = cg;
+  ctx.beginPath();
+  ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawFx(ctx, f) {
   if (drawExFx(ctx, f)) return; // v1.5.67 extra attack items (attack_items.js)
   if (f.kind === 'shock') { drawShockFx(ctx, f); return; }
   if (f.kind === 'bomb') { drawBombFx(ctx, f); return; }
+  if (f.kind === 'heal') { drawHealFx(ctx, f); return; }
   const t = 1 - f.life / f.max;
   ctx.save();
   ctx.globalAlpha = Math.max(0, 1 - t);
@@ -1494,6 +1677,7 @@ function drawHpBarsAtBoundary(ctx, L, selfHp, oppHp, maxHp, fx = {}) {
   const display = fx.hpDisplay != null ? fx.hpDisplay : selfHp;
   const shake = Math.max(0, fx.hpShake || 0);
   const flash = Math.max(0, fx.damageFlash || 0);
+  const healFlash = Math.max(0, fx.healFlash || 0);
   const x0 = L.W * 0.12;
   const barW = L.W * 0.66;
   const barH = Math.max(7, Math.min(12, L.H * 0.013));
@@ -1568,10 +1752,19 @@ function drawHpBarsAtBoundary(ctx, L, selfHp, oppHp, maxHp, fx = {}) {
     ctx.fillStyle = `rgba(255,255,255,${0.35 * Math.min(1, flash / 0.35)})`;
     ctx.fillRect(x, ySelf, barW * selfRatio, barH);
   }
+  if (healFlash > 0) {
+    const hf = Math.min(1, healFlash / 0.55);
+    ctx.save();
+    ctx.shadowColor = `rgba(80,255,160,${0.8 * hf})`;
+    ctx.shadowBlur = 14 * hf;
+    ctx.fillStyle = `rgba(160,255,210,${0.45 * hf})`;
+    ctx.fillRect(x, ySelf, barW * selfRatio, barH);
+    ctx.restore();
+  }
   ctx.strokeStyle = selfLow
     ? `rgba(255,80,80,${0.55 + 0.45 * pulse})`
-    : (flash > 0 ? '#fff' : 'rgba(255,255,255,0.65)');
-  ctx.lineWidth = selfLow || flash > 0 ? 2 : 1;
+    : (healFlash > 0 ? `rgba(160,255,210,${0.7 + 0.3 * Math.min(1, healFlash / 0.55)})` : (flash > 0 ? '#fff' : 'rgba(255,255,255,0.65)'));
+  ctx.lineWidth = selfLow || flash > 0 || healFlash > 0 ? 2 : 1;
   ctx.strokeRect(x, ySelf, barW, barH);
   ctx.font = `700 ${Math.max(9, barH)}px sans-serif`;
   ctx.fillStyle = '#fff';
@@ -2304,6 +2497,7 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
     hpDisplay: localState.hpDisplay,
     hpShake: localState.hpShake,
     damageFlash: localState.damageFlash,
+    healFlash: localState.healFlash,
   });
 
   // 3) Control — 操作画面 (purple/blue nebula pad)
@@ -2328,3 +2522,5 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
     ctx.fillRect(0, 0, L.W, L.H);
   }
 }
+
+

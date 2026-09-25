@@ -1,15 +1,15 @@
 import {
-  POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx,
+  POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=1.5.73';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.73';
-import { sfx } from './audio.js?v=1.5.73';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=1.5.73';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.73';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=1.5.73';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=1.5.73';
+} from './entities.js?v=1.5.74';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.74';
+import { sfx } from './audio.js?v=1.5.74';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=1.5.74';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.74';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=1.5.74';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=1.5.74';
 
 const HINT = '敵を倒してアイテムを取得（所持は最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -925,20 +925,23 @@ export class Game {
       p.hp = Math.min(p.maxHp || PLAYER_MAX_HP, p.hp + 25);
       this.state.hpGhost = p.hp;
       this.state.hpDisplay = p.hp;
+      this.state.healFlash = 0.7;
       this.showItemBanner(meta, `（+${p.hp - before}）`);
       p.activePower = null;
       p.activeTimer = 0;
-      this.state.fx.push(spawnExplosion(p.x + 8, p.y * this.L.own.h, false));
+      // Front of list so it survives net snapshot slice (like bomb / shock)
+      this.state.fx.unshift(spawnHealFx(p.x + 8, p.y * this.L.own.h, false));
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1200);
     } else if (id === 'heal_big') {
       const before = p.hp;
       p.hp = Math.min(p.maxHp || PLAYER_MAX_HP, p.hp + 50);
       this.state.hpGhost = p.hp;
       this.state.hpDisplay = p.hp;
+      this.state.healFlash = 0.95;
       this.showItemBanner(meta, `（+${p.hp - before}）`);
       p.activePower = null;
       p.activeTimer = 0;
-      this.state.fx.push(spawnExplosion(p.x + 8, p.y * this.L.own.h, true));
+      this.state.fx.unshift(spawnHealFx(p.x + 8, p.y * this.L.own.h, true));
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1200);
     } else if (id === 'direct') {
       // Only when actually consumed from inventory (never from net / COM / pickup)
@@ -1139,6 +1142,7 @@ export class Game {
       this.state.hpGhost = P.hp;
     }
     if (this.state.damageFlash > 0) this.state.damageFlash -= dt;
+    if (this.state.healFlash > 0) this.state.healFlash -= dt;
     if (this.state.hpShake > 0) this.state.hpShake -= dt;
     if (this.state.damageNumbers) {
       for (const n of this.state.damageNumbers) {
@@ -1737,7 +1741,7 @@ export class Game {
           if (dropId === 'direct') dropId = 'laser';
           if (dropId === 'heal' || dropId === 'heal_big') {
             B.hp = Math.min(B.maxHp || PLAYER_MAX_HP, B.hp + (dropId === 'heal_big' ? 50 : 25));
-            B.fx.push(spawnExplosion(48, B.y * fh, dropId === 'heal_big'));
+            B.fx.unshift(spawnHealFx(48, B.y * fh, dropId === 'heal_big'));
           } else {
             B.items.push(dropId);
           }
@@ -1847,6 +1851,7 @@ export class Game {
         B.activeTimer = 4;
       } else if (id === 'heal' || id === 'heal_big') {
         B.hp = Math.min(B.maxHp || PLAYER_MAX_HP, B.hp + (id === 'heal_big' ? 50 : 25));
+        B.fx.unshift(spawnHealFx(B.x || 48, B.y * fh, id === 'heal_big'));
       } else if (id === 'direct') {
         // Disabled for COM — was mistaken for the player's own direct attack
         B.items.push('laser');

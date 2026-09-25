@@ -36,8 +36,8 @@ export function pickPowerupId() {
   const weighted = [
     ['homing', 2], ['laser', 2], ['spread', 3], ['bomb', 2], ['shock', 3], ['rapid', 3],
     ['meteor', 2], ['send', 2.4], ['direct', 1],
-    // v1.5.72: heal / barrier slightly up so they stay visible with fewer drops
-    ['heal', 3.2], ['heal_big', 1.5],
+    // v1.5.74: heal weights +~28–30% so recovery feels a bit more common
+    ['heal', 4.1], ['heal_big', 1.95],
     ['send_mech', 2.3], ['send_golem', 2.3], ['send_tank', 2.3], ['send_drone', 2.3],
     // v1.5.67 extra attack items + v1.5.70 barrier
     ['pbeam', 1.5], ['option', 1.5], ['cluster', 1.5], ['blackhole', 1.5], ['freeze', 1.5], ['reflect', 1.5],
@@ -235,7 +235,7 @@ export function spawnShockFx(x, y, r = SHOCK_RADIUS, targets = []) {
 }
 
 /** ボム (bomb) FX total duration (s). Hit logic is screen-wide (every enemy on the stage). */
-export const BOMB_FX_LIFE = 1.4;
+export const BOMB_FX_LIFE = 1.75; // v1.5.74: longer dramatic beat
 
 /**
  * Bomb FX: short implosion at (x,y), then detonation + double shockwave sweeping the whole
@@ -250,6 +250,26 @@ export function spawnBombFx(x, y, fw, fh, targets = []) {
     life: BOMB_FX_LIFE,
     max: BOMB_FX_LIFE,
     t: targets.slice(0, 20).map(([tx, ty]) => [Math.round(tx), Math.round(ty)]),
+  };
+}
+
+/** Heal / heal_big activation FX (s). Visual only — HP is applied by caller. */
+export const HEAL_FX_LIFE = 0.9;
+export const HEAL_BIG_FX_LIFE = 1.15;
+
+/**
+ * Soft green/cyan recovery aura around the ship. `big` = heal_big (stronger rings / sparkles).
+ * Synced via serializeField (kind + a flag). Distinct from bomb (no screen shake / white-out).
+ */
+export function spawnHealFx(x, y, big = false) {
+  const life = big ? HEAL_BIG_FX_LIFE : HEAL_FX_LIFE;
+  return {
+    kind: 'heal',
+    x, y,
+    r: big ? 78 : 56,
+    life,
+    max: life,
+    a: big ? 1 : 0,
   };
 }
 
