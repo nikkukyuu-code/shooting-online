@@ -1,21 +1,22 @@
 import {
-  POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
+  POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=1.5.76';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.76';
-import { sfx } from './audio.js?v=1.5.76';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=1.5.76';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.76';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=1.5.76';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=1.5.76';
+} from './entities.js?v=1.5.77';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.77';
+import { sfx } from './audio.js?v=1.5.77';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=1.5.77';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.77';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=1.5.77';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=1.5.77';
 
-const HINT = '敵を倒してアイテムを取得（所持は最大3つ）';
+const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
 const TUTORIAL_STEPS = [
   { title: '操作', text: '下の操作画面で自機をドラッグ（←→↑↓／WASDでも移動）' },
   { title: 'アイテム', text: '右の枠をタップして発動。敵を倒すとドロップします' },
+  { title: 'デカ敵', text: 'デカい敵を倒すと回復アイテムが出る' },
   { title: '所持上限', text: 'アイテムは最大3つ。枠がいっぱいのとき拾うと、新しいほうは消えます' },
   { title: '勝ち方', text: '相手より長く生き残ろう。送信や攻撃アイテムで相手を攻めよう' },
 ];
@@ -1356,7 +1357,11 @@ export class Game {
         S.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
         sfx.explode();
         P.score += e.score;
-        if (Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : ITEM_DROP_CHANCE)) {
+        if (isLargeEnemy(e)) {
+          // デカギャラ撃破: 回復確定（ボス級は大回復）
+          const healId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';
+          S.items.push(spawnItemWithId(e.x, e.y, healId));
+        } else if (Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : ITEM_DROP_CHANCE)) {
           S.items.push(spawnItem(e.x, e.y));
         }
         // Damage bot passively a bit when scoring? No — only via powers / race.
@@ -1761,7 +1766,12 @@ export class Game {
     for (const e of B.enemies) {
       if (e.hp <= 0) {
         B.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
-        if (B.items.length < MAX_ITEM_SLOTS && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : BOT_ITEM_DROP_CHANCE)) {
+        if (isLargeEnemy(e)) {
+          // デカギャラ撃破: 回復確定（ボス級は大回復）— COMは即時HP適用
+          const dropId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';
+          B.hp = Math.min(B.maxHp || PLAYER_MAX_HP, B.hp + (dropId === 'heal_big' ? 50 : 25));
+          B.fx.unshift(spawnHealFx(48, B.y * fh, dropId === 'heal_big'));
+        } else if (B.items.length < MAX_ITEM_SLOTS && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : BOT_ITEM_DROP_CHANCE)) {
           let dropId = pickPowerupId();
           // COM never gets direct (looks like player's own upward laser)
           if (dropId === 'direct') dropId = 'laser';

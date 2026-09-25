@@ -188,10 +188,15 @@ export function spawnBullet(x, y, vx, vy, owner = 'player', homing = false, dmg 
   return b;
 }
 
-export function spawnItem(x, y) {
-  const id = pickPowerupId();
-  const p = POWERUPS.find((x) => x.id === id) || POWERUPS[0];
+export function spawnItem(x, y, forcedId) {
+  const id = forcedId || pickPowerupId();
+  const p = POWERUPS.find((q) => q.id === id) || POWERUPS[0];
   return { x, y, w: 40, h: 40, id: p.id, label: p.label, vy: 20, life: 8 }; // v1.5.67: bigger orb (r 11→20)
+}
+
+/** Force a specific powerup id (e.g. heal / heal_big from large-enemy kills). */
+export function spawnItemWithId(x, y, id) {
+  return spawnItem(x, y, id);
 }
 
 export function spawnMeteor(x, y, tx, ty) {
