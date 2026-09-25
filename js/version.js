@@ -1,9 +1,9 @@
 /** App version — player-visible label is Asia/Tokyo publish datetime to the second. */
-export const VERSION = '20260926001515';
-export const VERSION_LABEL = '2026-09-26 00:15:15';
+export const VERSION = '20260926001553';
+export const VERSION_LABEL = '2026-09-26 00:15:53';
 export const BUILD_NOTE = 'バージョン表示を日時（秒まで）に統一';
 /** Publish time (epoch ms). Within 5 min of this, menu shows 「最新」 badge. Update on every bump. */
-export const BUILD_TIME = 1790349315218;
+export const BUILD_TIME = 1790349353953;
 
 /** Format any epoch ms as Asia/Tokyo YYYY-MM-DD HH:mm:ss */
 export function formatVersionTime(ms = BUILD_TIME) {
