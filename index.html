@@ -42,7 +42,7 @@
   }
   </script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=20260926015534" />
+  <link rel="stylesheet" href="css/style.css?v=20260926020049" />
 </head>
 <body>
   <div id="app">
@@ -50,7 +50,7 @@
       <div class="sky sky-space" aria-hidden="true"></div>
       <div class="menu-pt" id="menu-pt" aria-live="polite">PT: 0</div>
       <div class="menu-hero">
-        <img class="menu-hero-art" src="assets/title-hero.svg?v=20260926015534" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
+        <img class="menu-hero-art" src="assets/title-hero.svg?v=20260926020049" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
         <header class="menu-brand">
           <h1 class="game-title">スペーストリックバトル</h1>
           <p class="game-subtitle">オンライン対戦</p>
@@ -65,14 +65,13 @@
             <button type="button" id="btn-cpu-normal" class="menu-btn menu-btn-sub">普通<span class="cpu-pt-tag">PT×1</span></button>
             <button type="button" id="btn-cpu-strong" class="menu-btn primary">強い<span class="cpu-pt-tag">PT×3</span></button>
           </div>
-          <p class="cpu-diff-hint">普通＝弱め・PT×1　強い＝従来・PT×3</p>
         </div>
         <button type="button" id="btn-find" class="menu-btn">対戦相手を探す</button>
-        <input type="text" id="field-find-status" class="menu-field" readonly placeholder="" />
+        <input type="text" id="field-find-status" class="menu-field menu-field-auto" readonly placeholder=" " />
         <button type="button" id="btn-create" class="menu-btn">部屋を作る</button>
-        <input type="text" id="field-room-code" class="menu-field" readonly placeholder="" />
+        <input type="text" id="field-room-code" class="menu-field menu-field-auto" readonly placeholder=" " />
         <button type="button" id="btn-start" class="menu-btn">入室</button>
-        <input type="text" id="input-room-name" class="menu-field room-name" maxlength="12" autocomplete="off" enterkeyhint="go" placeholder="" />
+        <input type="text" id="input-room-name" class="menu-field room-name" maxlength="12" autocomplete="off" enterkeyhint="go" placeholder="部屋名" />
         <div class="menu-row">
           <button type="button" id="btn-deck" class="menu-btn menu-btn-sub">デッキ</button>
           <button type="button" id="btn-shop" class="menu-btn menu-btn-sub">ショップ</button>
@@ -84,7 +83,7 @@
       </div>
       </div>
       <div class="menu-footer">
-        <p class="menu-hint">部屋名を入れて「入室」でゲスト入室 / 「部屋を作る」で相手の入室待ち</p>
+        <p class="menu-hint">部屋名→入室（ゲスト）／部屋を作る（ホスト）</p>
         <a class="hub-link" href="https://nikkukyuu-code.github.io/">トップページへ</a>
         <div id="app-meta" class="app-meta">
           <span id="app-version">2026-09-26 01:15:31</span>
@@ -172,6 +171,6 @@
   </div>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script type="module" src="js/main.js?v=20260926015534"></script>
+  <script type="module" src="js/main.js?v=20260926020049"></script>
 </body>
 </html>
