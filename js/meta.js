@@ -2,7 +2,7 @@
  * localStorage key: shootingOnline_meta (NEVER rename — would wipe player PT).
  * Backup key: shootingOnline_meta_bak. On every update, preserve pt; never clear storage.
  */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP } from './catalog.js?v=20260926001553';
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP } from './catalog.js?v=20260926002656';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;
@@ -67,45 +67,53 @@ function isValidComDeck(deck) {
  * Falls back to COM_DECK if anything goes wrong.
  * @returns {{ deck: string[], score: number, playerScore: number, level: number }}
  */
-export function buildComDeck(playerDeck, rng = Math.random) {
+export function buildComDeck(playerDeck, rng = Math.random, opts = {}) {
   const fallback = () => {
     const d = COM_DECK.slice();
+    // Still shuffle fallback so send order changes every match.
+    for (let i = d.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [d[i], d[j]] = [d[j], d[i]];
+    }
     return { deck: d, score: deckPower(d), playerScore: deckPower(playerDeck), level: deckLevel(deckPower(d)) };
   };
   try {
     const pool = COM_POOL;
     if (pool.length < DECK_SIZE) return fallback();
     const P = Math.max(POOL_MIN, deckPower(playerDeck));
-    let hi = Math.min(P * 1.15, POOL_MAX);
-    let lo = Math.min(P * 1.0, POOL_MAX * 0.97);
-    if (lo > hi) lo = hi * 0.95;
+    // Wider band → more variety between matches while staying near player strength.
+    let hi = Math.min(P * 1.22, POOL_MAX);
+    let lo = Math.min(P * 0.92, POOL_MAX * 0.97);
+    if (lo > hi) lo = hi * 0.9;
+    const avoid = new Set((opts && opts.avoid) || []);
     const playerKey = [...new Set(playerDeck || [])].sort().join(',');
     const sum = (d) => d.reduce((s, x) => s + x.p, 0);
     const inBand = (s) => s >= lo && s <= hi;
-    let best = null;
-    let bestCost = Infinity;
+    const overlap = (ids) => ids.reduce((n, id) => n + (avoid.has(id) ? 1 : 0), 0);
+    const candidates = [];
 
-    for (let attempt = 0; attempt < 60; attempt++) {
-      const target = lo + (hi - lo) * (0.15 + 0.85 * rng());
+    for (let attempt = 0; attempt < 90; attempt++) {
+      const target = lo + (hi - lo) * rng();
       const deck = [];
       const used = new Set();
-      // Randomized greedy: each slot picks a unit near the remaining average.
       for (let i = 0; i < DECK_SIZE; i++) {
         const k = DECK_SIZE - i;
         const avg = (target - sum(deck)) / k;
-        const win = Math.max(15, avg * 0.4);
+        const win = Math.max(20, avg * 0.55);
         let cands = pool.filter((u) => !used.has(u.id) && Math.abs(u.p - avg) <= win);
+        // Prefer units not in the previous COM deck when possible.
+        const fresh = cands.filter((u) => !avoid.has(u.id));
+        if (fresh.length >= 2) cands = fresh;
         if (!cands.length) {
           const rest = pool.filter((u) => !used.has(u.id));
           rest.sort((a, b) => Math.abs(a.p - avg) - Math.abs(b.p - avg));
-          cands = rest.slice(0, 3);
+          cands = rest.slice(0, 6);
         }
         const pick = cands[Math.floor(rng() * cands.length) % cands.length];
         deck.push(pick);
         used.add(pick.id);
       }
-      // Repair: swap units toward the target until inside the band.
-      for (let it = 0; it < 12 && !inBand(sum(deck)); it++) {
+      for (let it = 0; it < 14 && !inBand(sum(deck)); it++) {
         const cur = sum(deck);
         let bestSwap = null;
         let bestDist = Math.abs(cur - target);
@@ -122,16 +130,22 @@ export function buildComDeck(playerDeck, rng = Math.random) {
         deck[i] = u;
         used.add(u.id);
       }
+      const ids = deck.map((x) => x.id);
       const s = sum(deck);
-      const same = deck.map((x) => x.id).sort().join(',') === playerKey;
+      const same = [...ids].sort().join(',') === playerKey;
       const bandDist = s < lo ? lo - s : s > hi ? s - hi : 0;
-      const cost = bandDist * 10 + (same ? 5 : 0);
-      if (cost < bestCost) { bestCost = cost; best = deck.slice(); }
-      if (cost === 0) break;
+      const cost = bandDist * 10 + (same ? 8 : 0) + overlap(ids) * 3;
+      candidates.push({ ids, cost, s });
     }
-    if (!best) return fallback();
-    // Shuffle order so the send rotation varies too.
-    const ids = best.map((x) => x.id);
+    if (!candidates.length) return fallback();
+    candidates.sort((a, b) => a.cost - b.cost);
+    // Among the better half, pick at random so consecutive matches differ.
+    const top = candidates.slice(0, Math.max(8, Math.ceil(candidates.length * 0.35)));
+    // Prefer ones that differ from avoid when available.
+    const diverse = top.filter((c) => overlap(c.ids) <= 2);
+    const pickFrom = diverse.length ? diverse : top;
+    const chosen = pickFrom[Math.floor(rng() * pickFrom.length) % pickFrom.length];
+    const ids = chosen.ids.slice();
     for (let i = ids.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));
       [ids[i], ids[j]] = [ids[j], ids[i]];

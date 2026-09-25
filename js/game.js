@@ -3,13 +3,13 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260926001553';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260926001553';
-import { sfx } from './audio.js?v=20260926001553';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260926001553';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=20260926001553';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=20260926001553';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260926001553';
+} from './entities.js?v=20260926002656';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260926002656';
+import { sfx } from './audio.js?v=20260926002656';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260926002656';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=20260926002656';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=20260926002656';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260926002656';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -274,6 +274,7 @@ export class Game {
     this._playerDeck = null; // length 5 unit ids
     this._deckCursor = 0;
     this._comDeck = COM_DECK.slice();
+    this._lastComDeck = null;
     this._comDeckCursor = 0;
     this._ptReward = null; // { gain, total, remainingHp } when COM win grants PT
   }
@@ -317,19 +318,10 @@ export class Game {
     }
     this._comDeck = COM_DECK.slice();
     this._comDeckInfo = null;
-    // COM battle: build a strong deck matched to the player's deck strength.
-    // (Online P2P is unchanged — the opponent uses their own deck.)
+    // COM battle: rebuild a strength-matched deck EVERY match (avoid last lineup).
+    // Online P2P is unchanged — the opponent uses their own deck.
     if (this.useBot) {
-      try {
-        const info = buildComDeck(this._playerDeck);
-        if (info && Array.isArray(info.deck) && info.deck.length === DECK_SIZE
-          && info.deck.every((id) => CATALOG_BY_ID[id])) {
-          this._comDeck = info.deck.slice();
-          this._comDeckInfo = info;
-        }
-      } catch (_) {
-        this._comDeck = COM_DECK.slice();
-      }
+      this.rebuildComDeck();
     }
     // Clear victory celebration DOM if present
     if (this.ui.endOverlay) {
@@ -425,16 +417,13 @@ export class Game {
     if (bot) {
       this.waiting = false;
       this._initBot();
-      const lv = this._comDeckInfo && this._comDeckInfo.level;
-      if (lv) {
-        const msg = `相手デッキ：レベル${lv}`;
-        this.setStatus(msg);
-        setTimeout(() => {
-          if (!this.ended && !this.waiting && this.state && this.state.statusText === msg) this.setStatus(HINT);
-        }, 2600);
-      } else {
-        this.setStatus(HINT);
-      }
+      // Rebuild again here so every COM match gets a new lineup even if reset ran early.
+      this.rebuildComDeck();
+      const msg = this.comDeckStatusText();
+      this.setStatus(msg);
+      setTimeout(() => {
+        if (!this.ended && !this.waiting && this.state && this.state.statusText === msg) this.setStatus(HINT);
+      }, 4200);
       // First-time (or forced) in-battle tutorial in the info pane
       setTimeout(() => { if (!this.ended && !this.waiting) this.maybeStartTutorial(!!this._forceTutorial); this._forceTutorial = false; }, 700);
     } else if (net) {
@@ -772,6 +761,46 @@ export class Game {
     const kind = deck[this._deckCursor % deck.length];
     this._deckCursor = (this._deckCursor + 1) % deck.length;
     return kind;
+  }
+
+
+  /** Fresh COM deck each match: strength ~player, composition randomized, avoids last match. */
+  rebuildComDeck() {
+    this._comDeckCursor = 0;
+    try {
+      const info = buildComDeck(this._playerDeck, Math.random, {
+        avoid: this._lastComDeck || [],
+      });
+      if (info && Array.isArray(info.deck) && info.deck.length === DECK_SIZE
+        && info.deck.every((id) => CATALOG_BY_ID[id])) {
+        this._comDeck = info.deck.slice();
+        this._comDeckInfo = info;
+        this._lastComDeck = info.deck.slice();
+        return info;
+      }
+    } catch (_) { /* fall through */ }
+    const d = COM_DECK.slice();
+    for (let i = d.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [d[i], d[j]] = [d[j], d[i]];
+    }
+    this._comDeck = d;
+    this._comDeckInfo = {
+      deck: d.slice(),
+      score: 0,
+      playerScore: 0,
+      level: 0,
+    };
+    this._lastComDeck = d.slice();
+    return this._comDeckInfo;
+  }
+
+  comDeckStatusText() {
+    const ids = this._comDeck || [];
+    const names = ids.map((id) => (CATALOG_BY_ID[id] && CATALOG_BY_ID[id].name) || id);
+    const lv = this._comDeckInfo && this._comDeckInfo.level;
+    const head = lv ? `相手デッキ Lv${lv}` : '相手デッキ';
+    return `${head}：${names.join(' / ')}`;
   }
 
   nextComDeckKind() {
