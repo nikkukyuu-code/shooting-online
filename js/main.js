@@ -1,11 +1,11 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20260926014346';
-import { Net } from './net.js?v=20260926014346';
-import { Game } from './game.js?v=20260926014346';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=20260926014346';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=20260926014346';
-import { registerEnemyKinds } from './render.js?v=20260926014346';
-import { ALL_KIND_IDS } from './catalog.js?v=20260926014346';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20260926014346';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20260926014817';
+import { Net } from './net.js?v=20260926014817';
+import { Game } from './game.js?v=20260926014817';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=20260926014817';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=20260926014817';
+import { registerEnemyKinds } from './render.js?v=20260926014817';
+import { ALL_KIND_IDS } from './catalog.js?v=20260926014817';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20260926014817';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -24,7 +24,8 @@ const screens = {
 };
 
 const els = {
-  btnCpu: $('#btn-cpu'),
+  btnCpuNormal: $('#btn-cpu-normal'),
+  btnCpuStrong: $('#btn-cpu-strong'),
   btnFind: $('#btn-find'),
   btnCreate: $('#btn-create'),
   btnStart: $('#btn-start'),
@@ -95,7 +96,8 @@ function setHostingWaitingUI(on) {
 
 function setBusy(v) {
   busy = v;
-  if (els.btnCpu) els.btnCpu.disabled = v;
+  if (els.btnCpuNormal) els.btnCpuNormal.disabled = v;
+  if (els.btnCpuStrong) els.btnCpuStrong.disabled = v;
   els.btnFind.disabled = v;
   els.btnCreate.disabled = v;
   if (els.btnDeck) els.btnDeck.disabled = v;
@@ -123,7 +125,7 @@ function refreshPtDisplay(meta) {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20260926014346`;
+  return `assets/enemies/${id}/0.png?v=20260926014817`;
 }
 
 function unitName(id) {
@@ -399,7 +401,7 @@ function goMenu() {
   show('menu');
 }
 
-function startGameSession({ bot = false } = {}) {
+function startGameSession({ bot = false, comDifficulty = 'strong' } = {}) {
   show('game');
   els.endOverlay.classList.add('hidden');
   game = new Game(els.canvas, {
@@ -407,18 +409,19 @@ function startGameSession({ bot = false } = {}) {
     endOverlay: els.endOverlay,
     endMessage: els.endMessage,
   });
-  game.start({ net, bot });
+  game.start({ net, bot, comDifficulty });
 }
 
-els.btnCpu?.addEventListener('click', () => {
+function startCpuMatch(comDifficulty) {
   if (busy) return;
   setBusy(true);
   cleanupGame();
   net = new Net();
   net.usingBot = true;
-  els.fieldFind.value = 'CPU対戦';
+  const label = comDifficulty === 'normal' ? 'CPU対戦（普通・PT×1）' : 'CPU対戦（強い・PT×3）';
+  els.fieldFind.value = label;
   try {
-    startGameSession({ bot: true });
+    startGameSession({ bot: true, comDifficulty });
     game.beginMatch();
   } catch (e) {
     console.error(e);
@@ -428,7 +431,10 @@ els.btnCpu?.addEventListener('click', () => {
   } finally {
     setBusy(false);
   }
-});
+}
+
+els.btnCpuNormal?.addEventListener('click', () => startCpuMatch('normal'));
+els.btnCpuStrong?.addEventListener('click', () => startCpuMatch('strong'));
 
 
 els.btnTutorial?.addEventListener('click', () => {
@@ -440,7 +446,7 @@ els.btnTutorial?.addEventListener('click', () => {
   net.usingBot = true;
   els.fieldFind.value = 'チュートリアル（CPU）';
   try {
-    startGameSession({ bot: true });
+    startGameSession({ bot: true, comDifficulty: 'normal' });
     if (game) game._forceTutorial = true;
     game.beginMatch();
     // bot path already schedules maybeStartTutorial; force flag ensures it shows

@@ -42,7 +42,7 @@
   }
   </script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=20260926014346" />
+  <link rel="stylesheet" href="css/style.css?v=20260926014817" />
 </head>
 <body>
   <div id="app">
@@ -50,7 +50,7 @@
       <div class="sky sky-space" aria-hidden="true"></div>
       <div class="menu-pt" id="menu-pt" aria-live="polite">PT: 0</div>
       <div class="menu-hero">
-        <img class="menu-hero-art" src="assets/title-hero.svg?v=20260926014346" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
+        <img class="menu-hero-art" src="assets/title-hero.svg?v=20260926014817" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
         <header class="menu-brand">
           <h1 class="game-title">スペーストリックバトル</h1>
           <p class="game-subtitle">オンライン対戦</p>
@@ -59,7 +59,14 @@
       </div>
       <div class="menu-center">
       <div class="menu-panel">
-        <button type="button" id="btn-cpu" class="menu-btn primary">CPU対戦</button>
+        <div class="cpu-diff-block">
+          <p class="cpu-diff-title">CPU対戦</p>
+          <div class="menu-row cpu-diff-row">
+            <button type="button" id="btn-cpu-normal" class="menu-btn menu-btn-sub">普通<span class="cpu-pt-tag">PT×1</span></button>
+            <button type="button" id="btn-cpu-strong" class="menu-btn primary">強い<span class="cpu-pt-tag">PT×3</span></button>
+          </div>
+          <p class="cpu-diff-hint">普通＝やや弱い・いつものPT ／ 強い＝今までの強さ・獲得PT3倍</p>
+        </div>
         <button type="button" id="btn-find" class="menu-btn">対戦相手を探す</button>
         <input type="text" id="field-find-status" class="menu-field" readonly placeholder="" />
         <button type="button" id="btn-create" class="menu-btn">部屋を作る</button>
@@ -114,7 +121,7 @@
       <div class="sub-panel">
         <header class="sub-head">
           <h2>ショップ</h2>
-          <p class="sub-desc">PTで送信ユニットを解放</p>
+          <p class="sub-desc">PTで送信ユニットを解放（強いCOM勝利はPT×3・価格もそれに合わせて調整）</p>
           <div class="shop-pt-pill" id="shop-pt" aria-live="polite">PT: 0</div>
         </header>
         <div id="shop-detail" class="unit-detail" aria-live="polite"></div>
@@ -165,6 +172,6 @@
   </div>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script type="module" src="js/main.js?v=20260926014346"></script>
+  <script type="module" src="js/main.js?v=20260926014817"></script>
 </body>
 </html>

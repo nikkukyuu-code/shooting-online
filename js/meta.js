@@ -2,7 +2,7 @@
  * localStorage key: shootingOnline_meta (NEVER rename — would wipe player PT).
  * Backup key: shootingOnline_meta_bak. On every update, preserve pt; never clear storage.
  */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP } from './catalog.js?v=20260926014346';
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP } from './catalog.js?v=20260926014817';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;
@@ -82,8 +82,12 @@ export function buildComDeck(playerDeck, rng = Math.random, opts = {}) {
     if (pool.length < DECK_SIZE) return fallback();
     const P = Math.max(POOL_MIN, deckPower(playerDeck));
     // Wider band → more variety between matches while staying near player strength.
-    let hi = Math.min(P * 0.85, POOL_MAX);
-    let lo = Math.min(P * 0.60, POOL_MAX * 0.85);
+    // strong (default) ≈ current band; normal = weaker deck
+    const diff = (opts && opts.difficulty) || 'strong';
+    const hiMul = diff === 'normal' ? 0.72 : 0.85;
+    const loMul = diff === 'normal' ? 0.48 : 0.60;
+    let hi = Math.min(P * hiMul, POOL_MAX);
+    let lo = Math.min(P * loMul, POOL_MAX * 0.85);
     if (lo > hi) lo = hi * 0.9;
     const avoid = new Set((opts && opts.avoid) || []);
     const playerKey = [...new Set(playerDeck || [])].sort().join(',');
@@ -332,10 +336,28 @@ export function setDeckSlot(meta, slot, unitId) {
  * COM win PT: remaining player HP already scaled to 0–100 by caller, added as integer PT.
  * Formula: PT += Math.floor(scaledRemainingHP)
  */
-export function grantComVictoryPt(meta, remainingHp) {
-  const gain = Math.max(0, Math.floor(Number(remainingHp) || 0));
+/** COM win PT. remainingHp is already 0–100. mult=1 for 普通, mult=3 for 強い. */
+export function grantComVictoryPt(meta, remainingHp, opts = {}) {
+  const mult = Math.max(1, Number(opts.mult) || 1);
+  const base = Math.max(0, Math.floor(Number(remainingHp) || 0));
+  const gain = Math.max(0, Math.floor(base * mult));
   const next = { ...meta, pt: meta.pt + gain };
-  return { meta: saveMeta(next), gain, total: next.pt };
+  return { meta: saveMeta(next), gain, total: next.pt, base, mult };
 }
+
+export const COM_DIFFICULTY = {
+  normal: {
+    id: 'normal',
+    label: '普通',
+    ptMult: 1,
+    note: 'やや弱いCOM・勝利PTはこれまで通り',
+  },
+  strong: {
+    id: 'strong',
+    label: '強い',
+    ptMult: 3,
+    note: 'これまでの強さ・勝利PTは3倍',
+  },
+};
 
 export { CATALOG, CATALOG_BY_ID, STARTER_DECK };

@@ -3,13 +3,13 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260926014346';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260926014346';
-import { sfx } from './audio.js?v=20260926014346';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260926014346';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=20260926014346';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=20260926014346';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260926014346';
+} from './entities.js?v=20260926014817';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260926014817';
+import { sfx } from './audio.js?v=20260926014817';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260926014817';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=20260926014817';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260926014817';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260926014817';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -257,6 +257,7 @@ export class Game {
     this.waiting = true;
     this.ended = false;
     this.useBot = false;
+    this.comDifficulty = 'strong'; // 'normal' | 'strong'
     this.remoteSnap = null;
     this.pointerY = 0.5;
     this.pointerX = 0.14; // normalized 0..1 within own field width (left=back, right=forward)
@@ -405,10 +406,13 @@ export class Game {
     return true;
   }
 
-  start({ net, bot = false }) {
+  start({ net, bot = false, comDifficulty = 'strong' } = {}) {
     this.stopLoop();
     this.net = net;
     this.useBot = bot;
+    this.comDifficulty = (bot && (comDifficulty === 'normal' || comDifficulty === 'strong'))
+      ? comDifficulty
+      : 'strong';
     this.resetLocal();
     this.L = resizeCanvas(this.canvas);
     window.addEventListener('resize', this._onResize);
@@ -500,6 +504,36 @@ export class Game {
       surgePhase: 0,
     };
     this.state.botHp = PLAYER_MAX_HP;
+  }
+
+  /** COM AI + reward profile for the selected difficulty. */
+  comProfile() {
+    const d = this.comDifficulty === 'normal' ? 'normal' : 'strong';
+    const meta = COM_DIFFICULTY[d] || COM_DIFFICULTY.strong;
+    if (d === 'normal') {
+      return {
+        ...meta,
+        reactThreshold: 0.62,
+        panicChance: 0.09,
+        maxSpeedDodge: 1.0,
+        maxSpeed: 0.55,
+        aimNoiseAmp: 0.32,
+        powerCdBase: 9.0,
+        powerCdSpread: 4.0,
+        seedItemChance: 0.22,
+      };
+    }
+    return {
+      ...meta,
+      reactThreshold: 0.48,
+      panicChance: 0.05,
+      maxSpeedDodge: 1.2,
+      maxSpeed: 0.7,
+      aimNoiseAmp: 0.22,
+      powerCdBase: 7.0,
+      powerCdSpread: 3.0,
+      seedItemChance: 0.35,
+    };
   }
 
   stopLoop() {
@@ -775,6 +809,7 @@ export class Game {
     try {
       const info = buildComDeck(this._playerDeck, Math.random, {
         avoid: this._lastComDeck || [],
+        difficulty: this.comDifficulty || 'strong',
       });
       if (info && Array.isArray(info.deck) && info.deck.length === DECK_SIZE
         && info.deck.every((id) => CATALOG_BY_ID[id])) {
@@ -804,8 +839,10 @@ export class Game {
     const ids = this._comDeck || [];
     const names = ids.map((id) => (CATALOG_BY_ID[id] && CATALOG_BY_ID[id].name) || id);
     const lv = this._comDeckInfo && this._comDeckInfo.level;
+    const diff = (this.comProfile && this.comProfile().label) || '';
     const head = lv ? `相手デッキ Lv${lv}` : '相手デッキ';
-    return `${head}：${names.join(' / ')}`;
+    const tag = diff ? `【${diff}】` : '';
+    return `${tag}${head}：${names.join(' / ')}`;
   }
 
   nextComDeckKind() {
@@ -1533,6 +1570,7 @@ export class Game {
   }
 
   updateBot(dt) {
+    const _cp = this.comProfile();
     const B = this._bot;
     if (!B) return;
     const fw = this.L.own.w;
@@ -1588,10 +1626,10 @@ export class Game {
 
     if (urgent && urgentScore > 0.4) B.reactDelay += dt;
     else B.reactDelay = Math.max(0, B.reactDelay - dt * 2.2);
-    const reacted = B.reactDelay > 0.48; // ~480ms — clearly slower COM
+    const reacted = B.reactDelay > _cp.reactThreshold;
 
     // Rare wrong-way panic (keeps it human, not a wall)
-    if (reacted && urgent && B.humanPanic <= 0 && Math.random() < 0.05) {
+    if (reacted && urgent && B.humanPanic <= 0 && Math.random() < _cp.panicChance) {
       B.humanPanic = 0.35 + Math.random() * 0.3;
       B.dodgeDir = urgent.yN >= B.y ? -1 : 1;
     }
@@ -1635,7 +1673,7 @@ export class Game {
     wantY = Math.max(0.07, Math.min(0.93, wantY));
 
     // Snappy enough to feel skilled, not teleporty
-    const maxSpeed = dodging ? 1.2 : 0.7;
+    const maxSpeed = dodging ? _cp.maxSpeedDodge : _cp.maxSpeed;
     const accel = dodging ? 7 : 3.2;
     const desiredVel = Math.max(-maxSpeed, Math.min(maxSpeed, (wantY - B.y) * (dodging ? 5.2 : 2.6)));
     B.moveVel += (desiredVel - B.moveVel) * Math.min(1, accel * dt);
@@ -1682,7 +1720,7 @@ export class Game {
     B.x = Math.max(fw * 0.06, Math.min(fw * 0.55, B.x));
     shipX = B.x;
 
-    B.aimNoise += ((Math.random() - 0.5) * 0.22 - B.aimNoise) * Math.min(1, 1.4 * dt);
+    B.aimNoise += ((Math.random() - 0.5) * _cp.aimNoiseAmp - B.aimNoise) * Math.min(1, 1.4 * dt);
 
     // --- Fire control: lead aim, burst when aligned, powers ---
     B.fireCd -= dt;
@@ -1915,7 +1953,7 @@ export class Game {
     const tryUse = (force = false) => {
       if (B.powerCd > 0 && !force) return;
       // Softened: only sometimes seed a free item (was always + often a second)
-      if (!B.items.length && Math.random() < 0.35) {
+      if (!B.items.length && Math.random() < _cp.seedItemChance) {
         const pool = ['homing', 'laser', 'spread', 'bomb', 'shock', 'rapid', 'meteor', 'send', 'send_mech', 'send_golem', 'send_tank', 'send_drone', 'heal',
           'pbeam', 'option', 'cluster', 'blackhole', 'freeze', 'reflect', 'barrier'];
         B.items.push(pool[(Math.random() * pool.length) | 0]);
@@ -1923,7 +1961,7 @@ export class Game {
       const idx = pickBestItem();
       if (idx == null || idx < 0) return;
       const id = B.items.splice(idx, 1)[0];
-      B.powerCd = 7.0 + Math.random() * 3.0;
+      B.powerCd = _cp.powerCdBase + Math.random() * _cp.powerCdSpread;
 
       if (id === 'homing') {
         B.activePower = 'homing';
@@ -2053,11 +2091,19 @@ export class Game {
       const maxHp = this.state.player?.maxHp || PLAYER_MAX_HP;
       const hp = Math.max(0, Math.floor((rawHp / maxHp) * 100)); // keep PT on 0–100 scale
       try {
-        const result = grantComVictoryPt(loadMeta(), hp);
-        this._ptReward = { gain: result.gain, total: result.total, remainingHp: hp };
+        const prof = this.comProfile();
+        const result = grantComVictoryPt(loadMeta(), hp, { mult: prof.ptMult });
+        this._ptReward = {
+          gain: result.gain,
+          total: result.total,
+          remainingHp: hp,
+          mult: result.mult || prof.ptMult,
+          label: prof.label,
+          base: result.base != null ? result.base : hp,
+        };
       } catch (e) {
         console.warn('PT grant failed', e);
-        this._ptReward = { gain: hp, total: hp, remainingHp: hp };
+        this._ptReward = { gain: hp, total: hp, remainingHp: hp, mult: 1, label: '普通', base: hp };
       }
     }
 
@@ -2118,10 +2164,13 @@ export class Game {
         const hp = this._ptReward.remainingHp;
         const gain = this._ptReward.gain;
         const total = this._ptReward.total;
+        const mult = this._ptReward.mult || 1;
+        const diffLabel = this._ptReward.label || '';
         box.innerHTML = `
+          <div class="pt-line pt-diff">${diffLabel}（PT×${mult}）</div>
           <div class="pt-line pt-hp">残りライフ <strong class="pt-hp-n">0</strong></div>
           <div class="pt-line pt-arrow">↓</div>
-          <div class="pt-line pt-gain">+<strong class="pt-gain-n">0</strong> PT</div>
+          <div class="pt-line pt-gain">+<strong class="pt-gain-n">0</strong> PT${mult > 1 ? ` <span class="pt-mult-tag">×${mult}</span>` : ''}</div>
           <div class="pt-line pt-total">所持 PT <strong class="pt-total-n">0</strong></div>
         `;
         // Insert before the menu button

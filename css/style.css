@@ -525,6 +525,61 @@ html, body {
   gap: 8px;
 }
 .menu-row .menu-btn { flex: 1; }
+
+/* ---- CPU difficulty picker ---- */
+.cpu-diff-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+.cpu-diff-title {
+  margin: 0;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  color: rgba(200, 220, 255, 0.75);
+  text-align: center;
+}
+.cpu-diff-row {
+  gap: 8px;
+}
+.cpu-diff-row .menu-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  line-height: 1.2;
+  min-height: 2.6em;
+}
+.cpu-pt-tag {
+  font-size: 0.72em;
+  opacity: 0.9;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+#btn-cpu-strong .cpu-pt-tag {
+  color: #ffe08a;
+}
+.cpu-diff-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: rgba(180, 200, 230, 0.7);
+  text-align: center;
+}
+.pt-line.pt-diff {
+  font-size: 0.85em;
+  color: #ffe08a;
+  letter-spacing: 0.06em;
+  margin-bottom: 2px;
+}
+.pt-mult-tag {
+  color: #ffe08a;
+  font-weight: 700;
+  margin-left: 4px;
+}
+
 .menu-btn-sub {
   background: linear-gradient(180deg, #f0f4ff, #d8e4f8);
   border-color: #8aa8d0;
