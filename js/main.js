@@ -86,7 +86,7 @@ function restoreStartButton() {
 
 function setHostingWaitingUI(on) {
   if (on) {
-    els.btnStart.textContent = '入室（相手用）';
+    els.btnStart.textContent = '相手の入室待ち';
     els.btnStart.disabled = true;
   } else {
     restoreStartButton();
@@ -504,7 +504,7 @@ els.btnCreate.addEventListener('click', async () => {
     const room = await net.createRoom(preferred);
     els.fieldCode.value = room;
     els.inputRoom.value = room;
-    els.fieldFind.value = '部屋コード表示中・相手待ち';
+    els.fieldFind.value = '相手の入室待ち';
     setHostingWaitingUI(true);
     show('menu');
     net.on('connected', () => {
@@ -536,7 +536,7 @@ els.btnCreate.addEventListener('click', async () => {
 els.btnStart.addEventListener('click', async () => {
   if (busy) return;
   if (net && net.role === 'host' && !game) {
-    els.fieldFind.value = 'すでにホスト中・相手待ち（部屋コードを相手に伝えてください）';
+    els.fieldFind.value = '相手の入室待ち（部屋コードを相手に伝えてください）';
     return;
   }
   const name = els.inputRoom.value.trim();

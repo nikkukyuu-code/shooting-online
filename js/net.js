@@ -74,7 +74,7 @@ export class Net {
     const id = roomPeerId(this.roomName);
     this.peer = new Peer(id, { debug: 0 });
     await this._waitOpen(this.peer);
-    this.emit('status', { room: this.roomName, role: 'host', msg: '部屋を作成しました: ' + this.roomName });
+    this.emit('status', { room: this.roomName, role: 'host', msg: '相手の入室待ち: ' + this.roomName });
     this.peer.on('connection', (c) => this._bindConn(c));
     this.peer.on('error', (e) => this.emit('error', e));
     return this.roomName;
