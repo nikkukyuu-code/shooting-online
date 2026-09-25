@@ -3,13 +3,13 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=1.5.74';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.74';
-import { sfx } from './audio.js?v=1.5.74';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=1.5.74';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.74';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=1.5.74';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=1.5.74';
+} from './entities.js?v=1.5.75';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.75';
+import { sfx } from './audio.js?v=1.5.75';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=1.5.75';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.75';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=1.5.75';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=1.5.75';
 
 const HINT = '敵を倒してアイテムを取得（所持は最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -731,18 +731,24 @@ export class Game {
 
 
 
-  /** Sent enemies park on the right side and fight from there. */
+  /**
+   * Mark a transferred (send-item) enemy.
+   * Spawns just off the right edge, then lingers in the right zone (~2.2s) with
+   * bob/weave/fire allowed — no leftward advance until linger ends.
+   */
   markSentEnemy(e, fw, fh) {
     e.sent = true;
     e.holdX = fw * (0.72 + Math.random() * 0.14);
     e.holdY = Math.max(28, Math.min(fh - 28, e.y));
     e.x = fw + 24 + Math.random() * 50;
     e.y = e.holdY;
-    // Fight a bit more often once parked
+    // Fight a bit more often once in the right zone
     e.fireCd = Math.min(e.fireCd || 1, 0.6 + Math.random() * 0.5);
     // Appear FX (~0.9s blink/pop) — visual only; synced via serializeField.at
     e.appearT = 0.9;
     e.appearMax = 0.9;
+    // v1.5.75: stay on the right for a clear beat before pressing left (still move/shoot)
+    e.lingerT = 2.2;
     return e;
   }
 
@@ -1199,7 +1205,8 @@ export class Game {
         S.bullets.push(spawnBullet(P.x + 16, by + 6, 500, 30, 'player', false, 2));
         sfx.shot();
       } else {
-        S.bullets.push(spawnBullet(P.x + 16, by, 420, 0, 'player', false, 3));
+        // v1.5.75: normal shot 3→4 (~+33%, modest snap after 1.5.72 HP)
+        S.bullets.push(spawnBullet(P.x + 16, by, 420, 0, 'player', false, 4));
         sfx.shot();
       }
     }
@@ -1246,11 +1253,13 @@ export class Game {
       e.phase += dt * 2;
       e.surgePhase = (e.surgePhase || 0) + dt * (e.surgeFreq || 1.4);
       if (e.appearT > 0) e.appearT = Math.max(0, e.appearT - dt);
+      if (e.lingerT > 0) e.lingerT = Math.max(0, e.lingerT - dt);
       const surge = Math.sin(e.surgePhase) * (e.surgeAmp || 32);
-      if (e.sent) {
+      // Sent: linger on the right (bob/weave OK, no left push) until lingerT expires
+      if (e.sent && e.lingerT > 0) {
         if (e.holdX == null) e.holdX = fw * (0.72 + Math.random() * 0.14);
         if (e.holdY == null) e.holdY = e.y;
-        // Approach right-side hold, then weave forward/back + up/down
+        // Enter right zone from off-screen, then weave in place
         if (e.x > e.holdX + (e.surgeAmp || 32) + 8) {
           e.x -= Math.max(60, e.speed) * dt;
         } else {
@@ -1259,7 +1268,7 @@ export class Game {
           e.y = e.holdY + Math.sin(e.phase) * ((() => { const t = resolveEnemyTier(e.kind); return (t === 'swarm' || t === 'drone') ? 28 : 18; })());
         }
       } else {
-        // Drift left, but surge forward/back so they don't only slide one way
+        // Drift left (normal waves + sent after linger ends)
         const advance = e.speed + Math.cos(e.surgePhase) * (e.speed * 0.55);
         e.x -= advance * dt;
         if (!LARGE_ENEMY_TIERS.has(resolveEnemyTier(e.kind))) {
@@ -1271,7 +1280,7 @@ export class Game {
       }
       e.y = Math.max(16, Math.min(fh - 16, e.y));
       const onScreen = e.x < fw + 10;
-      const parked = e.sent ? e.x <= (e.holdX || fw) + 8 : true;
+      const parked = (e.sent && e.lingerT > 0) ? e.x <= (e.holdX || fw) + 8 : true;
       tickEnemyLaserFire(e, S.bullets, P.x, P.y * fh, dt, onScreen && parked, () => {
         const tier = resolveEnemyTier(e.kind);
         return e.sent
@@ -1631,7 +1640,8 @@ export class Game {
           const lead = Math.sin(focus.phase || 0) * 4;
           vy = lead;
         }
-        B.bullets.push(spawnBullet(shipX + 16, by, 430, vy, 'player', false, aligned ? 3 : 2));
+        // v1.5.75: COM normal shot matches player bump (aligned 3→4, else 2→3)
+        B.bullets.push(spawnBullet(shipX + 16, by, 430, vy, 'player', false, aligned ? 4 : 3));
         if (aligned && focus && LARGE_ENEMY_TIERS.has(resolveEnemyTier(focus.kind))) {
           B.bullets.push(spawnBullet(shipX + 16, by - 7, 400, -8, 'player', false, 1));
           B.bullets.push(spawnBullet(shipX + 16, by + 7, 400, 8, 'player', false, 1));
@@ -1678,8 +1688,10 @@ export class Game {
       e.phase += dt * 2;
       e.surgePhase = (e.surgePhase || 0) + dt * (e.surgeFreq || 1.4);
       if (e.appearT > 0) e.appearT = Math.max(0, e.appearT - dt);
+      if (e.lingerT > 0) e.lingerT = Math.max(0, e.lingerT - dt);
       const surge = Math.sin(e.surgePhase) * (e.surgeAmp || 32);
-      if (e.sent) {
+      // Sent: linger on the right (bob/weave OK) until lingerT expires, then advance left
+      if (e.sent && e.lingerT > 0) {
         if (e.holdX == null) e.holdX = fw * (0.72 + Math.random() * 0.14);
         if (e.holdY == null) e.holdY = e.y;
         if (e.x > e.holdX + (e.surgeAmp || 32) + 8) {
@@ -1698,7 +1710,7 @@ export class Game {
         }
       }
       e.y = Math.max(20, Math.min(fh - 20, e.y));
-      const parked = e.sent ? e.x <= (e.holdX || fw) + 8 : true;
+      const parked = (e.sent && e.lingerT > 0) ? e.x <= (e.holdX || fw) + 8 : true;
       tickEnemyLaserFire(e, B.bullets, shipX, B.y * fh, dt, parked, () => {
         const tier = resolveEnemyTier(e.kind);
         return e.sent
