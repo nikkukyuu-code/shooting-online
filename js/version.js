@@ -1,7 +1,7 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-09-26 00:33:00';
+export const VERSION_LABEL = '2026-09-26 01:05:57';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1790350380556;
+export const BUILD_TIME = 1790352357352;
 export const BUILD_NOTE = '';
 
 export function formatVersionTime(ms = BUILD_TIME) {
@@ -14,7 +14,7 @@ export function formatVersionTime(ms = BUILD_TIME) {
       hour12: false,
     }).formatToParts(d);
     const g = (t) => (p.find((x) => x.type === t) || {}).value || '00';
-    return `${g('year')}-${g('month')}-${g('day')} ${g('hour')}:${g('minute')}:${g('second')}`;
+    return g('year') + '-' + g('month') + '-' + g('day') + ' ' + g('hour') + ':' + g('minute') + ':' + g('second');
   } catch (_) {
     return VERSION_LABEL;
   }

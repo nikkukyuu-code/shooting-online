@@ -3,13 +3,13 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260926003300';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260926003300';
-import { sfx } from './audio.js?v=20260926003300';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260926003300';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=20260926003300';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=20260926003300';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260926003300';
+} from './entities.js?v=20260926010557';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260926010557';
+import { sfx } from './audio.js?v=20260926010557';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260926010557';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=20260926010557';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=20260926010557';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260926010557';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -621,7 +621,7 @@ export class Game {
       for (const touch of e.changedTouches) {
         const p = mapPoint(touch.clientX, touch.clientY);
         if (p.relY < INFO_RATIO && this.handleTutorialTap(p.relX)) continue;
-        // tryUsePower debounce ignores duplicate within 280ms after pointerdown
+        // tryUsePower debounce ignores duplicate within 90ms after pointerdown
         if (pressItemSlot(p.canvasX, p.canvasY)) continue;
         if (p.relY < OPP_RATIO || p.relY >= ctrlBot() + 0.02) continue;
         tryGrabOrMoveShip(touch.identifier, p.relX, p.relY, true);
@@ -714,10 +714,9 @@ export class Game {
   tryUsePower(index = 0) {
     if (this.waiting || this.ended || !this.state.alive) return;
     const p = this.state.player;
-    // Prevent double-fire from pointerdown + touchstart (and accidental multi-use)
+    // Prevent double-fire from pointerdown + touchstart only (keep short so taps feel instant)
     const now = performance.now();
-    if (this._itemUseAt && now - this._itemUseAt < 280) return;
-    if (p.activeTimer > 0) return;
+    if (this._itemUseAt && now - this._itemUseAt < 90) return;
     if (!p.items.length) {
       this.setStatus(HINT);
       return;
@@ -725,7 +724,12 @@ export class Game {
     const i = index | 0;
     // Only the tapped slot — never fall back to another item
     if (i < 0 || i >= p.items.length) return;
-    const id = p.items.splice(i, 1)[0];
+    const id = p.items[i];
+    // Timed powers (homing/laser/rapid/direct) can't stack on each other.
+    // Instant items — especially send_* — must always fire immediately.
+    const DURATION = new Set(['homing', 'laser', 'rapid', 'direct']);
+    if (p.activeTimer > 0 && DURATION.has(id)) return;
+    p.items.splice(i, 1);
     this._itemUseAt = now;
     this._powerFromItem = true;
     this.activatePower(id);

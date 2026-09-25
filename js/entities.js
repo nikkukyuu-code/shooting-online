@@ -36,8 +36,8 @@ export function pickPowerupId() {
   const weighted = [
     ['homing', 2], ['laser', 2], ['spread', 3], ['bomb', 2], ['shock', 3], ['rapid', 3],
     ['meteor', 2], ['send', 2.4], ['direct', 1],
-    // v1.5.74: heal weights +~28–30% so recovery feels a bit more common
-    ['heal', 4.1], ['heal_big', 1.95],
+    // Heal a bit less common again (was 4.1 / 1.95)
+    ['heal', 3.2], ['heal_big', 1.5],
     ['send_mech', 2.3], ['send_golem', 2.3], ['send_tank', 2.3], ['send_drone', 2.3],
     // v1.5.67 extra attack items + v1.5.70 barrier
     ['pbeam', 1.5], ['option', 1.5], ['cluster', 1.5], ['blackhole', 1.5], ['freeze', 1.5], ['reflect', 1.5],
@@ -51,10 +51,10 @@ export function pickPowerupId() {
 /** Player / COM max HP (v1.5.72: 100→150 for slower, more deliberate matches). */
 export const PLAYER_MAX_HP = 150;
 
-/** Non-boss item drop chance on kill (v1.5.73: 0.16→0.25, midway toward v1.5.71's 0.35). Boss stays guaranteed. */
-export const ITEM_DROP_CHANCE = 0.25;
-/** COM non-boss drop chance (v1.5.73: 0.18→0.28, midway toward v1.5.71's 0.40). */
-export const BOT_ITEM_DROP_CHANCE = 0.28;
+/** Non-boss item drop chance on kill (slightly lowered from 0.25). Boss stays guaranteed. */
+export const ITEM_DROP_CHANCE = 0.20;
+/** COM non-boss drop chance (slightly lowered from 0.28). */
+export const BOT_ITEM_DROP_CHANCE = 0.22;
 
 export function createPlayer(side = 'self') {
   return {
