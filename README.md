@@ -1,10 +1,10 @@
-# スペーストリックバトル
+# スペーストリックバトル（Space Trick Battle）
 
-ブラウザで遊べるオンライン対戦シューティングゲームです。
+無料のブラウザゲーム。オンライン対戦シューティングです。インストール不要で、スマホ縦持ちでも遊べます。
+
+**プレイ:** https://nikkukyuu-code.github.io/shooting-online/
 
 **バージョン:** メニュー下部に `vX.Y.Z` とアクセス数を表示
-
-**Play:** https://nikkukyuu-code.github.io/shooting-online/
 
 ## 遊び方
 

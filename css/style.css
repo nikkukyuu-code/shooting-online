@@ -200,6 +200,17 @@ html, body {
   text-indent: 0.42em;
   text-shadow: 0 0 10px rgba(60, 180, 255, 0.6), 0 1px 3px #000;
 }
+.game-intro {
+  margin: 8px auto 0;
+  max-width: 18.5em;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.55;
+  color: rgba(170, 190, 220, 0.78);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  pointer-events: none;
+}
 @keyframes title-glow {
   0% {
     text-shadow:
@@ -1125,6 +1136,7 @@ html, body {
   }
   .game-title { font-size: clamp(1.2rem, 5.5vw, 1.6rem); letter-spacing: 0.08em; }
   .game-subtitle { font-size: 0.65rem; margin-top: 4px; }
+  .game-intro { font-size: 0.56rem; margin-top: 6px; }
   .menu-panel { padding: 12px 12px 11px; gap: 7px; }
   #screen-menu .menu-btn { padding: 10px 8px; font-size: 0.98rem; }
   .sub-panel {
@@ -1202,6 +1214,7 @@ html, body {
   #screen-menu .menu-field.room-name { height: 23px; }
   .game-title { font-size: clamp(1.05rem, 5vw, 1.35rem); }
   .game-subtitle { font-size: 0.58rem; margin-top: 2px; letter-spacing: 0.32em; }
+  .game-intro { font-size: 0.52rem; margin-top: 4px; max-width: 17em; }
 }
 
 /* v1.5.70 — hold-limit note above item intro lists */

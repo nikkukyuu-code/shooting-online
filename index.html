@@ -7,10 +7,42 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta name="theme-color" content="#1a0a08" />
-  <title>スペーストリックバトル</title>
-  <meta name="description" content="スペーストリックバトル — オンライン対戦シューティング。デカい敵を倒すと回復アイテムが出る。敵を倒してアイテムを取得し、対戦相手と勝負しよう。" />
+  <title>スペーストリックバトル｜無料ブラウザ対戦シューティング</title>
+  <meta name="description" content="スペーストリックバトル（Space Trick Battle）は無料のブラウザゲーム。オンライン対戦シューティングで敵を倒しアイテムを集め、対戦相手と勝負しよう。インストール不要。" />
+  <link rel="canonical" href="https://nikkukyuu-code.github.io/shooting-online/" />
+  <meta property="og:title" content="スペーストリックバトル｜無料ブラウザ対戦シューティング" />
+  <meta property="og:description" content="スペーストリックバトル（Space Trick Battle）— 無料のブラウザオンライン対戦シューティング。敵を倒してアイテムを取得し、対戦相手と勝負しよう。" />
+  <meta property="og:url" content="https://nikkukyuu-code.github.io/shooting-online/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="ja_JP" />
+  <meta property="og:image" content="https://nikkukyuu-code.github.io/shooting-online/assets/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="スペーストリックバトル｜無料ブラウザ対戦シューティング" />
+  <meta name="twitter:description" content="無料のブラウザオンライン対戦シューティング。Space Trick Battle。" />
+  <meta name="twitter:image" content="https://nikkukyuu-code.github.io/shooting-online/assets/og-image.png" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "VideoGame",
+    "name": "スペーストリックバトル",
+    "alternateName": "Space Trick Battle",
+    "url": "https://nikkukyuu-code.github.io/shooting-online/",
+    "description": "無料のブラウザオンライン対戦シューティング。敵を倒してアイテムを取得し、対戦相手と勝負するゲーム。",
+    "inLanguage": "ja",
+    "isAccessibleForFree": true,
+    "genre": ["ブラウザシューティング", "オンラインマルチプレイヤー", "Shoot 'em up"],
+    "gamePlatform": "Web browser",
+    "applicationCategory": "Game",
+    "image": "https://nikkukyuu-code.github.io/shooting-online/assets/og-image.png",
+    "author": {
+      "@type": "Person",
+      "name": "nikkukyuu-code",
+      "url": "https://nikkukyuu-code.github.io/"
+    }
+  }
+  </script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=1.5.79" />
+  <link rel="stylesheet" href="css/style.css?v=1.5.80" />
 </head>
 <body>
   <div id="app">
@@ -18,10 +50,11 @@
       <div class="sky sky-space" aria-hidden="true"></div>
       <div class="menu-pt" id="menu-pt" aria-live="polite">PT: 0</div>
       <div class="menu-hero">
-        <img class="menu-hero-art" src="assets/title-hero.svg?v=1.5.79" alt="" width="480" height="220" decoding="async" />
+        <img class="menu-hero-art" src="assets/title-hero.svg?v=1.5.80" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
         <header class="menu-brand">
           <h1 class="game-title">スペーストリックバトル</h1>
           <p class="game-subtitle">オンライン対戦</p>
+          <p class="game-intro">無料のブラウザゲーム。オンライン対戦シューティング（Space Trick Battle）で敵を倒し、アイテムを使って勝負しよう。</p>
         </header>
       </div>
       <div class="menu-center">
@@ -46,7 +79,7 @@
       <div class="menu-footer">
         <p class="menu-hint">部屋名を入れて「入室」でゲスト入室 / 「部屋を作る」でホスト待機</p>
         <div id="app-meta" class="app-meta">
-          <span id="app-version">v1.5.79</span>
+          <span id="app-version">v1.5.80</span>
           <span class="meta-sep">·</span>
           <span id="app-visits">アクセス …</span>
         </div>
@@ -117,7 +150,7 @@
       <canvas id="game" width="390" height="700"></canvas>
       <div id="ui-overlay">
         <button type="button" id="btn-stop" class="stop-btn">ストップ</button>
-        <div id="game-version" class="game-version">v1.5.79</div>
+        <div id="game-version" class="game-version">v1.5.80</div>
         <div id="status-bar" class="status-bar">対戦相手を待っています</div>
       </div>
       <div id="end-overlay" class="end-overlay hidden">
@@ -128,6 +161,6 @@
   </div>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script type="module" src="js/main.js?v=1.5.79"></script>
+  <script type="module" src="js/main.js?v=1.5.80"></script>
 </body>
 </html>

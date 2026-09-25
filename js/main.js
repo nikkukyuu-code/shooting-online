@@ -1,4 +1,4 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME } from './version.js?v=1.5.78';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME } from './version.js?v=1.5.80';
 import { Net } from './net.js?v=1.5.78';
 import { Game } from './game.js?v=1.5.78';
 import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=1.5.78';
