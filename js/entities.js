@@ -18,7 +18,7 @@ export const POWERUPS = [
   { id: 'send_drone', label: '無人機群送信',  effect: '相手に宇宙ドローンを4機送る', desc: 'ドローンを複数機まとめて送り、数で相手を撹乱する。', color: '#33ffff', icon: '群' },
   // v1.5.67 — extra player attack items (logic/visuals in attack_items.js)
   { id: 'pbeam',      label: '貫通ビーム',    effect: '極太ビームで前方を貫通',     desc: '約2.6秒、前方へ極太ビームを照射。当たった敵を全部貫通し、ビーム上の敵弾も消す。', color: '#d58cff', icon: '▶' },
-  { id: 'option',     label: 'オプション',    effect: '子機2機が一緒に射撃',         desc: '約8秒、自機の上下に子機（ビット）が付いて前方へ弾を撃ち続ける。', color: '#ff9ed2', icon: '∞' },
+  { id: 'option',     label: 'オプション',    effect: '子機2機が一緒に射撃',         desc: '約8秒、自機の上下にメカ型ビットが展開し、前方へ弾を撃ち続ける。', color: '#ff8ec8', icon: '∞' },
   { id: 'cluster',    label: 'クラスターミサイル', effect: '分裂して小爆発するミサイル', desc: 'ミサイル4発を扇状に発射。途中で3つに分裂し、小さな爆発で周りの敵を巻き込む。', color: '#ff5c8a', icon: '裂' },
   { id: 'blackhole',  label: 'ブラックホール', effect: '敵と敵弾を吸い込み攻撃',     desc: '前方にブラックホールを作り約2秒間敵と敵弾を吸い寄せ、最後に収縮爆発でダメージ。', color: '#8a6bff', icon: '●' },
   { id: 'freeze',     label: 'フリーズ',      effect: '周囲の敵を凍らせる',         desc: '自機のまわりの敵を約3秒凍らせて動きと攻撃を止め、小ダメージ。範囲内の敵弾も消す。', color: '#bff4ff', icon: '氷' },

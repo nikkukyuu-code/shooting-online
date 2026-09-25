@@ -2,13 +2,13 @@ import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=1.5.68';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.68';
-import { sfx } from './audio.js?v=1.5.68';
-import { isExAttackItem, useExItem, tickExItems } from './attack_items.js?v=1.5.68';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.68';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=1.5.68';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=1.5.68';
+} from './entities.js?v=1.5.69';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.69';
+import { sfx } from './audio.js?v=1.5.69';
+import { isExAttackItem, useExItem, tickExItems } from './attack_items.js?v=1.5.69';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.69';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=1.5.69';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=1.5.69';
 
 const HINT = '敵を倒してアイテムを取得してください';
 const WAIT = '対戦相手を待っています';

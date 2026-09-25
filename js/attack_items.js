@@ -1,5 +1,6 @@
 /**
  * v1.5.67 — extra player attack items (自機の攻撃アイテム追加).
+ * v1.5.69 — オプション pods redrawn as mecha support drones.
  *
  * Every effect lives inside the field's `fx` list (kind = 'pbeam' | 'option' | 'cmis' |
  * 'cburst' | 'bhole' | 'freeze' | 'disc'), so it is drawn in the own pane AND in the
@@ -9,7 +10,7 @@
  * Damage only lowers e.hp — death / drops / score stay in the game loops.
  * All items are intentionally weaker than ボム (28 to every enemy + full bullet clear).
  */
-import { spawnBullet, spawnExplosion, isLargeEnemy } from './entities.js?v=1.5.68';
+import { spawnBullet, spawnExplosion, isLargeEnemy } from './entities.js?v=1.5.69';
 
 export const EX_ATTACK_IDS = ['pbeam', 'option', 'cluster', 'blackhole', 'freeze', 'reflect'];
 export function isExAttackItem(id) { return EX_ATTACK_IDS.includes(id); }
@@ -17,7 +18,7 @@ export function isExAttackItem(id) { return EX_ATTACK_IDS.includes(id); }
 /** Slot / orb style (merged into render.js ITEM_STYLE). */
 export const EX_ITEM_STYLE = {
   pbeam:     { color: '#d58cff', icon: '▶', label: '貫通',     effect: '極太ビーム' },
-  option:    { color: '#ff9ed2', icon: '∞', label: 'ビット',   effect: '子機が援護射撃' },
+  option:    { color: '#ff8ec8', icon: '∞', label: 'ビット',   effect: '子機が援護射撃' },
   cluster:   { color: '#ff5c8a', icon: '裂', label: 'クラスター', effect: '分裂ミサイル' },
   blackhole: { color: '#8a6bff', icon: '●', label: '黒穴',     effect: '吸い込み攻撃' },
   freeze:    { color: '#bff4ff', icon: '氷', label: '凍結',     effect: '周囲を凍らせる' },
@@ -372,37 +373,186 @@ function drawOption(ctx, f) {
   const age = f.max - f.life;
   const pop = clamp01(age / 0.2);
   const now = performance.now() / 1000;
+  const pulse = 0.7 + 0.3 * Math.sin(now * 14);
   ctx.save();
-  // Tether arc to the ship
-  ctx.strokeStyle = 'rgba(255,170,220,0.45)';
-  ctx.lineWidth = 1.5 * sc;
-  ctx.setLineDash([3 * sc, 4 * sc]);
-  ctx.beginPath();
-  ctx.arc(f.x, f.y, f.r, -Math.PI * 0.62, -Math.PI * 0.38);
-  ctx.moveTo(f.x + Math.cos(Math.PI * 0.38) * f.r, f.y + Math.sin(Math.PI * 0.38) * f.r);
-  ctx.arc(f.x, f.y, f.r, Math.PI * 0.38, Math.PI * 0.62);
-  ctx.stroke();
-  ctx.setLineDash([]);
+  // Mechanical tether rods (hard lines, not soft arcs)
   for (const [px, py] of podPositions(f)) {
-    const R = 9 * sc * pop;
-    const g = ctx.createRadialGradient(px, py, 0, px, py, R * 2.2);
-    g.addColorStop(0, 'rgba(255,220,240,0.9)');
-    g.addColorStop(1, 'rgba(255,120,200,0)');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(px, py, R * 2.2, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#ff7cc6';
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2 * sc;
-    ctx.beginPath(); ctx.arc(px, py, R, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    // spinning ring
-    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-    ctx.lineWidth = 1.4 * sc;
+    const midY = (f.y + py) * 0.5;
+    ctx.strokeStyle = 'rgba(160,200,255,0.55)';
+    ctx.lineWidth = 1.6 * sc;
     ctx.beginPath();
-    ctx.ellipse(px, py, R * 1.6, R * 0.6, now * 4, 0, Math.PI * 2);
+    ctx.moveTo(f.x - 2 * sc, f.y);
+    ctx.lineTo(f.x - 10 * sc, midY);
+    ctx.lineTo(px - 4 * sc, py);
     ctx.stroke();
-    // muzzle
-    ctx.fillStyle = '#fff';
-    ctx.beginPath(); ctx.arc(px + R, py, 2.2 * sc, 0, Math.PI * 2); ctx.fill();
+    // joint rivets
+    ctx.fillStyle = 'rgba(200,230,255,0.9)';
+    ctx.beginPath(); ctx.arc(f.x - 10 * sc, midY, 1.6 * sc, 0, Math.PI * 2); ctx.fill();
+  }
+  for (const [px, py] of podPositions(f)) {
+    drawMechaPod(ctx, px, py, sc * pop, pulse);
+  }
+  ctx.restore();
+}
+
+/** Angular support drone — armor plates, thruster, gun barrel (not a soft orb). */
+function drawMechaPod(ctx, px, py, s, pulse) {
+  if (s < 0.05) return;
+  ctx.save();
+  ctx.translate(px, py);
+
+  // Compact thruster plume (hard triangle, not a big soft wash)
+  const plume = 0.75 + 0.35 * Math.sin(performance.now() / 45);
+  const eg = ctx.createLinearGradient(-17 * s * plume, 0, -5 * s, 0);
+  eg.addColorStop(0, 'rgba(80,220,255,0)');
+  eg.addColorStop(0.55, `rgba(100,230,255,${0.7 * pulse})`);
+  eg.addColorStop(1, 'rgba(255,180,230,0.95)');
+  ctx.fillStyle = eg;
+  ctx.beginPath();
+  ctx.moveTo(-6 * s, -2.6 * s);
+  ctx.lineTo(-15 * s * plume, 0);
+  ctx.lineTo(-6 * s, 2.6 * s);
+  ctx.closePath();
+  ctx.fill();
+
+  // Lower armor plate (darker under-layer for thickness)
+  ctx.fillStyle = '#2a3558';
+  ctx.beginPath();
+  ctx.moveTo(9 * s, 1.5 * s);
+  ctx.lineTo(2 * s, 7.5 * s);
+  ctx.lineTo(-7 * s, 6 * s);
+  ctx.lineTo(-10 * s, 1.5 * s);
+  ctx.closePath();
+  ctx.fill();
+
+  // Main hull — hard faceted diamond
+  const hull = ctx.createLinearGradient(-9 * s, -8 * s, 11 * s, 8 * s);
+  hull.addColorStop(0, '#ffffff');
+  hull.addColorStop(0.2, '#d0dcf0');
+  hull.addColorStop(0.55, '#6a7ea8');
+  hull.addColorStop(1, '#2e3c5c');
+  ctx.fillStyle = hull;
+  ctx.strokeStyle = '#e8f4ff';
+  ctx.lineWidth = 1.5 * Math.min(1.25, s);
+  ctx.beginPath();
+  ctx.moveTo(11 * s, 0);
+  ctx.lineTo(4 * s, -7 * s);
+  ctx.lineTo(-7 * s, -5.5 * s);
+  ctx.lineTo(-10.5 * s, 0);
+  ctx.lineTo(-7 * s, 5.5 * s);
+  ctx.lineTo(4 * s, 7 * s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Top / bottom armor fins (hard wedges)
+  ctx.fillStyle = '#4a5c88';
+  ctx.strokeStyle = '#b8cce8';
+  ctx.lineWidth = 1.1 * Math.min(1.25, s);
+  ctx.beginPath();
+  ctx.moveTo(2 * s, -6.2 * s);
+  ctx.lineTo(-1.5 * s, -11 * s);
+  ctx.lineTo(-6 * s, -5.8 * s);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(2 * s, 6.2 * s);
+  ctx.lineTo(-1.5 * s, 11 * s);
+  ctx.lineTo(-6 * s, 5.8 * s);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+
+  // Panel lines (engraved)
+  ctx.strokeStyle = 'rgba(15,30,55,0.65)';
+  ctx.lineWidth = 1.05 * Math.min(1.25, s);
+  ctx.beginPath();
+  ctx.moveTo(7 * s, -2.2 * s); ctx.lineTo(-5 * s, -3.5 * s);
+  ctx.moveTo(7 * s, 2.2 * s); ctx.lineTo(-5 * s, 3.5 * s);
+  ctx.moveTo(-0.5 * s, -5 * s); ctx.lineTo(-0.5 * s, 5 * s);
+  ctx.moveTo(4 * s, -5.5 * s); ctx.lineTo(4 * s, 5.5 * s);
+  ctx.stroke();
+
+  // Pink warning stripe (option identity) — chevron on nose
+  ctx.strokeStyle = '#ff6eb8';
+  ctx.lineWidth = 1.8 * Math.min(1.25, s);
+  ctx.lineJoin = 'miter';
+  ctx.beginPath();
+  ctx.moveTo(3 * s, -5 * s);
+  ctx.lineTo(8.5 * s, 0);
+  ctx.lineTo(3 * s, 5 * s);
+  ctx.stroke();
+
+  // Rectangular sensor / HUD slit (not a round jewel)
+  ctx.fillStyle = '#0a1828';
+  ctx.fillRect(-1.5 * s, -2.2 * s, 5.5 * s, 4.4 * s);
+  const sens = ctx.createLinearGradient(-1.5 * s, -2.2 * s, 4 * s, 2.2 * s);
+  sens.addColorStop(0, '#9ef6ff');
+  sens.addColorStop(0.45, '#3ad0ff');
+  sens.addColorStop(1, '#1550a0');
+  ctx.fillStyle = sens;
+  ctx.fillRect(-1 * s, -1.6 * s, 4.5 * s, 3.2 * s);
+  // Scan line
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillRect(-1 * s, -0.4 * s, 4.5 * s, 0.7 * s);
+  ctx.strokeStyle = '#ff8ec8';
+  ctx.lineWidth = 0.9 * Math.min(1.25, s);
+  ctx.strokeRect(-1.5 * s, -2.2 * s, 5.5 * s, 4.4 * s);
+
+  // Twin railgun barrels
+  for (const oy of [-2.8, 2.8]) {
+    // barrel housing
+    ctx.fillStyle = '#1a2438';
+    ctx.strokeStyle = '#c0d0e8';
+    ctx.lineWidth = 1 * Math.min(1.25, s);
+    ctx.beginPath();
+    ctx.moveTo(9 * s, (oy - 1.5) * s);
+    ctx.lineTo(16.5 * s, (oy - 1.1) * s);
+    ctx.lineTo(16.5 * s, (oy + 1.1) * s);
+    ctx.lineTo(9 * s, (oy + 1.5) * s);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    // inner bore
+    ctx.fillStyle = '#050810';
+    ctx.fillRect(14.5 * s, (oy - 0.55) * s, 2.2 * s, 1.1 * s);
+    // muzzle brake rings
+    ctx.strokeStyle = '#7cf0ff';
+    ctx.lineWidth = 1.1 * Math.min(1.25, s);
+    ctx.beginPath();
+    ctx.moveTo(15.2 * s, (oy - 1.3) * s);
+    ctx.lineTo(15.2 * s, (oy + 1.3) * s);
+    ctx.stroke();
+    ctx.strokeStyle = '#ff6eb8';
+    ctx.beginPath();
+    ctx.moveTo(16.2 * s, (oy - 1.15) * s);
+    ctx.lineTo(16.2 * s, (oy + 1.15) * s);
+    ctx.stroke();
+  }
+
+  // Rear thruster nozzle (hexagon)
+  ctx.fillStyle = '#1a2840';
+  ctx.strokeStyle = '#7cf0ff';
+  ctx.lineWidth = 1.4 * Math.min(1.25, s);
+  ctx.beginPath();
+  ctx.moveTo(-9.2 * s, -3.4 * s);
+  ctx.lineTo(-12 * s, -1.6 * s);
+  ctx.lineTo(-12 * s, 1.6 * s);
+  ctx.lineTo(-9.2 * s, 3.4 * s);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = `rgba(120,240,255,${0.55 + 0.35 * pulse})`;
+  ctx.fillRect(-11.4 * s, -1.1 * s, 1.6 * s, 2.2 * s);
+
+  // Rivets / bolt heads
+  ctx.fillStyle = '#ffe08a';
+  for (const [rx, ry] of [[-5.5, -4], [-5.5, 4], [5.5, -4.2], [5.5, 4.2], [-2, -6.5], [-2, 6.5]]) {
+    ctx.beginPath();
+    ctx.arc(rx * s, ry * s, 1.05 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#c8a040';
+    ctx.beginPath();
+    ctx.arc(rx * s, ry * s, 0.45 * s, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffe08a';
   }
   ctx.restore();
 }
