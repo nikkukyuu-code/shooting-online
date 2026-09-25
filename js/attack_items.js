@@ -11,7 +11,7 @@
  * Damage only lowers e.hp — death / drops / score stay in the game loops.
  * All items are intentionally weaker than ボム (28 to every enemy + full bullet clear).
  */
-import { spawnBullet, spawnExplosion, isLargeEnemy } from './entities.js?v=20260926002656';
+import { spawnBullet, spawnExplosion, isLargeEnemy } from './entities.js?v=20260926003300';
 
 export const EX_ATTACK_IDS = ['pbeam', 'option', 'cluster', 'blackhole', 'freeze', 'reflect', 'barrier'];
 export function isExAttackItem(id) { return EX_ATTACK_IDS.includes(id); }
@@ -48,7 +48,7 @@ const BH_R = 170;
 const BH_DPS = 2.5;
 const BH_BURST = 12;             // → ~17 total to enemies caught in the vortex
 export const FREEZE_R = 270;
-const FREEZE_T = 3.0;            // enemies stop moving / firing
+const FREEZE_T = 5.0;            // enemies stop moving / firing
 const FREEZE_DMG = 6;
 const DISC_N = 4;
 export const DISC_LIFE = 3.6;
