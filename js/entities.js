@@ -51,10 +51,10 @@ export function pickPowerupId() {
 /** Player / COM max HP (v1.5.72: 100→150 for slower, more deliberate matches). */
 export const PLAYER_MAX_HP = 150;
 
-/** Non-boss item drop chance on kill (v1.5.72: 0.35→0.16 ≈ −54%). Boss stays guaranteed. */
-export const ITEM_DROP_CHANCE = 0.16;
-/** COM non-boss drop chance (v1.5.72: 0.4→0.18 ≈ −55%). */
-export const BOT_ITEM_DROP_CHANCE = 0.18;
+/** Non-boss item drop chance on kill (v1.5.73: 0.16→0.25, midway toward v1.5.71's 0.35). Boss stays guaranteed. */
+export const ITEM_DROP_CHANCE = 0.25;
+/** COM non-boss drop chance (v1.5.73: 0.18→0.28, midway toward v1.5.71's 0.40). */
+export const BOT_ITEM_DROP_CHANCE = 0.28;
 
 export function createPlayer(side = 'self') {
   return {
