@@ -3,13 +3,13 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=1.5.75';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.75';
-import { sfx } from './audio.js?v=1.5.75';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=1.5.75';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.75';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=1.5.75';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=1.5.75';
+} from './entities.js?v=1.5.76';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.76';
+import { sfx } from './audio.js?v=1.5.76';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=1.5.76';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.76';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=1.5.76';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=1.5.76';
 
 const HINT = '敵を倒してアイテムを取得（所持は最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -548,8 +548,16 @@ export class Game {
     const ctrlTop = () => OPP_RATIO + OWN_RATIO;
     const ctrlBot = () => ctrlTop() + CTRL_RATIO;
 
+    // Allow slight vertical overhang past stage edges (~half ship) while
+    // keeping full control. Do NOT hard-stop at 0/1 — that felt stuck.
+    const PTR_Y_MIN = -0.05;
+    const PTR_Y_MAX = 1.05;
+    const PTR_X_MIN = 0.06;
+    const PTR_X_MAX = 0.88;
+    // Grab may start a bit outside the ctrl pad (ship rim overhangs when clipped).
+    const GRAB_EDGE_PAD = 0.02; // fraction of full canvas height
+
     const tryGrabOrMoveShip = (pid, relX, relY, isDown) => {
-      if (relY < ctrlTop() || relY >= ctrlBot()) return false;
       const localY = (relY - ctrlTop()) / CTRL_RATIO;
       const localX = relX;
       const hitR = 0.16;
@@ -558,15 +566,19 @@ export class Game {
       const onShip = (dx * dx + dy * dy) <= hitR * hitR;
 
       if (isDown) {
+        // Initial grab: near/inside ctrl (pad so overhanging ship remains tappable)
+        if (relY < ctrlTop() - GRAB_EDGE_PAD || relY >= ctrlBot() + GRAB_EDGE_PAD) return false;
         if (!onShip) return false;
         this.draggingShip = true;
         this.shipPointerId = pid;
       } else if (!this.draggingShip || this.shipPointerId !== pid) {
         return false;
       }
+      // While dragging: keep tracking even if finger leaves the ctrl pane
+      // (top → own field, bottom → info). That was the "stuck at edge" feel.
 
-      this.pointerY = Math.max(0.06, Math.min(0.94, localY));
-      this.pointerX = Math.max(0.06, Math.min(0.88, localX));
+      this.pointerY = Math.max(PTR_Y_MIN, Math.min(PTR_Y_MAX, localY));
+      this.pointerX = Math.max(PTR_X_MIN, Math.min(PTR_X_MAX, localX));
       this.pointerDown = true;
       this.ctrlTouch = { active: true, x: this.pointerX, y: this.pointerY };
       return true;
@@ -599,7 +611,8 @@ export class Game {
       // Tutorial lives in the top info pane — tap to advance / skip (not on stage)
       if (p.relY < INFO_RATIO && this.handleTutorialTap(p.relX)) return;
       if (pressItemSlot(p.canvasX, p.canvasY)) return;
-      if (p.relY < OPP_RATIO || p.relY >= ctrlBot()) return;
+      // Allow a thin strip past ctrl bottom (info) so overhanging ship stays grabbable
+      if (p.relY < OPP_RATIO || p.relY >= ctrlBot() + 0.02) return;
       tryGrabOrMoveShip(e.pointerId, p.relX, p.relY, true);
     };
     this._onPointerMove = (e) => {
@@ -620,7 +633,7 @@ export class Game {
         if (p.relY < INFO_RATIO && this.handleTutorialTap(p.relX)) continue;
         // tryUsePower debounce ignores duplicate within 280ms after pointerdown
         if (pressItemSlot(p.canvasX, p.canvasY)) continue;
-        if (p.relY < OPP_RATIO || p.relY >= ctrlBot()) continue;
+        if (p.relY < OPP_RATIO || p.relY >= ctrlBot() + 0.02) continue;
         tryGrabOrMoveShip(touch.identifier, p.relX, p.relY, true);
       }
     };
@@ -1109,8 +1122,9 @@ export class Game {
 
     // Keyboard nudge (Y = up/down, X = back/forward along flight axis)
     if (this._keys) {
-      if (this._keys.has('ArrowUp') || this._keys.has('w') || this._keys.has('W')) this.pointerY = Math.max(0.06, this.pointerY - 1.2 * dt);
-      if (this._keys.has('ArrowDown') || this._keys.has('s') || this._keys.has('S')) this.pointerY = Math.min(0.94, this.pointerY + 1.2 * dt);
+      // Match touch clamps: slight Y overhang past 0/1, X unchanged
+      if (this._keys.has('ArrowUp') || this._keys.has('w') || this._keys.has('W')) this.pointerY = Math.max(-0.05, this.pointerY - 1.2 * dt);
+      if (this._keys.has('ArrowDown') || this._keys.has('s') || this._keys.has('S')) this.pointerY = Math.min(1.05, this.pointerY + 1.2 * dt);
       if (this._keys.has('ArrowLeft') || this._keys.has('a') || this._keys.has('A')) this.pointerX = Math.max(0.06, this.pointerX - 1.2 * dt);
       if (this._keys.has('ArrowRight') || this._keys.has('d') || this._keys.has('D')) this.pointerX = Math.min(0.88, this.pointerX + 1.2 * dt);
     }
