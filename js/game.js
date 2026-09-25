@@ -1254,6 +1254,15 @@ export class Game {
     if (S.incomingDirect > 0) {
       S.incomingDirect -= dt;
       if (S.incomingDirect < 0) S.incomingDirect = 0;
+      // Staccato spark ticks while the incoming beam is active (visual only)
+      S._incomingDirectSparkCd = (S._incomingDirectSparkCd || 0) - dt;
+      if (S._incomingDirectSparkCd <= 0 && S.incomingDirect > 0) {
+        S._incomingDirectSparkCd = 0.07;
+        const py = P.y * fh;
+        S.fx.push(spawnHitSpark(P.x + 6 + (Math.random() - 0.5) * 10, py - 8 + (Math.random() - 0.5) * 8));
+      }
+    } else {
+      S._incomingDirectSparkCd = 0;
     }
     if (P.activeTimer > 0) {
       P.activeTimer -= dt;
@@ -1861,8 +1870,6 @@ export class Game {
           B.fx.unshift(spawnHealFx(48, B.y * fh, dropId === 'heal_big'));
         } else if (B.items.length < MAX_ITEM_SLOTS && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : BOT_ITEM_DROP_CHANCE)) {
           let dropId = pickPowerupId();
-          // COM never gets direct (looks like player's own upward laser)
-          if (dropId === 'direct') dropId = 'laser';
           if (dropId === 'heal' || dropId === 'heal_big') {
             B.hp = Math.min(B.maxHp || PLAYER_MAX_HP, B.hp + (dropId === 'heal_big' ? 50 : 25));
             B.fx.unshift(spawnHealFx(48, B.y * fh, dropId === 'heal_big'));
@@ -1945,11 +1952,11 @@ export class Game {
         if (l >= 0) return l;
       }
       if (playerHp > 55) {
-        const heavy = B.items.findIndex((id) => id === 'send_mech' || id === 'send_golem' || id === 'send_tank' || id === 'send_drone' || id === 'send' || id === 'meteor');
+        const heavy = B.items.findIndex((id) => id === 'send_mech' || id === 'send_golem' || id === 'send_tank' || id === 'send_drone' || id === 'send' || id === 'meteor' || id === 'direct');
         if (heavy >= 0) return heavy;
       }
-      // default: first offensive (never direct — visual confuses with player's shot)
-      const off = B.items.findIndex((id) => id !== 'heal' && id !== 'heal_big' && id !== 'direct');
+      // default: first offensive (direct allowed — shown as incoming purple beam, not own upward)
+      const off = B.items.findIndex((id) => id !== 'heal' && id !== 'heal_big');
       return off >= 0 ? off : -1;
     };
 
@@ -1976,9 +1983,17 @@ export class Game {
         B.hp = Math.min(B.maxHp || PLAYER_MAX_HP, B.hp + (id === 'heal_big' ? 50 : 25));
         B.fx.unshift(spawnHealFx(B.x || 48, B.y * fh, id === 'heal_big'));
       } else if (id === 'direct') {
-        // Disabled for COM — was mistaken for the player's own direct attack
-        B.items.push('laser');
-        B.powerCd = 0.4;
+        // Incoming-only: purple downward beam on player (never set player.activePower)
+        const dmg = 8;
+        B.directBeam = 3.6;
+        this.state.incomingDirect = 3.6;
+        this.applyPlayerDamage(dmg, 'direct');
+        this.state.player.invuln = Math.max(this.state.player.invuln || 0, 0.6);
+        const py = this.state.player.y * fh;
+        this.state.fx.push(spawnExplosion(this.state.player.x + 10, py, true));
+        this.state.fx.push(spawnHitSpark(this.state.player.x + 8, py - 6));
+        this.setStatus('COMの直撃！');
+        setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
       } else if (id === 'spread') {
         const by = B.y * fh;
         for (let i = -3; i <= 3; i++) {

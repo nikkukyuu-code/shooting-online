@@ -2422,7 +2422,7 @@ export function drawField(ctx, area, snap, opts = {}) {
     const lowBlink = lowHp && Math.floor(performance.now() / 140) % 2 === 0;
     const blink = invulnBlink;
     const facingUp = !darkened && snap.player && snap.player.activePower === 'direct' && snap.player.activeTimer > 0;
-    const facingDown = darkened && snap.directBeam; // opponent firing down at us
+    const facingDown = darkened && (snap.directBeam || snap.ap === 'direct'); // opponent firing down at us
     const ang = facingUp ? -Math.PI / 2 : (facingDown ? Math.PI / 2 : 0);
     let shipColor = darkened ? '#cde' : (snap.invuln > 0 ? '#ffaaaa' : '#e8f0ff');
     if (lowHp) shipColor = lowBlink ? '#ff6688' : '#ff3344';
