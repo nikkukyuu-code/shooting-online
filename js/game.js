@@ -2,15 +2,24 @@ import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=1.5.69';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.69';
-import { sfx } from './audio.js?v=1.5.69';
-import { isExAttackItem, useExItem, tickExItems } from './attack_items.js?v=1.5.69';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.69';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=1.5.69';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=1.5.69';
+} from './entities.js?v=1.5.70';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.70';
+import { sfx } from './audio.js?v=1.5.70';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=1.5.70';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.70';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=1.5.70';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=1.5.70';
 
-const HINT = '敵を倒してアイテムを取得してください';
+const HINT = '敵を倒してアイテムを取得（所持は最大3つ）';
+const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
+const TUTORIAL_STEPS = [
+  { title: '操作', text: '下の操作画面で自機をドラッグ（←→↑↓／WASDでも移動）' },
+  { title: 'アイテム', text: '右の枠をタップして発動。敵を倒すとドロップします' },
+  { title: '所持上限', text: 'アイテムは最大3つ。枠がいっぱいのとき拾うと、新しいほうは消えます' },
+  { title: '勝ち方', text: '相手より長く生き残ろう。送信や攻撃アイテムで相手を攻めよう' },
+];
+const TUTORIAL_STEP_SEC = 3.8;
+
 const WAIT = '対戦相手を待っています';
 
 // Register catalog sprites + tier map (catalog + wave ambient kinds)
@@ -334,6 +343,74 @@ export class Game {
     this.ui.statusBar.textContent = text;
   }
 
+  isTutorialDone() {
+    try { return localStorage.getItem(TUTORIAL_KEY) === '1'; } catch (_) { return false; }
+  }
+
+  markTutorialDone() {
+    try { localStorage.setItem(TUTORIAL_KEY, '1'); } catch (_) {}
+  }
+
+  /** Start in-battle tips (info pane only). force=true ignores localStorage. */
+  maybeStartTutorial(force = false) {
+    if (!this.state || this.ended) return;
+    if (!force && this.isTutorialDone()) return;
+    if (this.state.tutorial) return;
+    this.state.tutorial = {
+      i: 0,
+      life: TUTORIAL_STEP_SEC,
+      total: TUTORIAL_STEPS.length,
+    };
+    this._applyTutorialStatus();
+  }
+
+  _applyTutorialStatus() {
+    const t = this.state && this.state.tutorial;
+    if (!t) return;
+    const step = TUTORIAL_STEPS[t.i];
+    if (!step) { this.finishTutorial(); return; }
+    t.title = step.title;
+    t.text = step.text;
+    const line = `チュートリアル ${t.i + 1}/${t.total}　【${step.title}】${step.text}　〔次へ／とばす〕`;
+    this.setStatus(line);
+  }
+
+  advanceTutorial() {
+    const t = this.state && this.state.tutorial;
+    if (!t) return;
+    t.i += 1;
+    if (t.i >= t.total) { this.finishTutorial(); return; }
+    t.life = TUTORIAL_STEP_SEC;
+    this._applyTutorialStatus();
+  }
+
+  skipTutorial() {
+    if (!this.state || !this.state.tutorial) return;
+    this.finishTutorial();
+  }
+
+  finishTutorial() {
+    if (!this.state) return;
+    this.state.tutorial = null;
+    this.markTutorialDone();
+    if (!this.ended && !this.waiting) this.setStatus(HINT);
+  }
+
+  tickTutorial(dt) {
+    const t = this.state && this.state.tutorial;
+    if (!t) return;
+    t.life -= dt;
+    if (t.life <= 0) this.advanceTutorial();
+  }
+
+  /** Info-pane tap during tutorial: left/center = next, right = skip. */
+  handleTutorialTap(relX) {
+    if (!this.state || !this.state.tutorial) return false;
+    if (relX >= 0.72) this.skipTutorial();
+    else this.advanceTutorial();
+    return true;
+  }
+
   start({ net, bot = false }) {
     this.stopLoop();
     this.net = net;
@@ -356,6 +433,8 @@ export class Game {
       } else {
         this.setStatus(HINT);
       }
+      // First-time (or forced) in-battle tutorial in the info pane
+      setTimeout(() => { if (!this.ended && !this.waiting) this.maybeStartTutorial(!!this._forceTutorial); this._forceTutorial = false; }, 700);
     } else if (net) {
       net.on('data', (msg) => this.onNet(msg));
       net.on('disconnected', () => {
@@ -394,6 +473,7 @@ export class Game {
     this.waiting = false;
     this.setStatus(HINT);
     if (this.net && !this.useBot) this.net.send({ type: 'start' });
+    setTimeout(() => { if (!this.ended && !this.waiting) this.maybeStartTutorial(!!this._forceTutorial); this._forceTutorial = false; }, 700);
   }
 
   _initBot() {
@@ -514,6 +594,8 @@ export class Game {
     this._onPointerDown = (e) => {
       e.preventDefault();
       const p = mapPoint(e.clientX, e.clientY);
+      // Tutorial lives in the top info pane — tap to advance / skip (not on stage)
+      if (p.relY < INFO_RATIO && this.handleTutorialTap(p.relX)) return;
       if (pressItemSlot(p.canvasX, p.canvasY)) return;
       if (p.relY < OPP_RATIO || p.relY >= ctrlBot()) return;
       tryGrabOrMoveShip(e.pointerId, p.relX, p.relY, true);
@@ -533,6 +615,7 @@ export class Game {
       e.preventDefault();
       for (const touch of e.changedTouches) {
         const p = mapPoint(touch.clientX, touch.clientY);
+        if (p.relY < INFO_RATIO && this.handleTutorialTap(p.relX)) continue;
         // tryUsePower debounce ignores duplicate within 280ms after pointerdown
         if (pressItemSlot(p.canvasX, p.canvasY)) continue;
         if (p.relY < OPP_RATIO || p.relY >= ctrlBot()) continue;
@@ -568,6 +651,8 @@ export class Game {
     this._keys = new Set();
     this._onKeyDown = (e) => {
       this._keys.add(e.key);
+      if ((e.key === 'Enter' || e.key === ' ') && this.state && this.state.tutorial) { this.advanceTutorial(); return; }
+      if ((e.key === 'Escape') && this.state && this.state.tutorial) { this.skipTutorial(); return; }
       if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','W','s','S','a','A','d','D',' ','Enter'].includes(e.key)) e.preventDefault();
       if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) this.tryUsePower(0);
     };
@@ -873,7 +958,7 @@ export class Game {
       this.state.fx.push(spawnExplosion(p.x + 8, p.y * this.L.own.h - 20, false));
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
     } else if (isExAttackItem(id)) {
-      // v1.5.67 extra attack items (貫通ビーム / オプション / クラスター / ブラックホール / フリーズ / リフレクター)
+      // v1.5.67+ extra items (貫通 / ビット / クラスター / 黒穴 / 凍結 / 反射 / バリア)
       const extra = useExItem(id, this.exField());
       if (extra) this.showItemBanner(meta, extra);
       p.activePower = null;
@@ -1065,6 +1150,7 @@ export class Game {
       this.state.itemBanner.life -= dt;
       if (this.state.itemBanner.life <= 0) this.state.itemBanner = null;
     }
+    this.tickTutorial(dt);
     if (S.incomingDirect > 0) {
       S.incomingDirect -= dt;
       if (S.incomingDirect < 0) S.incomingDirect = 0;
@@ -1252,28 +1338,46 @@ export class Game {
     S.enemies = remain;
 
     // Enemy bullets -> player (homing missiles weaker: ~67% of normal/laser)
+    // v1.5.70: barrier short-circuits damage (shield absorbs bullets)
+    const playerBarrier = hasBarrierFx(S.fx);
     for (const b of S.bullets) {
-      if (b.owner !== 'enemy') continue;
+      if (b.owner !== 'enemy' || b.life <= 0) continue;
       const py = P.y * fh;
       const hb = b.hb || 0; // bigger hurtbox for big orbs / mines / beams
-      if (P.invuln <= 0 && Math.abs(b.x - P.x) < 14 + hb && Math.abs(b.y - py) < 12 + hb) {
-        const hitDmg = b.homing ? 4 : 6;
-        this.applyPlayerDamage(hitDmg, 'bullet');
-        P.invuln = 0.75;
-        b.life = 0;
-        S.fx.push(spawnExplosion(P.x, py, false));
-        sfx.hit();
+      if (Math.abs(b.x - P.x) < 14 + hb && Math.abs(b.y - py) < 12 + hb) {
+        if (playerBarrier) {
+          b.life = 0;
+          const bar = S.fx.find((f) => f.kind === 'barrier' && f.life > 0);
+          if (bar) bar._hit = 0.14;
+          continue;
+        }
+        if (P.invuln <= 0) {
+          const hitDmg = b.homing ? 4 : 6;
+          this.applyPlayerDamage(hitDmg, 'bullet');
+          P.invuln = 0.75;
+          b.life = 0;
+          S.fx.push(spawnExplosion(P.x, py, false));
+          sfx.hit();
+        }
       }
     }
 
     // Enemy body -> player
     for (const e of S.enemies) {
       const py = P.y * fh;
-      if (P.invuln <= 0 && Math.abs(e.x - P.x) < e.w * 0.4 + 10 && Math.abs(e.y - py) < e.h * 0.4 + 8) {
-        this.applyPlayerDamage(10, 'ram');
-        P.invuln = 0.9;
-        e.hp -= 1;
-        S.fx.push(spawnExplosion(P.x, py, true));
+      if (Math.abs(e.x - P.x) < e.w * 0.4 + 10 && Math.abs(e.y - py) < e.h * 0.4 + 8) {
+        if (playerBarrier) {
+          const bar = S.fx.find((f) => f.kind === 'barrier' && f.life > 0);
+          if (bar) bar._hit = 0.14;
+          e.hp -= 1; // ship still scrapes the enemy a bit
+          continue;
+        }
+        if (P.invuln <= 0) {
+          this.applyPlayerDamage(10, 'ram');
+          P.invuln = 0.9;
+          e.hp -= 1;
+          S.fx.push(spawnExplosion(P.x, py, true));
+        }
       }
     }
 
@@ -1286,9 +1390,15 @@ export class Game {
         if (it.id === 'heal' || it.id === 'heal_big') {
           this.activatePower(it.id);
         } else {
-          if (P.items.length < MAX_ITEM_SLOTS) P.items.push(it.id);
           const meta = powerupMeta(it.id);
-          if (meta) this.setStatus(`入手 ${meta.icon} ${meta.label}（${meta.effect}）`);
+          if (P.items.length < MAX_ITEM_SLOTS) {
+            P.items.push(it.id);
+            if (meta) this.setStatus(`入手 ${meta.icon} ${meta.label}（${meta.effect}）`);
+          } else {
+            // Inventory full — orb is consumed/wasted (info pane only, not on stage)
+            const name = meta ? `${meta.icon}${meta.label}` : 'アイテム';
+            this.setStatus(`アイテムがいっぱいです（最大${MAX_ITEM_SLOTS}つ）　${name}は消えました`);
+          }
         }
       } else if (it.life > 0 && it.x > -20) {
         leftItems.push(it);
@@ -1637,22 +1747,40 @@ export class Game {
     B.enemies = kept;
 
     // Hits on bot — fair hurtbox (gets hit, not glass)
+    // v1.5.70: COM barrier blocks the same way as the player
+    const botBarrier = hasBarrierFx(B.fx);
     for (const b of B.bullets) {
-      if (b.owner !== 'enemy') continue;
+      if (b.owner !== 'enemy' || b.life <= 0) continue;
       const hb = b.hb || 0;
-      if (B.invuln <= 0 && Math.abs(b.x - shipX) < 13 + hb && Math.abs(b.y - B.y * fh) < 12 + hb) {
-        B.hp = Math.max(0, B.hp - 7);
-        B.invuln = 0.38;
-        b.life = 0;
-        B.fx.push(spawnExplosion(shipX, B.y * fh, false));
+      if (Math.abs(b.x - shipX) < 13 + hb && Math.abs(b.y - B.y * fh) < 12 + hb) {
+        if (botBarrier) {
+          b.life = 0;
+          const bar = B.fx.find((f) => f.kind === 'barrier' && f.life > 0);
+          if (bar) bar._hit = 0.14;
+          continue;
+        }
+        if (B.invuln <= 0) {
+          B.hp = Math.max(0, B.hp - 7);
+          B.invuln = 0.38;
+          b.life = 0;
+          B.fx.push(spawnExplosion(shipX, B.y * fh, false));
+        }
       }
     }
     for (const e of B.enemies) {
-      if (B.invuln <= 0 && Math.abs(e.x - shipX) < e.w * 0.4 + 8 && Math.abs(e.y - B.y * fh) < e.h * 0.4 + 8) {
-        B.hp = Math.max(0, B.hp - 10);
-        B.invuln = 0.45;
-        e.hp = 0;
-        B.fx.push(spawnExplosion(shipX, B.y * fh, true));
+      if (Math.abs(e.x - shipX) < e.w * 0.4 + 8 && Math.abs(e.y - B.y * fh) < e.h * 0.4 + 8) {
+        if (botBarrier) {
+          const bar = B.fx.find((f) => f.kind === 'barrier' && f.life > 0);
+          if (bar) bar._hit = 0.14;
+          e.hp = 0;
+          continue;
+        }
+        if (B.invuln <= 0) {
+          B.hp = Math.max(0, B.hp - 10);
+          B.invuln = 0.45;
+          e.hp = 0;
+          B.fx.push(spawnExplosion(shipX, B.y * fh, true));
+        }
       }
     }
 
@@ -1677,6 +1805,11 @@ export class Game {
         const h = B.items.findIndex((id) => id === 'heal_big');
         if (h >= 0) return h;
       }
+      // Prefer barrier when under fire and not already shielded
+      if ((B.hp <= 55 || enemyPressure >= 3) && !hasBarrierFx(B.fx)) {
+        const bar = B.items.findIndex((id) => id === 'barrier');
+        if (bar >= 0) return bar;
+      }
       if (enemyPressure >= 4 && !B.activePower) {
         const l = B.items.findIndex((id) => id === 'laser' || id === 'homing' || id === 'bomb' || id === 'shock' || id === 'spread' || id === 'rapid' || isExAttackItem(id));
         if (l >= 0) return l;
@@ -1695,7 +1828,7 @@ export class Game {
       // Seed inventory so COM always has something to think with
       if (!B.items.length) {
         const pool = ['homing', 'laser', 'spread', 'bomb', 'shock', 'rapid', 'meteor', 'send', 'send_mech', 'send_golem', 'send_tank', 'send_drone', 'heal',
-          'pbeam', 'option', 'cluster', 'blackhole', 'freeze', 'reflect'];
+          'pbeam', 'option', 'cluster', 'blackhole', 'freeze', 'reflect', 'barrier'];
         B.items.push(pool[(Math.random() * pool.length) | 0]);
         if (Math.random() < 0.5) B.items.push(pool[(Math.random() * pool.length) | 0]);
       }

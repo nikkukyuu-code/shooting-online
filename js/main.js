@@ -1,11 +1,11 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME } from './version.js?v=1.5.69';
-import { Net } from './net.js?v=1.5.69';
-import { Game } from './game.js?v=1.5.69';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=1.5.69';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=1.5.69';
-import { registerEnemyKinds } from './render.js?v=1.5.69';
-import { ALL_KIND_IDS } from './catalog.js?v=1.5.69';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=1.5.69';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME } from './version.js?v=1.5.70';
+import { Net } from './net.js?v=1.5.70';
+import { Game } from './game.js?v=1.5.70';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=1.5.70';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=1.5.70';
+import { registerEnemyKinds } from './render.js?v=1.5.70';
+import { ALL_KIND_IDS } from './catalog.js?v=1.5.70';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=1.5.70';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -31,6 +31,7 @@ const els = {
   btnDeck: $('#btn-deck'),
   btnShop: $('#btn-shop'),
   btnZukan: $('#btn-zukan'),
+  btnTutorial: $('#btn-tutorial'),
   btnDeckBack: $('#btn-deck-back'),
   btnShopBack: $('#btn-shop-back'),
   btnZukanBack: $('#btn-zukan-back'),
@@ -122,7 +123,7 @@ function refreshPtDisplay(meta) {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=1.5.69`;
+  return `assets/enemies/${id}/0.png?v=1.5.70`;
 }
 
 function unitName(id) {
@@ -163,6 +164,10 @@ function renderUnitDetail(container, unitId, opts = {}) {
 function renderItemsIntro(container) {
   if (!container) return;
   container.innerHTML = '';
+  const note = document.createElement('p');
+  note.className = 'items-intro-note';
+  note.textContent = '戦闘中の所持は最大3つ。枠が埋まっているときに拾うと、そのアイテムは消えます（回復は即時なので枠を使いません）。';
+  container.appendChild(note);
   for (const p of POWERUPS) {
     const row = document.createElement('div');
     row.className = 'item-intro-row';
@@ -412,6 +417,31 @@ els.btnCpu?.addEventListener('click', () => {
   try {
     startGameSession({ bot: true });
     game.beginMatch();
+  } catch (e) {
+    console.error(e);
+    els.fieldFind.value = '開始失敗';
+    cleanupGame();
+    show('menu');
+  } finally {
+    setBusy(false);
+  }
+});
+
+
+els.btnTutorial?.addEventListener('click', () => {
+  try { localStorage.removeItem('shootingOnline_tutorialDone'); } catch (_) {}
+  if (busy) return;
+  setBusy(true);
+  cleanupGame();
+  net = new Net();
+  net.usingBot = true;
+  els.fieldFind.value = 'チュートリアル（CPU）';
+  try {
+    startGameSession({ bot: true });
+    if (game) game._forceTutorial = true;
+    game.beginMatch();
+    // bot path already schedules maybeStartTutorial; force flag ensures it shows
+    if (game) game.maybeStartTutorial(true);
   } catch (e) {
     console.error(e);
     els.fieldFind.value = '開始失敗';

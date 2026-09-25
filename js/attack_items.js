@@ -1,18 +1,19 @@
 /**
  * v1.5.67 — extra player attack items (自機の攻撃アイテム追加).
  * v1.5.69 — オプション pods redrawn as mecha support drones.
+ * v1.5.70 — バリア defensive shield item.
  *
  * Every effect lives inside the field's `fx` list (kind = 'pbeam' | 'option' | 'cmis' |
- * 'cburst' | 'bhole' | 'freeze' | 'disc'), so it is drawn in the own pane AND in the
+ * 'cburst' | 'bhole' | 'freeze' | 'disc' | 'barrier'), so it is drawn in the own pane AND in the
  * opponent pane (bot snapshot / net serializeField) exactly like 電撃 / ボム.
  * Logic works on a plain "field" object so the player and COM share one code path:
  *   { enemies, bullets, fx, sx, sy, fw, fh }   (sx/sy = ship position in field px)
  * Damage only lowers e.hp — death / drops / score stay in the game loops.
  * All items are intentionally weaker than ボム (28 to every enemy + full bullet clear).
  */
-import { spawnBullet, spawnExplosion, isLargeEnemy } from './entities.js?v=1.5.69';
+import { spawnBullet, spawnExplosion, isLargeEnemy } from './entities.js?v=1.5.70';
 
-export const EX_ATTACK_IDS = ['pbeam', 'option', 'cluster', 'blackhole', 'freeze', 'reflect'];
+export const EX_ATTACK_IDS = ['pbeam', 'option', 'cluster', 'blackhole', 'freeze', 'reflect', 'barrier'];
 export function isExAttackItem(id) { return EX_ATTACK_IDS.includes(id); }
 
 /** Slot / orb style (merged into render.js ITEM_STYLE). */
@@ -23,6 +24,7 @@ export const EX_ITEM_STYLE = {
   blackhole: { color: '#8a6bff', icon: '●', label: '黒穴',     effect: '吸い込み攻撃' },
   freeze:    { color: '#bff4ff', icon: '氷', label: '凍結',     effect: '周囲を凍らせる' },
   reflect:   { color: '#ffc34d', icon: '◇', label: '反射',     effect: '跳ね返る円盤' },
+  barrier:   { color: '#6cf0ff', icon: '盾', label: 'バリア',   effect: '一定時間無敵' },
 };
 
 // ---- Balance (field px / seconds). Keep all below ボム. ----
@@ -54,9 +56,18 @@ const DISC_R = 12;
 const DISC_SPD = 390;
 const DISC_DMG = 3;
 const DISC_REHIT = 0.3;
+export const BARRIER_LIFE = 5.5; // s — defensive only, weaker role than ボム
+export const BARRIER_R = 40;     // shield radius (field px)
 
-const EX_FX_KINDS = new Set(['pbeam', 'option', 'cmis', 'cburst', 'bhole', 'freeze', 'disc']);
+const EX_FX_KINDS = new Set(['pbeam', 'option', 'cmis', 'cburst', 'bhole', 'freeze', 'disc', 'barrier']);
 export function isExFx(kind) { return EX_FX_KINDS.has(kind); }
+
+/** True while a barrier shield fx is still alive on this field. */
+export function hasBarrierFx(fx) {
+  if (!fx || !fx.length) return false;
+  for (const f of fx) if (f.kind === 'barrier' && f.life > 0) return true;
+  return false;
+}
 
 function hitBox(e, x, y, pad) {
   return Math.abs(e.x - x) < e.w * 0.45 + pad && Math.abs(e.y - y) < e.h * 0.45 + pad;
@@ -132,6 +143,12 @@ export function useExItem(id, F) {
         a: [Math.cos(a) * DISC_SPD, Math.sin(a) * DISC_SPD], _t: 0, _hit: new Map(),
       });
     }
+    return '';
+  }
+  if (id === 'barrier') {
+    const cur = fx.find((f) => f.kind === 'barrier');
+    if (cur) { cur.life = cur.max = BARRIER_LIFE; cur._hit = 0; return ''; }
+    fx.unshift({ kind: 'barrier', x: sx, y: sy, r: BARRIER_R, life: BARRIER_LIFE, max: BARRIER_LIFE, _hit: 0 });
     return '';
   }
   return '';
@@ -284,6 +301,19 @@ export function tickExItems(F, dt) {
       }
       for (const b of F.bullets) {
         if (b.owner === 'enemy' && Math.abs(b.x - f.x) < r + 4 && Math.abs(b.y - f.y) < r + 4) killEnemyBullet(b);
+      }
+    } else if (k === 'barrier') {
+      f.x = F.sx; f.y = F.sy;
+      if (f._hit > 0) f._hit = Math.max(0, f._hit - dt);
+      const R = f.r;
+      for (const b of F.bullets) {
+        if (b.owner !== 'enemy' || b.life <= 0) continue;
+        const dx = b.x - f.x, dy = b.y - f.y;
+        const hb = (b.hb || 0) + (b.r || 0);
+        if (dx * dx + dy * dy < (R + 6 + hb) * (R + 6 + hb)) {
+          killEnemyBullet(b);
+          f._hit = 0.14;
+        }
       }
     }
   }
@@ -780,6 +810,58 @@ function drawDisc(ctx, f) {
   ctx.restore();
 }
 
+function drawBarrier(ctx, f) {
+  const sc = f.sc || 1;
+  // Blink near expiry so the end is readable
+  if (f.life < 1.2 && Math.floor(performance.now() / 80) % 2 === 0) return;
+  const age = f.max - f.life;
+  const pop = clamp01(age / 0.18);
+  const fade = f.life < 0.45 ? clamp01(f.life / 0.45) : 1;
+  const now = performance.now() / 1000;
+  const pulse = 0.85 + 0.15 * Math.sin(now * 9);
+  const hitBoost = f._hit > 0 ? 1.15 : 1;
+  const R = f.r * pop * pulse * hitBoost;
+  const cx = f.x, cy = f.y;
+  ctx.save();
+  ctx.globalAlpha = fade;
+  // Soft energy dome fill
+  const g = ctx.createRadialGradient(cx, cy, R * 0.15, cx, cy, R);
+  g.addColorStop(0, 'rgba(180,250,255,0.08)');
+  g.addColorStop(0.55, `rgba(80,220,255,${0.14 + (f._hit > 0 ? 0.12 : 0)})`);
+  g.addColorStop(0.82, `rgba(100,240,255,${0.28 + (f._hit > 0 ? 0.2 : 0)})`);
+  g.addColorStop(1, 'rgba(60,200,255,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
+  // Outer ring
+  ctx.strokeStyle = f._hit > 0 ? 'rgba(255,255,255,0.95)' : 'rgba(140,245,255,0.9)';
+  ctx.lineWidth = (2.4 + (f._hit > 0 ? 1.5 : 0)) * sc;
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+  // Inner dashed ring (rotating)
+  ctx.strokeStyle = 'rgba(200,255,255,0.55)';
+  ctx.lineWidth = 1.4 * sc;
+  ctx.setLineDash([6 * sc, 5 * sc]);
+  ctx.lineDashOffset = -now * 50 * sc;
+  ctx.beginPath(); ctx.arc(cx, cy, R * 0.78, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
+  // Hex spokes (shield identity)
+  ctx.strokeStyle = 'rgba(160,240,255,0.35)';
+  ctx.lineWidth = 1.1 * sc;
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = i * Math.PI / 3 + now * 0.4;
+    ctx.moveTo(cx + Math.cos(a) * R * 0.28, cy + Math.sin(a) * R * 0.28);
+    ctx.lineTo(cx + Math.cos(a) * R * 0.92, cy + Math.sin(a) * R * 0.92);
+  }
+  ctx.stroke();
+  // Hit spark ring flash
+  if (f._hit > 0) {
+    ctx.strokeStyle = `rgba(255,255,255,${clamp01(f._hit / 0.14)})`;
+    ctx.lineWidth = 3 * sc;
+    ctx.beginPath(); ctx.arc(cx, cy, R * 1.05, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
 /** Draw an extra-item fx. Returns true when handled. */
 export function drawExFx(ctx, f) {
   switch (f.kind) {
@@ -790,6 +872,7 @@ export function drawExFx(ctx, f) {
     case 'bhole': drawBHole(ctx, f); return true;
     case 'freeze': drawFreeze(ctx, f); return true;
     case 'disc': drawDisc(ctx, f); return true;
+    case 'barrier': drawBarrier(ctx, f); return true;
     default: return false;
   }
 }

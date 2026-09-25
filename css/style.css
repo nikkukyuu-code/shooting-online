@@ -1171,3 +1171,15 @@ html, body {
   #screen-menu .menu-field { height: 24px; }
   #screen-menu .menu-field.room-name { height: 27px; margin-top: 0; }
 }
+
+/* v1.5.70 — hold-limit note above item intro lists */
+.items-intro-note {
+  margin: 0 0 0.75rem;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: #d8e8ff;
+  background: rgba(40, 70, 120, 0.45);
+  border: 1px solid rgba(120, 180, 255, 0.35);
+  border-radius: 8px;
+}

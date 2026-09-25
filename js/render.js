@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=1.5.69';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=1.5.70';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -64,7 +64,7 @@ export function resizeCanvas(canvas) {
 export function itemSlotRects(ctrl, count = MAX_ITEM_SLOTS) {
   const n = Math.max(1, count | 0);
   const padX = Math.max(8, ctrl.w * 0.02);
-  const padTop = Math.max(6, ctrl.h * 0.04);
+  const padTop = Math.max(20, ctrl.h * 0.08); // room for 「アイテム 最大3」 header
   const padBot = Math.max(8, ctrl.h * 0.04); // status moved to info pane
   const gap = Math.max(6, ctrl.h * 0.02);
   const colW = Math.max(100, Math.min(168, ctrl.w * 0.38));
@@ -299,7 +299,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=1.5.69`;
+  return `assets/enemies/${kind}/${frame}.png?v=1.5.70`;
 }
 
 function loadKindSprite(kind) {
@@ -1877,14 +1877,48 @@ function drawInfoPanel(ctx, area, localState) {
   const boxY = area.h * 0.05;
   const boxW = area.w * 0.94;
   const boxH = area.h * 0.45;
+  const tut = localState.tutorial;
+  const tutOn = !!(tut && tut.total > 0 && tut.i < tut.total);
   const ban = localState.itemBanner;
-  const banOn = !!(ban && ban.life > 0 && ban.text);
+  const banOn = !tutOn && !!(ban && ban.life > 0 && ban.text);
   const textW = boxW - Math.max(10 * u, boxW * 0.04);
   const baseFs = Math.max(12 * u, Math.min(20 * u, boxH * 0.4));
   const minFs = Math.max(11 * u, Math.min(13 * u, boxH * 0.26));
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  if (banOn) {
+  if (tutOn) {
+    // In-battle tutorial card (info pane only — never on the stage)
+    const head = `チュートリアル ${tut.i + 1}/${tut.total}　【${tut.title || '案内'}】`;
+    const body = tut.text || '';
+    const foot = '左タップ：次へ　　右タップ：とばす';
+    ctx.save();
+    ctx.fillStyle = 'rgba(8, 24, 48, 0.78)';
+    roundRect(ctx, boxX, boxY, boxW, boxH, 8 * u);
+    ctx.fill();
+    ctx.strokeStyle = '#6cf0ff';
+    ctx.lineWidth = Math.max(1.5, 2.2 * u);
+    roundRect(ctx, boxX, boxY, boxW, boxH, 8 * u);
+    ctx.stroke();
+    // progress bar
+    const prog = (tut.i + Math.max(0, Math.min(1, 1 - tut.life / 3.8))) / tut.total;
+    ctx.fillStyle = 'rgba(108, 240, 255, 0.35)';
+    ctx.fillRect(boxX + 4 * u, boxY + boxH - 5 * u, (boxW - 8 * u) * prog, 3 * u);
+    const fsHead = fitFontSize(ctx, [head], textW, Math.min(baseFs, boxH * 0.28), minFs, fontStack, 800);
+    ctx.font = `800 ${fsHead}px ${fontStack}`;
+    ctx.fillStyle = '#9ef6ff';
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 3 * u;
+    ctx.fillText(ellipsize(ctx, head, textW), area.w * 0.5, boxY + boxH * 0.28);
+    const fsBody = fitFontSize(ctx, [body], textW, Math.min(baseFs, boxH * 0.32), minFs, fontStack, 700);
+    ctx.font = `700 ${fsBody}px ${fontStack}`;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(ellipsize(ctx, body, textW), area.w * 0.5, boxY + boxH * 0.58);
+    const fsFoot = Math.max(9 * u, Math.min(12 * u, boxH * 0.18));
+    ctx.font = `600 ${fsFoot}px ${fontStack}`;
+    ctx.fillStyle = 'rgba(200, 230, 255, 0.85)';
+    ctx.fillText(foot, area.w * 0.5, boxY + boxH * 0.84);
+    ctx.restore();
+  } else if (banOn) {
     const a = Math.max(0, Math.min(1, ban.life / 0.35));
     ctx.save();
     ctx.globalAlpha = 0.35 + 0.65 * a;
@@ -1996,6 +2030,18 @@ function drawControlPanel(ctx, area, localState) {
   // Vertical item slots (max 3) on the right — button + description under each
   const items = (localState.player && localState.player.items) || [];
   const slots = itemSlotRects({ x: 0, y: 0, w: area.w, h: area.h }, MAX_ITEM_SLOTS);
+  if (slots.length) {
+    const head = slots[0];
+    const hFs = Math.max(11, Math.min(15, area.h * 0.06));
+    ctx.font = `700 ${hFs}px "Hiragino Sans","Noto Sans JP",sans-serif`;
+    ctx.fillStyle = 'rgba(180, 230, 255, 0.92)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 3;
+    ctx.fillText(`アイテム 最大${MAX_ITEM_SLOTS}`, head.x + head.w * 0.5, head.y - 3);
+    ctx.shadowBlur = 0;
+  }
   for (let i = 0; i < slots.length; i++) {
     const r = slots[i];
     const id = items[i];
@@ -2022,7 +2068,7 @@ function drawControlPanel(ctx, area, localState) {
     } else {
       ctx.font = `600 ${Math.max(11, r.btnH * 0.28)}px "Hiragino Sans","Noto Sans JP",sans-serif`;
       ctx.fillStyle = 'rgba(200,210,240,0.55)';
-      ctx.fillText(`枠${i + 1}`, r.btnX + r.btnW * 0.5, r.btnY + r.btnH * 0.5);
+      ctx.fillText(`空 ${i + 1}/${MAX_ITEM_SLOTS}`, r.btnX + r.btnW * 0.5, r.btnY + r.btnH * 0.5);
     }
     ctx.shadowBlur = 0;
 

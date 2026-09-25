@@ -23,6 +23,8 @@ export const POWERUPS = [
   { id: 'blackhole',  label: 'ブラックホール', effect: '敵と敵弾を吸い込み攻撃',     desc: '前方にブラックホールを作り約2秒間敵と敵弾を吸い寄せ、最後に収縮爆発でダメージ。', color: '#8a6bff', icon: '●' },
   { id: 'freeze',     label: 'フリーズ',      effect: '周囲の敵を凍らせる',         desc: '自機のまわりの敵を約3秒凍らせて動きと攻撃を止め、小ダメージ。範囲内の敵弾も消す。', color: '#bff4ff', icon: '氷' },
   { id: 'reflect',    label: 'リフレクター',  effect: '壁で跳ね返る円盤を発射',     desc: '画面の端で跳ね返る円盤を4枚発射。敵を貫通しながら何度も当たり、敵弾も弾く。', color: '#ffc34d', icon: '◇' },
+  // v1.5.70 — defensive barrier (logic/visuals in attack_items.js)
+  { id: 'barrier',    label: 'バリア',        effect: '一定時間ダメージを防ぐ',     desc: '約5.5秒、自機のまわりにエネルギーシールドを展開。敵弾と体当たりのダメージを防ぐ（攻撃はしない）。', color: '#6cf0ff', icon: '盾' },
 ];
 
 export function powerupMeta(id) {
@@ -34,11 +36,12 @@ export function pickPowerupId() {
   const weighted = [
     ['homing', 2], ['laser', 2], ['spread', 3], ['bomb', 2], ['shock', 3], ['rapid', 3],
     ['meteor', 2], ['send', 2.4], ['direct', 1],
-    // Recovery nudged up so its share stays ~9% after the v1.5.67 items were added
-    ['heal', 2.6], ['heal_big', 1.3],
+    // Recovery nudged so its share stays ~9% after extra items were added
+    ['heal', 2.75], ['heal_big', 1.35],
     ['send_mech', 2.3], ['send_golem', 2.3], ['send_tank', 2.3], ['send_drone', 2.3],
-    // v1.5.67 extra attack items
+    // v1.5.67 extra attack items + v1.5.70 barrier (~3.4% each)
     ['pbeam', 1.5], ['option', 1.5], ['cluster', 1.5], ['blackhole', 1.5], ['freeze', 1.5], ['reflect', 1.5],
+    ['barrier', 1.5],
   ];
   let r = Math.random() * weighted.reduce((s, [, w]) => s + w, 0);
   for (const [id, w] of weighted) { r -= w; if (r <= 0) return id; }
