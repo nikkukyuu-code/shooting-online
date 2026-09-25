@@ -1438,13 +1438,14 @@ html, body {
 }
 
 
-/* Short phones: keep everything on one screen without scroll */
+/* Short phones: shrink hero further (never larger than base clamp) */
 @media (max-height: 760px) {
   .menu-hero {
-    height: clamp(118px, 18vh, 150px);
-    padding-top: max(26px, calc(env(safe-area-inset-top, 0px) + 18px));
+    height: clamp(100px, 14vh, 124px);
+    min-height: 96px;
+    padding-top: max(18px, calc(env(safe-area-inset-top, 0px) + 10px));
   }
-  .menu-hero-art { top: 2%; height: 66%; }
+  .menu-hero-art { top: 0; height: 52%; }
   .menu-footer { gap: 3px; padding-top: 2px; }
   #screen-menu .menu-hint { font-size: 0.62rem; }
   .menu-panel { padding: 8px 10px 8px; gap: 4px; }
@@ -1453,9 +1454,10 @@ html, body {
 }
 @media (max-height: 700px) {
   .menu-hero {
-    height: clamp(104px, 16vh, 132px);
+    height: clamp(92px, 13vh, 112px);
+    min-height: 88px;
   }
-  .menu-hero-art { height: 62%; top: 0; }
+  .menu-hero-art { height: 50%; top: 0; }
   .menu-center { padding: 2px 0 4px; }
   .menu-panel { padding: 7px 9px 7px; gap: 3px; }
   #screen-menu .menu-btn { padding: 6px 7px; font-size: 0.86rem; }
@@ -1468,16 +1470,36 @@ html, body {
 }
 @media (max-height: 620px) {
   .menu-hero {
-    height: clamp(88px, 14vh, 112px);
-    padding-top: max(22px, calc(env(safe-area-inset-top, 0px) + 14px));
+    height: clamp(80px, 12vh, 100px);
+    min-height: 76px;
+    padding-top: max(16px, calc(env(safe-area-inset-top, 0px) + 8px));
   }
-  .menu-hero-art { height: 58%; }
+  .menu-hero-art { height: 48%; }
   .game-subtitle { display: none; }
   .menu-panel { padding: 6px 8px; gap: 3px; }
   #screen-menu .menu-btn { padding: 5px 6px; font-size: 0.82rem; }
   #screen-menu .menu-btn-sub { font-size: 0.76rem; padding: 5px 4px; }
   .cpu-diff-title { font-size: 0.64rem; }
   .menu-pt { font-size: 0.78rem; padding: 3px 10px; }
+}
+
+/* Wide/tall desktop: keep menu packed at top of the phone column */
+@media (min-width: 900px) and (min-height: 800px) {
+  #screen-menu.screen.active {
+    justify-content: flex-start;
+  }
+  .menu-hero {
+    height: clamp(108px, 12vh, 128px);
+    max-height: 132px;
+  }
+  .menu-hero-art { height: 54%; }
+  .menu-center {
+    flex: 0 1 auto;
+    justify-content: flex-start;
+  }
+  .menu-footer {
+    margin-top: 0;
+  }
 }
 
 /* v1.5.70 — hold-limit note above item intro lists */

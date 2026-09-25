@@ -1,5 +1,21 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-09-26 02:08:16';
+export const VERSION_LABEL = '2026-09-26 02:15:50';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1790356096878;
-export const BUILD_NOTE = '選択画面の余白を詰め、タイトル〜パネルを寄せた';
+export const BUILD_TIME = 1790356550909;
+export const BUILD_NOTE = 'PC・スマホ両対応：メニュー余白を詰め、短端末のヒーロー膨張を抑制';
+
+export function formatVersionTime(ms = BUILD_TIME) {
+  try {
+    const d = new Date(ms);
+    const p = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Tokyo',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false,
+    }).formatToParts(d);
+    const g = (t) => (p.find((x) => x.type === t) || {}).value || '00';
+    return g('year') + '-' + g('month') + '-' + g('day') + ' ' + g('hour') + ':' + g('minute') + ':' + g('second');
+  } catch (_) {
+    return VERSION_LABEL;
+  }
+}
