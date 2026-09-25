@@ -1,5 +1,5 @@
 /** Persist PT / owned unlocks / deck (exactly 5 unique). localStorage key: shootingOnline_meta */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP } from './catalog.js?v=1.5.71';
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP } from './catalog.js?v=1.5.72';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;
@@ -278,8 +278,8 @@ export function setDeckSlot(meta, slot, unitId) {
 }
 
 /**
- * COM win PT: remaining player HP (0–100 scale) added as integer PT.
- * Formula: PT += Math.floor(remainingPlayerHP)
+ * COM win PT: remaining player HP already scaled to 0–100 by caller, added as integer PT.
+ * Formula: PT += Math.floor(scaledRemainingHP)
  */
 export function grantComVictoryPt(meta, remainingHp) {
   const gain = Math.max(0, Math.floor(Number(remainingHp) || 0));

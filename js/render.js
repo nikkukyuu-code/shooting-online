@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=1.5.71';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=1.5.72';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -299,7 +299,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=1.5.71`;
+  return `assets/enemies/${kind}/${frame}.png?v=1.5.72`;
 }
 
 function loadKindSprite(kind) {
@@ -2190,7 +2190,7 @@ export function drawField(ctx, area, snap, opts = {}) {
   if (snap.alive !== false) {
     const invulnBlink = !darkened && snap.invuln > 0 && Math.floor(performance.now() / 60) % 2 === 0;
     const hpVal = snap.player?.hp ?? snap.php;
-    const lowHp = !darkened && hpVal != null && hpVal / (snap.player?.maxHp || 100) < 0.3;
+    const lowHp = !darkened && hpVal != null && hpVal / (snap.player?.maxHp || 150) < 0.3;
     // Slow danger blink when under 30% (does not hide ship completely)
     const lowBlink = lowHp && Math.floor(performance.now() / 140) % 2 === 0;
     const blink = invulnBlink;
@@ -2287,7 +2287,8 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
 
 
   drawDamageFlash(ctx, L, localState.damageFlash);
-  drawLowHpWarning(ctx, L, localState.player.hp, 100);
+  const playerMaxHp = localState.player.maxHp || 150;
+  drawLowHpWarning(ctx, L, localState.player.hp, playerMaxHp);
   drawDamageNumbers(ctx, L, localState.damageNumbers);
 
   // Divider between opp and own
@@ -2297,8 +2298,8 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
   ctx.fillRect(0, L.oppH - 1, L.W, 1);
 
   // HP bars at bottom of opponent pane (above divider; keeps own playfield clear)
-  const oppHp = remoteSnap ? (remoteSnap.php ?? 100) : (localState.botHp ?? 100);
-  drawHpBarsAtBoundary(ctx, L, localState.player.hp, oppHp, 100, {
+  const oppHp = remoteSnap ? (remoteSnap.php ?? playerMaxHp) : (localState.botHp ?? playerMaxHp);
+  drawHpBarsAtBoundary(ctx, L, localState.player.hp, oppHp, playerMaxHp, {
     hpGhost: localState.hpGhost,
     hpDisplay: localState.hpDisplay,
     hpShake: localState.hpShake,

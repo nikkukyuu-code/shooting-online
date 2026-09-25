@@ -1,14 +1,15 @@
 import {
   POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnExplosion, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx,
+  PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=1.5.71';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.71';
-import { sfx } from './audio.js?v=1.5.71';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=1.5.71';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.71';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=1.5.71';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=1.5.71';
+} from './entities.js?v=1.5.72';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=1.5.72';
+import { sfx } from './audio.js?v=1.5.72';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=1.5.72';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=1.5.72';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=1.5.72';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=1.5.72';
 
 const HINT = '敵を倒してアイテムを取得（所持は最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -289,7 +290,7 @@ export class Game {
       alive: true,
       statusText: WAIT,
       time: 0,
-      botHp: 100,
+      botHp: PLAYER_MAX_HP,
       botSnap: null,
     };
     this.ended = false;
@@ -479,7 +480,8 @@ export class Game {
   _initBot() {
     this._bot = {
       y: 0.5,
-      hp: 100,
+      hp: PLAYER_MAX_HP,
+      maxHp: PLAYER_MAX_HP,
       fireCd: 0,
       spawnAcc: 0,
       enemies: [],
@@ -507,7 +509,7 @@ export class Game {
       moveVelX: 0,
       surgePhase: 0,
     };
-    this.state.botHp = 100;
+    this.state.botHp = PLAYER_MAX_HP;
   }
 
   stopLoop() {
@@ -920,7 +922,7 @@ export class Game {
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
     } else if (id === 'heal') {
       const before = p.hp;
-      p.hp = Math.min(p.maxHp || 100, p.hp + 25);
+      p.hp = Math.min(p.maxHp || PLAYER_MAX_HP, p.hp + 25);
       this.state.hpGhost = p.hp;
       this.state.hpDisplay = p.hp;
       this.showItemBanner(meta, `（+${p.hp - before}）`);
@@ -930,7 +932,7 @@ export class Game {
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1200);
     } else if (id === 'heal_big') {
       const before = p.hp;
-      p.hp = Math.min(p.maxHp || 100, p.hp + 50);
+      p.hp = Math.min(p.maxHp || PLAYER_MAX_HP, p.hp + 50);
       this.state.hpGhost = p.hp;
       this.state.hpDisplay = p.hp;
       this.showItemBanner(meta, `（+${p.hp - before}）`);
@@ -1327,7 +1329,7 @@ export class Game {
         S.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
         sfx.explode();
         P.score += e.score;
-        if (Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : 0.35)) {
+        if (Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : ITEM_DROP_CHANCE)) {
           S.items.push(spawnItem(e.x, e.y));
         }
         // Damage bot passively a bit when scoring? No — only via powers / race.
@@ -1352,7 +1354,7 @@ export class Game {
           continue;
         }
         if (P.invuln <= 0) {
-          const hitDmg = b.homing ? 4 : 6;
+          const hitDmg = b.homing ? 3 : 5; // v1.5.72: was 4/6
           this.applyPlayerDamage(hitDmg, 'bullet');
           P.invuln = 0.75;
           b.life = 0;
@@ -1373,7 +1375,7 @@ export class Game {
           continue;
         }
         if (P.invuln <= 0) {
-          this.applyPlayerDamage(10, 'ram');
+          this.applyPlayerDamage(8, 'ram'); // v1.5.72: was 10
           P.invuln = 0.9;
           e.hp -= 1;
           S.fx.push(spawnExplosion(P.x, py, true));
@@ -1729,12 +1731,12 @@ export class Game {
     for (const e of B.enemies) {
       if (e.hp <= 0) {
         B.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
-        if (B.items.length < MAX_ITEM_SLOTS && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : 0.4)) {
+        if (B.items.length < MAX_ITEM_SLOTS && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : BOT_ITEM_DROP_CHANCE)) {
           let dropId = pickPowerupId();
           // COM never gets direct (looks like player's own upward laser)
           if (dropId === 'direct') dropId = 'laser';
           if (dropId === 'heal' || dropId === 'heal_big') {
-            B.hp = Math.min(100, B.hp + (dropId === 'heal_big' ? 50 : 25));
+            B.hp = Math.min(B.maxHp || PLAYER_MAX_HP, B.hp + (dropId === 'heal_big' ? 50 : 25));
             B.fx.push(spawnExplosion(48, B.y * fh, dropId === 'heal_big'));
           } else {
             B.items.push(dropId);
@@ -1760,7 +1762,7 @@ export class Game {
           continue;
         }
         if (B.invuln <= 0) {
-          B.hp = Math.max(0, B.hp - 7);
+          B.hp = Math.max(0, B.hp - 5); // v1.5.72: was 7
           B.invuln = 0.38;
           b.life = 0;
           B.fx.push(spawnExplosion(shipX, B.y * fh, false));
@@ -1776,7 +1778,7 @@ export class Game {
           continue;
         }
         if (B.invuln <= 0) {
-          B.hp = Math.max(0, B.hp - 10);
+          B.hp = Math.max(0, B.hp - 8); // v1.5.72: was 10
           B.invuln = 0.45;
           e.hp = 0;
           B.fx.push(spawnExplosion(shipX, B.y * fh, true));
@@ -1844,7 +1846,7 @@ export class Game {
         B.activePower = 'laser';
         B.activeTimer = 4;
       } else if (id === 'heal' || id === 'heal_big') {
-        B.hp = Math.min(100, B.hp + (id === 'heal_big' ? 50 : 25));
+        B.hp = Math.min(B.maxHp || PLAYER_MAX_HP, B.hp + (id === 'heal_big' ? 50 : 25));
       } else if (id === 'direct') {
         // Disabled for COM — was mistaken for the player's own direct attack
         B.items.push('laser');
@@ -1957,10 +1959,12 @@ export class Game {
     if (won) sfx.win(); else sfx.lose();
     this.setStatus(msg);
 
-    // PT only on COM (CPU) victory: remaining HP (0–100) → PT
+    // PT only on COM (CPU) victory: remaining HP scaled to 0–100 → PT
     this._ptReward = null;
     if (won && this.useBot) {
-      const hp = Math.max(0, Math.floor(this.state.player?.hp ?? 0));
+      const rawHp = Math.max(0, this.state.player?.hp ?? 0);
+      const maxHp = this.state.player?.maxHp || PLAYER_MAX_HP;
+      const hp = Math.max(0, Math.floor((rawHp / maxHp) * 100)); // keep PT on 0–100 scale
       try {
         const result = grantComVictoryPt(loadMeta(), hp);
         this._ptReward = { gain: result.gain, total: result.total, remainingHp: hp };
