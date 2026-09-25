@@ -227,6 +227,20 @@ export function spawnExplosion(x, y, big = false) {
   };
 }
 
+/**
+ * Compact per-hit spark (bullet / laser / pierce tick).
+ * One call per successful hit-detection / damage tick — not a death blast.
+ */
+export function spawnHitSpark(x, y) {
+  return {
+    kind: 'hit',
+    x, y,
+    life: 0.18,
+    max: 0.18,
+    r: 8,
+  };
+}
+
 /** 電撃 (shock) hit radius in field pixels — v1.5.63: doubled from 160. */
 export const SHOCK_RADIUS = 320;
 

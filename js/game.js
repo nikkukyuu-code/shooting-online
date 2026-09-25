@@ -1,15 +1,15 @@
 import {
-  POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
+  POWERUPS, powerupMeta, pickPowerupId, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260926021550';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260926021550';
-import { sfx } from './audio.js?v=20260926021550';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260926021550';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=20260926021550';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260926021550';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260926021550';
+} from './entities.js?v=20260926023924';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260926023924';
+import { sfx } from './audio.js?v=20260926023924';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260926023924';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=20260926023924';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260926023924';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260926023924';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1314,7 +1314,7 @@ export class Game {
       }
     }
 
-    // Laser damage
+    // Laser damage — every tick hit = one small spark at contact (pierce beam)
     if (P.activePower === 'laser' && P.activeTimer > 0) {
       P.laserCd = (P.laserCd || 0) - dt;
       if (P.laserCd <= 0) {
@@ -1323,6 +1323,7 @@ export class Game {
         for (const e of S.enemies) {
           if (Math.abs(e.y - ly) < e.h * 0.55 + 8 && e.x > P.x) {
             e.hp -= 1.05; // staccato ticks a bit harder, slightly slower
+            S.fx.push(spawnHitSpark(e.x - e.w * 0.35, ly));
           }
         }
       }
@@ -1431,9 +1432,10 @@ export class Game {
       for (const e of S.enemies) {
         if (Math.abs(b.x - e.x) < e.w * 0.45 + 4 && Math.abs(b.y - e.y) < e.h * 0.45 + 4) {
           e.hp -= b.dmg;
-          // pierce (direct volley): keep flying until off-screen
+          // pierce (direct volley / laser bullets): keep flying until off-screen
           if (!b.pierce) b.life = 0;
-          S.fx.push(spawnExplosion(e.x, e.y, false));
+          // Every successful hit (incl. pierce/laser) = one small boom at contact
+          S.fx.push(spawnHitSpark(b.x, b.y));
           break;
         }
       }
@@ -1480,7 +1482,7 @@ export class Game {
           this.applyPlayerDamage(hitDmg, 'bullet');
           P.invuln = 0.75;
           b.life = 0;
-          S.fx.push(spawnExplosion(P.x, py, false));
+          S.fx.push(spawnHitSpark(P.x, py));
           sfx.hit();
         }
       }
@@ -1551,6 +1553,7 @@ export class Game {
     // Cleanup — keep bullets past top/bottom so edge overhang is not a safe zone
     S.bullets = S.bullets.filter((b) => b.life > 0 && b.x > -30 && b.x < fw + 80 && b.y > -90 && b.y < fh + 90);
     S.fx = S.fx.filter((f) => f.life > 0);
+    if (S.fx.length > 96) S.fx.splice(0, S.fx.length - 96);
 
     // Show next item hint on bar when idle
     if (P.activeTimer <= 0 && P.items.length && S.statusText === HINT) {
@@ -1753,7 +1756,7 @@ export class Game {
       }
     }
 
-    // Laser beam while active
+    // Laser beam while active — every tick hit = one small spark (match player)
     if (B.activePower === 'laser' && B.activeTimer > 0) {
       B.laserCd = (B.laserCd || 0) - dt;
       if (B.laserCd <= 0) {
@@ -1762,7 +1765,7 @@ export class Game {
         for (const e of B.enemies) {
           if (e.x > shipX && Math.abs(e.y - by) < (e.h * 0.55 + 8)) {
             e.hp -= 1.05; // match player laser tick
-            if (Math.random() < 0.08) B.fx.push(spawnExplosion(e.x, e.y));
+            B.fx.push(spawnHitSpark(e.x - e.w * 0.35, by));
           }
         }
       }
@@ -1843,7 +1846,7 @@ export class Game {
         if (Math.abs(b.x - e.x) < e.w * 0.45 && Math.abs(b.y - e.y) < e.h * 0.45) {
           e.hp -= b.dmg;
           if (!b.pierce) b.life = 0;
-          B.fx.push(spawnExplosion(e.x, e.y));
+          B.fx.push(spawnHitSpark(b.x, b.y));
         }
       }
     }
@@ -1890,7 +1893,7 @@ export class Game {
           B.hp = Math.max(0, B.hp - 5); // v1.5.72: was 7
           B.invuln = 0.38;
           b.life = 0;
-          B.fx.push(spawnExplosion(shipX, B.y * fh, false));
+          B.fx.push(spawnHitSpark(shipX, B.y * fh));
         }
       }
     }
@@ -1914,7 +1917,7 @@ export class Game {
     B.bullets = B.bullets.filter((b) => b.life > 0 && b.x > -40 && b.x < fw + 80 && b.y > -40 && b.y < fh + 40);
     if (B.enemies.length > 36) B.enemies.length = 36;
     if (B.bullets.length > 100) B.bullets.length = 100;
-    if (B.fx.length > 40) B.fx.length = 40;
+    if (B.fx.length > 80) B.fx.splice(0, B.fx.length - 80); // keep newest (hit sparks)
     for (const f of B.fx) f.life -= dt;
     B.fx = B.fx.filter((f) => f.life > 0);
 

@@ -11,7 +11,7 @@
  * Damage only lowers e.hp — death / drops / score stay in the game loops.
  * All items are intentionally weaker than ボム (28 to every enemy + full bullet clear).
  */
-import { spawnBullet, spawnExplosion, isLargeEnemy } from './entities.js?v=20260926021550';
+import { spawnBullet, spawnExplosion, spawnHitSpark, isLargeEnemy } from './entities.js?v=20260926023924';
 
 export const EX_ATTACK_IDS = ['pbeam', 'option', 'cluster', 'blackhole', 'freeze', 'reflect', 'barrier'];
 export function isExAttackItem(id) { return EX_ATTACK_IDS.includes(id); }
@@ -198,7 +198,8 @@ export function tickExItems(F, dt) {
         for (const e of F.enemies) {
           if (e.x + e.w * 0.45 > f.x + 10 && Math.abs(e.y - f.y) < half + e.h * 0.42) {
             e.hp -= PBEAM_DMG;
-            if (Math.random() < 0.12) F.fx.push(spawnExplosion(e.x - e.w * 0.3, f.y + (Math.random() - 0.5) * half, false));
+            // Pierce beam: every damage tick = one small boom at contact
+            F.fx.push(spawnHitSpark(e.x - e.w * 0.35, f.y));
           }
         }
       }
@@ -296,7 +297,7 @@ export function tickExItems(F, dt) {
         if (f._t >= next) {
           e.hp -= DISC_DMG;
           f._hit.set(e, f._t + DISC_REHIT);
-          F.fx.push(spawnExplosion(f.x, f.y, false));
+          F.fx.push(spawnHitSpark(f.x, f.y));
         }
       }
       for (const b of F.bullets) {

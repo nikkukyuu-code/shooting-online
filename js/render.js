@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260926021550';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260926023924';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -277,13 +277,16 @@ function drawShip(ctx, x, y, w, h, color = '#e8f0ff', facing = 1, angle = 0) {
 
 function drawHpPip(ctx, e) {
   const pct = Math.max(0, e.hp / (e.maxHp || e.hp || 1));
+  // Prefer above the unit; if that would clip past the field top, pin just inside.
+  let pipY = -e.h * 0.78;
+  if (typeof e.y === 'number' && e.y + pipY < 6) pipY = Math.min(e.h * 0.55, -e.y + 6);
   ctx.fillStyle = 'rgba(0,0,0,0.75)';
-  ctx.fillRect(-e.w * 0.45, -e.h * 0.78, e.w * 0.9, 6);
+  ctx.fillRect(-e.w * 0.45, pipY, e.w * 0.9, 6);
   ctx.fillStyle = pct < 0.35 ? '#ff4444' : '#33ee66';
-  ctx.fillRect(-e.w * 0.45, -e.h * 0.78, e.w * 0.9 * pct, 6);
+  ctx.fillRect(-e.w * 0.45, pipY, e.w * 0.9 * pct, 6);
   ctx.strokeStyle = '#fff';
   ctx.lineWidth = 1;
-  ctx.strokeRect(-e.w * 0.45, -e.h * 0.78, e.w * 0.9, 6);
+  ctx.strokeRect(-e.w * 0.45, pipY, e.w * 0.9, 6);
 }
 
 /** User-art enemy sprites: static frame 0 only (assets/enemies/<kind>/0.png).
@@ -299,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260926021550`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260926023924`;
 }
 
 function loadKindSprite(kind) {
@@ -1652,11 +1655,39 @@ function drawHealFx(ctx, f) {
   ctx.restore();
 }
 
+function drawHitSpark(ctx, f) {
+  const t = 1 - f.life / f.max;
+  const r = (f.r || 8) * (0.55 + t * 0.9);
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, 1 - t * 0.85);
+  const rg = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, r);
+  rg.addColorStop(0, '#ffffff');
+  rg.addColorStop(0.35, '#ffe08a');
+  rg.addColorStop(0.7, '#ff8844');
+  rg.addColorStop(1, 'rgba(255,40,0,0)');
+  ctx.fillStyle = rg;
+  ctx.beginPath();
+  ctx.arc(f.x, f.y, r, 0, Math.PI * 2);
+  ctx.fill();
+  // Tiny cross burst
+  ctx.strokeStyle = `rgba(255,240,180,${Math.max(0, 0.85 - t)})`;
+  ctx.lineWidth = 1.5;
+  const arm = r * 0.85;
+  ctx.beginPath();
+  ctx.moveTo(f.x - arm, f.y);
+  ctx.lineTo(f.x + arm, f.y);
+  ctx.moveTo(f.x, f.y - arm);
+  ctx.lineTo(f.x, f.y + arm);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawFx(ctx, f) {
   if (drawExFx(ctx, f)) return; // v1.5.67 extra attack items (attack_items.js)
   if (f.kind === 'shock') { drawShockFx(ctx, f); return; }
   if (f.kind === 'bomb') { drawBombFx(ctx, f); return; }
   if (f.kind === 'heal') { drawHealFx(ctx, f); return; }
+  if (f.kind === 'hit') { drawHitSpark(ctx, f); return; }
   const t = 1 - f.life / f.max;
   ctx.save();
   ctx.globalAlpha = Math.max(0, 1 - t);
@@ -1697,10 +1728,13 @@ function drawHpBarsAtBoundary(ctx, L, selfHp, oppHp, maxHp, fx = {}) {
   const oppLow = oppRatio < 0.3;
   const pulse = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(now / 180)); // ~2.8Hz
 
-  // Soft backdrop so bars stay readable over the opponent field
-  ctx.fillStyle = 'rgba(0,0,0,0.42)';
-  const bgPad = 4;
+  // Opaque HUD plate so large enemies never hide life bars
+  ctx.fillStyle = 'rgba(4, 6, 14, 0.88)';
+  const bgPad = 6;
   ctx.fillRect(x - bgPad, y - bgPad, barW + bgPad * 2 + 28, totalH + bgPad * 2);
+  ctx.strokeStyle = 'rgba(255, 210, 150, 0.35)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x - bgPad, y - bgPad, barW + bgPad * 2 + 28, totalH + bgPad * 2);
 
   // TOP = opponent
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
@@ -2490,15 +2524,7 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
   ctx.fillStyle = 'rgba(255,200,150,0.25)';
   ctx.fillRect(0, L.oppH - 1, L.W, 1);
 
-  // HP bars at bottom of opponent pane (above divider; keeps own playfield clear)
   const oppHp = remoteSnap ? (remoteSnap.php ?? playerMaxHp) : (localState.botHp ?? playerMaxHp);
-  drawHpBarsAtBoundary(ctx, L, localState.player.hp, oppHp, playerMaxHp, {
-    hpGhost: localState.hpGhost,
-    hpDisplay: localState.hpDisplay,
-    hpShake: localState.hpShake,
-    damageFlash: localState.damageFlash,
-    healFlash: localState.healFlash,
-  });
 
   // 3) Control — 操作画面 (purple/blue nebula pad)
   drawControlPanel(ctx, L.ctrl, localState);
@@ -2516,6 +2542,15 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
 
   // Item effect announcements are drawn inside the info pane (drawInfoPanel),
   // never over the opponent / own stages.
+
+  // Life HUD last (above enemies / FX / panes) so large ships near the top cannot hide it
+  drawHpBarsAtBoundary(ctx, L, localState.player.hp, oppHp, playerMaxHp, {
+    hpGhost: localState.hpGhost,
+    hpDisplay: localState.hpDisplay,
+    hpShake: localState.hpShake,
+    damageFlash: localState.damageFlash,
+    healFlash: localState.healFlash,
+  });
 
   if (waiting) {
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
