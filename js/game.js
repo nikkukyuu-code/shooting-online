@@ -3,13 +3,13 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260926011531';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260926011531';
-import { sfx } from './audio.js?v=20260926011531';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260926011531';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=20260926011531';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=20260926011531';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260926011531';
+} from './entities.js?v=20260926012753';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260926012753';
+import { sfx } from './audio.js?v=20260926012753';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260926012753';
+import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=20260926012753';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck } from './meta.js?v=20260926012753';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260926012753';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -540,8 +540,9 @@ export class Game {
 
     // Allow slight vertical overhang past stage edges (~half ship) while
     // keeping full control. Do NOT hard-stop at 0/1 — that felt stuck.
-    const PTR_Y_MIN = -0.05;
-    const PTR_Y_MAX = 1.05;
+    // Slight overhang for feel — hitboxes still use real Y (no edge safe zone)
+    const PTR_Y_MIN = -0.08;
+    const PTR_Y_MAX = 1.08;
     const PTR_X_MIN = 0.06;
     const PTR_X_MAX = 0.88;
     // Grab may start a bit outside the ctrl pad (ship rim overhangs when clipped).
@@ -1004,7 +1005,9 @@ export class Game {
       }
       const dmg = 8;
       p.activePower = 'direct';
-      p.activeTimer = 0.85;
+      // Pose/beam window; shots keep flying until off-screen (pierce)
+      p.activeTimer = 1.2;
+      p._directShotCd = 0;
       this.showItemBanner(meta);
       if (this.useBot) {
         this._bot.hp = Math.max(0, this._bot.hp - dmg);
@@ -1157,8 +1160,8 @@ export class Game {
     // Keyboard nudge (Y = up/down, X = back/forward along flight axis)
     if (this._keys) {
       // Match touch clamps: slight Y overhang past 0/1, X unchanged
-      if (this._keys.has('ArrowUp') || this._keys.has('w') || this._keys.has('W')) this.pointerY = Math.max(-0.05, this.pointerY - 1.2 * dt);
-      if (this._keys.has('ArrowDown') || this._keys.has('s') || this._keys.has('S')) this.pointerY = Math.min(1.05, this.pointerY + 1.2 * dt);
+      if (this._keys.has('ArrowUp') || this._keys.has('w') || this._keys.has('W')) this.pointerY = Math.max(-0.08, this.pointerY - 1.2 * dt);
+      if (this._keys.has('ArrowDown') || this._keys.has('s') || this._keys.has('S')) this.pointerY = Math.min(1.08, this.pointerY + 1.2 * dt);
       if (this._keys.has('ArrowLeft') || this._keys.has('a') || this._keys.has('A')) this.pointerX = Math.max(0.06, this.pointerX - 1.2 * dt);
       if (this._keys.has('ArrowRight') || this._keys.has('d') || this._keys.has('D')) this.pointerX = Math.min(0.88, this.pointerX + 1.2 * dt);
     }
@@ -1217,8 +1220,23 @@ export class Game {
     }
     if (P.activeTimer > 0) {
       P.activeTimer -= dt;
+      // Direct: staccato upward shots — pierce, despawn only off-screen
+      if (P.activePower === 'direct') {
+        P._directShotCd = (P._directShotCd || 0) - dt;
+        if (P._directShotCd <= 0) {
+          P._directShotCd = 0.07;
+          const by = P.y * fh;
+          S.bullets.push(spawnBullet(
+            P.x + 8, by - 12,
+            (Math.random() - 0.5) * 18, -560 - Math.random() * 40,
+            'player', false, 2,
+            { laser: true, life: 4.5, pierce: true },
+          ));
+        }
+      }
       if (P.activeTimer <= 0) {
         P.activePower = null;
+        P._directShotCd = 0;
         if (!this.ended) {
           if (P.items.length) {
             const n = powerupMeta(P.items[0]);
@@ -1232,7 +1250,7 @@ export class Game {
     P.fireCd -= dt;
     const fireRate = P.activePower === 'homing' ? 0.16
       : P.activePower === 'rapid' ? 0.1
-      : 0.28;
+      : 0.16; // normal: denser stream (was 0.28)
     if (P.fireCd <= 0 && S.alive) {
       P.fireCd = fireRate;
       const by = P.y * fh;
@@ -1253,8 +1271,8 @@ export class Game {
         S.bullets.push(spawnBullet(P.x + 16, by + 6, 500, 30, 'player', false, 2));
         sfx.shot();
       } else {
-        // v1.5.75: normal shot 3→4 (~+33%, modest snap after 1.5.72 HP)
-        S.bullets.push(spawnBullet(P.x + 16, by, 420, 0, 'player', false, 4));
+        // denser fire, slightly weaker per shot (4→2)
+        S.bullets.push(spawnBullet(P.x + 16, by, 420, 0, 'player', false, 2));
         sfx.shot();
       }
     }
@@ -1376,7 +1394,8 @@ export class Game {
       for (const e of S.enemies) {
         if (Math.abs(b.x - e.x) < e.w * 0.45 + 4 && Math.abs(b.y - e.y) < e.h * 0.45 + 4) {
           e.hp -= b.dmg;
-          b.life = 0;
+          // pierce (direct volley): keep flying until off-screen
+          if (!b.pierce) b.life = 0;
           S.fx.push(spawnExplosion(e.x, e.y, false));
           break;
         }
@@ -1409,9 +1428,10 @@ export class Game {
     const playerBarrier = hasBarrierFx(S.fx);
     for (const b of S.bullets) {
       if (b.owner !== 'enemy' || b.life <= 0) continue;
+      // Use real ship Y even when slightly past 0/1 (overhang still hittable)
       const py = P.y * fh;
       const hb = b.hb || 0; // bigger hurtbox for big orbs / mines / beams
-      if (Math.abs(b.x - P.x) < 14 + hb && Math.abs(b.y - py) < 12 + hb) {
+      if (Math.abs(b.x - P.x) < 16 + hb && Math.abs(b.y - py) < 16 + hb) {
         if (playerBarrier) {
           b.life = 0;
           const bar = S.fx.find((f) => f.kind === 'barrier' && f.life > 0);
@@ -1432,7 +1452,7 @@ export class Game {
     // Enemy body -> player
     for (const e of S.enemies) {
       const py = P.y * fh;
-      if (Math.abs(e.x - P.x) < e.w * 0.4 + 10 && Math.abs(e.y - py) < e.h * 0.4 + 8) {
+      if (Math.abs(e.x - P.x) < e.w * 0.4 + 12 && Math.abs(e.y - py) < e.h * 0.4 + 12) {
         if (playerBarrier) {
           const bar = S.fx.find((f) => f.kind === 'barrier' && f.life > 0);
           if (bar) bar._hit = 0.14;
@@ -1491,8 +1511,8 @@ export class Game {
     }
     S.meteors = S.meteors.filter((m) => m.life > 0 && m.y < fh + 60);
 
-    // Cleanup
-    S.bullets = S.bullets.filter((b) => b.life > 0 && b.x > -30 && b.x < fw + 80 && b.y > -30 && b.y < fh + 30);
+    // Cleanup — keep bullets past top/bottom so edge overhang is not a safe zone
+    S.bullets = S.bullets.filter((b) => b.life > 0 && b.x > -30 && b.x < fw + 80 && b.y > -90 && b.y < fh + 90);
     S.fx = S.fx.filter((f) => f.life > 0);
 
     // Show next item hint on bar when idle
@@ -1568,11 +1588,11 @@ export class Game {
 
     if (urgent && urgentScore > 0.4) B.reactDelay += dt;
     else B.reactDelay = Math.max(0, B.reactDelay - dt * 2.2);
-    const reacted = B.reactDelay > 0.32; // ~320ms — slower COM
+    const reacted = B.reactDelay > 0.48; // ~480ms — clearly slower COM
 
     // Rare wrong-way panic (keeps it human, not a wall)
-    if (reacted && urgent && B.humanPanic <= 0 && Math.random() < 0.03) {
-      B.humanPanic = 0.28 + Math.random() * 0.25;
+    if (reacted && urgent && B.humanPanic <= 0 && Math.random() < 0.05) {
+      B.humanPanic = 0.35 + Math.random() * 0.3;
       B.dodgeDir = urgent.yN >= B.y ? -1 : 1;
     }
     if (B.humanPanic > 0) B.humanPanic -= dt;
@@ -1615,7 +1635,7 @@ export class Game {
     wantY = Math.max(0.07, Math.min(0.93, wantY));
 
     // Snappy enough to feel skilled, not teleporty
-    const maxSpeed = dodging ? 1.45 : 0.85;
+    const maxSpeed = dodging ? 1.2 : 0.7;
     const accel = dodging ? 7 : 3.2;
     const desiredVel = Math.max(-maxSpeed, Math.min(maxSpeed, (wantY - B.y) * (dodging ? 5.2 : 2.6)));
     B.moveVel += (desiredVel - B.moveVel) * Math.min(1, accel * dt);
@@ -1662,7 +1682,7 @@ export class Game {
     B.x = Math.max(fw * 0.06, Math.min(fw * 0.55, B.x));
     shipX = B.x;
 
-    B.aimNoise += ((Math.random() - 0.5) * 0.14 - B.aimNoise) * Math.min(1, 1.6 * dt);
+    B.aimNoise += ((Math.random() - 0.5) * 0.22 - B.aimNoise) * Math.min(1, 1.4 * dt);
 
     // --- Fire control: lead aim, burst when aligned, powers ---
     B.fireCd -= dt;
@@ -1671,7 +1691,7 @@ export class Game {
     // Softness comes from reaction / aim / movement / items elsewhere.
     const fireRate = B.activePower === 'homing' ? 0.16
       : B.activePower === 'rapid' ? 0.1
-      : 0.28;
+      : 0.16; // match player normal stream
     if (B.fireCd <= 0) {
       B.fireCd = fireRate;
       const by = B.y * fh;
@@ -1690,8 +1710,8 @@ export class Game {
         B.bullets.push(spawnBullet(shipX + 16, by - 6, 500, -30, 'player', false, 2));
         B.bullets.push(spawnBullet(shipX + 16, by + 6, 500, 30, 'player', false, 2));
       } else {
-        // Same normal shot as the player (no bonus side shots)
-        B.bullets.push(spawnBullet(shipX + 16, by, 420, 0, 'player', false, 4));
+        // Same as player: denser, weaker per shot
+        B.bullets.push(spawnBullet(shipX + 16, by, 420, 0, 'player', false, 2));
       }
     }
 
@@ -1784,7 +1804,7 @@ export class Game {
       for (const e of B.enemies) {
         if (Math.abs(b.x - e.x) < e.w * 0.45 && Math.abs(b.y - e.y) < e.h * 0.45) {
           e.hp -= b.dmg;
-          b.life = 0;
+          if (!b.pierce) b.life = 0;
           B.fx.push(spawnExplosion(e.x, e.y));
         }
       }
@@ -1903,7 +1923,7 @@ export class Game {
       const idx = pickBestItem();
       if (idx == null || idx < 0) return;
       const id = B.items.splice(idx, 1)[0];
-      B.powerCd = 5.5 + Math.random() * 2.5;
+      B.powerCd = 7.0 + Math.random() * 3.0;
 
       if (id === 'homing') {
         B.activePower = 'homing';

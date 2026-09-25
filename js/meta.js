@@ -2,7 +2,7 @@
  * localStorage key: shootingOnline_meta (NEVER rename — would wipe player PT).
  * Backup key: shootingOnline_meta_bak. On every update, preserve pt; never clear storage.
  */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP } from './catalog.js?v=20260926011531';
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP } from './catalog.js?v=20260926012753';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;
@@ -82,8 +82,8 @@ export function buildComDeck(playerDeck, rng = Math.random, opts = {}) {
     if (pool.length < DECK_SIZE) return fallback();
     const P = Math.max(POOL_MIN, deckPower(playerDeck));
     // Wider band → more variety between matches while staying near player strength.
-    let hi = Math.min(P * 0.95, POOL_MAX);
-    let lo = Math.min(P * 0.72, POOL_MAX * 0.90);
+    let hi = Math.min(P * 0.85, POOL_MAX);
+    let lo = Math.min(P * 0.60, POOL_MAX * 0.85);
     if (lo > hi) lo = hi * 0.9;
     const avoid = new Set((opts && opts.avoid) || []);
     const playerKey = [...new Set(playerDeck || [])].sort().join(',');

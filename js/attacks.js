@@ -7,8 +7,8 @@
  *  - Homing missiles use limited homing (homeT) via steerEnemyHoming in game.js.
  *  - Player-hit damage per projectile: homing 3, everything else 5 (see game.js).
  */
-import { spawnBullet, resolveEnemyTier, isLargeEnemy, isWaveKind } from './entities.js?v=20260926011531';
-import { unitAttackLoadout } from './catalog.js?v=20260926011531';
+import { spawnBullet, resolveEnemyTier, isLargeEnemy, isWaveKind } from './entities.js?v=20260926012753';
+import { unitAttackLoadout } from './catalog.js?v=20260926012753';
 
 const PI = Math.PI;
 const TAU = PI * 2;

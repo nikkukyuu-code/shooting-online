@@ -179,6 +179,8 @@ export function spawnBullet(x, y, vx, vy, owner = 'player', homing = false, dmg 
     owner, homing: useHoming, dmg,
     life: opts.life != null ? opts.life : (laser ? 2.2 : 3),
     laser,
+    // pierce: keep flying until off-screen (used by direct-attack volley)
+    pierce: !!opts.pierce,
   };
   // Limited-homing: steer only while homeT > 0, then fly straight
   if (useHoming && opts.homeT != null) {
