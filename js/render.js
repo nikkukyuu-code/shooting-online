@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260927200701';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260927201350';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260927200701`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260927201350`;
 }
 
 function loadKindSprite(kind) {
@@ -679,8 +679,10 @@ function drawEnemy(ctx, e) {
   const warpPop = !warpT && e.warpPop > 0 ? e.warpPop : 0;
   if (warpT > 0 || warpPop > 0) drawWarpRing(ctx, w, h, t, warpT, warpPop);
   if (warpT > WARP_STEADY_AT) {
-    // Clear on/off blink (~7Hz), never fully invisible so the unit stays readable
-    ctx.globalAlpha = (Math.floor(t * 14) % 2) ? 0.18 : 1;
+    // Calm blink: 2 per second (0.5s cycle, 6 blinks over 3s), smooth fade 100% → 18% → 100%.
+    // Phase follows warp elapsed time, so own pane / opponent pane / online snapshot match.
+    const el = Math.max(0, 5 - warpT);
+    ctx.globalAlpha = 0.18 + 0.82 * (0.5 + 0.5 * Math.cos(el * Math.PI * 2 / 0.5));
   }
 
   // Sent-unit spawn FX: rapid blink + scale pop + cyan ring (~0.9s)
