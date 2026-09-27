@@ -158,6 +158,44 @@ export const STARTER_DECK = ['basic', 'drone', 'elite', 'swarm', 'tank'];
 export const CATALOG_BY_ID = Object.fromEntries(CATALOG.map((u) => [u.id, u]));
 export const ALL_KIND_IDS = CATALOG.map((u) => u.id);
 
+/**
+ * Send items → unit groups (by catalog tier, which drives size/HP in game):
+ *   send       敵キャラ送信   : any unit, random from the sender's deck ×2
+ *   send_mech  戦艦送信       : mech tier (large warships/mechs 176×96, HP50+) ×1
+ *   send_golem 要塞送信       : golem + boss tiers (fortress/dreadnought/legendary, the largest) ×1
+ *   send_tank  ガンシップ送信 : tank tier (gunships/cruisers 180×88) ×1
+ *   send_drone 無人機群送信   : drone + swarm tiers (small units) ×4
+ * Pool: matching units in the sender's equipped deck; if the deck has none, all matching units
+ * in the full catalog (never a unit outside the group, so 戦艦/要塞 never send small units).
+ * Picks are uniformly random (with replacement), independent of deck order.
+ */
+export const SEND_GROUPS = {
+  send: null,
+  send_mech: ['mech'],
+  send_golem: ['golem', 'boss'],
+  send_tank: ['tank'],
+  send_drone: ['drone', 'swarm'],
+};
+export const SEND_COUNTS = { send: 2, send_mech: 1, send_golem: 1, send_tank: 1, send_drone: 4 };
+
+export function sendPool(itemId, deck) {
+  const tiers = SEND_GROUPS[itemId];
+  const d = (Array.isArray(deck) ? deck : []).filter((id) => CATALOG_BY_ID[id]);
+  if (!tiers) return { pool: d.length ? d : ['basic', 'drone', 'elite', 'swarm', 'tank'], fromDeck: d.length > 0 };
+  const ok = (id) => CATALOG_BY_ID[id] && tiers.includes(CATALOG_BY_ID[id].tier);
+  const inDeck = d.filter(ok);
+  if (inDeck.length) return { pool: inDeck, fromDeck: true };
+  return { pool: CATALOG.filter((u) => tiers.includes(u.tier)).map((u) => u.id), fromDeck: false };
+}
+
+export function pickSendKinds(itemId, deck, rng = Math.random) {
+  const { pool } = sendPool(itemId, deck);
+  const n = SEND_COUNTS[itemId] || 1;
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(pool[Math.floor(rng() * pool.length) % pool.length]);
+  return out;
+}
+
 
 /** Tier → 攻撃パターン / 役割 / 紹介文 (デッキ・ショップ・図鑑) */
 export const TIER_INTRO = {

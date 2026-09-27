@@ -3,14 +3,14 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260927224905';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260927224905';
-import { sfx } from './audio.js?v=20260927224905';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260927224905';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul } from './catalog.js?v=20260927224905';
-import { hitBattleCounter } from './stats.js?v=20260927224905';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260927224905';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260927224905';
+} from './entities.js?v=20260927225453';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260927225453';
+import { sfx } from './audio.js?v=20260927225453';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260927225453';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds } from './catalog.js?v=20260927225453';
+import { hitBattleCounter } from './stats.js?v=20260927225453';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260927225453';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260927225453';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -74,13 +74,6 @@ setKindTier({
 });
 
 /** How many copies a send-item type spawns from the deck. */
-const SEND_COUNTS = {
-  send: 2,
-  send_mech: 1,
-  send_golem: 1,
-  send_tank: 1,
-  send_drone: 3,
-};
 
 /** Homing missile: limited turn rate + sticky lock-on (no instant snap). */
 const HOMING_TURN_RATE = 10.5; // rad/s (~9–12)
@@ -1105,12 +1098,11 @@ export class Game {
 
   /** Build spawn kind list for a send-* powerup from the equipped deck. */
   kindsFromDeck(itemId, forCom = false) {
-    const n = SEND_COUNTS[itemId] || 1;
-    const out = [];
-    for (let i = 0; i < n; i++) {
-      out.push(forCom ? this.nextComDeckKind() : this.nextPlayerDeckKind());
-    }
-    return out;
+    // Random (not deck order); typed sends only pick their unit group (catalog.js SEND_GROUPS)
+    const deck = forCom
+      ? (this._comDeck && this._comDeck.length ? this._comDeck : COM_DECK)
+      : (this._playerDeck && this._playerDeck.length ? this._playerDeck : ['basic', 'drone', 'elite', 'swarm', 'tank']);
+    return pickSendKinds(itemId, deck);
   }
 
   sendLabelForKinds(kinds, fallback) {

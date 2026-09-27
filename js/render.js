@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260927224905';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260927225453';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -14,14 +14,14 @@ const ITEM_STYLE = {
   shock:      { color: '#88ddff', icon: '⚡',  label: '電撃',   effect: '広範囲感電' },
   rapid:      { color: '#ffee44', icon: '≫',  label: '連射',   effect: '連射強化' },
   meteor:     { color: '#ff7744', icon: '☄',  label: '隕石',   effect: '相手に隕石' },
-  send:       { color: '#ff8844', icon: '⇒',  label: '敵送信', effect: '相手に敵を送る' },
+  send:       { color: '#ff8844', icon: '⇒',  label: '敵送信', effect: 'デッキから2体' },
   direct:     { color: '#ff3333', icon: '※',  label: '直撃',   effect: '相手画面の下から通常弾' },
   heal:       { color: '#44ff88', icon: '+',  label: '回復',   effect: 'HP+25' },
   heal_big:   { color: '#22ff66', icon: '++', label: '大回復', effect: 'HP+50' },
-  send_mech:  { color: '#88aaff', icon: '艦',  label: '戦艦',   effect: '戦艦を送る' },
-  send_golem: { color: '#cc88ff', icon: '塞',  label: '要塞',   effect: '要塞を送る' },
-  send_tank:  { color: '#66ddff', icon: '砲',  label: '砲艦',   effect: 'ガンシップ送信' },
-  send_drone: { color: '#33ffff', icon: '群',  label: '無人機', effect: 'ドローン4機' },
+  send_mech:  { color: '#88aaff', icon: '艦',  label: '戦艦',   effect: '戦艦級1体' },
+  send_golem: { color: '#cc88ff', icon: '塞',  label: '要塞',   effect: '要塞級1体' },
+  send_tank:  { color: '#66ddff', icon: '砲',  label: '砲艦',   effect: 'ガンシップ級1体' },
+  send_drone: { color: '#33ffff', icon: '群',  label: '無人機', effect: '小型機4機' },
 };
 Object.assign(ITEM_STYLE, EX_ITEM_STYLE); // v1.5.67 extra attack items
 
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260927224905`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260927225453`;
 }
 
 function loadKindSprite(kind) {
