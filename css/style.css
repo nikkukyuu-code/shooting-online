@@ -1895,3 +1895,12 @@ html, body {
 @media (min-width: 900px) {
   .transfer-note { font-size: 0.74rem; }
 }
+.transfer-note a.transfer-easy {
+  display: inline-block;
+  margin-left: 2px;
+  color: #fff;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
