@@ -165,8 +165,11 @@ export const ALL_KIND_IDS = CATALOG.map((u) => u.id);
  *   send_golem 要塞送信       : golem + boss tiers (fortress/dreadnought/legendary, the largest) ×1
  *   send_tank  ガンシップ送信 : tank tier (gunships/cruisers 180×88) ×1
  *   send_drone 無人機群送信   : drone + swarm tiers (small units) ×4
- * Pool: matching units in the sender's equipped deck; if the deck has none, all matching units
- * in the full catalog (never a unit outside the group, so 戦艦/要塞 never send small units).
+ * Pool: ONLY the sender's equipped deck (never the full catalog).
+ *   Matching units in the deck → uniform random among them.
+ *   None match → 戦艦/要塞/ガンシップ: the LARGEST deck unit; 無人機群: the SMALLEST deck unit (×4).
+ *   Size order = tier rank (boss > golem > mech > tank > elite > drone > basic > swarm),
+ *   then 防御力 (DEF → HP); remaining ties random.
  * Picks are uniformly random (with replacement), independent of deck order.
  */
 export const SEND_GROUPS = {
@@ -177,15 +180,31 @@ export const SEND_GROUPS = {
   send_drone: ['drone', 'swarm'],
 };
 export const SEND_COUNTS = { send: 2, send_mech: 1, send_golem: 1, send_tank: 1, send_drone: 4 };
+const TIER_SIZE_RANK = { swarm: 1, basic: 2, drone: 3, elite: 4, tank: 5, mech: 6, golem: 7, boss: 8 };
+function unitSizeKey(id) {
+  const u = CATALOG_BY_ID[id];
+  const st = unitStats(id);
+  return [TIER_SIZE_RANK[u && u.tier] || 0, (st && st.def) || 0];
+}
+function cmpSize(a, b) {
+  const ka = unitSizeKey(a), kb = unitSizeKey(b);
+  return (ka[0] - kb[0]) || (ka[1] - kb[1]);
+}
 
+/** Returns { pool, mode: 'match'|'largest'|'smallest'|'any' } — pool always from the deck. */
 export function sendPool(itemId, deck) {
   const tiers = SEND_GROUPS[itemId];
-  const d = (Array.isArray(deck) ? deck : []).filter((id) => CATALOG_BY_ID[id]);
-  if (!tiers) return { pool: d.length ? d : ['basic', 'drone', 'elite', 'swarm', 'tank'], fromDeck: d.length > 0 };
-  const ok = (id) => CATALOG_BY_ID[id] && tiers.includes(CATALOG_BY_ID[id].tier);
-  const inDeck = d.filter(ok);
-  if (inDeck.length) return { pool: inDeck, fromDeck: true };
-  return { pool: CATALOG.filter((u) => tiers.includes(u.tier)).map((u) => u.id), fromDeck: false };
+  let d = (Array.isArray(deck) ? deck : []).filter((id) => CATALOG_BY_ID[id]);
+  if (!d.length) d = ['basic', 'drone', 'elite', 'swarm', 'tank'];
+  if (!tiers) return { pool: d, mode: 'any' };
+  const inDeck = d.filter((id) => tiers.includes(CATALOG_BY_ID[id].tier));
+  if (inDeck.length) return { pool: inDeck, mode: 'match' };
+  const small = itemId === 'send_drone';
+  const sorted = d.slice().sort(cmpSize);
+  const pick = small ? sorted[0] : sorted[sorted.length - 1];
+  // all deck units tied with the extreme (random among ties)
+  const ties = d.filter((id) => cmpSize(id, pick) === 0);
+  return { pool: [...new Set(ties)], mode: small ? 'smallest' : 'largest' };
 }
 
 export function pickSendKinds(itemId, deck, rng = Math.random) {

@@ -8,8 +8,8 @@
  *  - Player-hit damage per projectile: homing 3, everything else 5 (see game.js),
  *    × the firing unit's 攻撃力 multiplier (b.atk, catalog.js atkDamageMul).
  */
-import { spawnBullet, resolveEnemyTier, isLargeEnemy, isWaveKind } from './entities.js?v=20260927225453';
-import { unitAttackLoadout } from './catalog.js?v=20260927225453';
+import { spawnBullet, resolveEnemyTier, isLargeEnemy, isWaveKind } from './entities.js?v=20260927230515';
+import { unitAttackLoadout } from './catalog.js?v=20260927230515';
 
 const PI = Math.PI;
 const TAU = PI * 2;
