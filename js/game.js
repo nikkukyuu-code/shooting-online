@@ -3,14 +3,14 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260928020717';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260928020717';
-import { sfx } from './audio.js?v=20260928020717';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260928020717';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260928020717';
-import { hitBattleCounter } from './stats.js?v=20260928020717';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL } from './meta.js?v=20260928020717';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260928020717';
+} from './entities.js?v=20260928023659';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260928023659';
+import { sfx } from './audio.js?v=20260928023659';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260928023659';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260928023659';
+import { hitBattleCounter } from './stats.js?v=20260928023659';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL } from './meta.js?v=20260928023659';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260928023659';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -592,6 +592,7 @@ export class Game {
         powerCdBase: 9.0,
         powerCdSpread: 4.0,
         seedItemChance: 0.22,
+        sendReact: 2.5, // s to react to a held send item (player: instant tap)
       };
     }
     return {
@@ -604,6 +605,7 @@ export class Game {
       powerCdBase: 7.0,
       powerCdSpread: 3.0,
       seedItemChance: 0.35,
+      sendReact: 1.5,
     };
   }
 
@@ -2114,13 +2116,24 @@ export class Game {
     }
 
     // --- Spawns (slightly denser so AI has something to think about) ---
+    // Same wave rules as the player's field (interval, 1–2 per wave, kind mix, wave boss every 22s)
+    // so COM gets the same number of kill → item-drop chances.
     B.spawnAcc += dt;
-    if (B.spawnAcc > 0.85) {
+    const botSpawnEvery = Math.max(0.35, 0.85 - (B.time || 0) * 0.01);
+    if (B.spawnAcc >= botSpawnEvery) {
       B.spawnAcc = 0;
-      const r = Math.random();
-      // Wave-only kinds (not catalog/deck units)
-      const kind = r > 0.88 ? 'wave_elite' : r > 0.55 ? 'wave_swarm' : 'wave_basic';
-      B.enemies.push(spawnEnemy(fw, fh, kind));
+      const n = 1 + (Math.random() > 0.65 ? 1 : 0);
+      for (let i = 0; i < n; i++) {
+        const r = Math.random();
+        // Wave-only kinds (not catalog/deck units)
+        const kind = r > 0.85 ? 'wave_elite' : r > 0.5 ? 'wave_swarm' : 'wave_basic';
+        B.enemies.push(spawnEnemy(fw, fh, kind));
+      }
+    }
+    B.bossAcc = (B.bossAcc || 0) + dt;
+    if (B.bossAcc > 22 && !B.enemies.some((e) => resolveEnemyTier(e.kind) === 'boss')) {
+      B.bossAcc = 0;
+      B.enemies.push(spawnEnemy(fw, fh, 'wave_boss'));
     }
 
     for (const e of B.enemies) {
@@ -2201,7 +2214,7 @@ export class Game {
           const dropId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';
           B.hp = Math.min(B.maxHp || PLAYER_MAX_HP, B.hp + (dropId === 'heal_big' ? 50 : 25));
           B.fx.unshift(spawnHealFx(48, B.y * fh, dropId === 'heal_big'));
-        } else if (B.items.length < MAX_ITEM_SLOTS && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : BOT_ITEM_DROP_CHANCE)) {
+        } else if (B.items.length < MAX_ITEM_SLOTS && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : ITEM_DROP_CHANCE)) {
           let dropId = pickPowerupId();
           if (dropId === 'heal' || dropId === 'heal_big') {
             B.hp = Math.min(B.maxHp || PLAYER_MAX_HP, B.hp + (dropId === 'heal_big' ? 50 : 25));
@@ -2315,15 +2328,9 @@ export class Game {
 
     const tryUse = (force = false) => {
       if (B.powerCd > 0 && !force) return;
-      // Softened: only sometimes seed a free item (was always + often a second)
-      if (!B.items.length && Math.random() < _cp.seedItemChance) {
-        const pool = ['homing', 'laser', 'spread', 'bomb', 'shock', 'rapid', 'meteor', 'send', 'send_mech', 'send_golem', 'send_tank', 'send_drone', 'heal', 'direct',
-          'pbeam', 'option', 'cluster', 'blackhole', 'freeze', 'reflect', 'barrier'];
-        const seeded = pool[(Math.random() * pool.length) | 0];
-        B.items.push(seeded);
-        if (seeded === 'direct' && B._directHeldSince == null) B._directHeldSince = B.time;
-      }
-      const idx = pickBestItem();
+      // No free seeded items: COM only uses items it got from kills (same as the player)
+      const idx = B._forceIdx != null ? B._forceIdx : pickBestItem();
+      B._forceIdx = null;
       if (idx == null || idx < 0) return;
       const id = B.items.splice(idx, 1)[0];
       B.powerCd = _cp.powerCdBase + Math.random() * _cp.powerCdSpread;
@@ -2408,6 +2415,22 @@ export class Game {
       const wantClear = enemyPressure >= 3;
       const wantPressure = playerHp >= 40 && B.time > 4;
       if (wantHeal || wantClear || wantPressure || B.items.length >= 3) tryUse();
+    }
+    // Send items: like the player (who can tap any time), COM sends as soon as it reacts —
+    // not gated by the item cooldown, and it does not consume that cooldown either.
+    {
+      const sIdx = B.items.findIndex((id) => id === 'send' || id === 'send_mech' || id === 'send_golem' || id === 'send_tank' || id === 'send_drone');
+      if (sIdx < 0) B._sendHeldSince = null;
+      else {
+        if (B._sendHeldSince == null) B._sendHeldSince = B.time;
+        if (B.time - B._sendHeldSince >= (_cp.sendReact ?? 2)) {
+          const cd = B.powerCd;
+          B._forceIdx = sIdx;
+          tryUse(true);
+          B.powerCd = cd;
+          B._sendHeldSince = null;
+        }
+      }
     }
     // Emergency heal even if cooldown almost ready
     if (B.hp <= 22 && B.powerCd < 1.0 && B.items.some((id) => id === 'heal' || id === 'heal_big')) {
