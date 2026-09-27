@@ -29,6 +29,10 @@ export const POWERUPS = [
 
 /** Shared direct-attack pose/beam window (seconds). Thick continuous beam + HUD countdown. */
 export const DIRECT_DURATION = 6;
+/** Direct beam damage ticks: first hit on activation, then every 0.5s → 11 hits × 5 = 55 total over 6s. */
+export const DIRECT_TICK_INTERVAL = 0.5;
+export const DIRECT_TICK_DMG = 5;
+export const DIRECT_TICKS = 11;
 
 export function powerupMeta(id) {
   return POWERUPS.find((p) => p.id === id) || POWERUPS[0];

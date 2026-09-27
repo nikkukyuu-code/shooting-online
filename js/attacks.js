@@ -5,10 +5,11 @@
  * Rules kept from the original enemy AI:
  *  - Lasers are ALWAYS horizontal (vy = 0) and never track the player.
  *  - Homing missiles use limited homing (homeT) via steerEnemyHoming in game.js.
- *  - Player-hit damage per projectile: homing 3, everything else 5 (see game.js).
+ *  - Player-hit damage per projectile: homing 3, everything else 5 (see game.js),
+ *    × the firing unit's 攻撃力 multiplier (b.atk, catalog.js atkDamageMul).
  */
-import { spawnBullet, resolveEnemyTier, isLargeEnemy, isWaveKind } from './entities.js?v=20260926030107';
-import { unitAttackLoadout } from './catalog.js?v=20260926030107';
+import { spawnBullet, resolveEnemyTier, isLargeEnemy, isWaveKind } from './entities.js?v=20260927184129';
+import { unitAttackLoadout } from './catalog.js?v=20260927184129';
 
 const PI = Math.PI;
 const TAU = PI * 2;
@@ -62,6 +63,8 @@ function makeCtx(e, bullets, tx, ty) {
       if (mine >= cap || total >= ENEMY_BULLET_FIELD_CAP) return null;
       mine++; total++;
       b.src = e._uid;
+      // 攻撃力: damage multiplier of the firing unit (set in markSentEnemy)
+      if (e.atkMul) b.atk = e.atkMul;
       bullets.push(b);
       return b;
     },
@@ -321,6 +324,7 @@ export function updateEnemyBullet(b, dt, out) {
           const s = spawnBullet(b.x, b.y, Math.cos(a) * b.ss, Math.sin(a) * b.ss, 'enemy', false, 2, { life: 2.6 });
           s.k = 'petal';
           s.src = b.src;
+          if (b.atk) s.atk = b.atk;
           out.push(s);
         }
       }

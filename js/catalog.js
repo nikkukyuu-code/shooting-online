@@ -331,3 +331,58 @@ export const RARITY_JA = {
   epic: 'エピック',
   legendary: 'レジェンダリー',
 };
+
+/* ---------------------------------------------------------------------------
+ * 攻撃力 / 防御力 (ATK / DEF) — derived from rarity, tier HP, attack loadout and price.
+ *   fire = avg(pattern power) × per / iv   (volley strength per second)
+ *   price' = price (starters: tier pseudo price 20–30)
+ *   ATK = round(12 + 9×rarityRank + 9×fire + 0.8×√price')
+ *   DEF = round(10 + 9×rarityRank + 4×√tierBaseHP + 0.8×√price')
+ * Gameplay (same for player-sent and COM-sent units):
+ *   bullet damage to the receiving ship ×= (0.85 + ATK/400)   (ATK 60 ≈ ×1.00)
+ *   unit HP ×= (1 + DEF/500)                                   (DEF 100 = ×1.20)
+ * ------------------------------------------------------------------------- */
+const RARITY_RANK = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 };
+/** Base HP by tier (mirrors ENEMY_TIER_STATS in entities.js). */
+const TIER_BASE_HP = { swarm: 4, basic: 7, drone: 9, elite: 18, mech: 50, golem: 64, tank: 70, boss: 125 };
+const STARTER_PSEUDO_PRICE = { swarm: 20, basic: 25, drone: 25, elite: 30, tank: 30, mech: 35, golem: 40, boss: 45 };
+const _statCache = Object.create(null);
+
+/** { atk, def } for a catalog unit id; null for unknown / wave kinds. */
+export function unitStats(id) {
+  if (_statCache[id]) return _statCache[id];
+  const u = CATALOG_BY_ID[id];
+  if (!u) return null;
+  const tier = u.tier || 'basic';
+  const lo = unitAttackLoadout(id, tier);
+  const seq = (lo && lo.seq) || [];
+  const avgPow = seq.length
+    ? seq.reduce((s, [p]) => s + ((ATTACK_PATTERN_INFO[p] && ATTACK_PATTERN_INFO[p].power) || 1), 0) / seq.length
+    : 1;
+  const fire = avgPow * ((lo && lo.per) || 1) / ((lo && lo.iv) || 1.5);
+  const price = u.price > 0 ? u.price : (STARTER_PSEUDO_PRICE[tier] || 25);
+  const rank = RARITY_RANK[u.rarity] || 0;
+  const atk = Math.round(12 + 9 * rank + 9 * fire + 0.8 * Math.sqrt(price));
+  const def = Math.round(10 + 9 * rank + 4 * Math.sqrt(TIER_BASE_HP[tier] || 7) + 0.8 * Math.sqrt(price));
+  return (_statCache[id] = { atk, def });
+}
+
+/** Damage multiplier for bullets fired by a unit with this ATK (clamped for safety). */
+export function atkDamageMul(atk) {
+  const n = Number(atk);
+  if (!Number.isFinite(n) || n <= 0) return 1;
+  return Math.max(0.85, Math.min(1.3, 0.85 + n / 400));
+}
+
+/** HP multiplier for a unit with this DEF (clamped for safety). */
+export function defHpMul(def) {
+  const n = Number(def);
+  if (!Number.isFinite(n) || n <= 0) return 1;
+  return Math.max(1, Math.min(1.3, 1 + n / 500));
+}
+
+// Additive: expose atk/def on catalog entries too (does not touch saved data).
+for (const u of CATALOG) {
+  const s = unitStats(u.id);
+  if (s) { u.atk = s.atk; u.def = s.def; }
+}

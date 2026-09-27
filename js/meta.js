@@ -2,7 +2,7 @@
  * localStorage key: shootingOnline_meta (NEVER rename — would wipe player PT).
  * Backup key: shootingOnline_meta_bak. On every update, preserve pt; never clear storage.
  */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP } from './catalog.js?v=20260926030107';
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP } from './catalog.js?v=20260927184129';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;
@@ -300,7 +300,47 @@ export function buyUnit(meta, id) {
     owned: [...meta.owned, id],
     deck: [...meta.deck],
   };
-  return { ok: true, meta: saveMeta(next, { allowPtDecrease: true }), reason: 'bought' };
+  const saved = saveMeta(next, { allowPtDecrease: true });
+  markUnitNew(id);
+  return { ok: true, meta: saved, reason: 'bought' };
+}
+
+/* ---------------------------------------------------------------------------
+ * 「NEW」 marks for freshly purchased units.
+ * Separate key (shootingOnline_newUnits) — never touches shootingOnline_meta / _bak.
+ * Rule: set on purchase; cleared when the unit's card is tapped in the deck screen
+ * (tap = equip into the selected slot), i.e. once the player has seen & used it.
+ * ------------------------------------------------------------------------- */
+export const NEW_UNITS_KEY = 'shootingOnline_newUnits';
+
+/** Set of unit ids currently marked NEW (only catalog ids). Never throws. */
+export function loadNewUnits() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(NEW_UNITS_KEY) || '[]');
+    return new Set(Array.isArray(raw) ? raw.filter((id) => typeof id === 'string' && CATALOG_BY_ID[id]) : []);
+  } catch (_) {
+    return new Set();
+  }
+}
+
+function saveNewUnits(set) {
+  try { localStorage.setItem(NEW_UNITS_KEY, JSON.stringify([...set])); } catch (_) { /* ignore */ }
+}
+
+export function markUnitNew(id) {
+  if (!CATALOG_BY_ID[id]) return;
+  const s = loadNewUnits();
+  if (s.has(id)) return;
+  s.add(id);
+  saveNewUnits(s);
+}
+
+/** Clear NEW for a unit. Returns true if it was marked. */
+export function clearUnitNew(id) {
+  const s = loadNewUnits();
+  if (!s.delete(id)) return false;
+  saveNewUnits(s);
+  return true;
 }
 
 /**

@@ -1,15 +1,16 @@
 import {
-  POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
+  POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_TICK_INTERVAL, DIRECT_TICK_DMG, DIRECT_TICKS, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260926030107';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260926030107';
-import { sfx } from './audio.js?v=20260926030107';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260926030107';
-import { ALL_KIND_IDS, CATALOG_BY_ID } from './catalog.js?v=20260926030107';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260926030107';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260926030107';
+} from './entities.js?v=20260927184129';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260927184129';
+import { sfx } from './audio.js?v=20260927184129';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260927184129';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul } from './catalog.js?v=20260927184129';
+import { hitBattleCounter } from './stats.js?v=20260927184129';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260927184129';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260927184129';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -246,6 +247,19 @@ function tickEnemyLaserFire(e, bullets, tx, ty, dt, canFire, computeReload) {
 
 
 
+/** Bullet → ship damage with the firing unit's 攻撃力 multiplier (1 for wave enemies). */
+function scaledHitDmg(base, b) {
+  const m = b && Number.isFinite(b.atk) && b.atk > 0 ? b.atk : 1;
+  return Math.max(1, Math.round(base * m));
+}
+
+/** Direct-attack impact boom (a bit larger than a normal big explosion so it reads in the small opp pane). */
+function directBoom(x, y) {
+  const f = spawnExplosion(x, y, true);
+  f.r = 32;
+  return f;
+}
+
 export class Game {
   constructor(canvas, ui) {
     this.canvas = canvas;
@@ -421,6 +435,8 @@ export class Game {
     if (bot) {
       this.waiting = false;
       this._initBot();
+      // Worldwide battle counter (bc): every CPU battle counts once
+      hitBattleCounter();
       // Rebuild again here so every COM match gets a new lineup even if reset ran early.
       this.rebuildComDeck();
       const msg = this.comDeckStatusText();
@@ -468,6 +484,11 @@ export class Game {
     this.waiting = false;
     this.setStatus(HINT);
     if (this.net && !this.useBot) this.net.send({ type: 'start' });
+    // Worldwide battle counter (bc): online match counted by the host only (no double count)
+    if (this.net && !this.useBot && this.net.role === 'host' && !this._battleCounted) {
+      this._battleCounted = true;
+      hitBattleCounter();
+    }
     setTimeout(() => { if (!this.ended && !this.waiting) this.maybeStartTutorial(!!this._forceTutorial); this._forceTutorial = false; }, 700);
   }
 
@@ -746,6 +767,42 @@ export class Game {
     return dmg;
   }
 
+  /** One direct-beam tick on the COM ship: damage + spark + boom in the opponent pane (via _bot.fx). */
+  directTickOnBot() {
+    const B = this._bot;
+    if (!B || this.ended) return;
+    const fh = this.L.own.h;
+    B.hp = Math.max(0, B.hp - DIRECT_TICK_DMG);
+    this.state.botHp = B.hp;
+    const x = B.x || 48;
+    const y = B.y * fh;
+    B.fx.push(directBoom(x + (Math.random() - 0.5) * 10, y + (Math.random() - 0.5) * 8));
+    B.fx.push(spawnHitSpark(x + (Math.random() - 0.5) * 8, y - 4 + (Math.random() - 0.5) * 8));
+  }
+
+  /** One incoming direct-beam tick on our ship: damage + boom (front of fx so net snapshots keep it). */
+  directTickOnPlayer() {
+    if (this.ended) return;
+    const S = this.state;
+    const P = S.player;
+    const fh = this.L.own.h;
+    this.applyPlayerDamage(DIRECT_TICK_DMG, 'direct');
+    const x = P.x + 4;
+    const y = P.y * fh;
+    S.fx.unshift(directBoom(x + (Math.random() - 0.5) * 10, y + (Math.random() - 0.5) * 8));
+    S.fx.push(spawnHitSpark(x + (Math.random() - 0.5) * 8, y - 4 + (Math.random() - 0.5) * 8));
+    sfx.hit();
+  }
+
+  /** Start an incoming direct beam (COM or online): first tick now, rest in update(). */
+  startIncomingDirect() {
+    const S = this.state;
+    S.incomingDirect = DIRECT_DURATION;
+    S._inDirectHits = 1;
+    this.directTickOnPlayer();
+    S.player.invuln = Math.max(S.player.invuln || 0, 0.6);
+  }
+
   tryUsePower(index = 0) {
     if (this.waiting || this.ended || !this.state.alive) return;
     const p = this.state.player;
@@ -780,6 +837,18 @@ export class Game {
    */
   markSentEnemy(e, fw, fh) {
     e.sent = true;
+    // 攻撃力 / 防御力 (catalog.js): ATK scales this unit's bullet damage to the receiving ship,
+    // DEF raises its HP. Same rule for player-sent, COM-sent and online-received units.
+    const st = unitStats(e.kind);
+    if (st && !e._statsApplied) {
+      e._statsApplied = true;
+      e.atk = st.atk;
+      e.def = st.def;
+      e.atkMul = atkDamageMul(st.atk);
+      const hp = Math.max(1, Math.round((e.maxHp || e.hp || 1) * defHpMul(st.def)));
+      e.hp = hp;
+      e.maxHp = hp;
+    }
     e.holdX = fw * (0.72 + Math.random() * 0.14);
     e.holdY = Math.max(28, Math.min(fh - 28, e.y));
     e.x = fw + 24 + Math.random() * 50;
@@ -1040,18 +1109,19 @@ export class Game {
         console.warn('blocked direct without item');
         return;
       }
-      const dmg = 8;
       p.activePower = 'direct';
       // Pose/beam window; shots keep flying until off-screen (pierce)
       p.activeTimer = DIRECT_DURATION;
       p._directShotCd = 0;
+      p._directHits = 0;
       this.showItemBanner(meta);
       if (this.useBot) {
-        this._bot.hp = Math.max(0, this._bot.hp - dmg);
-        this.state.botHp = this._bot.hp;
-        this._bot.fx.push(spawnExplosion(this.L.own.w * 0.35, this._bot.y * this.L.own.h, true));
+        // First hit now; the rest tick every DIRECT_TICK_INTERVAL in update()
+        p._directHits = 1;
+        this.directTickOnBot();
       } else if (this.net) {
-        this.net.send({ type: 'directHit', dmg });
+        // One start message — the receiver simulates every tick locally (no double apply here)
+        this.net.send({ type: 'directHit', dmg: DIRECT_TICK_DMG, ticks: DIRECT_TICKS });
       }
       this.state.fx.push(spawnExplosion(p.x + 8, p.y * this.L.own.h - 20, false));
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
@@ -1123,11 +1193,7 @@ export class Game {
     }
     if (msg.type === 'directHit') {
       // Incoming only — do NOT set player.activePower (that made it look like WE fired)
-      const dmg = msg.dmg || 8;
-      this.state.incomingDirect = DIRECT_DURATION;
-      this.applyPlayerDamage(dmg, 'direct');
-      this.state.player.invuln = 0.6;
-      this.state.fx.push(spawnExplosion(this.state.player.x + 10, this.state.player.y * this.L.own.h, true));
+      this.startIncomingDirect();
       this.setStatus('相手からの直撃！');
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1400);
       if (this.state.player.hp <= 0) this.finish(false);
@@ -1254,6 +1320,12 @@ export class Game {
     if (S.incomingDirect > 0) {
       S.incomingDirect -= dt;
       if (S.incomingDirect < 0) S.incomingDirect = 0;
+      // Damage ticks while the incoming beam is active (COM or online opponent)
+      const inElapsed = DIRECT_DURATION - S.incomingDirect;
+      while ((S._inDirectHits || 0) < DIRECT_TICKS && inElapsed >= (S._inDirectHits || 0) * DIRECT_TICK_INTERVAL) {
+        S._inDirectHits = (S._inDirectHits || 0) + 1;
+        this.directTickOnPlayer();
+      }
       // Staccato spark ticks while the incoming beam is active (visual only)
       S._incomingDirectSparkCd = (S._incomingDirectSparkCd || 0) - dt;
       if (S._incomingDirectSparkCd <= 0 && S.incomingDirect > 0) {
@@ -1278,6 +1350,14 @@ export class Game {
             'player', false, 2,
             { laser: true, life: 4.5, pierce: true },
           ));
+        }
+        // CPU match: beam damage ticks on the COM ship (online: receiver simulates ticks)
+        if (this.useBot && this._bot) {
+          const elapsed = DIRECT_DURATION - Math.max(0, P.activeTimer);
+          while ((P._directHits || 0) < DIRECT_TICKS && elapsed >= (P._directHits || 0) * DIRECT_TICK_INTERVAL) {
+            P._directHits = (P._directHits || 0) + 1;
+            this.directTickOnBot();
+          }
         }
       }
       if (P.activeTimer <= 0) {
@@ -1487,7 +1567,8 @@ export class Game {
           continue;
         }
         if (P.invuln <= 0) {
-          const hitDmg = b.homing ? 3 : 5; // v1.5.72: was 4/6 (field enemies; COM ship nerfed separately)
+          // v1.5.72: 3/5 base; × firing unit's 攻撃力 multiplier (b.atk, sent units only)
+          const hitDmg = scaledHitDmg(b.homing ? 3 : 5, b);
           this.applyPlayerDamage(hitDmg, 'bullet');
           P.invuln = 0.75;
           b.life = 0;
@@ -1898,7 +1979,7 @@ export class Game {
           continue;
         }
         if (B.invuln <= 0) {
-          B.hp = Math.max(0, B.hp - 5); // v1.5.72: was 7
+          B.hp = Math.max(0, B.hp - scaledHitDmg(5, b)); // v1.5.72: was 7; × 攻撃力 (same rule as player)
           B.invuln = 0.38;
           b.life = 0;
           B.fx.push(spawnHitSpark(shipX, B.y * fh));
@@ -1995,17 +2076,12 @@ export class Game {
         // Incoming purple beam only on player pane (never set player.activePower).
         // Set COM activePower so opponent-pane facing (snap.ap === 'direct') is reliable;
         // updateBot only special-fires for homing/laser/rapid, so normal shots continue.
-        const dmg = 8;
         B.activePower = 'direct';
         B.activeTimer = DIRECT_DURATION;
         B.directBeam = DIRECT_DURATION;
         B._directHeldSince = null;
-        this.state.incomingDirect = DIRECT_DURATION;
-        this.applyPlayerDamage(dmg, 'direct');
-        this.state.player.invuln = Math.max(this.state.player.invuln || 0, 0.6);
-        const py = this.state.player.y * fh;
-        this.state.fx.push(spawnExplosion(this.state.player.x + 10, py, true));
-        this.state.fx.push(spawnHitSpark(this.state.player.x + 8, py - 6));
+        // Same tick damage as the player's direct (fair): first hit now, rest in update()
+        this.startIncomingDirect();
         this.setStatus('COMの直撃！');
         setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
       } else if (id === 'spread') {

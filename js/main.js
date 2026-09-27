@@ -1,11 +1,12 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20260926030107';
-import { Net } from './net.js?v=20260926030107';
-import { Game } from './game.js?v=20260926030107';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA } from './catalog.js?v=20260926030107';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE } from './meta.js?v=20260926030107';
-import { registerEnemyKinds } from './render.js?v=20260926030107';
-import { ALL_KIND_IDS } from './catalog.js?v=20260926030107';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20260926030107';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20260927184129';
+import { Net } from './net.js?v=20260927184129';
+import { Game } from './game.js?v=20260927184129';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats } from './catalog.js?v=20260927184129';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew } from './meta.js?v=20260927184129';
+import { loadBattleCount } from './stats.js?v=20260927184129';
+import { registerEnemyKinds } from './render.js?v=20260927184129';
+import { ALL_KIND_IDS } from './catalog.js?v=20260927184129';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20260927184129';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -125,7 +126,7 @@ function refreshPtDisplay(meta) {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20260926030107`;
+  return `assets/enemies/${id}/0.png?v=20260927184129`;
 }
 
 function unitName(id) {
@@ -134,6 +135,25 @@ function unitName(id) {
 
 function rarityLabel(r) {
   return RARITY_JA[r] || r || '';
+}
+
+/** 攻撃力 / 防御力 chips. compact = short labels for the narrow deck slots. */
+function statsHtml(id, compact = false) {
+  const st = unitStats(id);
+  if (!st) return '';
+  if (compact) {
+    return `<span class="unit-stats compact"><span class="st st-atk">攻${st.atk}</span><span class="st st-def">防${st.def}</span></span>`;
+  }
+  return `<span class="unit-stats"><span class="st st-atk">攻撃力 ${st.atk}</span><span class="st st-def">防御力 ${st.def}</span></span>`;
+}
+
+const NEW_BADGE = '<span class="unit-new-badge" aria-label="新しく購入">NEW</span>';
+
+/** Show a small NEW dot on the デッキ menu button while any purchased unit is still unseen. */
+function refreshDeckNewDot() {
+  if (!els.btnDeck) return;
+  const n = loadNewUnits().size;
+  els.btnDeck.classList.toggle('has-new', n > 0);
 }
 
 function renderUnitDetail(container, unitId, opts = {}) {
@@ -157,9 +177,20 @@ function renderUnitDetail(container, unitId, opts = {}) {
         <span class="detail-role">${intro.role}</span>
         ${price}
       </div>
+      <div class="detail-stats">${detailStatsHtml(unitId)}</div>
       <div class="detail-attack"><span class="detail-label">攻撃</span>${intro.attack}</div>
       <p class="detail-blurb">${intro.blurb}</p>
     </div>
+  `;
+}
+
+function detailStatsHtml(id) {
+  const st = unitStats(id);
+  if (!st) return '';
+  const bar = (v) => Math.max(6, Math.min(100, Math.round(v / 150 * 100)));
+  return `
+    <div class="stat-row st-atk"><span class="stat-name">攻撃力</span><span class="stat-bar"><i style="width:${bar(st.atk)}%"></i></span><b>${st.atk}</b></div>
+    <div class="stat-row st-def"><span class="stat-name">防御力</span><span class="stat-bar"><i style="width:${bar(st.def)}%"></i></span><b>${st.def}</b></div>
   `;
 }
 
@@ -209,6 +240,7 @@ function renderDeckScreen() {
       <div class="slot-art"><img src="${spriteUrl(id)}" alt="" width="56" height="56" loading="lazy" /></div>
       <span class="slot-name">${unitName(id)}</span>
       <span class="slot-attack">${intro.attack.split('／')[0]}</span>
+      ${statsHtml(id, true)}
     `;
     btn.addEventListener('click', () => {
       selectedDeckSlot = i;
@@ -221,23 +253,32 @@ function renderDeckScreen() {
   }
 
   els.deckOwned.innerHTML = '';
-  const ownedUnits = CATALOG.filter((u) => meta.owned.includes(u.id));
+  const newSet = loadNewUnits();
+  // Freshly purchased (NEW) units first so they are easy to find
+  const ownedUnits = CATALOG.filter((u) => meta.owned.includes(u.id))
+    .sort((a, b) => (newSet.has(b.id) ? 1 : 0) - (newSet.has(a.id) ? 1 : 0));
   for (const u of ownedUnits) {
+    const isNew = newSet.has(u.id) && !meta.deck.includes(u.id);
     const inDeck = meta.deck.includes(u.id);
     const deckSlot = meta.deck.indexOf(u.id);
     const intro = unitIntro(u.id);
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'unit-card' + (inDeck ? ' in-deck' : '');
+    btn.className = 'unit-card' + (inDeck ? ' in-deck' : '') + (isNew ? ' is-new' : '');
     if (u.rarity) btn.dataset.rarity = u.rarity;
     btn.innerHTML = `
       ${inDeck ? `<span class="unit-badge equipped">装備中<span class="unit-badge-slot">スロット${deckSlot + 1}</span></span>` : ''}
+      ${isNew ? NEW_BADGE : ''}
       <div class="unit-art"><img src="${spriteUrl(u.id)}" alt="" width="64" height="64" loading="lazy" /></div>
       <span class="unit-name">${u.name}</span>
       <span class="unit-attack-chip">${intro.attack.split('／')[0]}</span>
+      ${statsHtml(u.id)}
       <span class="rarity ${u.rarity}">${rarityLabel(u.rarity)}</span>
     `;
     btn.addEventListener('click', () => {
+      // NEW rule: tapping the card in the deck screen (= equip / view) clears its NEW mark
+      clearUnitNew(u.id);
+      refreshDeckNewDot();
       const res = setDeckSlot(loadMeta(), selectedDeckSlot, u.id);
       if (res.ok) {
         if (els.deckHint) {
@@ -251,6 +292,8 @@ function renderDeckScreen() {
         }
         renderDeckScreen();
         refreshPtDisplay(res.meta);
+      } else {
+        renderDeckScreen();
       }
     });
     els.deckOwned.appendChild(btn);
@@ -265,8 +308,9 @@ function clearShopMsg() {
   els.shopMsg.hidden = true;
 }
 
-function showShopMsg(text) {
+function showShopMsg(text, ok = false) {
   if (!els.shopMsg) return;
+  els.shopMsg.classList.toggle('ok', !!ok);
   els.shopMsg.textContent = text;
   els.shopMsg.hidden = false;
 }
@@ -300,7 +344,11 @@ function buySelectedShopUnit() {
   }
   const res = buyUnit(cur, u.id);
   clearShopMsg();
-  if (res.ok) refreshPtDisplay(res.meta);
+  if (res.ok) {
+    refreshPtDisplay(res.meta);
+    refreshDeckNewDot();
+    showShopMsg(`${u.name} を購入しました！ デッキ編集で「NEW」表示されます`, true);
+  }
   renderShopScreen();
 }
 
@@ -325,19 +373,23 @@ function renderShopScreen() {
     return a.price - b.price;
   });
 
+  const newSet = loadNewUnits();
   for (const u of list) {
     const owned = meta.owned.includes(u.id);
+    const isNew = owned && newSet.has(u.id);
     const intro = unitIntro(u.id);
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'unit-card' + (owned ? ' owned' : '') + (selectedShopId === u.id ? ' selected-card' : '');
+    btn.className = 'unit-card' + (owned ? ' owned' : '') + (isNew ? ' is-new' : '') + (selectedShopId === u.id ? ' selected-card' : '');
     if (u.rarity) btn.dataset.rarity = u.rarity;
     const priceLabel = owned ? '所持済' : (u.price <= 0 ? '無料' : `${u.price} PT`);
     btn.innerHTML = `
       ${owned ? '<span class="unit-badge">所持</span>' : ''}
+      ${isNew ? NEW_BADGE : ''}
       <div class="unit-art"><img src="${spriteUrl(u.id)}" alt="" width="72" height="72" loading="lazy" /></div>
       <span class="unit-name">${u.name}</span>
       <span class="unit-attack-chip">${intro.attack.split('／')[0]}</span>
+      ${statsHtml(u.id)}
       <span class="rarity ${u.rarity}">${rarityLabel(u.rarity)}</span>
       <span class="unit-price">${priceLabel}</span>
     `;
@@ -370,6 +422,7 @@ function renderZukanScreen() {
         <div class="unit-art"><img src="${spriteUrl(u.id)}" alt="" width="72" height="72" loading="lazy" /></div>
         <span class="unit-name">${u.name}</span>
         <span class="unit-attack-chip">${intro.attack.split('／')[0]}</span>
+        ${statsHtml(u.id)}
         <span class="rarity ${u.rarity}">${rarityLabel(u.rarity)}</span>
       `;
       btn.addEventListener('click', () => {
@@ -398,6 +451,8 @@ function goMenu() {
   els.fieldCode.value = '';
   restoreStartButton();
   refreshPtDisplay();
+  refreshDeckNewDot();
+  loadBattleCount(document.getElementById('app-battles'));
   show('menu');
 }
 
@@ -611,6 +666,7 @@ els.btnZukan?.addEventListener('click', () => {
 
 els.btnDeckBack?.addEventListener('click', () => {
   refreshPtDisplay();
+  refreshDeckNewDot();
   show('menu');
 });
 
@@ -621,6 +677,7 @@ els.btnShopBuy?.addEventListener('click', () => {
 els.btnShopBack?.addEventListener('click', () => {
   clearShopMsg();
   refreshPtDisplay();
+  refreshDeckNewDot();
   show('menu');
 });
 
@@ -647,6 +704,7 @@ window.addEventListener('load', () => {
   // Ensure starters persisted + duplicate decks cleaned
   saveMeta(loadMeta());
   refreshPtDisplay();
+  refreshDeckNewDot();
   show('menu');
 });
 
@@ -751,3 +809,4 @@ async function loadVisits() {
   }
 }
 loadVisits();
+loadBattleCount(document.getElementById('app-battles'));

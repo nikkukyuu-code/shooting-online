@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260926030107';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260927184129';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260926030107`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260927184129`;
 }
 
 function loadKindSprite(kind) {
@@ -2483,12 +2483,7 @@ export function drawField(ctx, area, snap, opts = {}) {
     if (lowHp) shipColor = lowBlink ? '#ff6688' : '#ff3344';
     if (!blink) drawShip(ctx, px, py, 28 * Math.min(sx, 1.2), 18 * Math.min(sy, 1.2), shipColor, 1, ang);
     if (!darkened && snap.player) drawLaser(ctx, snap.player, fh);
-    // Own-pane part of upward direct beam
-    if (facingUp) {
-      const lr = directBeamLifeRatio(snap.player.activeTimer);
-      // Continuous column from ship to top of own field
-      drawDirectBeam(ctx, px, py - 12, px, 2, lr);
-    }
+    // (Own direct beam is drawn cross-pane in renderFrame, aimed at the opponent ship.)
   }
 
   // Bomb detonation: white → orange full-pane flash, then a fading warm tint
@@ -2549,22 +2544,32 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
   // 2) MIDDLE — player's own gameplay field (display)
   drawField(ctx, L.own, localSnap, { darkened: false });
 
-  // Cross-pane direct-attack beam (own ship → deep into opponent pane)
+  // Opponent ship position on screen (same math as drawField) — direct beams connect to it
+  const oppShip = (() => {
+    const sx = oppDraw._sx || 1;
+    const ox = oppDraw.px ?? 48;
+    const oy = oppDraw.py ?? 0.5;
+    return {
+      x: L.opp.x + ox * (ox > 1 ? sx : 1),
+      y: L.opp.y + (oy <= 1 ? oy * L.opp.h : oy * (oppDraw._sy || 1)),
+    };
+  })();
+
+  // Cross-pane direct-attack beam: own ship → opponent ship (impact booms come from fx)
   const pl = localState.player;
   if (pl && pl.activePower === 'direct' && pl.activeTimer > 0) {
     const px = L.own.x + (pl.x || 48);
     const py = L.own.y + (pl.y <= 1 ? pl.y * L.own.h : pl.y);
     const lr = directBeamLifeRatio(pl.activeTimer);
-    // Straight UP from ship through own pane into most of opp pane
-    drawDirectBeam(ctx, px, py - 8, px, L.opp.y + L.opp.h * 0.12, lr);
+    drawDirectBeam(ctx, px, py - 8, oppShip.x, oppShip.y, lr);
   }
-  // Incoming: thick purple pillar FROM opponent pane DOWN onto our ship.
+  // Incoming: thick purple pillar FROM the opponent ship DOWN onto our ship.
   // Endpoint (spark) = opponent side so it never looks like we fired.
   if (localState.incomingDirect && localState.incomingDirect > 0) {
     const lr = directBeamLifeRatio(localState.incomingDirect);
     const px = L.own.x + (pl.x || 48);
     const py = L.own.y + (pl.y <= 1 ? pl.y * L.own.h : pl.y);
-    drawDirectBeam(ctx, px, py - 6, px, L.opp.y + L.opp.h * 0.1, lr, 'incoming');
+    drawDirectBeam(ctx, px, py - 6, oppShip.x, oppShip.y, lr, 'incoming');
   }
 
   // Direct-attack remaining-seconds HUD (own or incoming)
