@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-09-27 18:41:29';
+export const VERSION_LABEL = '2026-09-27 18:55:37';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1790502089097;
-export const BUILD_NOTE = '直接攻撃連続ヒット・NEW・攻防力・bc';
+export const BUILD_TIME = 1790502937140;
+export const BUILD_NOTE = '直接攻撃を通常弾の撃ち込みに変更（当たると爆発・よけられる）';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

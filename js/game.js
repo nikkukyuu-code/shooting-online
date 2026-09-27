@@ -1,16 +1,16 @@
 import {
-  POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_TICK_INTERVAL, DIRECT_TICK_DMG, DIRECT_TICKS, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
+  POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, spawnDirectShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260927184129';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260927184129';
-import { sfx } from './audio.js?v=20260927184129';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260927184129';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul } from './catalog.js?v=20260927184129';
-import { hitBattleCounter } from './stats.js?v=20260927184129';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260927184129';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260927184129';
+} from './entities.js?v=20260927185537';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260927185537';
+import { sfx } from './audio.js?v=20260927185537';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260927185537';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul } from './catalog.js?v=20260927185537';
+import { hitBattleCounter } from './stats.js?v=20260927185537';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260927185537';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260927185537';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -253,11 +253,13 @@ function scaledHitDmg(base, b) {
   return Math.max(1, Math.round(base * m));
 }
 
-/** Direct-attack impact boom (a bit larger than a normal big explosion so it reads in the small opp pane). */
-function directBoom(x, y) {
-  const f = spawnExplosion(x, y, true);
-  f.r = 32;
-  return f;
+/**
+ * 直接攻撃 hit test: same ship hurtbox as other bullets vs that ship.
+ * Player ship ±16 (+hb), COM ship ±13/±12 (+hb). No clamping of y → edge overhang is still hittable.
+ */
+function directShotHits(b, sx, sy, hx, hy) {
+  const hb = b.hb || 0;
+  return Math.abs(b.x - sx) < hx + hb && Math.abs(b.y - sy) < hy + hb;
 }
 
 export class Game {
@@ -767,40 +769,30 @@ export class Game {
     return dmg;
   }
 
-  /** One direct-beam tick on the COM ship: damage + spark + boom in the opponent pane (via _bot.fx). */
-  directTickOnBot() {
+  /** Our direct shot collided with the COM ship: normal shot damage + spark + small explosion (opp pane). */
+  onDirectHitBot(b) {
     const B = this._bot;
     if (!B || this.ended) return;
-    const fh = this.L.own.h;
-    B.hp = Math.max(0, B.hp - DIRECT_TICK_DMG);
+    B.hp = Math.max(0, B.hp - (b.dmg || DIRECT_SHOT_DMG));
     this.state.botHp = B.hp;
-    const x = B.x || 48;
-    const y = B.y * fh;
-    B.fx.push(directBoom(x + (Math.random() - 0.5) * 10, y + (Math.random() - 0.5) * 8));
-    B.fx.push(spawnHitSpark(x + (Math.random() - 0.5) * 8, y - 4 + (Math.random() - 0.5) * 8));
+    B.fx.push(spawnExplosion(b.x, b.y, false));
+    B.fx.push(spawnHitSpark(b.x, b.y));
   }
 
-  /** One incoming direct-beam tick on our ship: damage + boom (front of fx so net snapshots keep it). */
-  directTickOnPlayer() {
+  /** An incoming direct shot collided with our ship: normal shot damage + spark + small explosion. */
+  onDirectHitPlayer(b) {
     if (this.ended) return;
     const S = this.state;
-    const P = S.player;
-    const fh = this.L.own.h;
-    this.applyPlayerDamage(DIRECT_TICK_DMG, 'direct');
-    const x = P.x + 4;
-    const y = P.y * fh;
-    S.fx.unshift(directBoom(x + (Math.random() - 0.5) * 10, y + (Math.random() - 0.5) * 8));
-    S.fx.push(spawnHitSpark(x + (Math.random() - 0.5) * 8, y - 4 + (Math.random() - 0.5) * 8));
+    this.applyPlayerDamage(b.dmg || DIRECT_SHOT_DMG, 'direct');
+    // Explosion at the front of fx so the 12-entry net snapshot keeps it (opponent sees it too)
+    S.fx.unshift(spawnExplosion(b.x, b.y, false));
+    S.fx.push(spawnHitSpark(b.x, b.y));
     sfx.hit();
   }
 
-  /** Start an incoming direct beam (COM or online): first tick now, rest in update(). */
-  startIncomingDirect() {
-    const S = this.state;
-    S.incomingDirect = DIRECT_DURATION;
-    S._inDirectHits = 1;
-    this.directTickOnPlayer();
-    S.player.invuln = Math.max(S.player.invuln || 0, 0.6);
+  /** Incoming direct shot (COM or online): falls straight down from the top of OUR field at x. */
+  pushIncomingDirectShot(x) {
+    this.state.bullets.push(spawnDirectShot(x, 'enemy'));
   }
 
   tryUsePower(index = 0) {
@@ -1109,19 +1101,14 @@ export class Game {
         console.warn('blocked direct without item');
         return;
       }
+      // For DIRECT_DURATION the normal shot stream is redirected into the opponent's field
+      // (falls straight down from the top at our x). Hits only on real collision.
       p.activePower = 'direct';
-      // Pose/beam window; shots keep flying until off-screen (pierce)
       p.activeTimer = DIRECT_DURATION;
-      p._directShotCd = 0;
-      p._directHits = 0;
       this.showItemBanner(meta);
-      if (this.useBot) {
-        // First hit now; the rest tick every DIRECT_TICK_INTERVAL in update()
-        p._directHits = 1;
-        this.directTickOnBot();
-      } else if (this.net) {
-        // One start message — the receiver simulates every tick locally (no double apply here)
-        this.net.send({ type: 'directHit', dmg: DIRECT_TICK_DMG, ticks: DIRECT_TICKS });
+      if (!this.useBot && this.net) {
+        // HUD countdown start on the receiver (no damage; shots follow as directShot messages)
+        this.net.send({ type: 'directStart', dur: DIRECT_DURATION });
       }
       this.state.fx.push(spawnExplosion(p.x + 8, p.y * this.L.own.h - 20, false));
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
@@ -1191,12 +1178,20 @@ export class Game {
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1400);
       return;
     }
-    if (msg.type === 'directHit') {
+    if (msg.type === 'directStart') {
       // Incoming only — do NOT set player.activePower (that made it look like WE fired)
-      this.startIncomingDirect();
-      this.setStatus('相手からの直撃！');
-      setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1400);
-      if (this.state.player.hp <= 0) this.finish(false);
+      this.state.incomingDirect = DIRECT_DURATION;
+      this.setStatus('相手の直接攻撃！ 上から降る弾をよけろ');
+      setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
+      return;
+    }
+    if (msg.type === 'directShot') {
+      // Receiver simulates the shot + collision locally → damage counts exactly once (here)
+      const nx = Number(msg.x);
+      if (Number.isFinite(nx)) {
+        if (!(this.state.incomingDirect > 0)) this.state.incomingDirect = DIRECT_DURATION;
+        this.pushIncomingDirectShot(Math.max(0, Math.min(1, nx)) * this.L.own.w);
+      }
       return;
     }
     if (msg.type === 'over') {
@@ -1320,49 +1315,11 @@ export class Game {
     if (S.incomingDirect > 0) {
       S.incomingDirect -= dt;
       if (S.incomingDirect < 0) S.incomingDirect = 0;
-      // Damage ticks while the incoming beam is active (COM or online opponent)
-      const inElapsed = DIRECT_DURATION - S.incomingDirect;
-      while ((S._inDirectHits || 0) < DIRECT_TICKS && inElapsed >= (S._inDirectHits || 0) * DIRECT_TICK_INTERVAL) {
-        S._inDirectHits = (S._inDirectHits || 0) + 1;
-        this.directTickOnPlayer();
-      }
-      // Staccato spark ticks while the incoming beam is active (visual only)
-      S._incomingDirectSparkCd = (S._incomingDirectSparkCd || 0) - dt;
-      if (S._incomingDirectSparkCd <= 0 && S.incomingDirect > 0) {
-        S._incomingDirectSparkCd = 0.07;
-        const py = P.y * fh;
-        S.fx.push(spawnHitSpark(P.x + 6 + (Math.random() - 0.5) * 10, py - 8 + (Math.random() - 0.5) * 8));
-      }
-    } else {
-      S._incomingDirectSparkCd = 0;
     }
     if (P.activeTimer > 0) {
       P.activeTimer -= dt;
-      // Direct: staccato upward shots — pierce, despawn only off-screen
-      if (P.activePower === 'direct') {
-        P._directShotCd = (P._directShotCd || 0) - dt;
-        if (P._directShotCd <= 0) {
-          P._directShotCd = 0.07;
-          const by = P.y * fh;
-          S.bullets.push(spawnBullet(
-            P.x + 8, by - 12,
-            (Math.random() - 0.5) * 18, -560 - Math.random() * 40,
-            'player', false, 2,
-            { laser: true, life: 4.5, pierce: true },
-          ));
-        }
-        // CPU match: beam damage ticks on the COM ship (online: receiver simulates ticks)
-        if (this.useBot && this._bot) {
-          const elapsed = DIRECT_DURATION - Math.max(0, P.activeTimer);
-          while ((P._directHits || 0) < DIRECT_TICKS && elapsed >= (P._directHits || 0) * DIRECT_TICK_INTERVAL) {
-            P._directHits = (P._directHits || 0) + 1;
-            this.directTickOnBot();
-          }
-        }
-      }
       if (P.activeTimer <= 0) {
         P.activePower = null;
-        P._directShotCd = 0;
         if (!this.ended) {
           if (P.items.length) {
             const n = powerupMeta(P.items[0]);
@@ -1395,6 +1352,15 @@ export class Game {
         S.bullets.push(spawnBullet(P.x + 16, by, 520, 0, 'player', false, 3));
         S.bullets.push(spawnBullet(P.x + 16, by - 6, 500, -30, 'player', false, 2));
         S.bullets.push(spawnBullet(P.x + 16, by + 6, 500, 30, 'player', false, 2));
+        sfx.shot();
+      } else if (P.activePower === 'direct') {
+        // 直接攻撃: the same normal shot (speed/damage/rate), fired into the opponent's field instead —
+        // appears at the top at our x and falls straight down. No homing / no aim correction.
+        if (this.useBot && this._bot) {
+          this._bot.bullets.push(spawnDirectShot(P.x, 'player'));
+        } else if (this.net && this.net.ready) {
+          this.net.send({ type: 'directShot', x: +(P.x / fw).toFixed(4) });
+        }
         sfx.shot();
       } else {
         // denser fire, slightly weaker per shot (4→2)
@@ -1564,6 +1530,12 @@ export class Game {
           b.life = 0;
           const bar = S.fx.find((f) => f.kind === 'barrier' && f.life > 0);
           if (bar) bar._hit = 0.14;
+          continue;
+        }
+        if (b.dir) {
+          // 直接攻撃 shot: every real collision = normal shot damage + explosion (no invuln gate)
+          b.life = 0;
+          this.onDirectHitPlayer(b);
           continue;
         }
         if (P.invuln <= 0) {
@@ -1840,6 +1812,9 @@ export class Game {
         B.bullets.push(spawnBullet(shipX + 16, by, 520, 0, 'player', false, 3));
         B.bullets.push(spawnBullet(shipX + 16, by - 6, 500, -30, 'player', false, 2));
         B.bullets.push(spawnBullet(shipX + 16, by + 6, 500, 30, 'player', false, 2));
+      } else if (B.activePower === 'direct' && B.activeTimer > 0) {
+        // COM 直接攻撃 (fair mirror): same normal shot, falling down from the top of OUR field at COM x
+        this.pushIncomingDirectShot(shipX);
       } else {
         // Same as player: denser, weaker per shot
         B.bullets.push(spawnBullet(shipX + 16, by, 420, 0, 'player', false, 2));
@@ -1931,7 +1906,7 @@ export class Game {
 
     // Bot bullets hit enemies + item drops into bot inventory
     for (const b of B.bullets) {
-      if (b.owner !== 'player') continue;
+      if (b.owner !== 'player' || b.dir) continue; // direct shots only hit the COM ship
       for (const e of B.enemies) {
         if (Math.abs(b.x - e.x) < e.w * 0.45 && Math.abs(b.y - e.y) < e.h * 0.45) {
           e.hp -= b.dmg;
@@ -1968,6 +1943,18 @@ export class Game {
     // Hits on bot — fair hurtbox (gets hit, not glass)
     // v1.5.70: COM barrier blocks the same way as the player
     const botBarrier = hasBarrierFx(B.fx);
+    // Player's 直接攻撃 shots vs COM ship — real collision each frame, explosion per hit
+    for (const b of B.bullets) {
+      if (!b.dir || b.life <= 0) continue;
+      if (!directShotHits(b, shipX, B.y * fh, 13, 12)) continue;
+      b.life = 0;
+      if (botBarrier) {
+        const bar = B.fx.find((f) => f.kind === 'barrier' && f.life > 0);
+        if (bar) bar._hit = 0.14;
+        continue;
+      }
+      this.onDirectHitBot(b);
+    }
     for (const b of B.bullets) {
       if (b.owner !== 'enemy' || b.life <= 0) continue;
       const hb = b.hb || 0;
@@ -2080,9 +2067,9 @@ export class Game {
         B.activeTimer = DIRECT_DURATION;
         B.directBeam = DIRECT_DURATION;
         B._directHeldSince = null;
-        // Same tick damage as the player's direct (fair): first hit now, rest in update()
-        this.startIncomingDirect();
-        this.setStatus('COMの直撃！');
+        // HUD countdown only; the shots themselves come from the COM fire loop (dodgeable)
+        this.state.incomingDirect = DIRECT_DURATION;
+        this.setStatus('COMの直接攻撃！ 上から降る弾をよけろ');
         setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
       } else if (id === 'spread') {
         const by = B.y * fh;

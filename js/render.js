@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260927184129';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260927185537';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -15,7 +15,7 @@ const ITEM_STYLE = {
   rapid:      { color: '#ffee44', icon: '≫',  label: '連射',   effect: '連射強化' },
   meteor:     { color: '#ff7744', icon: '☄',  label: '隕石',   effect: '相手に隕石' },
   send:       { color: '#ff8844', icon: '⇒',  label: '敵送信', effect: '相手に敵を送る' },
-  direct:     { color: '#ff3333', icon: '※',  label: '直撃',   effect: '上向き連射レーザー' },
+  direct:     { color: '#ff3333', icon: '※',  label: '直撃',   effect: '相手画面へ通常弾' },
   heal:       { color: '#44ff88', icon: '+',  label: '回復',   effect: 'HP+25' },
   heal_big:   { color: '#22ff66', icon: '++', label: '大回復', effect: 'HP+50' },
   send_mech:  { color: '#88aaff', icon: '艦',  label: '戦艦',   effect: '戦艦を送る' },
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260927184129`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260927185537`;
 }
 
 function loadKindSprite(kind) {
@@ -681,6 +681,7 @@ function drawBullet(ctx, b) {
   ctx.save();
   if (b.owner === 'player') {
     const homing = !!b.homing;
+    const purple = b.tint === 'in'; // incoming 直接攻撃 shot (same sprite, purple)
     // Trail direction: behind flight. Player shots go +X; fall back to left of x.
     // Use unscaled vx/vy for angle (direction only — do not scale by sx/sy).
     const vx = (typeof b.vx === 'number') ? b.vx : 280;
@@ -742,6 +743,12 @@ function drawBullet(ctx, b) {
         ribbon.addColorStop(0.55, 'rgba(255,130,225,0.18)');
         ribbon.addColorStop(0.85, 'rgba(255,160,240,0.38)');
         ribbon.addColorStop(1, 'rgba(255,190,255,0.55)');
+      } else if (purple) {
+        ribbon.addColorStop(0, 'rgba(150,60,255,0)');
+        ribbon.addColorStop(0.25, 'rgba(160,70,255,0.06)');
+        ribbon.addColorStop(0.55, 'rgba(175,95,255,0.2)');
+        ribbon.addColorStop(0.85, 'rgba(200,130,255,0.42)');
+        ribbon.addColorStop(1, 'rgba(225,170,255,0.6)');
       } else {
         ribbon.addColorStop(0, 'rgba(255,40,70,0)');
         ribbon.addColorStop(0.25, 'rgba(255,50,80,0.06)');
@@ -768,7 +775,7 @@ function drawBullet(ctx, b) {
         const gy = b.y - uy * gap * i;
         ctx.strokeStyle = homing
           ? `rgba(255,120,220,${a})`
-          : `rgba(255,70,90,${a})`;
+          : (purple ? `rgba(180,100,255,${a})` : `rgba(255,70,90,${a})`);
         ctx.lineWidth = thick;
         ctx.beginPath();
         ctx.moveTo(gx - ux * len * 0.55, gy - uy * len * 0.55);
@@ -777,7 +784,7 @@ function drawBullet(ctx, b) {
       }
     }
     // Bright elongated core streak (oriented along velocity; light alpha, minimal blur)
-    ctx.strokeStyle = homing ? 'rgba(255,180,255,0.92)' : 'rgba(255,160,170,0.92)';
+    ctx.strokeStyle = homing ? 'rgba(255,180,255,0.92)' : (purple ? 'rgba(215,170,255,0.95)' : 'rgba(255,160,170,0.92)');
     ctx.lineWidth = homing ? 3.0 : 2.8;
     ctx.beginPath();
     ctx.moveTo(b.x - ux * 10, b.y - uy * 10);
@@ -1920,92 +1927,6 @@ function drawDirectTimerHud(ctx, L, localState) {
   ctx.restore();
 }
 
-/** Keep beam fully opaque for most of DIRECT_DURATION; fade only in last ~0.5s. */
-function directBeamLifeRatio(remaining) {
-  if (!(remaining > 0)) return 0;
-  if (remaining > 0.5) return 1;
-  return Math.max(0.35, remaining / 0.5);
-}
-
-function drawDirectBeam(ctx, x0, y0, x1, y1, lifeRatio = 1, tint = 'own') {
-  // Continuous thick pillar end-to-end (not sparse short bolts).
-  // tint: 'own' = red upward (player), 'incoming' = purple downward (opponent)
-  const now = performance.now();
-  const baseA = Math.max(0.3, Math.min(1, lifeRatio));
-  const isIn = tint === 'incoming';
-  const glow = isIn ? '#a040ff' : '#ff2040';
-  const outer = isIn ? '#c060ff' : '#ff3355';
-  const mid = isIn ? '#e0a0ff' : '#ff6688';
-  const core = isIn ? '#f8f0ff' : '#ffe8f0';
-  // Gentle pulse so it flickers but stays fully connected
-  const pulse = 0.88 + 0.12 * Math.sin(now / 55);
-  const flicker = 0.92 + 0.08 * Math.sin(now / 28);
-
-  ctx.save();
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.shadowColor = glow;
-
-  // Wide outer glow pillar
-  ctx.globalAlpha = baseA * 0.55 * pulse;
-  ctx.strokeStyle = glow;
-  ctx.lineWidth = 18;
-  ctx.shadowBlur = 28;
-  ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  ctx.lineTo(x1, y1);
-  ctx.stroke();
-
-  // Mid thickness
-  ctx.globalAlpha = baseA * 0.85 * flicker;
-  ctx.strokeStyle = outer;
-  ctx.lineWidth = 14;
-  ctx.shadowBlur = 18;
-  ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  ctx.lineTo(x1, y1);
-  ctx.stroke();
-
-  // Bright mid core
-  ctx.globalAlpha = baseA * 0.95;
-  ctx.strokeStyle = mid;
-  ctx.lineWidth = 7;
-  ctx.shadowBlur = 10;
-  ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  ctx.lineTo(x1, y1);
-  ctx.stroke();
-
-  // Hot white core — always continuous
-  ctx.globalAlpha = baseA;
-  ctx.strokeStyle = core;
-  ctx.lineWidth = 5.5;
-  ctx.shadowBlur = 6;
-  ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  ctx.lineTo(x1, y1);
-  ctx.stroke();
-
-  // Impact spark at endpoint
-  const spark = 14 + 10 * Math.sin(now / 30);
-  const g = ctx.createRadialGradient(x1, y1, 0, x1, y1, spark);
-  g.addColorStop(0, 'rgba(255,255,255,0.98)');
-  if (isIn) {
-    g.addColorStop(0.35, 'rgba(180,100,255,0.7)');
-    g.addColorStop(1, 'rgba(120,0,200,0)');
-  } else {
-    g.addColorStop(0.35, 'rgba(255,90,110,0.7)');
-    g.addColorStop(1, 'rgba(255,0,40,0)');
-  }
-  ctx.globalAlpha = baseA;
-  ctx.fillStyle = g;
-  ctx.shadowBlur = 12;
-  ctx.beginPath();
-  ctx.arc(x1, y1, spark, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
-
 function drawLaser(ctx, player, fieldH) {
   if (player.activePower !== 'laser' || player.activeTimer <= 0) return;
   // Straight forward staccato bolts — NO vertical weave (that looked like homing)
@@ -2428,8 +2349,12 @@ export function drawField(ctx, area, snap, opts = {}) {
 
   const bullets = snap.bullets || [];
   for (const b of bullets) {
+    // 直接攻撃 shots use the normal player-shot sprite (oriented by velocity → pointing down).
+    // In our own pane they are incoming → purple tint; in the opponent pane they are ours → normal red.
+    const isDir = !!(b.D || b.dir);
     drawBullet(ctx, {
-      x: b.x * sx, y: b.y * sy, owner: b.o || b.owner, homing: b.h || b.homing, r: (b.r || 3) * Math.min(sx, sy), vx: b.vx, vy: b.vy,
+      x: b.x * sx, y: b.y * sy, owner: isDir ? 'player' : (b.o || b.owner), homing: isDir ? false : (b.h || b.homing),
+      tint: isDir && !darkened ? 'in' : undefined, r: (b.r || 3) * Math.min(sx, sy), vx: b.vx, vy: b.vy,
       laser: !!(b.L || b.laser), k: b.k, st: b.st,
       trail: Array.isArray(b.trail) ? b.trail.map((p) => ({ x: p.x * sx, y: p.y * sy })) : undefined,
     });
@@ -2483,7 +2408,6 @@ export function drawField(ctx, area, snap, opts = {}) {
     if (lowHp) shipColor = lowBlink ? '#ff6688' : '#ff3344';
     if (!blink) drawShip(ctx, px, py, 28 * Math.min(sx, 1.2), 18 * Math.min(sy, 1.2), shipColor, 1, ang);
     if (!darkened && snap.player) drawLaser(ctx, snap.player, fh);
-    // (Own direct beam is drawn cross-pane in renderFrame, aimed at the opponent ship.)
   }
 
   // Bomb detonation: white → orange full-pane flash, then a fading warm tint
@@ -2544,33 +2468,7 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
   // 2) MIDDLE — player's own gameplay field (display)
   drawField(ctx, L.own, localSnap, { darkened: false });
 
-  // Opponent ship position on screen (same math as drawField) — direct beams connect to it
-  const oppShip = (() => {
-    const sx = oppDraw._sx || 1;
-    const ox = oppDraw.px ?? 48;
-    const oy = oppDraw.py ?? 0.5;
-    return {
-      x: L.opp.x + ox * (ox > 1 ? sx : 1),
-      y: L.opp.y + (oy <= 1 ? oy * L.opp.h : oy * (oppDraw._sy || 1)),
-    };
-  })();
-
-  // Cross-pane direct-attack beam: own ship → opponent ship (impact booms come from fx)
   const pl = localState.player;
-  if (pl && pl.activePower === 'direct' && pl.activeTimer > 0) {
-    const px = L.own.x + (pl.x || 48);
-    const py = L.own.y + (pl.y <= 1 ? pl.y * L.own.h : pl.y);
-    const lr = directBeamLifeRatio(pl.activeTimer);
-    drawDirectBeam(ctx, px, py - 8, oppShip.x, oppShip.y, lr);
-  }
-  // Incoming: thick purple pillar FROM the opponent ship DOWN onto our ship.
-  // Endpoint (spark) = opponent side so it never looks like we fired.
-  if (localState.incomingDirect && localState.incomingDirect > 0) {
-    const lr = directBeamLifeRatio(localState.incomingDirect);
-    const px = L.own.x + (pl.x || 48);
-    const py = L.own.y + (pl.y <= 1 ? pl.y * L.own.h : pl.y);
-    drawDirectBeam(ctx, px, py - 6, oppShip.x, oppShip.y, lr, 'incoming');
-  }
 
   // Direct-attack remaining-seconds HUD (own or incoming)
   drawDirectTimerHud(ctx, L, localState);

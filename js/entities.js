@@ -9,7 +9,7 @@ export const POWERUPS = [
   { id: 'rapid',      label: '連射強化',      effect: '一定時間すばやく強弾を連射', desc: '一定時間、自機の連射速度と弾威力が上がる強化アイテム。', color: '#ffee44', icon: '≫' },
   { id: 'meteor',     label: '隕石送信',      effect: '相手に隕石攻撃を落とす',     desc: '対戦相手のフィールドへ隕石を落とし、直接ダメージを与える。', color: '#ff7744', icon: '☄' },
   { id: 'send',       label: '敵キャラ送信',  effect: '相手に敵を送る',             desc: 'デッキから選んだ敵を相手フィールドへ送る基本送信アイテム。', color: '#ff8844', icon: '⇒' },
-  { id: 'direct',     label: '直接攻撃',      effect: '小刻み上向きレーザーで相手を直撃', desc: '相手ライフへ直接レーザー攻撃。強力だが入手は少なめ。', color: '#ff3333', icon: '※' },
+  { id: 'direct',     label: '直接攻撃',      effect: '通常弾を相手画面の上から撃ち込む', desc: '約6秒間、通常攻撃の弾が相手フィールドの上端（自機と同じ横位置）から真下へ飛ぶ。当たるたびに爆発してダメージ。追尾しないので相手はよけられる。', color: '#ff3333', icon: '※' },
   { id: 'heal',       label: 'HP回復',        effect: '自分のHPを+25',              desc: '自分のHPを25回復する。ピンチのときの定番回復。', color: '#44ff88', icon: '+' },
   { id: 'heal_big',   label: '大回復',        effect: '自分のHPを+50',              desc: '自分のHPを50回復する大回復。出現率は低め。', color: '#22ff66', icon: '++' },
   { id: 'send_mech',  label: '戦艦送信',      effect: '相手に宇宙戦艦を送る',       desc: 'デッキのメカ級など大型を相手へ送る。予告レーザーにも注意。', color: '#88aaff', icon: '艦' },
@@ -27,12 +27,24 @@ export const POWERUPS = [
   { id: 'barrier',    label: 'バリア',        effect: '一定時間ダメージを防ぐ',     desc: '約5.5秒、自機のまわりにエネルギーシールドを展開。敵弾と体当たりのダメージを防ぐ（攻撃はしない）。', color: '#6cf0ff', icon: '盾' },
 ];
 
-/** Shared direct-attack pose/beam window (seconds). Thick continuous beam + HUD countdown. */
+/** 直接攻撃 window (seconds) + HUD countdown. */
 export const DIRECT_DURATION = 6;
-/** Direct beam damage ticks: first hit on activation, then every 0.5s → 11 hits × 5 = 55 total over 6s. */
-export const DIRECT_TICK_INTERVAL = 0.5;
-export const DIRECT_TICK_DMG = 5;
-export const DIRECT_TICKS = 11;
+/**
+ * 直接攻撃 shot = the normal shot (speed 420 px/s, damage 2, fired every 0.16s by the normal
+ * auto-fire), only redirected: it appears just above the top of the OPPONENT's field at the
+ * shooter's x and flies straight down. No homing, no aim correction, no pierce.
+ */
+export const DIRECT_SHOT_SPEED = 420;
+export const DIRECT_SHOT_DMG = 2;
+/** Spawn y (px above the field top) so ships in the top edge overhang are still hittable. */
+export const DIRECT_SHOT_SPAWN_Y = -30;
+
+/** Falling direct shot in the target field. owner: 'player' (in COM field) | 'enemy' (in our field). */
+export function spawnDirectShot(x, owner) {
+  const b = spawnBullet(x, DIRECT_SHOT_SPAWN_Y, 0, DIRECT_SHOT_SPEED, owner, false, DIRECT_SHOT_DMG, { life: 4 });
+  b.dir = true;
+  return b;
+}
 
 export function powerupMeta(id) {
   return POWERUPS.find((p) => p.id === id) || POWERUPS[0];
@@ -322,6 +334,7 @@ export function serializeField(state) {
     bullets: state.bullets.filter(b => b.owner === 'player' || b.owner === 'enemy').slice(0, 60).map(b => ({
       x: b.x, y: b.y, o: b.owner, h: !!b.homing, vx: b.vx, vy: b.vy,
       L: b.laser ? 1 : undefined,
+      D: b.dir ? 1 : undefined,
       k: b.k || undefined,
       r: b.r > 3.5 ? b.r : undefined,
     })),
