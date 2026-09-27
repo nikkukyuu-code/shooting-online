@@ -3,14 +3,14 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260927201350';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260927201350';
-import { sfx } from './audio.js?v=20260927201350';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260927201350';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul } from './catalog.js?v=20260927201350';
-import { hitBattleCounter } from './stats.js?v=20260927201350';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260927201350';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260927201350';
+} from './entities.js?v=20260927201612';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260927201612';
+import { sfx } from './audio.js?v=20260927201612';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260927201612';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul } from './catalog.js?v=20260927201612';
+import { hitBattleCounter } from './stats.js?v=20260927201612';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260927201612';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260927201612';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -26,8 +26,9 @@ const TUTORIAL_STEP_SEC = 3.8;
 const WAIT = '対戦相手を待っています';
 
 /**
- * Warp-in for transferred (sent) units: 0–3s ring + blinking unit, 3–5s steady ring + unit.
- * During the whole 5s the unit is stationary, invulnerable (shots pass through), harmless
+ * Warp-in for transferred (sent) units: 0–3s enters from off-screen right (ease-out) inside a
+ * blinking ring, 3–5s steady ring + unit at the hold point.
+ * During the whole 5s the unit is invulnerable (shots pass through), harmless
  * (no fire, no body damage). At 5s the ring pops and the unit starts attacking.
  */
 export const WARP_TOTAL = 5;
@@ -39,6 +40,13 @@ function tickWarp(e, dt) {
   if (e.warpPop > 0) e.warpPop = Math.max(0, e.warpPop - dt);
   if (!(e.warpT > 0)) return false;
   e.warpT = Math.max(0, e.warpT - dt);
+  // 0–3s: glide in from off-screen (ease-out) to the hold point; 3–5s: hold still
+  if (e.warpX0 != null && e.holdX != null) {
+    const u = Math.min(1, (WARP_TOTAL - e.warpT) / WARP_BLINK);
+    const ease = 1 - Math.pow(1 - u, 3);
+    e.x = e.warpX0 + (e.holdX - e.warpX0) * ease;
+    if (e.holdY != null) e.y = e.holdY;
+  }
   if (e.warpHp != null && e.hp < e.warpHp) e.hp = e.warpHp; // safety net: no damage while warping
   if (e.warpT > 0) return true;
   // Ring off → start attacking right away
@@ -1022,8 +1030,9 @@ export class Game {
     e.holdY = Math.max(mh, Math.min(fh - mh, e.y));
     // Keep the whole unit + ring inside the pane
     e.holdX = Math.max(fw * 0.5, Math.min(e.holdX, fw - (e.w || 40) * 0.56 - 12));
-    // Warp in directly at the hold point (no slide-in from the edge)
-    e.x = e.holdX;
+    // Start fully off-screen on the right; tickWarp glides it to holdX by 3s
+    e.warpX0 = fw + (e.w || 40) * 0.6 + 16;
+    e.x = e.warpX0;
     e.y = e.holdY;
     e.appearT = 0; // old 0.9s pop FX replaced by the warp ring
     e.warpT = WARP_TOTAL;
@@ -1623,7 +1632,7 @@ export class Game {
 
     // Update enemies (vertical weave + forward/back surge)
     for (const e of S.enemies) {
-      if (tickWarp(e, dt)) continue; // warp-in: stationary, no fire
+      if (tickWarp(e, dt)) continue; // warp-in: scripted glide / hold, no fire
       if (e.frozenT > 0) continue; // フリーズ: no movement / no fire while frozen
       e.phase += dt * 2;
       e.surgePhase = (e.surgePhase || 0) + dt * (e.surgeFreq || 1.4);
@@ -2083,7 +2092,7 @@ export class Game {
     }
 
     for (const e of B.enemies) {
-      if (tickWarp(e, dt)) continue; // warp-in: stationary, no fire
+      if (tickWarp(e, dt)) continue; // warp-in: scripted glide / hold, no fire
       if (e.frozenT > 0) continue; // フリーズ: no movement / no fire while frozen
       e.phase += dt * 2;
       e.surgePhase = (e.surgePhase || 0) + dt * (e.surgeFreq || 1.4);
