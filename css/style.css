@@ -1904,3 +1904,16 @@ html, body {
   text-underline-offset: 2px;
   white-space: nowrap;
 }
+
+/* Online result: no PT notice */
+.pt-none {
+  margin: -6px 0 0;
+  padding: 6px 14px;
+  border-radius: 6px;
+  background: rgba(20, 30, 60, 0.75);
+  border: 1px solid rgba(160, 200, 255, 0.5);
+  color: #dfeaff;
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-align: center;
+}
