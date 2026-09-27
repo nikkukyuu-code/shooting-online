@@ -1,16 +1,16 @@
 import {
-  POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
+  POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260927191707';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260927191707';
-import { sfx } from './audio.js?v=20260927191707';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260927191707';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul } from './catalog.js?v=20260927191707';
-import { hitBattleCounter } from './stats.js?v=20260927191707';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260927191707';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260927191707';
+} from './entities.js?v=20260927192212';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260927192212';
+import { sfx } from './audio.js?v=20260927192212';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260927192212';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul } from './catalog.js?v=20260927192212';
+import { hitBattleCounter } from './stats.js?v=20260927192212';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260927192212';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260927192212';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -795,7 +795,7 @@ export class Game {
     if (this.ended) return;
     const fw = this.L.own.w;
     if (this.useBot && this._bot) {
-      this._bot.bullets.push(spawnDirectShot(x, 'player'));
+      this._bot.bullets.push(spawnDirectShot(x, this.L.own.h, 'player'));
     } else if (this.net && this.net.ready) {
       this.net.send({ type: 'directShot', x: +(x / fw).toFixed(4) });
     }
@@ -803,7 +803,7 @@ export class Game {
 
   /** Incoming direct shot (COM or online): falls straight down from the top of OUR field at x. */
   pushIncomingDirectShot(x) {
-    this.state.bullets.push(spawnDirectShot(x, 'enemy'));
+    this.state.bullets.push(spawnDirectShot(x, this.L.own.h, 'enemy'));
   }
 
   tryUsePower(index = 0) {
@@ -1192,7 +1192,7 @@ export class Game {
     if (msg.type === 'directStart') {
       // Incoming only — do NOT set player.activePower (that made it look like WE fired)
       this.state.incomingDirect = DIRECT_DURATION;
-      this.setStatus('相手の直接攻撃！ 上から降る弾をよけろ');
+      this.setStatus('相手の直接攻撃！ 下から来る弾をよけろ');
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
       return;
     }
@@ -1367,10 +1367,8 @@ export class Game {
       } else if (P.activePower === 'direct') {
         // 直接攻撃: the same normal shot (speed/damage/rate) leaves our ship straight UP (ship faces up).
         // It hits nothing in our pane; when it exits the top it is handed off to the opponent's field
-        // (see handOffDirectShot) — appears at the top there at the same x and falls straight down.
-        const vb = spawnBullet(P.x, by - 14, 0, -DIRECT_SHOT_SPEED, 'player', false, 0, { life: 4 });
-        vb.dvis = true;
-        S.bullets.push(vb);
+        // (see handOffDirectShot) — enters there from the BOTTOM edge at the same x and keeps rising.
+        S.bullets.push(spawnDirectOutShot(P.x, by - 14));
         sfx.shot();
       } else {
         // denser fire, slightly weaker per shot (4→2)
@@ -1830,8 +1828,9 @@ export class Game {
         B.bullets.push(spawnBullet(shipX + 16, by - 6, 500, -30, 'player', false, 2));
         B.bullets.push(spawnBullet(shipX + 16, by + 6, 500, 30, 'player', false, 2));
       } else if (B.activePower === 'direct' && B.activeTimer > 0) {
-        // COM 直接攻撃 (fair mirror): same normal shot, falling down from the top of OUR field at COM x
-        this.pushIncomingDirectShot(shipX);
+        // COM 直接攻撃 (fair mirror): same normal shot leaves the COM ship upward in its pane;
+        // on exiting the top it enters OUR field from the bottom at the same x (hand-off below).
+        B.bullets.push(spawnDirectOutShot(shipX, B.y * fh - 14));
       } else {
         // Same as player: denser, weaker per shot
         B.bullets.push(spawnBullet(shipX + 16, by, 420, 0, 'player', false, 2));
@@ -1920,10 +1919,17 @@ export class Game {
       pushHomingTrail(b);
     }
     for (const b of spawnedBB) B.bullets.push(b);
+    // COM 直接攻撃: outgoing shot left the top of the COM pane → enters our field from the bottom
+    for (const b of B.bullets) {
+      if (b.dvis && b.life > 0 && b.y < -12) {
+        b.life = 0;
+        if (!this.ended) this.pushIncomingDirectShot(b.x);
+      }
+    }
 
     // Bot bullets hit enemies + item drops into bot inventory
     for (const b of B.bullets) {
-      if (b.owner !== 'player' || b.dir) continue; // direct shots only hit the COM ship
+      if (b.owner !== 'player' || b.dir || b.dvis) continue; // direct shots only hit the COM ship
       for (const e of B.enemies) {
         if (Math.abs(b.x - e.x) < e.w * 0.45 && Math.abs(b.y - e.y) < e.h * 0.45) {
           e.hp -= b.dmg;
@@ -2086,7 +2092,7 @@ export class Game {
         B._directHeldSince = null;
         // HUD countdown only; the shots themselves come from the COM fire loop (dodgeable)
         this.state.incomingDirect = DIRECT_DURATION;
-        this.setStatus('COMの直接攻撃！ 上から降る弾をよけろ');
+        this.setStatus('COMの直接攻撃！ 下から来る弾をよけろ');
         setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
       } else if (id === 'spread') {
         const by = B.y * fh;

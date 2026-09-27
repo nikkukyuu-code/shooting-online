@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260927191707';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260927192212';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -15,7 +15,7 @@ const ITEM_STYLE = {
   rapid:      { color: '#ffee44', icon: '≫',  label: '連射',   effect: '連射強化' },
   meteor:     { color: '#ff7744', icon: '☄',  label: '隕石',   effect: '相手に隕石' },
   send:       { color: '#ff8844', icon: '⇒',  label: '敵送信', effect: '相手に敵を送る' },
-  direct:     { color: '#ff3333', icon: '※',  label: '直撃',   effect: '相手画面へ通常弾' },
+  direct:     { color: '#ff3333', icon: '※',  label: '直撃',   effect: '相手画面の下から通常弾' },
   heal:       { color: '#44ff88', icon: '+',  label: '回復',   effect: 'HP+25' },
   heal_big:   { color: '#22ff66', icon: '++', label: '大回復', effect: 'HP+50' },
   send_mech:  { color: '#88aaff', icon: '艦',  label: '戦艦',   effect: '戦艦を送る' },
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260927191707`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260927192212`;
 }
 
 function loadKindSprite(kind) {
@@ -2402,8 +2402,9 @@ export function drawField(ctx, area, snap, opts = {}) {
     const lowBlink = lowHp && Math.floor(performance.now() / 140) % 2 === 0;
     const blink = invulnBlink;
     const facingUp = !darkened && snap.player && snap.player.activePower === 'direct' && snap.player.activeTimer > 0;
-    const facingDown = darkened && (snap.directBeam || snap.ap === 'direct'); // opponent firing down at us
-    const ang = facingUp ? -Math.PI / 2 : (facingDown ? Math.PI / 2 : 0);
+    // Opponent using 直接攻撃 also turns nose-up (its shots leave upward, then rise into our pane from below)
+    const oppUp = darkened && (snap.directBeam || snap.ap === 'direct');
+    const ang = (facingUp || oppUp) ? -Math.PI / 2 : 0;
     let shipColor = darkened ? '#cde' : (snap.invuln > 0 ? '#ffaaaa' : '#e8f0ff');
     if (lowHp) shipColor = lowBlink ? '#ff6688' : '#ff3344';
     if (!blink) drawShip(ctx, px, py, 28 * Math.min(sx, 1.2), 18 * Math.min(sy, 1.2), shipColor, 1, ang);
