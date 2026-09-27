@@ -1856,3 +1856,42 @@ html, body {
   60% { transform: translate(4px, 5px); }
   75% { transform: translate(-3px, 2px); }
 }
+
+/* ---- 引き継ぎ (data transfer) button on the title screen ---- */
+#screen-menu .menu-btn.transfer-btn {
+  display: block;
+  margin-top: 4px;
+  text-align: center;
+  text-decoration: none;
+  font-size: 1.02rem;
+  font-weight: 800;
+  padding: 10px 8px;
+  color: #3a1d00;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+  background: linear-gradient(180deg, #ffe066 0%, #ffb020 55%, #ff8a00 100%);
+  border: 2px solid #fff3b0;
+  border-radius: 8px;
+  box-shadow: 0 0 14px rgba(255, 190, 40, 0.65), 0 2px 0 rgba(255, 255, 255, 0.5) inset;
+  animation: transferGlow 2.2s ease-in-out infinite;
+  white-space: normal;
+  line-height: 1.25;
+}
+.transfer-btn .tr-main { font-size: 1.12em; }
+.transfer-btn .tr-main, .transfer-btn .tr-sub { white-space: nowrap; display: inline-block; }
+.transfer-btn .tr-sub { font-size: 0.8em; font-weight: 700; }
+#screen-menu .menu-btn.transfer-btn:active { transform: translateY(1px); filter: brightness(0.95); }
+@keyframes transferGlow {
+  0%, 100% { box-shadow: 0 0 10px rgba(255, 190, 40, 0.5), 0 2px 0 rgba(255, 255, 255, 0.5) inset; }
+  50% { box-shadow: 0 0 20px rgba(255, 200, 60, 0.95), 0 2px 0 rgba(255, 255, 255, 0.5) inset; }
+}
+.transfer-note {
+  margin: 2px 0 0;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  text-align: center;
+}
+.transfer-note a { color: #ffd98a; text-decoration: none; }
+.transfer-note a:active { text-decoration: underline; }
+@media (min-width: 900px) {
+  .transfer-note { font-size: 0.74rem; }
+}

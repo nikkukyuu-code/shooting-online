@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-09-28 03:06:29';
+export const VERSION_LABEL = '2026-09-28 04:09:58';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1790532389561;
-export const BUILD_NOTE = 'COMの回避とアイテム取得を人らしいAIに変更しルールをプレイヤーと統一';
+export const BUILD_TIME = 1790536198313;
+export const BUILD_NOTE = 'タイトル画面に引き継ぎボタンと注意書きを追加';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
