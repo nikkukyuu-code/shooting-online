@@ -3,14 +3,14 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260927230515';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260927230515';
-import { sfx } from './audio.js?v=20260927230515';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260927230515';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds } from './catalog.js?v=20260927230515';
-import { hitBattleCounter } from './stats.js?v=20260927230515';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260927230515';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260927230515';
+} from './entities.js?v=20260927231317';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260927231317';
+import { sfx } from './audio.js?v=20260927231317';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260927231317';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds } from './catalog.js?v=20260927231317';
+import { hitBattleCounter } from './stats.js?v=20260927231317';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL } from './meta.js?v=20260927231317';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260927231317';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1084,7 +1084,8 @@ export class Game {
     const names = ids.map((id) => (CATALOG_BY_ID[id] && CATALOG_BY_ID[id].name) || id);
     const lv = this._comDeckInfo && this._comDeckInfo.level;
     const diff = (this.comProfile && this.comProfile().label) || '';
-    const head = lv ? `相手デッキ Lv${lv}` : '相手デッキ';
+    const ctr = this._comDeckInfo && COUNTER_LABEL[this._comDeckInfo.counter];
+    const head = (lv ? `相手デッキ Lv${lv}` : '相手デッキ') + (ctr ? `・${ctr}` : '');
     const tag = diff ? `【${diff}】` : '';
     return `${tag}${head}：${names.join(' / ')}`;
   }

@@ -2,7 +2,7 @@
  * localStorage key: shootingOnline_meta (NEVER rename — would wipe player PT).
  * Backup key: shootingOnline_meta_bak. On every update, preserve pt; never clear storage.
  */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP } from './catalog.js?v=20260927230515';
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20260927231317';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;
@@ -61,92 +61,193 @@ function isValidComDeck(deck) {
   return deck.every((id) => CATALOG_BY_ID[id] && !String(id).startsWith('wave_'));
 }
 
+/* ---------------------------------------------------------------------------
+ * COM deck builder (v2: coverage + counter-picking)
+ *
+ * 1) Coverage: always ≥1 unit of each send class (same groups as the send picker, catalog.js
+ *    SEND_GROUPS): 戦艦級 mech / 要塞級 golem+boss / ガンシップ級 tank / 小型機 drone+swarm.
+ *    The 5th slot is free (counter slot).
+ * 2) Counter-picking from the player's class mix:
+ *      small share = player units in basic/swarm/drone/elite tiers.
+ *      ≥60% small  → 'large'    「対策：大型重視」: favor high 防御力 (HP) + wide/area attackers,
+ *                                 free slot prefers large tiers.
+ *      ≤40% small  → 'fire'     「対策：火力重視」: favor high 攻撃力 + fast fire + aimed/focused
+ *                                 attackers, free slot also likes small fast units.
+ *      otherwise   → 'balanced' 「対策：バランス」: favor 攻撃力+防御力 evenly.
+ *    Scores are normalized 0..1 inside each class so every class slot can express the counter.
+ * 3) Strength: sum of unitPower within the difficulty band of the player's deck power
+ *      強い 60–85%, 普通 48–72%  (coverage wins: cheap player decks overshoot with the cheapest
+ *      units of each required class).
+ * 4) Variety: 120 randomized attempts; prefers units not in the previous COM deck; picks at random
+ *    among the best candidates.
+ * ------------------------------------------------------------------------- */
+const SMALL_TIERS = new Set(['basic', 'swarm', 'drone', 'elite']);
+const AREA_PATTERNS = new Set(['spread3', 'fan5', 'ring', 'spiral', 'split', 'mine', 'sweep', 'trilaser', 'salvo', 'wave', 'bigorb', 'boomerang']);
+const FOCUS_PATTERNS = new Set(['aimed', 'burst', 'stream', 'twinlaser', 'longlaser', 'laser', 'pulse', 'missile', 'twin', 'single']);
+export const COM_COVER_CLASSES = ['send_mech', 'send_golem', 'send_tank', 'send_drone'];
+export const COUNTER_LABEL = { large: '対策:大型', fire: '対策:火力', balanced: '対策:均衡' };
+
+function unitTraits(id) {
+  const u = CATALOG_BY_ID[id];
+  const st = unitStats(id) || { atk: 0, def: 0 };
+  const lo = unitAttackLoadout(id, u && u.tier) || { seq: [] };
+  const seq = lo.seq || [];
+  const n = seq.length || 1;
+  const area = seq.filter(([p]) => AREA_PATTERNS.has(p)).length / n;
+  const focus = seq.filter(([p]) => FOCUS_PATTERNS.has(p)).length / n;
+  const rate = (lo.per || 1) / (lo.iv || 1.5);
+  return { atk: st.atk, def: st.def, area, focus, rate, small: SMALL_TIERS.has(u && u.tier) };
+}
+
+/** Player class mix → counter mode. */
+export function comCounterMode(playerDeck) {
+  const d = (playerDeck || []).filter((id) => CATALOG_BY_ID[id]);
+  if (!d.length) return 'balanced';
+  const small = d.filter((id) => SMALL_TIERS.has(CATALOG_BY_ID[id].tier)).length / d.length;
+  if (small >= 0.6) return 'large';
+  if (small <= 0.4) return 'fire';
+  return 'balanced';
+}
+
+function classOf(id) {
+  const t = CATALOG_BY_ID[id] && CATALOG_BY_ID[id].tier;
+  for (const c of COM_COVER_CLASSES) if (SEND_GROUPS[c].includes(t)) return c;
+  return null;
+}
+
+/** Per-unit counter score 0..1 (normalized within its group). */
+function counterScores(units, mode) {
+  const tr = units.map((u) => unitTraits(u.id));
+  const norm = (arr) => {
+    const mn = Math.min(...arr), mx = Math.max(...arr);
+    return arr.map((v) => (mx > mn ? (v - mn) / (mx - mn) : 0.5));
+  };
+  const A = norm(tr.map((t) => t.atk));
+  const D = norm(tr.map((t) => t.def));
+  const R = norm(tr.map((t) => t.rate));
+  return tr.map((t, i) => {
+    if (mode === 'large') return 0.55 * D[i] + 0.45 * t.area;
+    if (mode === 'fire') return 0.5 * A[i] + 0.3 * R[i] + 0.2 * t.focus;
+    return 0.5 * A[i] + 0.5 * D[i];
+  });
+}
+
+const CLASS_POOLS = (() => {
+  const out = {};
+  for (const c of COM_COVER_CLASSES) out[c] = COM_POOL.filter((u) => classOf(u.id) === c);
+  return out;
+})();
+
 /**
- * Build a COM deck of 5 unique units whose strength is ~100–115% of the
- * player's deck (clamped to what the catalog can reach). Randomized per call.
- * Falls back to COM_DECK if anything goes wrong.
- * @returns {{ deck: string[], score: number, playerScore: number, level: number }}
+ * Build the COM deck. Strength target: difficulty band of the player's deck power
+ * (強い 60–85%, 普通 48–72%), with send-class coverage and counter-picking (see above).
+ * @returns {{ deck: string[], score: number, playerScore: number, level: number, counter: string, over: number }}
  */
 export function buildComDeck(playerDeck, rng = Math.random, opts = {}) {
   const fallback = () => {
     const d = COM_DECK.slice();
-    // Still shuffle fallback so send order changes every match.
     for (let i = d.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));
       [d[i], d[j]] = [d[j], d[i]];
     }
-    return { deck: d, score: deckPower(d), playerScore: deckPower(playerDeck), level: deckLevel(deckPower(d)) };
+    return { deck: d, score: deckPower(d), playerScore: deckPower(playerDeck), level: deckLevel(deckPower(d)), counter: 'balanced', over: 0 };
   };
   try {
-    const pool = COM_POOL;
-    if (pool.length < DECK_SIZE) return fallback();
+    if (COM_POOL.length < DECK_SIZE || COM_COVER_CLASSES.some((c) => !CLASS_POOLS[c].length)) return fallback();
     const P = Math.max(POOL_MIN, deckPower(playerDeck));
-    // Wider band → more variety between matches while staying near player strength.
-    // strong (default) ≈ current band; normal = weaker deck
     const diff = (opts && opts.difficulty) || 'strong';
     const hiMul = diff === 'normal' ? 0.72 : 0.85;
     const loMul = diff === 'normal' ? 0.48 : 0.60;
     let hi = Math.min(P * hiMul, POOL_MAX);
     let lo = Math.min(P * loMul, POOL_MAX * 0.85);
     if (lo > hi) lo = hi * 0.9;
+    const mode = comCounterMode(playerDeck);
     const avoid = new Set((opts && opts.avoid) || []);
     const playerKey = [...new Set(playerDeck || [])].sort().join(',');
-    const sum = (d) => d.reduce((s, x) => s + x.p, 0);
-    const inBand = (s) => s >= lo && s <= hi;
-    const overlap = (ids) => ids.reduce((n, id) => n + (avoid.has(id) ? 1 : 0), 0);
+
+    // Counter score per unit: inside each class, and over the whole pool for the free slot
+    const score = new Map();
+    for (const c of COM_COVER_CLASSES) {
+      const sc = counterScores(CLASS_POOLS[c], mode);
+      CLASS_POOLS[c].forEach((u, i) => score.set(u.id, sc[i]));
+    }
+    const freeScore = new Map();
+    const fsc = counterScores(COM_POOL, mode);
+    COM_POOL.forEach((u, i) => {
+      const t = unitTraits(u.id);
+      let v = fsc[i];
+      if (mode === 'large' && !t.small) v += 0.35; // free slot: prefer large vs small-heavy decks
+      if (mode === 'fire' && t.small) v += 0.15;   // …and small fast units vs large-heavy decks
+      freeScore.set(u.id, v);
+    });
+
+    const slots = [...COM_COVER_CLASSES, 'free'];
+    const poolFor = (slot) => (slot === 'free' ? COM_POOL : CLASS_POOLS[slot]);
+    const scoreFor = (slot, id) => (slot === 'free' ? freeScore.get(id) : score.get(id)) || 0;
+    const sumP = (d) => d.reduce((s, u) => s + u.p, 0);
+    const bandDist = (s) => (s < lo ? lo - s : s > hi ? s - hi : 0);
     const candidates = [];
 
-    for (let attempt = 0; attempt < 90; attempt++) {
+    for (let attempt = 0; attempt < 120; attempt++) {
       const target = lo + (hi - lo) * rng();
-      const deck = [];
+      const deck = new Array(slots.length);
       const used = new Set();
-      for (let i = 0; i < DECK_SIZE; i++) {
-        const k = DECK_SIZE - i;
-        const avg = (target - sum(deck)) / k;
-        const win = Math.max(20, avg * 0.55);
-        let cands = pool.filter((u) => !used.has(u.id) && Math.abs(u.p - avg) <= win);
-        // Prefer units not in the previous COM deck when possible.
+      // Fill class slots in random order, free slot last
+      const order = COM_COVER_CLASSES.slice().sort(() => rng() - 0.5).concat(['free']);
+      let filled = 0;
+      for (const slot of order) {
+        const si = slots.indexOf(slot);
+        const remain = slots.length - filled;
+        const cur = deck.reduce((s, u) => s + (u ? u.p : 0), 0);
+        const avg = (target - cur) / remain;
+        let cands = poolFor(slot).filter((u) => !used.has(u.id));
         const fresh = cands.filter((u) => !avoid.has(u.id));
         if (fresh.length >= 2) cands = fresh;
-        if (!cands.length) {
-          const rest = pool.filter((u) => !used.has(u.id));
-          rest.sort((a, b) => Math.abs(a.p - avg) - Math.abs(b.p - avg));
-          cands = rest.slice(0, 6);
-        }
-        const pick = cands[Math.floor(rng() * cands.length) % cands.length];
-        deck.push(pick);
+        // weight: closeness to the per-slot budget × counter preference
+        const ws = cands.map((u) => {
+          const close = Math.exp(-Math.abs(u.p - avg) / Math.max(25, avg * 0.5));
+          return close * Math.exp(2.2 * scoreFor(slot, u.id));
+        });
+        const tot = ws.reduce((a, b) => a + b, 0);
+        let r = rng() * tot, pick = cands[cands.length - 1];
+        for (let i = 0; i < cands.length; i++) { r -= ws[i]; if (r <= 0) { pick = cands[i]; break; } }
+        deck[si] = pick;
         used.add(pick.id);
+        filled++;
       }
-      for (let it = 0; it < 14 && !inBand(sum(deck)); it++) {
-        const cur = sum(deck);
-        let bestSwap = null;
-        let bestDist = Math.abs(cur - target);
-        for (let i = 0; i < deck.length; i++) {
-          for (const u of pool) {
+      // Pull into the band by swapping within each slot's pool (coverage preserved)
+      for (let it = 0; it < 16 && bandDist(sumP(deck)) > 0; it++) {
+        const cur = sumP(deck);
+        let best = null, bestD = bandDist(cur), bestS = -1e9;
+        for (let i = 0; i < slots.length; i++) {
+          for (const u of poolFor(slots[i])) {
             if (used.has(u.id)) continue;
-            const d = Math.abs(cur - deck[i].p + u.p - target);
-            if (d < bestDist) { bestDist = d; bestSwap = [i, u]; }
+            const ns = cur - deck[i].p + u.p;
+            const d = bandDist(ns);
+            const sc = scoreFor(slots[i], u.id);
+            if (d < bestD - 1e-9 || (Math.abs(d - bestD) < 1e-9 && d < bandDist(cur) && sc > bestS)) {
+              best = [i, u]; bestD = d; bestS = sc;
+            }
           }
         }
-        if (!bestSwap) break;
-        const [i, u] = bestSwap;
+        if (!best) break;
+        const [i, u] = best;
         used.delete(deck[i].id);
         deck[i] = u;
         used.add(u.id);
       }
-      const ids = deck.map((x) => x.id);
-      const s = sum(deck);
+      const ids = deck.map((u) => u.id);
+      const s = sumP(deck);
       const same = [...ids].sort().join(',') === playerKey;
-      const bandDist = s < lo ? lo - s : s > hi ? s - hi : 0;
-      const cost = bandDist * 10 + (same ? 8 : 0) + overlap(ids) * 3;
+      const ov = ids.reduce((n, id) => n + (avoid.has(id) ? 1 : 0), 0);
+      const cs = slots.reduce((a, slot, i) => a + scoreFor(slot, ids[i]), 0);
+      const cost = bandDist(s) * 20 + (same ? 8 : 0) + ov * 3 - cs * 12;
       candidates.push({ ids, cost, s });
     }
     if (!candidates.length) return fallback();
     candidates.sort((a, b) => a.cost - b.cost);
-    // Among the better half, pick at random so consecutive matches differ.
-    const top = candidates.slice(0, Math.max(8, Math.ceil(candidates.length * 0.35)));
-    // Prefer ones that differ from avoid when available.
-    const diverse = top.filter((c) => overlap(c.ids) <= 2);
+    const top = candidates.slice(0, Math.max(8, Math.ceil(candidates.length * 0.25)));
+    const diverse = top.filter((c) => c.ids.reduce((n, id) => n + (avoid.has(id) ? 1 : 0), 0) <= 2);
     const pickFrom = diverse.length ? diverse : top;
     const chosen = pickFrom[Math.floor(rng() * pickFrom.length) % pickFrom.length];
     const ids = chosen.ids.slice();
@@ -155,8 +256,8 @@ export function buildComDeck(playerDeck, rng = Math.random, opts = {}) {
       [ids[i], ids[j]] = [ids[j], ids[i]];
     }
     if (!isValidComDeck(ids)) return fallback();
-    const score = deckPower(ids);
-    return { deck: ids, score, playerScore: P, level: deckLevel(score) };
+    const sc = deckPower(ids);
+    return { deck: ids, score: sc, playerScore: P, level: deckLevel(sc), counter: mode, over: Math.max(0, sc - hi) };
   } catch (_) {
     return fallback();
   }
