@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-09-27 22:49:05';
+export const VERSION_LABEL = '2026-09-27 22:54:53';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1790516945812;
-export const BUILD_NOTE = 'トップ・タイトルにβ版表示を追加';
+export const BUILD_TIME = 1790517293000;
+export const BUILD_NOTE = '送信アイテムをランダム化・戦艦／要塞／砲艦／無人機は種類別（無人機4機）';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
