@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-09-27 19:22:12';
+export const VERSION_LABEL = '2026-09-27 19:29:02';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1790504532954;
-export const BUILD_NOTE = '直接攻撃：撃った弾が相手画面の下から出現（双方向・よけられる）';
+export const BUILD_TIME = 1790504942103;
+export const BUILD_NOTE = '制限時間5分：残りライフ判定・同じなら延長戦';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

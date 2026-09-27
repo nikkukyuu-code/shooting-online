@@ -3,14 +3,14 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260927192212';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260927192212';
-import { sfx } from './audio.js?v=20260927192212';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260927192212';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul } from './catalog.js?v=20260927192212';
-import { hitBattleCounter } from './stats.js?v=20260927192212';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260927192212';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260927192212';
+} from './entities.js?v=20260927192902';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260927192902';
+import { sfx } from './audio.js?v=20260927192902';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260927192902';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul } from './catalog.js?v=20260927192902';
+import { hitBattleCounter } from './stats.js?v=20260927192902';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260927192902';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260927192902';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -24,6 +24,17 @@ const TUTORIAL_STEPS = [
 const TUTORIAL_STEP_SEC = 3.8;
 
 const WAIT = '対戦相手を待っています';
+
+/** Match time limit (seconds). Hidden test override: globalThis.__shootingMatchSec (not exposed in UI). */
+const MATCH_TIME_SEC = 300;
+function matchTimeSec() {
+  const o = Number(globalThis.__shootingMatchSec);
+  return Number.isFinite(o) && o > 0 ? o : MATCH_TIME_SEC;
+}
+function fmtClock(sec) {
+  const t = Math.max(0, Math.ceil(sec));
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+}
 
 // Register catalog sprites + tier map (catalog + wave ambient kinds)
 registerEnemyKinds(ALL_KIND_IDS);
@@ -322,6 +333,17 @@ export class Game {
     this.shipPointerId = null;
     this.ui.endOverlay.classList.add('hidden');
     this._ptReward = null;
+    this._endInfo = null;
+    // Match timer / sudden death (延長戦)
+    this.matchLeft = matchTimeSec();
+    this.suddenDeath = false;
+    this._sdDecided = false;
+    this._sdReported = false;
+    this._sdSelfHp = null;
+    this._sdBotHp = null;
+    this._timerSyncAcc = 0;
+    this._timerShown = '';
+    this.renderMatchTimer(true);
     this._deckCursor = 0;
     this._comDeckCursor = 0;
     // Load equipped deck (always 5)
@@ -343,7 +365,7 @@ export class Game {
     // Clear victory celebration DOM if present
     if (this.ui.endOverlay) {
       this.ui.endOverlay.classList.remove('victory', 'defeat', 'pt-show');
-      const extras = this.ui.endOverlay.querySelectorAll('.vic-fx, .pt-reward, .vic-banner');
+      const extras = this.ui.endOverlay.querySelectorAll('.vic-fx, .pt-reward, .vic-banner, .end-reason');
       extras.forEach((el) => el.remove());
     }
     this.setStatus(WAIT);
@@ -568,6 +590,7 @@ export class Game {
 
   destroy() {
     this.stopLoop();
+    this.renderMatchTimer(true);
     if (this.net) {
       try { this.net.destroy(); } catch (_) {}
     }
@@ -767,6 +790,126 @@ export class Game {
     });
     if (this.state.hpDisplay == null) this.state.hpDisplay = before;
     return dmg;
+  }
+
+  /* ------------------------------------------------------------------
+   * 5-minute match timer + 延長戦 (sudden death)
+   *  - Counts only while the match is running (not waiting / ended).
+   *  - 0:00 → more remaining HP wins. Equal HP → sudden death: first side to take damage loses.
+   *  - CPU: decided locally. Online: host is authoritative (timer sync, time-up verdict,
+   *    sudden-death result); the guest only displays and reports its own damage.
+   * ------------------------------------------------------------------ */
+  isOnline() {
+    return !!(this.net && !this.useBot);
+  }
+
+  isHost() {
+    return this.isOnline() && this.net.role === 'host';
+  }
+
+  oppHpNow() {
+    if (this.useBot) return this._bot ? this._bot.hp : this.state.botHp;
+    return this.remoteSnap && Number.isFinite(this.remoteSnap.php) ? this.remoteSnap.php : null;
+  }
+
+  tickMatchTimer(dt) {
+    if (this.waiting || this.ended) return;
+    const P = this.state.player;
+    if (this.suddenDeath) {
+      this.tickSuddenDeath();
+      return;
+    }
+    this.matchLeft = Math.max(0, this.matchLeft - dt);
+    if (this.isOnline()) {
+      if (!this.isHost()) return; // guest: display only; waits for host timeUp
+      this._timerSyncAcc += dt;
+      if (this._timerSyncAcc >= 1) {
+        this._timerSyncAcc = 0;
+        this.net.send({ type: 'timer', left: +this.matchLeft.toFixed(2) });
+      }
+    }
+    if (this.matchLeft > 0) return;
+    const self = Math.max(0, Math.round(P.hp));
+    const oppRaw = this.oppHpNow();
+    const opp = oppRaw == null ? self : Math.max(0, Math.round(oppRaw));
+    if (self === opp) {
+      this.startSuddenDeath();
+      if (this.isHost()) this.net.send({ type: 'timeUp', result: 'sudden', hostHp: self, guestHp: opp });
+      return;
+    }
+    const won = self > opp;
+    if (this.isHost()) {
+      this.net.send({ type: 'timeUp', result: won ? 'host' : 'guest', hostHp: self, guestHp: opp });
+    }
+    this.finish(won, { reason: 'time', selfHp: self, oppHp: opp });
+  }
+
+  startSuddenDeath() {
+    this.suddenDeath = true;
+    this.matchLeft = 0;
+    this._sdSelfHp = this.state.player.hp;
+    this._sdBotHp = this.useBot && this._bot ? this._bot.hp : null;
+    this.setStatus('延長戦！先にダメージを受けた方の負け');
+    this.renderMatchTimer(true);
+  }
+
+  /** Detect the first damage after sudden death started (frame-based HP drop; heals just raise the baseline). */
+  tickSuddenDeath() {
+    if (this._sdDecided || this.ended) return;
+    const P = this.state.player;
+    const selfHit = this._sdSelfHp != null && P.hp < this._sdSelfHp - 1e-6;
+    if (!selfHit && this._sdSelfHp != null) this._sdSelfHp = Math.max(this._sdSelfHp, P.hp);
+    if (this.useBot) {
+      const B = this._bot;
+      const botHit = B && this._sdBotHp != null && B.hp < this._sdBotHp - 1e-6;
+      if (B && !botHit) this._sdBotHp = Math.max(this._sdBotHp ?? B.hp, B.hp);
+      if (selfHit || botHit) {
+        this._sdDecided = true;
+        // Same frame: the player is treated as hit first (rare; keeps the result deterministic)
+        this.finish(!selfHit, { reason: 'sudden', selfHp: Math.round(P.hp), oppHp: Math.round(B.hp) });
+      }
+      return;
+    }
+    if (!selfHit) return;
+    if (this.isHost()) {
+      this._sdDecided = true;
+      this.net.send({ type: 'sdResult', loser: 'host', hostHp: Math.round(P.hp) });
+      this.finish(false, { reason: 'sudden', selfHp: Math.round(P.hp), oppHp: this.oppHpNow() });
+    } else if (!this._sdReported) {
+      // Guest reports its own damage; the host decides (avoids double results)
+      this._sdReported = true;
+      this.net.send({ type: 'sdHit', guestHp: Math.round(P.hp) });
+    }
+  }
+
+  /** Top-of-screen timer (DOM). force = re-render even if the text did not change. */
+  renderMatchTimer(force = false) {
+    const el = typeof document !== 'undefined' ? document.getElementById('match-timer') : null;
+    if (!el) return;
+    const active = this.running && !this.waiting && !this.ended;
+    let key;
+    if (!active) key = 'off';
+    else if (this.suddenDeath) key = 'sd';
+    else key = fmtClock(this.matchLeft);
+    if (!force && key === this._timerShown) return;
+    this._timerShown = key;
+    if (key === 'off') {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    const main = el.querySelector('.mt-main');
+    const sub = el.querySelector('.mt-sub');
+    if (key === 'sd') {
+      el.className = 'match-timer sudden';
+      if (main) main.textContent = '延長戦！';
+      if (sub) { sub.textContent = '先にダメージを受けた方の負け'; sub.hidden = false; }
+      return;
+    }
+    const left = Math.ceil(this.matchLeft);
+    el.className = 'match-timer' + (left <= 10 ? ' danger final' : left <= 30 ? ' danger' : '');
+    if (main) main.textContent = `残り ${key}`;
+    if (sub) { sub.textContent = ''; sub.hidden = true; }
   }
 
   /** Our direct shot collided with the COM ship: normal shot damage + spark + small explosion (opp pane). */
@@ -1205,6 +1348,38 @@ export class Game {
       }
       return;
     }
+    if (msg.type === 'timer') {
+      // Guest: host-authoritative clock
+      if (!this.isHost() && Number.isFinite(msg.left) && !this.suddenDeath) this.matchLeft = Math.max(0, msg.left);
+      return;
+    }
+    if (msg.type === 'timeUp') {
+      if (this.ended || this.isHost()) return;
+      const self = Number(msg.guestHp);
+      const opp = Number(msg.hostHp);
+      if (msg.result === 'sudden') {
+        this.startSuddenDeath();
+        return;
+      }
+      this.matchLeft = 0;
+      this.finish(msg.result === 'guest', { reason: 'time', selfHp: self, oppHp: opp });
+      return;
+    }
+    if (msg.type === 'sdHit') {
+      // Host: guest took the first damage in sudden death → guest loses (unless already decided)
+      if (!this.isHost() || this.ended || this._sdDecided) return;
+      this._sdDecided = true;
+      this.net.send({ type: 'sdResult', loser: 'guest', guestHp: msg.guestHp });
+      this.finish(true, { reason: 'sudden', selfHp: Math.round(this.state.player.hp), oppHp: msg.guestHp });
+      return;
+    }
+    if (msg.type === 'sdResult') {
+      if (this.isHost() || this.ended) return;
+      this._sdDecided = true;
+      const won = msg.loser === 'host';
+      this.finish(won, { reason: 'sudden', selfHp: Math.round(this.state.player.hp), oppHp: this.oppHpNow() });
+      return;
+    }
     if (msg.type === 'over') {
       // opponent reports result from their view
       if (msg.youWin) this.finish(true);
@@ -1221,6 +1396,7 @@ export class Game {
       if (!this.waiting && !this.ended) {
         this.update(dt);
         if (this.useBot) this.updateBot(dt);
+        if (!this.ended) this.tickMatchTimer(dt);
         this._syncAcc += dt;
         if (this._syncAcc > 0.05) {
           this._syncAcc = 0;
@@ -1238,6 +1414,7 @@ export class Game {
         this.state.nextItemLabel = `${m.icon || ''} ${m.label || ''}：${m.effect || ''}`;
       } else this.state.nextItemLabel = '';
       renderFrame(this.ctx, this.L, this.state, this.remoteSnap, this.waiting);
+      this.renderMatchTimer();
     } catch (err) {
       console.error('frame error', err);
       this.setStatus('一時エラー（継続中）');
@@ -2210,9 +2387,11 @@ export class Game {
     if (this.state.player.hp <= 0) this.finish(false);
   }
 
-  finish(won) {
+  finish(won, info = null) {
     if (this.ended) return;
     this.ended = true;
+    this._endInfo = info;
+    this.renderMatchTimer(true);
     this.state.alive = won ? this.state.alive : false;
     const msg = won ? 'あなたの勝ちです' : 'あなたの負けです';
     if (won) sfx.win(); else sfx.lose();
@@ -2258,7 +2437,20 @@ export class Game {
     if (!ov || !msgEl) return;
 
     // Clear prior celebration nodes
-    ov.querySelectorAll('.vic-fx, .pt-reward, .vic-banner').forEach((el) => el.remove());
+    ov.querySelectorAll('.vic-fx, .pt-reward, .vic-banner, .end-reason').forEach((el) => el.remove());
+    // Time-limit / sudden-death reason line (above the menu button)
+    const info = this._endInfo;
+    if (info && (info.reason === 'time' || info.reason === 'sudden')) {
+      const r = document.createElement('div');
+      r.className = 'end-reason';
+      const hpLine = (info.selfHp != null && info.oppHp != null && Number.isFinite(Number(info.oppHp)))
+        ? `<div class="end-reason-hp">残りライフ　自分 ${Math.round(info.selfHp)} ／ 相手 ${Math.round(info.oppHp)}</div>` : '';
+      r.innerHTML = info.reason === 'time'
+        ? `<div class="end-reason-main">時間切れ！残りライフ判定で${won ? '勝利' : '敗北'}</div>${hpLine}`
+        : `<div class="end-reason-main">延長戦で決着（先にダメージを受けた方の負け）</div>`;
+      const btn0 = ov.querySelector('#btn-again');
+      if (btn0) ov.insertBefore(r, btn0); else ov.appendChild(r);
+    }
     ov.classList.remove('victory', 'defeat', 'pt-show', 'hidden');
     ov.classList.add(won ? 'victory' : 'defeat');
 
