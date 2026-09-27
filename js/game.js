@@ -3,14 +3,14 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260928011655';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260928011655';
-import { sfx } from './audio.js?v=20260928011655';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260928011655';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260928011655';
-import { hitBattleCounter } from './stats.js?v=20260928011655';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL } from './meta.js?v=20260928011655';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260928011655';
+} from './entities.js?v=20260928015151';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260928015151';
+import { sfx } from './audio.js?v=20260928015151';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260928015151';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260928015151';
+import { hitBattleCounter } from './stats.js?v=20260928015151';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL } from './meta.js?v=20260928015151';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260928015151';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -357,6 +357,8 @@ export class Game {
     this.ui.endOverlay.classList.add('hidden');
     this._ptReward = null;
     this._endInfo = null;
+    this._ko = null;
+    this.clearKoFx();
     // Match timer / sudden death (延長戦)
     this.matchLeft = matchTimeSec();
     this.suddenDeath = false;
@@ -613,6 +615,9 @@ export class Game {
 
   destroy() {
     this.stopLoop();
+    this._ko = null;
+    this.clearKoFx();
+    this.renderCountdown(null);
     this.renderMatchTimer(true);
     if (this.net) {
       try { this.net.destroy(); } catch (_) {}
@@ -914,6 +919,9 @@ export class Game {
     if (!active) key = 'off';
     else if (this.suddenDeath) key = 'sd';
     else key = fmtClock(this.matchLeft);
+    // Big center countdown (10…1) + red edge vignette in the last 10 s
+    const leftNow = active && !this.suddenDeath ? Math.ceil(this.matchLeft) : null;
+    this.renderCountdown(leftNow != null && leftNow <= 10 && leftNow >= 1 ? leftNow : null);
     if (!force && key === this._timerShown) return;
     this._timerShown = key;
     if (key === 'off') {
@@ -930,9 +938,35 @@ export class Game {
       return;
     }
     const left = Math.ceil(this.matchLeft);
-    el.className = 'match-timer' + (left <= 10 ? ' danger final' : left <= 30 ? ' danger' : '');
+    // last 30 s: yellow pulse; last 10 s: red, faster pulse
+    el.className = 'match-timer' + (left <= 10 ? ' danger final' : left <= 30 ? ' warn' : '');
     if (main) main.textContent = `残り ${key}`;
     if (sub) { sub.textContent = ''; sub.hidden = true; }
+  }
+
+  /** Center countdown number (null = hide). Re-triggers the pop animation once per second. */
+  renderCountdown(n) {
+    if (typeof document === 'undefined') return;
+    const host = document.getElementById('ui-overlay');
+    if (!host) return;
+    let cd = document.getElementById('match-countdown');
+    let vg = document.getElementById('match-vignette');
+    if (n == null) {
+      if (cd) cd.hidden = true;
+      if (vg) vg.hidden = true;
+      this._cdShown = null;
+      return;
+    }
+    if (!cd) { cd = document.createElement('div'); cd.id = 'match-countdown'; cd.className = 'match-countdown'; host.appendChild(cd); }
+    if (!vg) { vg = document.createElement('div'); vg.id = 'match-vignette'; vg.className = 'match-vignette'; host.appendChild(vg); }
+    vg.hidden = false;
+    cd.hidden = false;
+    if (this._cdShown === n) return;
+    this._cdShown = n;
+    cd.textContent = String(n);
+    cd.classList.remove('pop');
+    void cd.offsetWidth; // restart CSS animation
+    cd.classList.add('pop');
   }
 
   /** Our direct shot collided with the COM ship: normal shot damage + spark + small explosion (opp pane). */
@@ -1434,6 +1468,8 @@ export class Game {
           this._syncAcc = 0;
           this.syncOut();
         }
+      } else if (this._ko) {
+        this.tickKo(dt);
       } else {
         this.state.scroll += 20 * dt;
       }
@@ -2462,10 +2498,117 @@ export class Game {
       }
     }
 
-    this.showEndCelebration(won);
+    // Result is locked here (ended=true, PT granted once, net 'over' sent once).
+    // The result overlay appears only after the KO / TIME UP slow-motion sequence.
     if (this.net && !this.useBot) {
       this.net.send({ type: 'over', youWin: !won });
     }
+    this.startKoSequence(won, info);
+  }
+
+  /* ------------------------------------------------------------------
+   * KO slow-motion finish (visual only — outcome already locked by finish()).
+   *  KO / 延長戦: ~2.6s real time. Game visuals run at 0.22× for 1.7s, then ease back to 1×
+   *  over 0.9s; explosions burst on the defeated ship (3 waves), white/red flash, screen shake,
+   *  「K.O.」 (延長戦: 「決着！」) text. TIME UP: 1.8s, no explosion, 「TIME UP」 text.
+   *  Then the result overlay (showEndCelebration) is shown.
+   * ------------------------------------------------------------------ */
+  startKoSequence(won, info) {
+    const reason = info && info.reason;
+    const timeUp = reason === 'time';
+    const dur = timeUp ? 1.8 : 2.6;
+    this._ko = { t: 0, dur, won, timeUp, bursts: timeUp ? [] : [0, 0.35, 0.8], syncAcc: 0 };
+    this.clearKoFx();
+    const host = document.getElementById('ui-overlay');
+    const cv = this.ctx && this.ctx.canvas;
+    if (!host || !cv) { this.finishKoSequence(); return; }
+    const pos = this.koTargetPos(won);
+    const fx = document.createElement('div');
+    fx.className = 'ko-fx' + (won ? ' ko-win' : ' ko-lose') + (timeUp ? ' ko-time' : '');
+    const text = timeUp ? 'TIME UP' : (reason === 'sudden' ? '決着！' : 'K.O.');
+    const sub = timeUp ? '時間切れ' : (won ? '撃破！' : '被撃破…');
+    fx.innerHTML = `<div class="ko-flash"></div>`
+      + (pos && !timeUp ? `<div class="ko-burst" style="left:${pos.x}px;top:${pos.y}px"></div><div class="ko-burst b2" style="left:${pos.x}px;top:${pos.y}px"></div>` : '')
+      + `<div class="ko-text"><span class="ko-main">${text}</span><span class="ko-sub">${sub}</span></div>`;
+    host.appendChild(fx);
+    if (!timeUp) cv.classList.add('ko-shake');
+  }
+
+  /** Screen (CSS px, relative to the canvas) position of the defeated ship. */
+  koTargetPos(won) {
+    const cv = this.ctx && this.ctx.canvas;
+    if (!cv || !this.L) return null;
+    const k = cv.clientWidth ? cv.clientWidth / cv.width : 1;
+    if (!won) {
+      const P = this.state.player;
+      return { x: (this.L.own.x + P.x) * k, y: (this.L.own.y + P.y * this.L.own.h) * k };
+    }
+    let px, py, fw;
+    if (this.useBot && this._bot) { px = this._bot.x || 48; py = this._bot.y; fw = this.L.own.w; }
+    else if (this.remoteSnap) { px = this.remoteSnap.px; py = this.remoteSnap.py; fw = this.remoteSnap._fw || this.L.own.w; }
+    if (!Number.isFinite(px) || !Number.isFinite(py)) return null;
+    return { x: (this.L.opp.x + px * (this.L.opp.w / fw)) * k, y: (this.L.opp.y + py * this.L.opp.h) * k };
+  }
+
+  /** Per-frame KO tick: slow-motion visuals only (no damage / collisions / results). */
+  tickKo(dt) {
+    const K = this._ko;
+    if (!K) return;
+    K.t += dt;
+    const slowEnd = K.dur - 0.9;
+    const scale = K.t < slowEnd ? 0.22 : 0.22 + 0.78 * Math.min(1, (K.t - slowEnd) / 0.9);
+    const sdt = dt * scale;
+    // Explosion waves on the defeated ship (canvas FX where the field is simulated locally)
+    while (K.bursts.length && K.t >= K.bursts[0]) {
+      K.bursts.shift();
+      this.koExplode(K.won);
+    }
+    const slowField = (F) => {
+      if (!F) return;
+      F.scroll = (F.scroll || 0) + 20 * sdt;
+      for (const b of F.bullets || []) { b.x += (b.vx || 0) * sdt; b.y += (b.vy || 0) * sdt; }
+      for (const e of F.enemies || []) e.x -= (e.speed || 40) * 0.5 * sdt;
+      for (const f of F.fx || []) f.life -= sdt;
+      if (F.fx) { const keep = F.fx.filter((f) => f.life > 0); F.fx.length = 0; F.fx.push(...keep); }
+    };
+    slowField(this.state);
+    if (this.useBot && this._bot) {
+      slowField(this._bot);
+      if (this.state.botSnap) { this.state.botSnap.fx = this._bot.fx; this.state.botSnap.bullets = this._bot.bullets; this.state.botSnap.enemies = this._bot.enemies; this.state.botSnap.scroll = this._bot.scroll; }
+    }
+    // Online: keep streaming our field so the opponent sees our explosion too
+    K.syncAcc += dt;
+    if (K.syncAcc > 0.05) { K.syncAcc = 0; this.syncOut(); }
+    if (K.t >= K.dur) this.finishKoSequence();
+  }
+
+  koExplode(won) {
+    const jitter = () => (Math.random() - 0.5) * 36;
+    if (!won) {
+      const P = this.state.player;
+      const fh = this.L.own.h;
+      this.state.fx.push(spawnExplosion(P.x + jitter(), P.y * fh + jitter(), true));
+      sfx.explode();
+    } else if (this.useBot && this._bot) {
+      const B = this._bot;
+      const fh = this.L.own.h;
+      B.fx.push(spawnExplosion((B.x || 48) + jitter(), B.y * fh + jitter(), true));
+      sfx.explode();
+    }
+  }
+
+  finishKoSequence() {
+    const K = this._ko;
+    this._ko = null;
+    this.clearKoFx();
+    if (K) this.showEndCelebration(K.won);
+  }
+
+  clearKoFx() {
+    if (typeof document === 'undefined') return;
+    document.querySelectorAll('.ko-fx').forEach((el) => el.remove());
+    const cv = this.ctx && this.ctx.canvas;
+    if (cv) cv.classList.remove('ko-shake');
   }
 
   /**

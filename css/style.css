@@ -1755,3 +1755,102 @@ html, body {
 /* In-battle version label hidden (it overlapped enemies in the opponent pane and the result
    overlay). The version is shown on the title/menu screen (#app-version) with the 最新 badge. */
 #game-version, .game-version { display: none !important; }
+
+/* ---- 残り時間演出: 30秒=黄色, 10秒=赤＋中央カウントダウン＋赤い縁 ---- */
+.match-timer.warn {
+  color: #ffd84a;
+  border-color: rgba(255, 216, 74, 0.9);
+  box-shadow: 0 0 12px rgba(255, 200, 40, 0.55);
+  animation: mtPulse 1s ease-in-out infinite;
+}
+.match-countdown {
+  pointer-events: none;
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+  font-size: clamp(4.2rem, 24vw, 9rem);
+  font-weight: 900;
+  line-height: 1;
+  color: rgba(255, 70, 70, 0.85);
+  -webkit-text-stroke: 2px rgba(255, 240, 240, 0.8);
+  text-shadow: 0 0 24px rgba(255, 40, 40, 0.6);
+  font-variant-numeric: tabular-nums;
+}
+.match-countdown[hidden], .match-vignette[hidden] { display: none; }
+.match-countdown.pop { animation: cdPop 0.95s ease-out forwards; }
+@keyframes cdPop {
+  0% { transform: translate(-50%, -50%) scale(1.7); opacity: 0; }
+  15% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(0.92); opacity: 0.6; }
+}
+.match-vignette {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  box-shadow: inset 0 0 50px 8px rgba(255, 30, 30, 0.55);
+  animation: vgPulse 1s ease-in-out infinite;
+}
+@keyframes vgPulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+
+/* ---- KO slow-motion finish ---- */
+.ko-fx { pointer-events: none; position: absolute; inset: 0; z-index: 9; overflow: hidden; }
+.ko-flash {
+  position: absolute; inset: 0;
+  background: #fff;
+  animation: koFlash 0.55s ease-out forwards;
+}
+.ko-lose .ko-flash { background: #ff3030; }
+.ko-time .ko-flash { background: rgba(255, 220, 90, 0.8); }
+@keyframes koFlash { 0% { opacity: 0.85; } 100% { opacity: 0; } }
+.ko-burst {
+  position: absolute;
+  width: 40px; height: 40px;
+  margin: -20px 0 0 -20px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,230,1) 0%, rgba(255,200,60,0.9) 30%, rgba(255,80,20,0.6) 60%, rgba(255,40,0,0) 75%);
+  animation: koBurst 1.4s ease-out forwards;
+}
+.ko-burst.b2 { animation-delay: 0.4s; opacity: 0; animation-duration: 1.6s; }
+@keyframes koBurst {
+  0% { transform: scale(0.3); opacity: 1; }
+  60% { opacity: 0.9; }
+  100% { transform: scale(7); opacity: 0; }
+}
+.ko-text {
+  position: absolute; left: 50%; top: 40%;
+  transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center;
+  animation: koText 2.6s ease-out forwards;
+  white-space: nowrap;
+}
+.ko-time .ko-text { animation-duration: 1.8s; }
+.ko-main {
+  font-size: clamp(3.2rem, 17vw, 6.5rem);
+  font-weight: 900; font-style: italic; letter-spacing: 0.04em;
+  color: #fff4c0;
+  -webkit-text-stroke: 3px #b3261e;
+  text-shadow: 0 0 18px rgba(255, 120, 40, 0.9), 0 4px 0 #6a0f0a;
+}
+.ko-lose .ko-main { color: #ffd0d0; -webkit-text-stroke-color: #5a0000; text-shadow: 0 0 18px rgba(255, 30, 30, 0.9), 0 4px 0 #300; }
+.ko-time .ko-main { color: #ffe680; -webkit-text-stroke-color: #7a4a00; text-shadow: 0 0 18px rgba(255, 200, 40, 0.9); }
+.ko-sub { margin-top: 2px; font-size: clamp(1rem, 4.6vw, 1.5rem); font-weight: 900; color: #fff; text-shadow: 0 2px 4px #000; }
+@keyframes koText {
+  0% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; }
+  12% { transform: translate(-50%, -50%) scale(0.95); opacity: 1; }
+  18% { transform: translate(-50%, -50%) scale(1.05); }
+  25% { transform: translate(-50%, -50%) scale(1); }
+  85% { opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.08); opacity: 0; }
+}
+#game.ko-shake { animation: koShake 0.6s ease-out 2; }
+@keyframes koShake {
+  0%, 100% { transform: translate(0, 0); }
+  15% { transform: translate(-7px, 4px); }
+  30% { transform: translate(6px, -5px); }
+  45% { transform: translate(-5px, -3px); }
+  60% { transform: translate(4px, 5px); }
+  75% { transform: translate(-3px, 2px); }
+}
