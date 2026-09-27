@@ -3,14 +3,14 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260928023659';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260928023659';
-import { sfx } from './audio.js?v=20260928023659';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260928023659';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260928023659';
-import { hitBattleCounter } from './stats.js?v=20260928023659';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL } from './meta.js?v=20260928023659';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260928023659';
+} from './entities.js?v=20260928030629';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260928030629';
+import { sfx } from './audio.js?v=20260928030629';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260928030629';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260928030629';
+import { hitBattleCounter } from './stats.js?v=20260928030629';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL } from './meta.js?v=20260928030629';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260928030629';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -555,8 +555,9 @@ export class Game {
       meteors: [],
       scroll: 0,
       items: [],
+      orbs: [],
       time: 0,
-      powerCd: 2.5,
+      powerCd: 0,
       reactDelay: 0,
       dodgeDir: 0,
       aimNoise: 0,
@@ -589,10 +590,8 @@ export class Game {
         maxSpeedDodge: 1.0,
         maxSpeed: 0.55,
         aimNoiseAmp: 0.32,
-        powerCdBase: 9.0,
-        powerCdSpread: 4.0,
-        seedItemChance: 0.22,
-        sendReact: 2.5, // s to react to a held send item (player: instant tap)
+        // AI quality only (same ship / items / rules as the player)
+        ai: { horizon: 0.35, react: 0.36, noise: 10, margin: 2, replan: 0.18, lapseChance: 0.8, attn: 6, overcommit: 0.3, hand: 1.4, accT: 0.2, pickW: 1.2, pickSafe: false, orbNotice: 0.6, itemReact: 1.4, think: 0.6, smart: false },
       };
     }
     return {
@@ -602,10 +601,7 @@ export class Game {
       maxSpeedDodge: 1.2,
       maxSpeed: 0.7,
       aimNoiseAmp: 0.22,
-      powerCdBase: 7.0,
-      powerCdSpread: 3.0,
-      seedItemChance: 0.35,
-      sendReact: 1.5,
+      ai: { horizon: 0.75, react: 0.21, noise: 4, margin: 3, replan: 0.1, lapseChance: 0.12, attn: 12, alignW: 3, prefX: 0.18, overcommit: 0.15, hand: 2.2, accT: 0.16, pickW: 1.6, pickSafe: true, orbNotice: 0.3, itemReact: 0.6, think: 0.25, smart: true },
     };
   }
 
@@ -1459,7 +1455,8 @@ export class Game {
   frame(ts) {
     if (!this.running) return;
     try {
-      const dt = Math.min(0.05, (ts - (this._lastTs || ts)) / 1000) || 0.016;
+      // rAF timestamps can be slightly earlier than performance.now() set at start → never negative dt
+      const dt = Math.max(0, Math.min(0.05, (ts - (this._lastTs || ts)) / 1000)) || 0.016;
       this._lastTs = ts;
 
       if (!this.waiting && !this.ended) {
@@ -1919,70 +1916,43 @@ export class Game {
       if (B.activeTimer <= 0) B.activePower = null;
     }
 
-    // --- Balanced human-like COM (capable but not perfect) ---
-    if (B.reactDelay == null) B.reactDelay = 0;
-    if (B.dodgeDir == null) B.dodgeDir = 0;
-    if (B.aimNoise == null) B.aimNoise = 0;
-    if (B.humanPanic == null) B.humanPanic = 0;
+    // --- COM movement: threat-predicting planner (samples candidate positions, projects enemy
+    // bullets / ships / laser telegraphs a short horizon ahead, picks the safest spot that still
+    // lines up a shot). Difficulty = reaction (new bullets unseen for a moment), horizon, replan
+    // interval, perception noise and rare lapses — not raw speed or stats.
+    if (!Number.isFinite(B.x)) B.x = 48;
+    if (!Number.isFinite(B.y)) B.y = 0.5;
     if (B.moveVel == null) B.moveVel = 0;
+    if (B.moveVelX == null) B.moveVelX = 0;
     if (B.preferredY == null) B.preferredY = 0.5;
-
-    // Urgent threat: react a bit earlier than "weak" AI, still not machine-perfect
-    let urgent = null;
-    let urgentScore = 0;
+    const AI = globalThis.__aiOverride ? { ...(_cp.ai || {}), ...globalThis.__aiOverride } : (_cp.ai || {});
+    const horizon = AI.horizon || 0.6;
+    const react = AI.react != null ? AI.react : 0.1;
+    const noise = AI.noise || 0;
+    const margin = AI.margin != null ? AI.margin : 5;
+    // The COM 'hand' drags a virtual pointer (like the player's finger); the ship follows it with
+    // exactly the player's ship response. Hand speed / reaction are AI quality, not ship stats.
+    const handPx = (AI.hand || 2) * fh; // px/s
+    const vyMax = handPx;
+    const vxMax = handPx;
+    const shipY0 = B.y * fh;
+    // Threats the COM has "noticed" (reaction delay on freshly fired shots)
+    const threats = [];
     for (const b of B.bullets) {
-      if (b.owner !== 'enemy' || b.vx >= 0) continue;
-      const dist = b.x - shipX;
-      if (dist < 0 || dist > fw * 0.62) continue;
-      const eta = dist / Math.max(50, -b.vx);
-      if (eta > 0.7) continue;
-      const yN = b.y / fh;
-      const lane = Math.abs(yN - B.y);
-      if (lane > 0.15) continue;
-      const score = (1 - eta / 0.7) * (1 - lane / 0.15) + (eta < 0.28 ? 0.55 : 0);
-      if (score > urgentScore) {
-        urgentScore = score;
-        urgent = { yN, eta };
-      }
+      if (b.life <= 0) continue;
+      if (b.owner !== 'enemy' && !b.dir) continue;
+      if (b._seenT == null) { b._seenT = B.time; b._nz = (Math.random() - 0.5) * 2 * noise; }
+      if (B.time - b._seenT < react) continue;
+      threats.push(b);
     }
-    for (const e of B.enemies) {
-      if (e.x > shipX + 110) continue;
-      const yN = e.y / fh;
-      if (Math.abs(yN - B.y) > 0.13) continue;
-      const eta = (e.x - shipX) / Math.max(40, e.speed || 80);
-      const score = 0.85 + (1 - Math.min(1, eta)) * 0.9;
-      if (score > urgentScore) {
-        urgentScore = score;
-        urgent = { yN, eta };
-      }
+    // Attention: a human only tracks the nearest few shots
+    if (AI.attn && threats.length > AI.attn) {
+      threats.sort((p, q) => Math.hypot(p.x - shipX, p.y - B.y * fh) - Math.hypot(q.x - shipX, q.y - B.y * fh));
+      threats.length = AI.attn;
     }
+    const enemyPressure = B.enemies.filter((e) => e.x < fw * 0.7).length;
 
-    if (urgent && urgentScore > 0.4) B.reactDelay += dt;
-    else B.reactDelay = Math.max(0, B.reactDelay - dt * 2.2);
-    const reacted = B.reactDelay > _cp.reactThreshold;
-
-    // Rare wrong-way panic (keeps it human, not a wall)
-    if (reacted && urgent && B.humanPanic <= 0 && Math.random() < _cp.panicChance) {
-      B.humanPanic = 0.35 + Math.random() * 0.3;
-      B.dodgeDir = urgent.yN >= B.y ? -1 : 1;
-    }
-    if (B.humanPanic > 0) B.humanPanic -= dt;
-
-    let wantY = B.preferredY;
-    let dodging = false;
-    if (reacted && urgent && B.humanPanic <= 0) {
-      dodging = true;
-      const upSpace = urgent.yN;
-      const downSpace = 1 - urgent.yN;
-      let dir = upSpace >= downSpace ? -1 : 1;
-      if (Math.random() < 0.008) dir *= -1;
-      B.dodgeDir = dir;
-      wantY = Math.max(0.08, Math.min(0.92, urgent.yN + dir * (0.18 + Math.random() * 0.06)));
-    } else if (B.humanPanic > 0) {
-      dodging = true;
-      wantY = Math.max(0.08, Math.min(0.92, B.y + B.dodgeDir * 0.18));
-    }
-
+    // Target to aim at (heavier / closer / aligned first)
     let focus = null;
     let focusVal = -1e9;
     for (const e of B.enemies) {
@@ -1990,67 +1960,170 @@ export class Game {
       const kindW = ({ boss: 5, mech: 4, golem: 4, tank: 4, elite: 3, drone: 2, basic: 1.5, swarm: 1 })[resolveEnemyTier(e.kind)] || 1;
       const dist = Math.max(20, e.x - shipX);
       const align = 1 - Math.min(1, Math.abs(e.y / fh - B.y) / 0.28);
-      let val = kindW * 16 / Math.sqrt(dist) + align * 5 + (e.x < 160 ? 1.8 : 0);
-      if (dodging) val -= Math.abs(e.y / fh - wantY) * 4;
+      const val = kindW * 16 / Math.sqrt(dist) + align * 5 + (e.x < 160 ? 1.8 : 0);
       if (val > focusVal) { focusVal = val; focus = e; }
     }
 
-    if (!dodging && focus) {
-      B.preferredY += ((focus.y / fh) - B.preferredY) * Math.min(1, 2.2 * dt);
-      wantY = B.preferredY + Math.sin(B.time * 1.2) * 0.025;
-    } else if (!dodging && !focus) {
-      wantY = 0.5 + Math.sin(B.time * 1.0) * 0.14;
-      B.preferredY = wantY;
+    const STEPS = [0.06, 0.13, 0.2, 0.28, 0.36, 0.45, 0.55, 0.66, 0.78, 0.9].filter((t) => t <= horizon + 1e-6);
+    const posAt = (x0, y0, cx, cy, t) => {
+      const dx = cx - x0, dy = cy - y0;
+      const mx = vxMax * t, my = vyMax * t;
+      return [x0 + Math.sign(dx) * Math.min(Math.abs(dx), mx), y0 + Math.sign(dy) * Math.min(Math.abs(dy), my)];
+    };
+    const dangerOf = (cx, cy) => {
+      let d = 0;
+      for (const b of threats) {
+        if (b.homing && !b.laser && b.owner === 'enemy' && b.homeT > 0) {
+          // Limited-homing missile: simulate its steering toward our projected path
+          let mx = b.x, my = b.y + (b._nz || 0), mvx = b.vx || -1, mvy = b.vy || 0, hT = b.homeT;
+          const hbm = (b.hb || 0) + margin + 3;
+          const H = horizon + 0.25, h = 0.04;
+          for (let t = h; t <= H; t += h) {
+            const [sx, sy] = posAt(shipX, shipY0, cx, cy, t);
+            if (hT > 0) {
+              hT -= h;
+              const des = Math.atan2(sy - my, sx - mx);
+              const cur = Math.atan2(mvy, mvx);
+              let dl = des - cur;
+              while (dl > Math.PI) dl -= Math.PI * 2;
+              while (dl < -Math.PI) dl += Math.PI * 2;
+              const mt = ENEMY_HOMING_TURN * h;
+              const a = cur + Math.max(-mt, Math.min(mt, dl));
+              mvx = Math.cos(a) * ENEMY_HOMING_SPD; mvy = Math.sin(a) * ENEMY_HOMING_SPD;
+            }
+            mx += mvx * h; my += mvy * h;
+            const ax = Math.abs(mx - sx), ay = Math.abs(my - sy);
+            if (ax < 16 + hbm && ay < 16 + hbm) { d += 10 / (0.18 + t); break; }
+            if (ax < 26 + hbm && ay < 22 + hbm) d += 0.3 / (0.25 + t);
+          }
+          continue;
+        }
+        const hb = (b.hb || 0) + margin + (b.homing ? 4 : 0);
+        const bvx = b.vx || 0, bvy = b.vy || 0;
+        const bny = b._nz || 0;
+        for (const t of STEPS) {
+          if (t > b.life) break;
+          const bx = b.x + bvx * t, by = b.y + bvy * t + bny;
+          const [sx, sy] = posAt(shipX, shipY0, cx, cy, t);
+          const ax = Math.abs(bx - sx), ay = Math.abs(by - sy);
+          if (ax < 16 + hb && ay < 16 + hb) { d += 10 / (0.18 + t); break; }
+          if (ax < 26 + hb && ay < 22 + hb) d += 0.6 / (0.25 + t);
+        }
+      }
+      for (const e of B.enemies) {
+        if (warping(e)) continue;
+        const parkedE = e.sent && e.lingerT > 0;
+        const spd = parkedE ? 0 : (e.speed || 60) * 1.55;
+        const rx = (e.w || 30) * 0.4 + 8 + margin + 10, ry = (e.h || 30) * 0.4 + 8 + margin + 12;
+        for (const t of STEPS) {
+          const ex = e.x - spd * t, ey = e.y;
+          const [sx, sy] = posAt(shipX, shipY0, cx, cy, t);
+          if (Math.abs(ex - sx) < rx && Math.abs(ey - sy) < ry) { d += 12 / (0.18 + t); break; }
+        }
+        // general standoff: close enemies ram and fire point-blank missiles that can't be dodged
+        {
+          const dd = Math.hypot((e.x - cx) * 0.8, e.y - cy);
+          const r = AI.standR ?? 150;
+          if (dd < r) d += (AI.standW ?? 0) * (1 - dd / r);
+        }
+        // keep a respectful distance from big ships (ramming + point-blank volleys)
+        if (isLargeEnemy(e)) {
+          const dd = Math.hypot(e.x - cx, e.y - cy);
+          const r = (e.w || 80) * 0.75 + 50;
+          if (dd < r) d += 2.2 * (1 - dd / r);
+        }
+        // laser telegraph lanes (about to fire straight left)
+        if (e.laserTeleT > 0 && e.x > cx) {
+          const offs = e.laserTeleOffs || [0];
+          for (const o of offs) if (Math.abs(cy - (e.y + o)) < 16 + margin) d += 5;
+        }
+        // don't sit in the firing line of a unit that is about to shoot
+        if (e.x > cx && Math.abs(e.y - cy) < 14 && (e.fireCd || 0) < 0.35) d += 0.7;
+      }
+      return d;
+    };
+
+    B._planAcc = (B._planAcc || 0) - dt;
+    if (B._lapse > 0) B._lapse -= dt;
+    else if (AI.lapseChance && Math.random() < AI.lapseChance * dt) B._lapse = 0.25 + Math.random() * 0.25;
+    if (B._tx == null) { B._tx = B.x; B._ty = shipY0; }
+    let curDanger = 0;
+    if (B._planAcc <= 0 && !(B._lapse > 0)) {
+      B._planAcc = AI.replan || 0.07;
+      // Stay back: distance buys time once enemy missiles stop homing (they fly straight after)
+      const prefX = fw * (AI.prefX || 0.1);
+      const cands = [[B._tx, B._ty], [B.x, shipY0]];
+      const xs = [0.07, 0.13, 0.2, 0.28, 0.37, 0.47, 0.6, 0.74].map((k) => k * fw);
+      for (const cx of xs) for (let k = 0; k <= 12; k++) cands.push([cx, fh * (0.04 + 0.92 * k / 12)]);
+      for (const it of B.orbs) if (it._seenT != null && B.time - it._seenT >= (AI.orbNotice ?? 0.5)) cands.push([it.x - 30 * 0.3, it.y]);
+      // fine candidates around the current position
+      for (const [ox, oy] of [[0, -0.06], [0, 0.06], [-0.05, 0], [0.05, 0], [0, -0.12], [0, 0.12]]) cands.push([B.x + ox * fw, shipY0 + oy * fh]);
+      let best = null, bestC = 1e9;
+      for (const [cx0, cy0] of cands) {
+        const cx = Math.max(20, Math.min(fw * 0.88, cx0));
+        const cy = Math.max(fh * 0.02, Math.min(fh * 0.98, cy0));
+        const dz = dangerOf(cx, cy);
+        let c = dz;
+        // Item pickup desire vs safety (strong: skips orbs sitting in danger; normal: greedier)
+        for (const it of B.orbs) {
+          const heal = it.id === 'heal' || it.id === 'heal_big';
+          const hpR = B.hp / (B.maxHp || PLAYER_MAX_HP);
+          const v = heal ? (hpR < 0.5 ? 3 : hpR < 0.85 ? 1.6 : 0.3) : (B.items.length < MAX_ITEM_SLOTS ? 1.4 : 0);
+          if (v <= 0) continue;
+          if (it._seenT == null) it._seenT = B.time;
+          if (B.time - it._seenT < (AI.orbNotice ?? 0.5)) continue; // human: notice the orb first
+          if (dz > (AI.pickSafe ? 2 : 6)) continue; // too risky here → give up on it (for now)
+          const tArr = Math.hypot(it.x - B.x, it.y - shipY0) / Math.max(1, handPx);
+          if (tArr > it.life - 0.2) continue; // can't make it in time
+          const dd = Math.hypot(it.x - 30 * tArr - cx, it.y - cy);
+          if (dd < 110) c -= (AI.pickW || 1) * v * (1 - dd / 110);
+        }
+        if (focus) {
+          const al = Math.abs(cy - focus.y) / fh;
+          c += al < 0.05 ? -(AI.alignW ?? 1.1) : Math.min(1.2, al * 3) * (AI.alignW ?? 1.1) / 1.1;
+        } else c += Math.abs(cy - fh * 0.5) / fh * 0.8;
+        c += Math.abs(cx - prefX) / fw * (AI.prefW ?? 0.9);
+        c += Math.hypot((cx - B.x) / fw, (cy - shipY0) / fh) * 0.5; // don't wander
+        if (cy < fh * 0.1 || cy > fh * 0.9) c += 0.35; // edges trap you
+        if (Math.abs(cx - B._tx) < 2 && Math.abs(cy - B._ty) < 2) c -= 0.35; // hysteresis (no jitter)
+        if (c < bestC) { bestC = c; best = [cx, cy]; }
+      }
+      if (best) {
+        let bx = best[0], by = best[1];
+        const moved = Math.hypot(bx - B._tx, by - B._ty);
+        if (moved > fh * 0.08 && AI.overcommit && Math.random() < AI.overcommit) {
+          // over-commit: keep going a little past the chosen spot
+          const k = 0.15 + Math.random() * 0.25;
+          bx += (bx - B.x) * k; by += (by - shipY0) * k;
+        }
+        B._tx = Math.max(20, Math.min(fw * 0.88, bx)); B._ty = Math.max(fh * 0.02, Math.min(fh * 0.98, by));
+      }
     }
+    curDanger = dangerOf(B.x, shipY0);
+    const dodging = curDanger > 1.5;
 
-    wantY = Math.max(0.07, Math.min(0.93, wantY));
-
-    // Snappy enough to feel skilled, not teleporty
-    const maxSpeed = dodging ? _cp.maxSpeedDodge : _cp.maxSpeed;
-    const accel = dodging ? 7 : 3.2;
-    const desiredVel = Math.max(-maxSpeed, Math.min(maxSpeed, (wantY - B.y) * (dodging ? 5.2 : 2.6)));
-    B.moveVel += (desiredVel - B.moveVel) * Math.min(1, accel * dt);
-    B.moveVel += (Math.random() - 0.5) * 0.04;
-    B.y += B.moveVel * dt;
-    B.y = Math.max(0.07, Math.min(0.93, B.y));
-
-    const enemyPressure = B.enemies.filter((e) => e.x < fw * 0.7).length;
-
-    // Fore-aft (X): push in when pressuring, pull back when dodging / crowded
-    if (B.x == null) B.x = 48;
-    if (B.preferredX == null) B.preferredX = 48;
-    if (B.moveVelX == null) B.moveVelX = 0;
-    if (B.surgePhase == null) B.surgePhase = Math.random() * Math.PI * 2;
-    B.surgePhase += dt * (1.3 + Math.random() * 0.4);
-    let wantX = B.preferredX;
-    if (dodging || urgent) {
-      // pull back hard when dodging
-      wantX = fw * 0.08 + Math.random() * fw * 0.06;
-      B.preferredX += (wantX - B.preferredX) * Math.min(1, 5.5 * dt);
-    } else if (focus && focus.x < fw * 0.62) {
-      // surge forward toward targets
-      wantX = fw * 0.38 + Math.min(fw * 0.18, (fw * 0.55 - focus.x) * 0.25);
-      B.preferredX += (wantX - B.preferredX) * Math.min(1, 3.2 * dt);
-    } else if (enemyPressure >= 3) {
-      wantX = fw * 0.12;
-      B.preferredX += (wantX - B.preferredX) * Math.min(1, 2.8 * dt);
-    } else {
-      // big idle weave — clearly visible fore/aft (left=back, right=forward)
-      wantX = fw * 0.28 + Math.sin(B.surgePhase) * fw * 0.18 + Math.sin(B.time * 0.55) * fw * 0.08;
-      B.preferredX += (wantX - B.preferredX) * Math.min(1, 2.2 * dt);
+    // Hand moves the virtual pointer toward the planned spot; ship follows it like the player's ship
+    if (!Number.isFinite(B.ptrX) || !Number.isFinite(B.ptrY) || !Number.isFinite(B.pvx) || !Number.isFinite(B.pvy)) { B.ptrX = B.x; B.ptrY = B.y; B.pvx = 0; B.pvy = 0; }
+    {
+      // Finger-like drag: speed capped (AI.hand field-heights/s), acceleration-limited (reaches
+      // full speed in ~AI.accT s), eases in on arrival → smooth curved paths, no teleports.
+      const dx = B._tx - B.ptrX, dy = B._ty - B.ptrY * fh;
+      const dl = Math.hypot(dx, dy);
+      const vCap = Math.min(handPx, dl * 6);
+      const dvx = dl > 1e-6 ? (dx / dl) * vCap : 0, dvy = dl > 1e-6 ? (dy / dl) * vCap : 0;
+      const acc = handPx / (AI.accT || 0.18) * dt;
+      const ex = dvx - B.pvx, ey = dvy - B.pvy, el = Math.hypot(ex, ey);
+      const k = el > acc ? acc / el : 1;
+      B.pvx += ex * k; B.pvy += ey * k;
+      B.ptrX += B.pvx * dt;
+      B.ptrY += (B.pvy * dt) / fh;
+      if (B.ptrX < fw * 0.06 || B.ptrX > fw * 0.88) { B.ptrX = Math.max(fw * 0.06, Math.min(fw * 0.88, B.ptrX)); B.pvx = 0; }
+      if (B.ptrY < -0.08 || B.ptrY > 1.08) { B.ptrY = Math.max(-0.08, Math.min(1.08, B.ptrY)); B.pvy = 0; }
     }
-    // occasional dash pulse
-    if (Math.random() < 0.012) {
-      B.preferredX = Math.random() < 0.5 ? fw * 0.1 : fw * 0.48;
-    }
-    wantX = B.preferredX + Math.sin(B.surgePhase * 1.7) * fw * 0.04;
-    const maxSpeedX = dodging ? fw * 1.1 : fw * 0.75;
-    const accelX = dodging ? 16 : 9;
-    const desiredVelX = Math.max(-maxSpeedX, Math.min(maxSpeedX, (wantX - B.x) * (dodging ? 7 : 4)));
-    B.moveVelX += (desiredVelX - B.moveVelX) * Math.min(1, accelX * dt);
-    B.moveVelX += (Math.random() - 0.5) * fw * 0.04;
-    B.x += B.moveVelX * dt;
-    B.x = Math.max(fw * 0.06, Math.min(fw * 0.55, B.x));
+    B.y += (B.ptrY - B.y) * Math.min(1, 12 * dt);
+    B.x += (B.ptrX - B.x) * Math.min(1, 12 * dt);
+    B.x = Math.max(20, Math.min(fw * 0.88, B.x));
+    B.preferredY = B.y;
     shipX = B.x;
 
     B.aimNoise += ((Math.random() - 0.5) * _cp.aimNoiseAmp - B.aimNoise) * Math.min(1, 1.4 * dt);
@@ -2209,20 +2282,12 @@ export class Game {
     for (const e of B.enemies) {
       if (e.hp <= 0) {
         B.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
+        // Same as the player: drops are orbs that the COM ship must fly into (8s life)
         if (isLargeEnemy(e)) {
-          // デカギャラ撃破: 回復確定（ボス級は大回復）— COMは即時HP適用
-          const dropId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';
-          B.hp = Math.min(B.maxHp || PLAYER_MAX_HP, B.hp + (dropId === 'heal_big' ? 50 : 25));
-          B.fx.unshift(spawnHealFx(48, B.y * fh, dropId === 'heal_big'));
-        } else if (B.items.length < MAX_ITEM_SLOTS && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : ITEM_DROP_CHANCE)) {
-          let dropId = pickPowerupId();
-          if (dropId === 'heal' || dropId === 'heal_big') {
-            B.hp = Math.min(B.maxHp || PLAYER_MAX_HP, B.hp + (dropId === 'heal_big' ? 50 : 25));
-            B.fx.unshift(spawnHealFx(48, B.y * fh, dropId === 'heal_big'));
-          } else {
-            B.items.push(dropId);
-            if (dropId === 'direct' && B._directHeldSince == null) B._directHeldSince = B.time;
-          }
+          const healId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';
+          B.orbs.push(spawnItemWithId(e.x, e.y, healId));
+        } else if (Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : ITEM_DROP_CHANCE)) {
+          B.orbs.push(spawnItem(e.x, e.y));
         }
       } else if (e.x > -40) {
         kept.push(e);
@@ -2230,13 +2295,36 @@ export class Game {
     }
     B.enemies = kept;
 
+    // Item orbs float + pickup (same motion / radius / lifetime / heal rule as the player)
+    {
+      const byP = B.y * fh;
+      const left = [];
+      for (const it of B.orbs) {
+        it.y += Math.sin(B.time * 3 + it.x) * 10 * dt;
+        it.x -= 30 * dt;
+        it.y = Math.max(24, Math.min(fh - 24, it.y));
+        it.life -= dt;
+        if (Math.abs(it.x - shipX) < 32 && Math.abs(it.y - byP) < 32) {
+          if (it.id === 'heal' || it.id === 'heal_big') {
+            B.hp = Math.min(B.maxHp || PLAYER_MAX_HP, B.hp + (it.id === 'heal_big' ? 50 : 25));
+            B.fx.unshift(spawnHealFx(shipX + 8, byP, it.id === 'heal_big'));
+          } else if (B.items.length < MAX_ITEM_SLOTS) {
+            B.items.push(it.id);
+            B._gotT = B.time;
+            if (it.id === 'direct' && B._directHeldSince == null) B._directHeldSince = B.time;
+          } // full: orb is wasted (same as the player)
+        } else if (it.life > 0 && it.x > -20) left.push(it);
+      }
+      B.orbs = left;
+    }
+
     // Hits on bot — fair hurtbox (gets hit, not glass)
     // v1.5.70: COM barrier blocks the same way as the player
     const botBarrier = hasBarrierFx(B.fx);
     // Player's 直接攻撃 shots vs COM ship — real collision each frame, explosion per hit
     for (const b of B.bullets) {
       if (!b.dir || b.life <= 0) continue;
-      if (!directShotHits(b, shipX, B.y * fh, 13, 12)) continue;
+      if (!directShotHits(b, shipX, B.y * fh, 16, 16)) continue; // same hurtbox as the player ship
       b.life = 0;
       if (botBarrier) {
         const bar = B.fx.find((f) => f.kind === 'barrier' && f.life > 0);
@@ -2248,7 +2336,7 @@ export class Game {
     for (const b of B.bullets) {
       if (b.owner !== 'enemy' || b.life <= 0) continue;
       const hb = b.hb || 0;
-      if (Math.abs(b.x - shipX) < 13 + hb && Math.abs(b.y - B.y * fh) < 12 + hb) {
+      if (Math.abs(b.x - shipX) < 16 + hb && Math.abs(b.y - B.y * fh) < 16 + hb) { // same hurtbox as the player
         if (botBarrier) {
           b.life = 0;
           const bar = B.fx.find((f) => f.kind === 'barrier' && f.life > 0);
@@ -2256,26 +2344,28 @@ export class Game {
           continue;
         }
         if (B.invuln <= 0) {
-          B.hp = Math.max(0, B.hp - scaledHitDmg(5, b)); // v1.5.72: was 7; × 攻撃力 (same rule as player)
-          B.invuln = 0.38;
+          // Same rule as the player: homing 3 / others 5 (× 攻撃力), 0.75s invulnerability
+          B.hp = Math.max(0, B.hp - scaledHitDmg(b.homing ? 3 : 5, b));
+          B.invuln = 0.75;
           b.life = 0;
           B.fx.push(spawnHitSpark(shipX, B.y * fh));
         }
       }
     }
+    // Enemy body -> COM ship: same rule as the player (box +12, 8 dmg, 0.9s invuln, scrape 1)
     for (const e of B.enemies) {
       if (warping(e)) continue;
-      if (Math.abs(e.x - shipX) < e.w * 0.4 + 8 && Math.abs(e.y - B.y * fh) < e.h * 0.4 + 8) {
+      if (Math.abs(e.x - shipX) < e.w * 0.4 + 12 && Math.abs(e.y - B.y * fh) < e.h * 0.4 + 12) {
         if (botBarrier) {
           const bar = B.fx.find((f) => f.kind === 'barrier' && f.life > 0);
           if (bar) bar._hit = 0.14;
-          e.hp = 0;
+          e.hp -= 1;
           continue;
         }
         if (B.invuln <= 0) {
-          B.hp = Math.max(0, B.hp - 8); // v1.5.72: was 10
-          B.invuln = 0.45;
-          e.hp = 0;
+          B.hp = Math.max(0, B.hp - 8);
+          B.invuln = 0.9;
+          e.hp -= 1;
           B.fx.push(spawnExplosion(shipX, B.y * fh, true));
         }
       }
@@ -2289,7 +2379,6 @@ export class Game {
     B.fx = B.fx.filter((f) => f.life > 0);
 
     // --- Smart item / power usage ---
-    B.powerCd -= dt;
     const playerHp = this.state.player.hp;
     const pickBestItem = () => {
       if (!B.items.length) return null;
@@ -2326,14 +2415,15 @@ export class Game {
       return off >= 0 ? off : -1;
     };
 
-    const tryUse = (force = false) => {
-      if (B.powerCd > 0 && !force) return;
-      // No free seeded items: COM only uses items it got from kills (same as the player)
+    // Apply item idx (same effects as the player's items). No cooldown rule — WHEN to use is AI.
+    const tryUse = () => {
       const idx = B._forceIdx != null ? B._forceIdx : pickBestItem();
       B._forceIdx = null;
       if (idx == null || idx < 0) return;
-      const id = B.items.splice(idx, 1)[0];
-      B.powerCd = _cp.powerCdBase + Math.random() * _cp.powerCdSpread;
+      const id = B.items[idx];
+      // Player rule: timed powers can't stack on each other
+      if (B.activeTimer > 0 && (id === 'homing' || id === 'laser' || id === 'rapid' || id === 'direct')) return;
+      B.items.splice(idx, 1);
 
       if (id === 'homing') {
         B.activePower = 'homing';
@@ -2361,9 +2451,9 @@ export class Game {
         for (let i = -3; i <= 3; i++) {
           const ang = i * 0.18;
           const spd = 480;
-          B.bullets.push(spawnBullet(48 + 18, by, Math.cos(ang) * spd, Math.sin(ang) * spd, 'player', false, 2));
+          B.bullets.push(spawnBullet(shipX + 18, by, Math.cos(ang) * spd, Math.sin(ang) * spd, 'player', false, 2));
         }
-        B.fx.push(spawnExplosion(48 + 30, by, false));
+        B.fx.push(spawnExplosion(shipX + 30, by, false));
       } else if (id === 'bomb') {
         const targets = [];
         for (const e of B.enemies) {
@@ -2409,49 +2499,39 @@ export class Game {
       }
     };
 
-    // Use when: cooldown ready AND (low HP heal / many enemies / mid-fight pressure)
-    if (B.powerCd <= 0) {
-      const wantHeal = B.hp <= 38 && B.items.some((id) => id === 'heal' || id === 'heal_big');
-      const wantClear = enemyPressure >= 3;
-      const wantPressure = playerHp >= 40 && B.time > 4;
-      if (wantHeal || wantClear || wantPressure || B.items.length >= 3) tryUse();
-    }
-    // Send items: like the player (who can tap any time), COM sends as soon as it reacts —
-    // not gated by the item cooldown, and it does not consume that cooldown either.
-    {
-      const sIdx = B.items.findIndex((id) => id === 'send' || id === 'send_mech' || id === 'send_golem' || id === 'send_tank' || id === 'send_drone');
-      if (sIdx < 0) B._sendHeldSince = null;
-      else {
-        if (B._sendHeldSince == null) B._sendHeldSince = B.time;
-        if (B.time - B._sendHeldSince >= (_cp.sendReact ?? 2)) {
-          const cd = B.powerCd;
-          B._forceIdx = sIdx;
-          tryUse(true);
-          B.powerCd = cd;
-          B._sendHeldSince = null;
-        }
+    // --- Item timing (AI only): think every AI.think s, react AI.itemReact s after a pickup ---
+    B.thinkAcc = (B.thinkAcc || 0) - dt;
+    if (B.items.length && B.thinkAcc <= 0 && (B.time - (B._gotT ?? -99)) >= (AI.itemReact ?? 1)) {
+      B.thinkAcc = AI.think || 0.4;
+      const isSend = (id) => id === 'send' || id === 'send_mech' || id === 'send_golem' || id === 'send_tank' || id === 'send_drone';
+      const timed = (id) => id === 'homing' || id === 'laser' || id === 'rapid' || id === 'direct';
+      const clearers = (id) => id === 'bomb' || id === 'shock' || id === 'cluster' || id === 'blackhole' || id === 'freeze';
+      const nThreat = threats.length;
+      const full = B.items.length >= MAX_ITEM_SLOTS;
+      const oppBusy = this.state.enemies.length >= 5 || playerHp < (this.state.player.maxHp || PLAYER_MAX_HP) * 0.5;
+      let pick = -1;
+      if (AI.smart) {
+        const want = (id) => {
+          if (timed(id) && B.activeTimer > 0) return -1;
+          if (isSend(id)) return 5; // send promptly
+          if (id === 'barrier') return (curDanger > 3 || nThreat >= 6) && !hasBarrierFx(B.fx) ? 6 : (full ? 1 : -1);
+          if (id === 'reflect') return nThreat >= 6 ? 4.5 : (full ? 1 : -1);
+          if (clearers(id)) return enemyPressure >= 4 ? 4 + enemyPressure * 0.1 : (full ? 1.5 : -1);
+          if (id === 'direct') return oppBusy || (B._directHeldSince != null && B.time - B._directHeldSince > 6) ? 3.5 : (full ? 1.2 : -1);
+          if (id === 'meteor') return 3;
+          if (id === 'laser' || id === 'homing' || id === 'rapid' || id === 'spread' || id === 'pbeam' || id === 'option') {
+            return focus && (enemyPressure >= 2 || isLargeEnemy(focus)) ? 3.2 : (full ? 1.3 : -1);
+          }
+          return full ? 1 : 2;
+        };
+        let bv = 0;
+        B.items.forEach((id, i) => { const v = want(id); if (v > bv) { bv = v; pick = i; } });
+      } else {
+        // 普通: less judgment — mostly first usable item, sometimes waits too long / uses it early
+        const i0 = B.items.findIndex((id) => !(timed(id) && B.activeTimer > 0));
+        if (i0 >= 0 && (full || enemyPressure >= 2 || isSend(B.items[i0]) || Math.random() < 0.35)) pick = i0;
       }
-    }
-    // Emergency heal even if cooldown almost ready
-    if (B.hp <= 22 && B.powerCd < 1.0 && B.items.some((id) => id === 'heal' || id === 'heal_big')) {
-      B.powerCd = 0;
-      tryUse(true);
-    }
-    // Force-use direct if held ~8s after pickup (so purple beam actually shows)
-    if (
-      playerHp >= 30
-      && B._directHeldSince != null
-      && (B.time - B._directHeldSince) >= 8
-      && B.items.includes('direct')
-      && !(B.activePower === 'direct' && B.activeTimer > 0)
-    ) {
-      const di = B.items.indexOf('direct');
-      if (di >= 0) {
-        B.powerCd = 0;
-        const held = B.items.splice(di, 1)[0];
-        B.items.unshift(held);
-        tryUse(true);
-      }
+      if (pick >= 0) { B._forceIdx = pick; tryUse(); }
     }
 
     if (!B.meteors) B.meteors = [];
@@ -2476,6 +2556,7 @@ export class Game {
       bullets: B.bullets,
       fx: B.fx,
       meteors: B.meteors,
+      worldItems: B.orbs,
       directBeam: (B.directBeam || 0) > 0,
       ap: B.activePower || null,
       px: B.x || shipX,
