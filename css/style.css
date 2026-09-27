@@ -1751,3 +1751,7 @@ html, body {
 }
 /* keep badge readable on small phones without widening the title */
 .game-title .beta-badge { font-size: max(0.72rem, 0.5em); margin-left: 0.3em; }
+
+/* In-battle version label hidden (it overlapped enemies in the opponent pane and the result
+   overlay). The version is shown on the title/menu screen (#app-version) with the 最新 badge. */
+#game-version, .game-version { display: none !important; }

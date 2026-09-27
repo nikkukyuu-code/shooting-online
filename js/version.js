@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-09-28 00:54:48';
+export const VERSION_LABEL = '2026-09-28 01:16:55';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1790524488878;
-export const BUILD_NOTE = '転送敵のライフをデッキとショップに表示・小型ユニットのライフ下限を追加';
+export const BUILD_TIME = 1790525815900;
+export const BUILD_NOTE = '対戦中のバージョン表示を非表示に（タイトル画面のみ表示）';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
