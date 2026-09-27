@@ -1,16 +1,16 @@
 import {
-  POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, spawnDirectShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
+  POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260927185537';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260927185537';
-import { sfx } from './audio.js?v=20260927185537';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260927185537';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul } from './catalog.js?v=20260927185537';
-import { hitBattleCounter } from './stats.js?v=20260927185537';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260927185537';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260927185537';
+} from './entities.js?v=20260927191423';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260927191423';
+import { sfx } from './audio.js?v=20260927191423';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260927191423';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul } from './catalog.js?v=20260927191423';
+import { hitBattleCounter } from './stats.js?v=20260927191423';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260927191423';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260927191423';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -790,6 +790,17 @@ export class Game {
     sfx.hit();
   }
 
+  /** Hand our direct shot over to the opponent: COM field (top, falling) or online directShot message. */
+  handOffDirectShot(x) {
+    if (this.ended) return;
+    const fw = this.L.own.w;
+    if (this.useBot && this._bot) {
+      this._bot.bullets.push(spawnDirectShot(x, 'player'));
+    } else if (this.net && this.net.ready) {
+      this.net.send({ type: 'directShot', x: +(x / fw).toFixed(4) });
+    }
+  }
+
   /** Incoming direct shot (COM or online): falls straight down from the top of OUR field at x. */
   pushIncomingDirectShot(x) {
     this.state.bullets.push(spawnDirectShot(x, 'enemy'));
@@ -1354,13 +1365,12 @@ export class Game {
         S.bullets.push(spawnBullet(P.x + 16, by + 6, 500, 30, 'player', false, 2));
         sfx.shot();
       } else if (P.activePower === 'direct') {
-        // 直接攻撃: the same normal shot (speed/damage/rate), fired into the opponent's field instead —
-        // appears at the top at our x and falls straight down. No homing / no aim correction.
-        if (this.useBot && this._bot) {
-          this._bot.bullets.push(spawnDirectShot(P.x, 'player'));
-        } else if (this.net && this.net.ready) {
-          this.net.send({ type: 'directShot', x: +(P.x / fw).toFixed(4) });
-        }
+        // 直接攻撃: the same normal shot (speed/damage/rate) leaves our ship straight UP (ship faces up).
+        // It hits nothing in our pane; when it exits the top it is handed off to the opponent's field
+        // (see handOffDirectShot) — appears at the top there at the same x and falls straight down.
+        const vb = spawnBullet(P.x, by - 14, 0, -DIRECT_SHOT_SPEED, 'player', false, 0, { life: 4 });
+        vb.dvis = true;
+        S.bullets.push(vb);
         sfx.shot();
       } else {
         // denser fire, slightly weaker per shot (4→2)
@@ -1469,6 +1479,13 @@ export class Game {
       pushHomingTrail(b);
     }
     for (const b of spawnedEB) S.bullets.push(b);
+    // 直接攻撃: our upward shot left the top of our pane → continue it in the opponent's field
+    for (const b of S.bullets) {
+      if (b.dvis && b.life > 0 && b.y < -12) {
+        b.life = 0;
+        this.handOffDirectShot(b.x);
+      }
+    }
 
     // Items float
     for (const it of S.items) {
@@ -1483,7 +1500,7 @@ export class Game {
 
     // Collisions player bullets -> enemies
     for (const b of S.bullets) {
-      if (b.owner !== 'player') continue;
+      if (b.owner !== 'player' || b.dvis) continue; // direct shots fly out of our pane without hitting
       for (const e of S.enemies) {
         if (Math.abs(b.x - e.x) < e.w * 0.45 + 4 && Math.abs(b.y - e.y) < e.h * 0.45 + 4) {
           e.hp -= b.dmg;
