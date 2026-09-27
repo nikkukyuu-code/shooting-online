@@ -520,6 +520,23 @@ export function defHpMul(def) {
   return Math.max(1, Math.min(1.3, 1 + n / 500));
 }
 
+/**
+ * Sent (transferred) unit HP floor per tier — applied to the base HP before 防御力 scaling so the
+ * smallest classes don't die to 1–2 normal shots right after the warp-in. Wave enemies unchanged.
+ * (was swarm 4 / basic 7 / drone 9 / elite 18)
+ */
+export const SENT_HP_FLOOR = { swarm: 12, basic: 14, drone: 16, elite: 24 };
+
+/** Actual HP a unit has when sent to the opponent (player, COM and online use this). */
+export function sentUnitHp(id) {
+  const u = CATALOG_BY_ID[id];
+  if (!u) return null;
+  const tier = u.tier || 'basic';
+  const base = Math.max(TIER_BASE_HP[tier] || 7, SENT_HP_FLOOR[tier] || 0);
+  const st = unitStats(id);
+  return Math.max(1, Math.round(base * defHpMul(st ? st.def : 0)));
+}
+
 // Additive: expose atk/def on catalog entries too (does not touch saved data).
 for (const u of CATALOG) {
   const s = unitStats(u.id);

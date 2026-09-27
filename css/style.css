@@ -1611,12 +1611,13 @@ html, body {
 }
 .unit-stats .st-atk { color: #ffd0c0; background: rgba(170, 40, 30, 0.45); border: 1px solid rgba(255, 110, 90, 0.35); }
 .unit-stats .st-def { color: #c8e8ff; background: rgba(30, 90, 170, 0.45); border: 1px solid rgba(100, 170, 255, 0.35); }
+.unit-stats .st-hp { color: #c8ffd8; background: rgba(30, 140, 70, 0.45); border: 1px solid rgba(100, 230, 140, 0.35); }
 .unit-stats.compact { gap: 2px; }
 .unit-stats.compact .st { font-size: 0.5rem; padding: 0 3px; }
 
-.detail-stats { display: flex; flex-direction: row; flex-wrap: wrap; gap: 3px 10px; max-width: 340px; }
+.detail-stats { display: flex; flex-direction: row; flex-wrap: wrap; gap: 3px 8px; max-width: 380px; }
 .stat-row {
-  flex: 1 1 110px;
+  flex: 1 1 96px;
   min-width: 0;
   display: grid;
   grid-template-columns: auto minmax(20px, 1fr) 1.8em;
@@ -1638,6 +1639,8 @@ html, body {
 .stat-row.st-atk .stat-bar i { background: linear-gradient(90deg, #ff7a50, #ff3a3a); }
 .stat-row.st-def b { color: #8ac8ff; }
 .stat-row.st-def .stat-bar i { background: linear-gradient(90deg, #50b0ff, #3a6aff); }
+.stat-row.st-hp b { color: #8affb0; }
+.stat-row.st-hp .stat-bar i { background: linear-gradient(90deg, #50e080, #20a860); }
 
 /* Japanese unit names: wrap to max 2 lines instead of clipping with "…" */
 .deck-slot .slot-name,

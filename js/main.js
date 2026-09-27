@@ -1,12 +1,12 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20260928004134';
-import { Net } from './net.js?v=20260928004134';
-import { Game } from './game.js?v=20260928004134';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats } from './catalog.js?v=20260928004134';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew } from './meta.js?v=20260928004134';
-import { loadBattleCount } from './stats.js?v=20260928004134';
-import { registerEnemyKinds } from './render.js?v=20260928004134';
-import { ALL_KIND_IDS } from './catalog.js?v=20260928004134';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20260928004134';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20260928005448';
+import { Net } from './net.js?v=20260928005448';
+import { Game } from './game.js?v=20260928005448';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20260928005448';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew } from './meta.js?v=20260928005448';
+import { loadBattleCount } from './stats.js?v=20260928005448';
+import { registerEnemyKinds } from './render.js?v=20260928005448';
+import { ALL_KIND_IDS } from './catalog.js?v=20260928005448';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20260928005448';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -126,7 +126,7 @@ function refreshPtDisplay(meta) {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20260928004134`;
+  return `assets/enemies/${id}/0.png?v=20260928005448`;
 }
 
 function unitName(id) {
@@ -137,14 +137,15 @@ function rarityLabel(r) {
   return RARITY_JA[r] || r || '';
 }
 
-/** 攻撃力 / 防御力 chips. compact = short labels for the narrow deck slots. */
+/** 攻撃力 / 防御力 / ライフ (sent HP) chips. compact = short labels for the narrow deck slots. */
 function statsHtml(id, compact = false) {
   const st = unitStats(id);
   if (!st) return '';
+  const hp = sentUnitHp(id); // actual HP when this unit is sent (same for player / COM / online)
   if (compact) {
-    return `<span class="unit-stats compact"><span class="st st-atk">攻${st.atk}</span><span class="st st-def">防${st.def}</span></span>`;
+    return `<span class="unit-stats compact"><span class="st st-atk">攻${st.atk}</span><span class="st st-def">防${st.def}</span><span class="st st-hp" title="ライフ">♥${hp}</span></span>`;
   }
-  return `<span class="unit-stats"><span class="st st-atk">攻撃力 ${st.atk}</span><span class="st st-def">防御力 ${st.def}</span></span>`;
+  return `<span class="unit-stats"><span class="st st-atk">攻撃力 ${st.atk}</span><span class="st st-def">防御力 ${st.def}</span><span class="st st-hp">ライフ ${hp}</span></span>`;
 }
 
 const NEW_BADGE = '<span class="unit-new-badge" aria-label="新しく購入">NEW</span>';
@@ -191,6 +192,7 @@ function detailStatsHtml(id) {
   return `
     <div class="stat-row st-atk"><span class="stat-name">攻撃力</span><span class="stat-bar"><i style="width:${bar(st.atk)}%"></i></span><b>${st.atk}</b></div>
     <div class="stat-row st-def"><span class="stat-name">防御力</span><span class="stat-bar"><i style="width:${bar(st.def)}%"></i></span><b>${st.def}</b></div>
+    <div class="stat-row st-hp"><span class="stat-name">ライフ</span><span class="stat-bar"><i style="width:${Math.max(6, Math.min(100, Math.round((sentUnitHp(id) || 0) / 160 * 100)))}%"></i></span><b>${sentUnitHp(id)}</b></div>
   `;
 }
 
