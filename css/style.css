@@ -1814,6 +1814,8 @@ html, body {
   animation: koBurst 1.4s ease-out forwards;
 }
 .ko-burst.b2 { animation-delay: 0.4s; opacity: 0; animation-duration: 1.6s; }
+.ko-burst.small { width: 22px; height: 22px; margin: -11px 0 0 -11px; animation: koBurstS 0.7s ease-out forwards; }
+@keyframes koBurstS { 0% { transform: scale(0.4); opacity: 1; } 100% { transform: scale(3.2); opacity: 0; } }
 @keyframes koBurst {
   0% { transform: scale(0.3); opacity: 1; }
   60% { opacity: 0.9; }

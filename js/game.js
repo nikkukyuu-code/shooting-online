@@ -3,14 +3,14 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260928015151';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260928015151';
-import { sfx } from './audio.js?v=20260928015151';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260928015151';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260928015151';
-import { hitBattleCounter } from './stats.js?v=20260928015151';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL } from './meta.js?v=20260928015151';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260928015151';
+} from './entities.js?v=20260928020415';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260928020415';
+import { sfx } from './audio.js?v=20260928020415';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260928020415';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260928020415';
+import { hitBattleCounter } from './stats.js?v=20260928020415';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL } from './meta.js?v=20260928020415';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260928020415';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -349,6 +349,7 @@ export class Game {
     this.ended = false;
     this.waiting = true;
     this.remoteSnap = null;
+    this._oppShown = null;
     this.pointerY = 0.5;
     this.pointerX = 0.14;
     this.ctrlTouch = { active: false, x: 0.5, y: 0.5 };
@@ -1460,6 +1461,7 @@ export class Game {
       this._lastTs = ts;
 
       if (!this.waiting && !this.ended) {
+        { const o = this.oppHpNow(); if (Number.isFinite(o) && o > 0) this._oppShown = o; } // last positive life shown
         this.update(dt);
         if (this.useBot) this.updateBot(dt);
         if (!this.ended) this.tickMatchTimer(dt);
@@ -2473,7 +2475,9 @@ export class Game {
     this.state.alive = won ? this.state.alive : false;
     const msg = won ? 'あなたの勝ちです' : 'あなたの負けです';
     if (won) sfx.win(); else sfx.lose();
-    this.setStatus(msg);
+    // Result text (「あなたの勝ちです／負けです」) is shown after the finish sequence, with the result screen
+    void msg;
+    this.setStatus('');
 
     // PT only on COM (CPU) victory: remaining HP scaled to 0–100 → PT
     this._ptReward = null;
@@ -2508,30 +2512,65 @@ export class Game {
 
   /* ------------------------------------------------------------------
    * KO slow-motion finish (visual only — outcome already locked by finish()).
-   *  KO / 延長戦: ~2.6s real time. Game visuals run at 0.22× for 1.7s, then ease back to 1×
-   *  over 0.9s; explosions burst on the defeated ship (3 waves), white/red flash, screen shake,
-   *  「K.O.」 (延長戦: 「決着！」) text. TIME UP: 1.8s, no explosion, 「TIME UP」 text.
-   *  Then the result overlay (showEndCelebration) is shown.
+   *  KO (life hit 0): 3.0s. The loser's life bar drains from its last shown value to exactly 0
+   *   over 0–1.0s (bar flashes, small explosions), big explosions at 0 / 0.5 / 1.0s, screen shake,
+   *   「K.O.」 slams in at 0.85s. Game visuals run at 0.22× until 2.1s, then ease back to 1×.
+   *  TIME UP / 延長戦 (loser still has life): 3.2s. The loser's remaining life drains to 0 over
+   *   0.15–1.45s with small explosions on the loser ship, big explosion + shake at 1.45s,
+   *   「TIME UP」/「決着！」 at 1.5s.
+   *  The result overlay + status line appear only after the sequence (finishKoSequence).
    * ------------------------------------------------------------------ */
   startKoSequence(won, info) {
     const reason = info && info.reason;
     const timeUp = reason === 'time';
-    const dur = timeUp ? 1.8 : 2.6;
-    this._ko = { t: 0, dur, won, timeUp, bursts: timeUp ? [] : [0, 0.35, 0.8], syncAcc: 0 };
+    const drainType = reason === 'time' || reason === 'sudden';
+    const cfg = drainType
+      ? { dur: 3.2, d0: 0.15, d1: 1.45, textAt: 1.5, big: [1.45, 1.7], shakeAt: 1.45 }
+      : { dur: 3.0, d0: 0, d1: 1.0, textAt: 0.85, big: [0, 0.5, 1.0], shakeAt: 0 };
+    // Life values shown at the moment of the decision (loser drains from here to 0)
+    const P = this.state.player;
+    const maxHp = P.maxHp || PLAYER_MAX_HP;
+    const selfNow = Math.max(0, P.hp);
+    const selfShown = Math.max(selfNow, Number.isFinite(this.state.hpDisplay) ? this.state.hpDisplay : selfNow);
+    const oppNowRaw = this.oppHpNow();
+    const oppNow = Number.isFinite(oppNowRaw) ? Math.max(0, oppNowRaw)
+      : (info && Number.isFinite(Number(info.oppHp)) ? Math.max(0, Number(info.oppHp)) : maxHp);
+    const oppPrev = Number.isFinite(this._oppShown) ? Math.max(0, this._oppShown) : oppNow;
+    const oppShown = Math.max(oppNow, oppPrev);
+    this._ko = {
+      t: 0, won, timeUp, reason, syncAcc: 0, ...cfg,
+      big: cfg.big.slice(), nextSmall: cfg.d0 + 0.05, textShown: false, shaken: false,
+      from: won ? oppShown : selfShown,
+      selfWin: selfNow, oppWin: oppNow,
+    };
+    this.applyKoHp();
     this.clearKoFx();
-    const host = document.getElementById('ui-overlay');
+    const host = typeof document !== 'undefined' ? document.getElementById('ui-overlay') : null;
     const cv = this.ctx && this.ctx.canvas;
-    if (!host || !cv) { this.finishKoSequence(); return; }
-    const pos = this.koTargetPos(won);
+    if (!host || !cv) return; // tickKo still runs the timeline
     const fx = document.createElement('div');
     fx.className = 'ko-fx' + (won ? ' ko-win' : ' ko-lose') + (timeUp ? ' ko-time' : '');
-    const text = timeUp ? 'TIME UP' : (reason === 'sudden' ? '決着！' : 'K.O.');
-    const sub = timeUp ? '時間切れ' : (won ? '撃破！' : '被撃破…');
-    fx.innerHTML = `<div class="ko-flash"></div>`
-      + (pos && !timeUp ? `<div class="ko-burst" style="left:${pos.x}px;top:${pos.y}px"></div><div class="ko-burst b2" style="left:${pos.x}px;top:${pos.y}px"></div>` : '')
-      + `<div class="ko-text"><span class="ko-main">${text}</span><span class="ko-sub">${sub}</span></div>`;
+    fx.innerHTML = '<div class="ko-flash"></div>';
     host.appendChild(fx);
-    if (!timeUp) cv.classList.add('ko-shake');
+    this._koEl = fx;
+  }
+
+  /** Display-only life override while/after the finish sequence (loser drains to exactly 0). */
+  applyKoHp() {
+    const K = this._ko;
+    if (!K) return;
+    const u = Math.max(0, Math.min(1, (K.t - K.d0) / Math.max(0.01, K.d1 - K.d0)));
+    const e = 1 - (1 - u) * (1 - u); // ease-out
+    const lose = u >= 1 ? 0 : Math.max(0, K.from * (1 - e));
+    const draining = K.t >= K.d0 - 0.05 && u < 1;
+    this.state.koHp = {
+      self: K.won ? K.selfWin : lose,
+      opp: K.won ? lose : K.oppWin,
+      flashSelf: !K.won && draining,
+      flashOpp: K.won && draining,
+      zeroSelf: !K.won && u >= 1,
+      zeroOpp: K.won && u >= 1,
+    };
   }
 
   /** Screen (CSS px, relative to the canvas) position of the defeated ship. */
@@ -2550,6 +2589,21 @@ export class Game {
     return { x: (this.L.opp.x + px * (this.L.opp.w / fw)) * k, y: (this.L.opp.y + py * this.L.opp.h) * k };
   }
 
+  /** DOM fireball on the defeated ship (small = drain sparks). */
+  koDomBurst(won, small) {
+    const el = this._koEl;
+    if (!el) return;
+    const pos = this.koTargetPos(won);
+    if (!pos) return;
+    const j = small ? 26 : 0;
+    const b = document.createElement('div');
+    b.className = 'ko-burst' + (small ? ' small' : '');
+    b.style.left = `${pos.x + (Math.random() - 0.5) * j}px`;
+    b.style.top = `${pos.y + (Math.random() - 0.5) * j}px`;
+    el.appendChild(b);
+    setTimeout(() => b.remove(), 1800);
+  }
+
   /** Per-frame KO tick: slow-motion visuals only (no damage / collisions / results). */
   tickKo(dt) {
     const K = this._ko;
@@ -2558,10 +2612,35 @@ export class Game {
     const slowEnd = K.dur - 0.9;
     const scale = K.t < slowEnd ? 0.22 : 0.22 + 0.78 * Math.min(1, (K.t - slowEnd) / 0.9);
     const sdt = dt * scale;
-    // Explosion waves on the defeated ship (canvas FX where the field is simulated locally)
-    while (K.bursts.length && K.t >= K.bursts[0]) {
-      K.bursts.shift();
-      this.koExplode(K.won);
+    this.applyKoHp();
+    // Small explosions on the loser while its life drains
+    while (K.t >= K.nextSmall && K.nextSmall < K.d1) {
+      K.nextSmall += 0.17;
+      this.koExplode(K.won, false);
+      this.koDomBurst(K.won, true);
+    }
+    // Big explosion waves on the defeated ship
+    while (K.big.length && K.t >= K.big[0]) {
+      K.big.shift();
+      this.koExplode(K.won, true);
+      this.koDomBurst(K.won, false);
+    }
+    if (!K.shaken && K.t >= K.shakeAt && !K.timeUp) {
+      K.shaken = true;
+      const cv = this.ctx && this.ctx.canvas;
+      if (cv) { cv.classList.remove('ko-shake'); void cv.offsetWidth; cv.classList.add('ko-shake'); }
+    }
+    if (!K.textShown && K.t >= K.textAt) {
+      K.textShown = true;
+      if (this._koEl) {
+        const text = K.timeUp ? 'TIME UP' : (K.reason === 'sudden' ? '決着！' : 'K.O.');
+        const sub = K.timeUp ? (K.won ? '時間切れ・判定勝ち' : '時間切れ・判定負け') : (K.won ? '撃破！' : '被撃破…');
+        const t = document.createElement('div');
+        t.className = 'ko-text';
+        t.style.animationDuration = `${Math.max(0.8, K.dur - K.textAt).toFixed(2)}s`;
+        t.innerHTML = `<span class="ko-main">${text}</span><span class="ko-sub">${sub}</span>`;
+        this._koEl.appendChild(t);
+      }
     }
     const slowField = (F) => {
       if (!F) return;
@@ -2582,31 +2661,36 @@ export class Game {
     if (K.t >= K.dur) this.finishKoSequence();
   }
 
-  koExplode(won) {
-    const jitter = () => (Math.random() - 0.5) * 36;
+  koExplode(won, big = true) {
+    const jitter = () => (Math.random() - 0.5) * (big ? 36 : 30);
     if (!won) {
       const P = this.state.player;
       const fh = this.L.own.h;
-      this.state.fx.push(spawnExplosion(P.x + jitter(), P.y * fh + jitter(), true));
-      sfx.explode();
+      this.state.fx.push(spawnExplosion(P.x + jitter(), P.y * fh + jitter(), big));
+      if (big) sfx.explode();
     } else if (this.useBot && this._bot) {
       const B = this._bot;
       const fh = this.L.own.h;
-      B.fx.push(spawnExplosion((B.x || 48) + jitter(), B.y * fh + jitter(), true));
-      sfx.explode();
+      B.fx.push(spawnExplosion((B.x || 48) + jitter(), B.y * fh + jitter(), big));
+      if (big) sfx.explode();
     }
   }
 
   finishKoSequence() {
     const K = this._ko;
+    if (K) { K.t = Math.max(K.t, K.d1); this.applyKoHp(); if (this.state.koHp) { this.state.koHp.flashSelf = false; this.state.koHp.flashOpp = false; } }
     this._ko = null;
     this.clearKoFx();
-    if (K) this.showEndCelebration(K.won);
+    if (K) {
+      this.setStatus(K.won ? 'あなたの勝ちです' : 'あなたの負けです');
+      this.showEndCelebration(K.won);
+    }
   }
 
   clearKoFx() {
     if (typeof document === 'undefined') return;
     document.querySelectorAll('.ko-fx').forEach((el) => el.remove());
+    this._koEl = null;
     const cv = this.ctx && this.ctx.canvas;
     if (cv) cv.classList.remove('ko-shake');
   }
@@ -2629,7 +2713,7 @@ export class Game {
       const r = document.createElement('div');
       r.className = 'end-reason';
       const hpLine = (info.selfHp != null && info.oppHp != null && Number.isFinite(Number(info.oppHp)))
-        ? `<div class="end-reason-hp">残りライフ　自分 ${Math.round(info.selfHp)} ／ 相手 ${Math.round(info.oppHp)}</div>` : '';
+        ? `<div class="end-reason-hp">判定時のライフ　自分 ${Math.round(info.selfHp)} ／ 相手 ${Math.round(info.oppHp)}</div>` : '';
       r.innerHTML = info.reason === 'time'
         ? `<div class="end-reason-main">時間切れ！残りライフ判定で${won ? '勝利' : '敗北'}</div>${hpLine}`
         : `<div class="end-reason-main">延長戦で決着（先にダメージを受けた方の負け）</div>`;

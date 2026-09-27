@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260928015151';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260928020415';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260928015151`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260928020415`;
 }
 
 function loadKindSprite(kind) {
@@ -1885,6 +1885,18 @@ function drawHpBarsAtBoundary(ctx, L, selfHp, oppHp, maxHp, fx = {}) {
     ctx.font = `800 ${Math.max(8, barH - 1)}px sans-serif`;
     ctx.fillText('危険', x + barW - 4, ySelf + barH * 0.5);
   }
+  // Finish sequence: the losing side's bar flashes while it drains to 0
+  if (fx.koFlashSelf || fx.koFlashOpp) {
+    const blink = 0.5 + 0.5 * Math.sin(now / 45);
+    const by = fx.koFlashOpp ? y : ySelf;
+    ctx.save();
+    ctx.fillStyle = `rgba(255,255,255,${0.18 + 0.42 * blink})`;
+    ctx.fillRect(x, by, barW, barH);
+    ctx.strokeStyle = `rgba(255,60,60,${0.6 + 0.4 * blink})`;
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(x - 1, by - 1, barW + 2, barH + 2);
+    ctx.restore();
+  }
 }
 
 /** Persistent red edge vignette + tint while local HP is under 30%. */
@@ -2131,7 +2143,7 @@ function drawInfoPanel(ctx, area, localState) {
   ctx.fillRect(0, 0, area.w, 2);
 
   const fontStack = '"Hiragino Sans","Noto Sans JP","Yu Gothic",Meiryo,sans-serif';
-  const selfHp = Math.max(0, Math.round(localState.player?.hp ?? 100));
+  const selfHp = Math.max(0, Math.round(localState.selfHpDisplay ?? localState.player?.hp ?? 100));
   const oppHp = Math.max(0, Math.round(
     localState.oppHpDisplay ?? localState.botHp ?? 100
   ));
@@ -2552,6 +2564,10 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
   ctx.fillRect(0, L.oppH - 1, L.W, 1);
 
   const oppHp = remoteSnap ? (remoteSnap.php ?? playerMaxHp) : (localState.botHp ?? playerMaxHp);
+  // Finish sequence: display-only life override (loser drains to exactly 0)
+  const koHp = localState.koHp || null;
+  const oppHpShown = koHp && Number.isFinite(koHp.opp) ? koHp.opp : oppHp;
+  const selfHpShown = koHp && Number.isFinite(koHp.self) ? koHp.self : null;
 
   // 3) Control — 操作画面 (purple/blue nebula pad)
   drawControlPanel(ctx, L.ctrl, localState);
@@ -2565,15 +2581,17 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
   ctx.fillRect(0, L.oppH + L.ownH + L.ctrlH - 1, L.W, 2);
   ctx.fillStyle = 'rgba(180,190,255,0.3)';
   ctx.fillRect(0, L.oppH + L.ownH + L.ctrlH, L.W, 1);
-  drawInfoPanel(ctx, L.info, { ...localState, oppHpDisplay: oppHp });
+  drawInfoPanel(ctx, L.info, { ...localState, oppHpDisplay: oppHpShown, selfHpDisplay: selfHpShown });
 
   // Item effect announcements are drawn inside the info pane (drawInfoPanel),
   // never over the opponent / own stages.
 
   // Life HUD last (above enemies / FX / panes) so large ships near the top cannot hide it
-  drawHpBarsAtBoundary(ctx, L, localState.player.hp, oppHp, playerMaxHp, {
-    hpGhost: localState.hpGhost,
-    hpDisplay: localState.hpDisplay,
+  drawHpBarsAtBoundary(ctx, L, selfHpShown ?? localState.player.hp, oppHpShown, playerMaxHp, {
+    hpGhost: selfHpShown ?? localState.hpGhost,
+    hpDisplay: selfHpShown ?? localState.hpDisplay,
+    koFlashSelf: !!(koHp && koHp.flashSelf),
+    koFlashOpp: !!(koHp && koHp.flashOpp),
     hpShake: localState.hpShake,
     damageFlash: localState.damageFlash,
     healFlash: localState.healFlash,
