@@ -1638,3 +1638,18 @@ html, body {
 .stat-row.st-atk .stat-bar i { background: linear-gradient(90deg, #ff7a50, #ff3a3a); }
 .stat-row.st-def b { color: #8ac8ff; }
 .stat-row.st-def .stat-bar i { background: linear-gradient(90deg, #50b0ff, #3a6aff); }
+
+/* Japanese unit names: wrap to max 2 lines instead of clipping with "…" */
+.deck-slot .slot-name,
+.unit-card .unit-name {
+  white-space: normal;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-break: strict;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}

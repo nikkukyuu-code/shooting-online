@@ -71,6 +71,88 @@ export const CATALOG = [
   { id: 'planet_eater', name: 'Planet Eater', price: 990, rarity: 'legendary', tier: 'boss', starter: false },
 ];
 
+/**
+ * 表示名（日本語）— display only. IDs / localStorage keys are unchanged.
+ * The English name from the sprite sheet is kept as `nameEn`.
+ */
+export const UNIT_NAME_JA = {
+  basic: '哨戒機ガンマ',
+  gunship_alpha: '砲艇アルファ',
+  elite: '迅雷ファイター',
+  swarm: '群体ノード',
+  drone: '偵察機R-1',
+  gunship_alpha_b: '砲艇アルファ改',
+  fighter_mk2: '迅雷ファイター改',
+  scout_drone: '斥候ドローン',
+  tank: '装甲執行艦',
+  sea_patrol: '巡視艇ナギ',
+  scout_frigate: '疾風フリゲート',
+  cruiser_class: '蒼鋼巡洋艦',
+  destroyer_class: '烈火駆逐艦',
+  gorgon_mech: '石眼機ゴルゴン',
+  mech: '重衛機センチネル',
+  heavy_sentinel_ship: '重衛艦センチネル',
+  drone_swarm_node_variant: '蟲群ノード改',
+  combat_walker: '戦闘歩行機',
+  tracking_sentry: '追尾砲台アイ',
+  assault_transport: '強襲揚陸艇',
+  light_cruiser: '軽巡スズカゼ',
+  rapid_fire_mech: '連射機神ガトル',
+  missile_destroyer: '誘導弾駆逐艦',
+  dreadnought_c1: '壱式弩級艦',
+  golem: '弐式弩級艦',
+  cruiser_gun: '砲撃巡洋艦',
+  heavy_gunner: '重砲機ガンナー',
+  fleet_carrier: '艦隊空母ミズチ',
+  battlecruiser: '巡洋戦艦アカツキ',
+  battlecruiser_b: '巡洋戦艦シノノメ',
+  siege_mech: '攻城機バスター',
+  plasma_bomber: '爆撃機プラズマ',
+  drone_carrier: '無人機母艦',
+  shield_frigate: '盾艦イージス',
+  stealth_corvette: '隠密艦カゲロウ',
+  railgun_tank: '電磁砲戦車',
+  heavy_mech: '重装機神ゴウ',
+  light_destroyer: '軽駆逐艦ハヤテ',
+  artillery_platform: '自走砲台ツチグモ',
+  orbital_defense: '軌道防衛砲',
+  bio_cruiser: '生体巡洋艦',
+  heavy_dreadnought: '重弩級艦ガイア',
+  mobile_fortress: '機動要塞ガンマ',
+  carrier_hive: '蟲母艦クイーン',
+  siege_destroyer: '攻城駆逐艦ラセツ',
+  orbital_cannon: '軌道神砲アマツ',
+  super_battle_mech: '超戦機ヴァルガ',
+  fleet_support_ship: '支援艦アルテミス',
+  command_carrier: '指揮空母オウガ',
+  planetary_defense_array: '星防陣アイギス',
+  dreadnought_c3: '参式弩級艦ゼン',
+  super_carrier: '超空母リヴァイア',
+  colony_ship: '方舟艦ノア',
+  siege_fortress: '攻城要塞バベル',
+  megamech_alpha: '巨神機アルファ',
+  orbital_blaster: '超軌道砲ラグナ',
+  hyper_dreadnought: '極弩級艦オメガ',
+  planetary_siege_engine: '惑星攻城機ギガス',
+  titan_mech: '巨神タイタン',
+  central_core_defender: '中枢守護神コア',
+  super_dreadnought: '終焉艦ラグナロク',
+  mobile_planet_killer: '惑星滅殺艦ゼロ',
+  colossal_hive_ship: '蟲皇艦ベヒモス',
+  titan_fortress: '巨神要塞テュポン',
+  supreme_command_center: '司令皇艦カイザー',
+  boss: '滅星艦ネメシス',
+  ai_core: '超知性核オラクル',
+  titan_carrier: '巨神空母アトラス',
+  planet_eater: '星喰いアポフィス',
+};
+for (const u of CATALOG) {
+  if (UNIT_NAME_JA[u.id]) {
+    u.nameEn = u.name;
+    u.name = UNIT_NAME_JA[u.id];
+  }
+}
+
 /** Fixed order: 5 free starters always equipped at first launch. */
 export const STARTER_DECK = ['basic', 'drone', 'elite', 'swarm', 'tank'];
 export const CATALOG_BY_ID = Object.fromEntries(CATALOG.map((u) => [u.id, u]));
