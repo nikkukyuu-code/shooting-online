@@ -9,7 +9,7 @@ export const POWERUPS = [
   { id: 'rapid',      label: '連射強化',      effect: '一定時間すばやく強弾を連射', desc: '一定時間、自機の連射速度と弾威力が上がる強化アイテム。', color: '#ffee44', icon: '≫' },
   { id: 'meteor',     label: '隕石送信',      effect: '相手に隕石攻撃を落とす',     desc: '対戦相手のフィールドへ隕石を落とし、直接ダメージを与える。', color: '#ff7744', icon: '☄' },
   { id: 'send',       label: '敵キャラ送信',  effect: 'デッキからランダムに2体送る', desc: '装備デッキの中からランダムに2体を相手フィールドへ送る基本送信アイテム。送られた敵はワープの輪の中に出現し、5秒間（最初の3秒は点滅）無敵・攻撃なし。輪が消えると攻撃開始。', color: '#ff8844', icon: '⇒' },
-  { id: 'direct',     label: '直接攻撃',      effect: '自機から撃った通常弾が相手画面の下から出現', desc: '約6秒間、自機が上を向き通常弾を真上へ発射。画面の上へ抜けた弾は相手フィールドの下端（同じ横位置）から現れてそのまま上へ飛び、当たるたびに爆発してダメージ。追尾しないので相手は横に動けばよけられる。', color: '#ff3333', icon: '※' },
+  { id: 'direct',     label: '直接攻撃',      effect: '自機から撃った通常弾が相手画面の下から出現', desc: '約3.6秒間、自機が上を向き通常弾を真上へ発射。画面の上へ抜けた弾は相手フィールドの下端（同じ横位置）から現れてそのまま上へ飛び、当たるたびに爆発してダメージ。追尾しないので相手は横に動けばよけられる。', color: '#ff3333', icon: '※' },
   { id: 'heal',       label: 'HP回復',        effect: '自分のHPを+25',              desc: '自分のHPを25回復する。ピンチのときの定番回復。', color: '#44ff88', icon: '+' },
   { id: 'heal_big',   label: '大回復',        effect: '自分のHPを+50',              desc: '自分のHPを50回復する大回復。出現率は低め。', color: '#22ff66', icon: '++' },
   { id: 'send_mech',  label: '戦艦送信',      effect: 'デッキの戦艦級を1体送る',   desc: 'デッキの戦艦級（メカ級）からランダムに1体送る。デッキに戦艦級がない時はデッキ最大のユニット。予告レーザーにも注意。', color: '#88aaff', icon: '艦' },
@@ -28,7 +28,7 @@ export const POWERUPS = [
 ];
 
 /** 直接攻撃 window (seconds) + HUD countdown. */
-export const DIRECT_DURATION = 6;
+export const DIRECT_DURATION = 3.6;
 /**
  * 直接攻撃 shot = the normal shot (speed 420 px/s, damage 2, fired every 0.16s by the normal
  * auto-fire), only redirected. Symmetric for both sides:
