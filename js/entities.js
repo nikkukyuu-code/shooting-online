@@ -8,7 +8,7 @@ export const POWERUPS = [
   { id: 'shock',      label: '電撃',          effect: '周囲の広範囲の敵を感電',     desc: '自機周囲の広い円内の敵をまとめて感電させる。', color: '#88ddff', icon: '⚡' },
   { id: 'rapid',      label: '連射強化',      effect: '一定時間すばやく強弾を連射', desc: '一定時間、自機の連射速度と弾威力が上がる強化アイテム。', color: '#ffee44', icon: '≫' },
   { id: 'meteor',     label: '隕石送信',      effect: '相手に隕石攻撃を落とす',     desc: '対戦相手のフィールドへ隕石を落とし、直接ダメージを与える。', color: '#ff7744', icon: '☄' },
-  { id: 'send',       label: '敵キャラ送信',  effect: '相手に敵を送る',             desc: 'デッキから選んだ敵を相手フィールドへ送る基本送信アイテム。', color: '#ff8844', icon: '⇒' },
+  { id: 'send',       label: '敵キャラ送信',  effect: '相手に敵を送る',             desc: 'デッキから選んだ敵を相手フィールドへ送る基本送信アイテム。送られた敵はワープの輪の中に出現し、5秒間（最初の3秒は点滅）無敵・攻撃なし。輪が消えると攻撃開始。', color: '#ff8844', icon: '⇒' },
   { id: 'direct',     label: '直接攻撃',      effect: '自機から撃った通常弾が相手画面の下から出現', desc: '約6秒間、自機が上を向き通常弾を真上へ発射。画面の上へ抜けた弾は相手フィールドの下端（同じ横位置）から現れてそのまま上へ飛び、当たるたびに爆発してダメージ。追尾しないので相手は横に動けばよけられる。', color: '#ff3333', icon: '※' },
   { id: 'heal',       label: 'HP回復',        effect: '自分のHPを+25',              desc: '自分のHPを25回復する。ピンチのときの定番回復。', color: '#44ff88', icon: '+' },
   { id: 'heal_big',   label: '大回復',        effect: '自分のHPを+50',              desc: '自分のHPを50回復する大回復。出現率は低め。', color: '#22ff66', icon: '++' },
@@ -336,6 +336,8 @@ export function serializeField(state) {
     enemies: state.enemies.slice(0, 40).map(e => ({
       x: e.x, y: e.y, w: e.w, h: e.h, kind: e.kind, hp: e.hp, c: e.color, s: !!e.sent,
       at: e.appearT > 0 ? +e.appearT.toFixed(3) : undefined,
+      wt: e.warpT > 0 ? +e.warpT.toFixed(2) : undefined,
+      wp: e.warpPop > 0 ? +e.warpPop.toFixed(2) : undefined,
       lt: e.laserTeleT > 0 ? +e.laserTeleT.toFixed(3) : undefined,
       lm: e.laserTeleT > 0 ? +(e.laserTeleMax || 0.6).toFixed(3) : undefined,
       ax: e.laserTeleT > 0 && e.laserAimX != null ? +e.laserAimX.toFixed(1) : undefined,

@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-09-27 19:29:02';
+export const VERSION_LABEL = '2026-09-27 20:07:01';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1790504942103;
-export const BUILD_NOTE = '制限時間5分：残りライフ判定・同じなら延長戦';
+export const BUILD_TIME = 1790507221300;
+export const BUILD_NOTE = '転送敵ワープ出現：輪の中で5秒無敵・攻撃なし（3秒点滅）';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

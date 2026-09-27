@@ -3,14 +3,14 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260927192902';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260927192902';
-import { sfx } from './audio.js?v=20260927192902';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260927192902';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul } from './catalog.js?v=20260927192902';
-import { hitBattleCounter } from './stats.js?v=20260927192902';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260927192902';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260927192902';
+} from './entities.js?v=20260927200701';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260927200701';
+import { sfx } from './audio.js?v=20260927200701';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260927200701';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul } from './catalog.js?v=20260927200701';
+import { hitBattleCounter } from './stats.js?v=20260927200701';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY } from './meta.js?v=20260927200701';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260927200701';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -24,6 +24,28 @@ const TUTORIAL_STEPS = [
 const TUTORIAL_STEP_SEC = 3.8;
 
 const WAIT = '対戦相手を待っています';
+
+/**
+ * Warp-in for transferred (sent) units: 0–3s ring + blinking unit, 3–5s steady ring + unit.
+ * During the whole 5s the unit is stationary, invulnerable (shots pass through), harmless
+ * (no fire, no body damage). At 5s the ring pops and the unit starts attacking.
+ */
+export const WARP_TOTAL = 5;
+export const WARP_BLINK = 3;
+const WARP_POP = 0.35;
+const warping = (e) => e && e.warpT > 0;
+/** Advance warp timers; returns true while the unit is still warping (skip move/fire). */
+function tickWarp(e, dt) {
+  if (e.warpPop > 0) e.warpPop = Math.max(0, e.warpPop - dt);
+  if (!(e.warpT > 0)) return false;
+  e.warpT = Math.max(0, e.warpT - dt);
+  if (e.warpHp != null && e.hp < e.warpHp) e.hp = e.warpHp; // safety net: no damage while warping
+  if (e.warpT > 0) return true;
+  // Ring off → start attacking right away
+  e.warpPop = WARP_POP;
+  e.fireCd = Math.min(e.fireCd || 1, 0.25 + Math.random() * 0.35);
+  return false;
+}
 
 /** Match time limit (seconds). Hidden test override: globalThis.__shootingMatchSec (not exposed in UI). */
 const MATCH_TIME_SEC = 300;
@@ -996,15 +1018,20 @@ export class Game {
       e.maxHp = hp;
     }
     e.holdX = fw * (0.72 + Math.random() * 0.14);
-    e.holdY = Math.max(28, Math.min(fh - 28, e.y));
-    e.x = fw + 24 + Math.random() * 50;
+    const mh = Math.max(28, (e.h || 30) * 0.6 + 8);
+    e.holdY = Math.max(mh, Math.min(fh - mh, e.y));
+    // Keep the whole unit + ring inside the pane
+    e.holdX = Math.max(fw * 0.5, Math.min(e.holdX, fw - (e.w || 40) * 0.56 - 12));
+    // Warp in directly at the hold point (no slide-in from the edge)
+    e.x = e.holdX;
     e.y = e.holdY;
-    // Fight a bit more often once in the right zone
-    e.fireCd = Math.min(e.fireCd || 1, 0.6 + Math.random() * 0.5);
-    // Appear FX (~0.9s blink/pop) — visual only; synced via serializeField.at
-    e.appearT = 0.9;
-    e.appearMax = 0.9;
-    // v1.5.75: stay on the right for a clear beat before pressing left (still move/shoot)
+    e.appearT = 0; // old 0.9s pop FX replaced by the warp ring
+    e.warpT = WARP_TOTAL;
+    e.warpMax = WARP_TOTAL;
+    e.warpHp = e.hp;
+    e.warpPop = 0;
+    e.laserTeleT = 0;
+    // After the warp: stay on the right for a clear beat before pressing left (move/shoot)
     e.lingerT = 2.2;
     return e;
   }
@@ -1170,6 +1197,7 @@ export class Game {
       let hits = 0;
       const targets = [];
       for (const e of this.state.enemies) {
+        if (warping(e)) continue;
         e.hp -= 28;
         this.state.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
         targets.push([e.x, e.y]);
@@ -1188,6 +1216,7 @@ export class Game {
       let hits = 0;
       const targets = [];
       for (const e of this.state.enemies) {
+        if (warping(e)) continue;
         const dx = e.x - p.x;
         const dy = e.y - py;
         if (dx * dx + dy * dy < SHOCK_RADIUS * SHOCK_RADIUS) {
@@ -1561,6 +1590,7 @@ export class Game {
         P.laserCd = 0.07;
         const ly = P.y * fh;
         for (const e of S.enemies) {
+          if (warping(e)) continue;
           if (Math.abs(e.y - ly) < e.h * 0.55 + 8 && e.x > P.x) {
             e.hp -= 1.05; // staccato ticks a bit harder, slightly slower
             S.fx.push(spawnHitSpark(e.x - e.w * 0.35, ly));
@@ -1593,6 +1623,7 @@ export class Game {
 
     // Update enemies (vertical weave + forward/back surge)
     for (const e of S.enemies) {
+      if (tickWarp(e, dt)) continue; // warp-in: stationary, no fire
       if (e.frozenT > 0) continue; // フリーズ: no movement / no fire while frozen
       e.phase += dt * 2;
       e.surgePhase = (e.surgePhase || 0) + dt * (e.surgeFreq || 1.4);
@@ -1677,6 +1708,7 @@ export class Game {
     for (const b of S.bullets) {
       if (b.owner !== 'player' || b.dvis) continue; // direct shots fly out of our pane without hitting
       for (const e of S.enemies) {
+        if (warping(e)) continue; // shots pass through warping units
         if (Math.abs(b.x - e.x) < e.w * 0.45 + 4 && Math.abs(b.y - e.y) < e.h * 0.45 + 4) {
           e.hp -= b.dmg;
           // pierce (direct volley / laser bullets): keep flying until off-screen
@@ -1742,8 +1774,9 @@ export class Game {
       }
     }
 
-    // Enemy body -> player
+    // Enemy body -> player (warping units are harmless)
     for (const e of S.enemies) {
+      if (warping(e)) continue;
       const py = P.y * fh;
       if (Math.abs(e.x - P.x) < e.w * 0.4 + 12 && Math.abs(e.y - py) < e.h * 0.4 + 12) {
         if (playerBarrier) {
@@ -1910,7 +1943,7 @@ export class Game {
     let focus = null;
     let focusVal = -1e9;
     for (const e of B.enemies) {
-      if (e.x < shipX - 10) continue;
+      if (e.x < shipX - 10 || warping(e)) continue; // don't aim at invulnerable warp-ins
       const kindW = ({ boss: 5, mech: 4, golem: 4, tank: 4, elite: 3, drone: 2, basic: 1.5, swarm: 1 })[resolveEnemyTier(e.kind)] || 1;
       const dist = Math.max(20, e.x - shipX);
       const align = 1 - Math.min(1, Math.abs(e.y / fh - B.y) / 0.28);
@@ -2021,6 +2054,7 @@ export class Game {
         B.laserCd = 0.07;
         const by = B.y * fh;
         for (const e of B.enemies) {
+          if (warping(e)) continue;
           if (e.x > shipX && Math.abs(e.y - by) < (e.h * 0.55 + 8)) {
             e.hp -= 1.05; // match player laser tick
             B.fx.push(spawnHitSpark(e.x - e.w * 0.35, by));
@@ -2049,6 +2083,7 @@ export class Game {
     }
 
     for (const e of B.enemies) {
+      if (tickWarp(e, dt)) continue; // warp-in: stationary, no fire
       if (e.frozenT > 0) continue; // フリーズ: no movement / no fire while frozen
       e.phase += dt * 2;
       e.surgePhase = (e.surgePhase || 0) + dt * (e.surgeFreq || 1.4);
@@ -2108,6 +2143,7 @@ export class Game {
     for (const b of B.bullets) {
       if (b.owner !== 'player' || b.dir || b.dvis) continue; // direct shots only hit the COM ship
       for (const e of B.enemies) {
+        if (warping(e)) continue; // shots pass through warping units
         if (Math.abs(b.x - e.x) < e.w * 0.45 && Math.abs(b.y - e.y) < e.h * 0.45) {
           e.hp -= b.dmg;
           if (!b.pierce) b.life = 0;
@@ -2174,6 +2210,7 @@ export class Game {
       }
     }
     for (const e of B.enemies) {
+      if (warping(e)) continue;
       if (Math.abs(e.x - shipX) < e.w * 0.4 + 8 && Math.abs(e.y - B.y * fh) < e.h * 0.4 + 8) {
         if (botBarrier) {
           const bar = B.fx.find((f) => f.kind === 'barrier' && f.life > 0);
@@ -2282,6 +2319,7 @@ export class Game {
       } else if (id === 'bomb') {
         const targets = [];
         for (const e of B.enemies) {
+          if (warping(e)) continue;
           e.hp -= 28;
           B.fx.push(spawnExplosion(e.x, e.y, true));
           targets.push([e.x, e.y]);
@@ -2293,6 +2331,7 @@ export class Game {
         const cx = B.x || 48; // centre on COM ship's actual position (it moves horizontally)
         const targets = [];
         for (const e of B.enemies) {
+          if (warping(e)) continue;
           const dx = e.x - cx;
           const dy = e.y - by;
           if (dx * dx + dy * dy < SHOCK_RADIUS * SHOCK_RADIUS) {

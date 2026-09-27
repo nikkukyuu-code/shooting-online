@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260927192902';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260927200701';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260927192902`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260927200701`;
 }
 
 function loadKindSprite(kind) {
@@ -606,6 +606,59 @@ function drawLaserTelegraph(ctx, e, t) {
   ctx.restore();
 }
 
+/** Seconds-left threshold where the warp blink stops (5s total − 3s blink = 2s steady). */
+const WARP_STEADY_AT = 2;
+
+function drawWarpRing(ctx, w, h, t, warpT, warpPop) {
+  // Ellipse hugging the unit (large units are wide and short)
+  const rx = w * 0.56 + 10, ry = h * 0.6 + 10;
+  const R = Math.max(rx, ry);
+  ctx.save();
+  ctx.scale(rx / R, ry / R); // draw circles of radius R → ellipse rx×ry
+  ctx.shadowBlur = 0;
+  if (warpPop > 0) {
+    // Ring releases: expand + fade out
+    const u = 1 - warpPop / 0.35;
+    ctx.globalAlpha = Math.max(0, 1 - u);
+    ctx.strokeStyle = 'rgba(160,250,255,1)';
+    ctx.lineWidth = 3 * (1 - u) + 1;
+    ctx.beginPath();
+    ctx.arc(0, 0, R * (1 + u * 0.8), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+  const blinking = warpT > WARP_STEADY_AT;
+  // Soft inner glow
+  const g = ctx.createRadialGradient(0, 0, R * 0.2, 0, 0, R);
+  g.addColorStop(0, 'rgba(90,220,255,0.02)');
+  g.addColorStop(0.75, 'rgba(90,220,255,0.14)');
+  g.addColorStop(1, 'rgba(120,240,255,0.32)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(0, 0, R, 0, Math.PI * 2);
+  ctx.fill();
+  // Main ring (glowing)
+  ctx.shadowColor = 'rgba(80,230,255,0.95)';
+  ctx.shadowBlur = 10;
+  ctx.strokeStyle = blinking ? 'rgba(140,245,255,0.95)' : 'rgba(170,250,255,1)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(0, 0, R, 0, Math.PI * 2);
+  ctx.stroke();
+  // Rotating dashed outer ring
+  ctx.shadowBlur = 0;
+  ctx.setLineDash([6, 6]);
+  ctx.lineDashOffset = -t * 30;
+  ctx.globalAlpha = 0.75;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(0, 0, R + 5, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
 function drawEnemy(ctx, e) {
   ctx.save();
   ctx.translate(e.x, e.y);
@@ -620,6 +673,15 @@ function drawEnemy(ctx, e) {
 
   const kind = e.kind || 'basic';
   const w = e.w, h = e.h;
+
+  // Warp-in (transferred units): ring + blink 0–3s, steady 3–5s, ring pop at 5s
+  const warpT = e.warpT > 0 ? e.warpT : 0;
+  const warpPop = !warpT && e.warpPop > 0 ? e.warpPop : 0;
+  if (warpT > 0 || warpPop > 0) drawWarpRing(ctx, w, h, t, warpT, warpPop);
+  if (warpT > WARP_STEADY_AT) {
+    // Clear on/off blink (~7Hz), never fully invisible so the unit stays readable
+    ctx.globalAlpha = (Math.floor(t * 14) % 2) ? 0.18 : 1;
+  }
 
   // Sent-unit spawn FX: rapid blink + scale pop + cyan ring (~0.9s)
   if (appearT > 0) {
@@ -2340,6 +2402,7 @@ export function drawField(ctx, area, snap, opts = {}) {
       x: e.x * sx, y: e.y * sy, w: (e.w || 20) * sx, h: (e.h || 16) * sy,
       kind: e.kind, hp: e.hp, maxHp: e.maxHp || e.hp || 1, color: e.c || e.color || '#c44', sent: e.s || e.sent,
       appearT: e.appearT ?? e.at, appearMax: e.appearMax || 0.9, _uid: e._uid,
+      warpT: e.warpT ?? e.wt, warpPop: e.warpPop ?? e.wp,
       laserTeleT: e.laserTeleT ?? e.lt, laserTeleMax: e.laserTeleMax ?? e.lm ?? 0.55,
       laserAimX: (e.laserAimX ?? e.ax) != null ? (e.laserAimX ?? e.ax) * sx : undefined,
       laserAimY: (e.laserAimY ?? e.ay) != null ? (e.laserAimY ?? e.ay) * sy : undefined,

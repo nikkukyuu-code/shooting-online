@@ -11,7 +11,7 @@
  * Damage only lowers e.hp — death / drops / score stay in the game loops.
  * All items are intentionally weaker than ボム (28 to every enemy + full bullet clear).
  */
-import { spawnBullet, spawnExplosion, spawnHitSpark, isLargeEnemy } from './entities.js?v=20260927192902';
+import { spawnBullet, spawnExplosion, spawnHitSpark, isLargeEnemy } from './entities.js?v=20260927200701';
 
 export const EX_ATTACK_IDS = ['pbeam', 'option', 'cluster', 'blackhole', 'freeze', 'reflect', 'barrier'];
 export function isExAttackItem(id) { return EX_ATTACK_IDS.includes(id); }
@@ -83,6 +83,9 @@ function killEnemyBullet(b) { if (b.owner === 'enemy') b.life = 0; }
  * Activate one of the new items on a field. Returns a short result string for the
  * info pane banner (e.g. 「（命中3）」) or ''.
  */
+/** Enemies that can be hit (warping transferred units are invulnerable). */
+function hittable(F) { return F.enemies.filter((e) => !(e.warpT > 0)); }
+
 export function useExItem(id, F) {
   const { fx } = F;
   const sx = F.sx, sy = F.sy;
@@ -117,7 +120,7 @@ export function useExItem(id, F) {
   }
   if (id === 'freeze') {
     const refs = [];
-    for (const e of F.enemies) {
+    for (const e of hittable(F)) {
       if (inCircle(e, sx, sy, FREEZE_R)) {
         e.hp -= FREEZE_DMG;
         e.frozenT = FREEZE_T;
@@ -162,7 +165,7 @@ function syncFreeze(f) {
 }
 
 function burstAt(F, f, r, dmg) {
-  for (const e of F.enemies) {
+  for (const e of hittable(F)) {
     if (inCircle(e, f.x, f.y, r)) e.hp -= dmg;
   }
   f.kind = 'cburst';
@@ -177,7 +180,7 @@ function burstAt(F, f, r, dmg) {
  */
 export function tickExItems(F, dt) {
   // Frozen timers (movement/fire skip lives in the game loops: `if (e.frozenT > 0) continue`)
-  for (const e of F.enemies) {
+  for (const e of hittable(F)) {
     if (e.frozenT > 0) e.frozenT = Math.max(0, e.frozenT - dt);
   }
   const fx = F.fx;
@@ -195,7 +198,7 @@ export function tickExItems(F, dt) {
       f._cd -= dt;
       if (f._cd <= 0) {
         f._cd += PBEAM_TICK;
-        for (const e of F.enemies) {
+        for (const e of hittable(F)) {
           if (e.x + e.w * 0.45 > f.x + 10 && Math.abs(e.y - f.y) < half + e.h * 0.42) {
             e.hp -= PBEAM_DMG;
             // Pierce beam: every damage tick = one small boom at contact
@@ -218,7 +221,7 @@ export function tickExItems(F, dt) {
       const [vx, vy] = f.a;
       f.x += vx * dt; f.y += vy * dt;
       let hit = null;
-      for (const e of F.enemies) { if (hitBox(e, f.x, f.y, 6)) { hit = e; break; } }
+      for (const e of hittable(F)) { if (hitBox(e, f.x, f.y, 6)) { hit = e; break; } }
       const out = f.x > F.fw + 20 || f.y < -10 || f.y > F.fh + 10;
       if (hit || out) {
         if (hit && f._gen === 0) hit.hp -= CLUSTER_PARENT_DMG;
@@ -248,7 +251,7 @@ export function tickExItems(F, dt) {
       if (age < BH_PULL_T) {
         const grow = Math.min(1, age / 0.25);
         const R = f.r * grow;
-        for (const e of F.enemies) {
+        for (const e of hittable(F)) {
           const dx = f.x - e.x, dy = f.y - e.y;
           const d = Math.hypot(dx, dy) || 1;
           if (d > R + Math.min(e.w, e.h) * 0.3) continue;
@@ -268,7 +271,7 @@ export function tickExItems(F, dt) {
         }
       } else if (!f._burst) {
         f._burst = true;
-        for (const e of F.enemies) {
+        for (const e of hittable(F)) {
           if (inCircle(e, f.x, f.y, f.r)) {
             e.hp -= BH_BURST;
             F.fx.push(spawnExplosion(e.x, e.y, false));
@@ -291,7 +294,7 @@ export function tickExItems(F, dt) {
       if (f.y > F.fh - r) { f.y = F.fh - r; v[1] = -Math.abs(v[1]); }
       if (f.x > F.fw - r) { f.x = F.fw - r; v[0] = -Math.abs(v[0]); }
       if (f.x < r) { f.x = r; v[0] = Math.abs(v[0]); }
-      for (const e of F.enemies) {
+      for (const e of hittable(F)) {
         if (!hitBox(e, f.x, f.y, r)) continue;
         const next = f._hit.get(e) || 0;
         if (f._t >= next) {
