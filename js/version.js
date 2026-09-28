@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-09-28 21:05:26';
+export const VERSION_LABEL = '2026-09-28 22:26:31';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1790597126326;
-export const BUILD_NOTE = '短いスマホ画面でもタイトルが切れないよう調整';
+export const BUILD_TIME = 1790601991277;
+export const BUILD_NOTE = '敵レベル上昇でCOMのミスを減らし強さをはっきり上げる';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

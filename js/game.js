@@ -3,14 +3,14 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260928210526';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260928210526';
-import { sfx } from './audio.js?v=20260928210526';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260928210526';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260928210526';
-import { hitBattleCounter } from './stats.js?v=20260928210526';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260928210526';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260928210526';
+} from './entities.js?v=20260928222631';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260928222631';
+import { sfx } from './audio.js?v=20260928222631';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260928222631';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260928222631';
+import { hitBattleCounter } from './stats.js?v=20260928222631';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260928222631';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260928222631';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -2006,7 +2006,7 @@ export class Game {
     for (const b of B.bullets) {
       if (b.life <= 0) continue;
       if (b.owner !== 'enemy' && !b.dir) continue;
-      if (b._seenT == null) { b._seenT = B.time; b._nz = (Math.random() - 0.5) * 2 * noise; }
+      if (b._seenT == null) { b._seenT = B.time; b._nz = (Math.random() - 0.5) * 2 * noise; b._juke = !!(b.homing && AI.juke && Math.random() < AI.juke); }
       if (B.time - b._seenT < react) continue;
       threats.push(b);
     }
@@ -2035,16 +2035,19 @@ export class Game {
       const mx = vxMax * t, my = vyMax * t;
       return [x0 + Math.sign(dx) * Math.min(Math.abs(dx), mx), y0 + Math.sign(dy) * Math.min(Math.abs(dy), my)];
     };
-    const dangerOf = (cx, cy) => {
+    const dangerOf = (cx, cy, noHoming = false) => {
       let d = 0;
       for (const b of threats) {
         if (b.homing && !b.laser && b.owner === 'enemy' && b.homeT > 0) {
-          // Limited-homing missile: simulate its steering toward our projected path
+          if (noHoming) continue;
+          // Limited-homing missile: simulate its steering toward our projected path.
+          // Bait skill (b._juke): hold still while it homes, then sidestep once it flies straight.
           let mx = b.x, my = b.y + (b._nz || 0), mvx = b.vx || -1, mvy = b.vy || 0, hT = b.homeT;
           const hbm = (b.hb || 0) + margin + 3;
           const H = horizon + 0.25, h = 0.04;
+          const tw = b._juke ? b.homeT : 0;
           for (let t = h; t <= H; t += h) {
-            const [sx, sy] = posAt(shipX, shipY0, cx, cy, t);
+            const [sx, sy] = t <= tw ? [shipX, shipY0] : posAt(shipX, shipY0, cx, cy, t - tw);
             if (hT > 0) {
               hT -= h;
               const des = Math.atan2(sy - my, sx - mx);
@@ -2153,7 +2156,7 @@ export class Game {
           c += al < 0.05 ? -(AI.alignW ?? 1.1) : Math.min(1.2, al * 3) * (AI.alignW ?? 1.1) / 1.1;
         } else c += Math.abs(cy - fh * 0.5) / fh * 0.8;
         c += Math.abs(cx - prefX) / fw * (AI.prefW ?? 0.9);
-        c += Math.hypot((cx - B.x) / fw, (cy - shipY0) / fh) * 0.5; // don't wander
+        c += Math.hypot((cx - B.x) / fw, (cy - shipY0) / fh) * (AI.wanderW ?? 0.5); // don't wander (higher level: calmer, shorter dodges)
         if (cy < fh * 0.1 || cy > fh * 0.9) c += 0.35; // edges trap you
         // Line of fire: prefer rows with (visible, hittable) enemies ahead of the ship
         if (AI.lofW) {
@@ -2171,7 +2174,12 @@ export class Game {
           const cP = cx < fw * 0.12 ? 1 : 0;
           c += AI.edgeW * (eP * 0.8 + eP * cP * 0.7);
         }
+        // Skill (higher level): don't back into the left wall — passing enemies fly over you there
+        // and fire at point-blank range with nowhere left to go
+        if (AI.wallW) c += AI.wallW * Math.max(0, (0.16 - cx / fw) / 0.16);
         if (Math.abs(cx - B._tx) < 2 && Math.abs(cy - B._ty) < 2) c -= 0.35; // hysteresis (no jitter)
+        // Skill (higher level): commit to a dodge instead of flip-flopping between far-apart spots
+        if (AI.commitW && Math.hypot((cx - B._tx) / fw, (cy - B._ty) / fh) < 0.12) c -= AI.commitW;
         if (c < bestC) { bestC = c; best = [cx, cy]; }
       }
       if (best) {
@@ -2188,12 +2196,15 @@ export class Game {
     curDanger = dangerOf(B.x, shipY0);
     const dodging = curDanger > 1.5;
 
+    // Bait a homing missile: keep still while it is still steering (if nothing else is coming)
+    const jukeHold = threats.some((b) => b._juke && b.homeT > 0.04 && Math.hypot(b.x - shipX, b.y - shipY0) < 240)
+      && dangerOf(B.x, shipY0, true) < 1.5;
     // Hand moves the virtual pointer toward the planned spot; ship follows it like the player's ship
     if (!Number.isFinite(B.ptrX) || !Number.isFinite(B.ptrY) || !Number.isFinite(B.pvx) || !Number.isFinite(B.pvy)) { B.ptrX = B.x; B.ptrY = B.y; B.pvx = 0; B.pvy = 0; }
     {
       // Finger-like drag: speed capped (AI.hand field-heights/s), acceleration-limited (reaches
       // full speed in ~AI.accT s), eases in on arrival → smooth curved paths, no teleports.
-      const dx = B._tx - B.ptrX, dy = B._ty - B.ptrY * fh;
+      const dx = jukeHold ? 0 : B._tx - B.ptrX, dy = jukeHold ? 0 : B._ty - B.ptrY * fh;
       const dl = Math.hypot(dx, dy);
       const vCap = Math.min(handPx, dl * 6);
       const dvx = dl > 1e-6 ? (dx / dl) * vCap : 0, dvy = dl > 1e-6 ? (dy / dl) * vCap : 0;
@@ -2601,7 +2612,7 @@ export class Game {
       // Don't sit on items: after holdMax s of holding, use the best offensive one
       const heldLong = AI.holdMax && B._heldT != null && B.time - B._heldT > AI.holdMax;
       let pick = -1;
-      if (AI.smart) {
+      if (AI.smart || Math.random() < (AI.smartP ?? 0)) {
         const want = (id) => {
           if (timed(id) && B.activeTimer > 0) return -1;
           if (isSend(id)) return oppBusy || oppLow ? 6 : 5; // send promptly (pile on when they're busy / low)
@@ -2627,6 +2638,11 @@ export class Game {
         const iAgg = (AI.lazySend ? oppLow : (oppBusy || oppLow)) ? B.items.findIndex((id) => isSend(id) || id === 'direct' || id === 'meteor') : -1;
         if (iAgg >= 0 && !(timed(B.items[iAgg]) && B.activeTimer > 0)) pick = iAgg;
         else if (i0 >= 0 && (full || heldLong || enemyPressure >= 2 || (!AI.lazySend && isSend(B.items[i0])) || Math.random() < (AI.idleUse ?? 0.35))) pick = i0;
+      }
+      // Human slip (fewer at higher level): now and then grab the wrong item or hesitate instead
+      if (B.items.length && AI.itemErr && Math.random() < AI.itemErr) {
+        pick = Math.random() < 0.5 ? -1 : Math.floor(Math.random() * B.items.length);
+        if (pick >= 0 && timed(B.items[pick]) && B.activeTimer > 0) pick = -1;
       }
       if (pick >= 0) { B._forceIdx = pick; tryUse(); B._heldT = B.items.length ? B.time : null; }
     }
