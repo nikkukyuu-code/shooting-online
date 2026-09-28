@@ -3,14 +3,14 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260928054933';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260928054933';
-import { sfx } from './audio.js?v=20260928054933';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260928054933';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260928054933';
-import { hitBattleCounter } from './stats.js?v=20260928054933';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL } from './meta.js?v=20260928054933';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260928054933';
+} from './entities.js?v=20260928122852';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260928122852';
+import { sfx } from './audio.js?v=20260928122852';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260928122852';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260928122852';
+import { hitBattleCounter } from './stats.js?v=20260928122852';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL } from './meta.js?v=20260928122852';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260928122852';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -39,6 +39,14 @@ const warping = (e) => e && e.warpT > 0;
 function tickWarp(e, dt) {
   if (e.warpPop > 0) e.warpPop = Math.max(0, e.warpPop - dt);
   if (!(e.warpT > 0)) return false;
+  // Queued arrival (pane crowded with just-arrived sent units): wait off-screen, then warp in
+  if (e.arriveDelay > 0) {
+    e.arriveDelay = Math.max(0, e.arriveDelay - dt);
+    if (e.warpX0 != null) e.x = e.warpX0;
+    if (e.holdY != null) e.y = e.holdY;
+    if (e.warpHp != null && e.hp < e.warpHp) e.hp = e.warpHp;
+    return true;
+  }
   e.warpT = Math.max(0, e.warpT - dt);
   // 0–3s: glide in from off-screen (ease-out) to the hold point; 3–5s: hold still
   if (e.warpX0 != null && e.holdX != null) {
@@ -1037,7 +1045,74 @@ export class Game {
    * Spawns just off the right edge, then lingers in the right zone (~2.2s) with
    * bob/weave/fire allowed — no leftward advance until linger ends.
    */
-  markSentEnemy(e, fw, fh) {
+  /**
+   * Arrival spot for a sent unit: never on top of other sent units that are still warping in /
+   * lingering on the right (same batch or earlier arrivals). Picks the candidate point with the
+   * largest clearance (box = unit + warp ring + a little bob), clamped inside the pane.
+   * Runs on the receiving field only (online: the receiver places them locally and streams its
+   * field as usual), so both peers see the same thing. Same rule for player / COM / online.
+   */
+  placeSentEnemy(e, fw, fh, field) {
+    const bobOf = (u) => { const t = resolveEnemyTier(u.kind); return (t === 'swarm' || t === 'drone') ? 28 : 18; };
+    const hwOf = (u) => (u.w || 40) * 0.5 + 4;
+    const hhOf = (u) => (u.h || 30) * 0.5 + 4;
+    const mh = Math.max(28, (e.h || 30) * 0.6 + 8);
+    const xMin = fw * 0.42;
+    const xMax = Math.max(xMin, fw - (e.w || 40) * 0.56 - 12);
+    const yMin = mh, yMax = Math.max(mh, fh - mh);
+    const hwE = hwOf(e), hhE = hhOf(e), bobE = bobOf(e);
+    // Sent units still arriving / lingering; each holds its slot until ~its linger ends (+ time to leave)
+    const busy = (field || []).filter((o) => o && o !== e && o.sent && o.holdX != null && (o.warpT > 0 || o.lingerT > 0))
+      .map((o) => ({
+        o,
+        x: o.warpT > 0 ? o.holdX : o.x,
+        y: o.holdY != null ? o.holdY : o.y,
+        until: (o.arriveDelay || 0) + (o.warpT || 0) + (o.lingerT || 0) + 0.3,
+        // when its glide-in from the right edge starts (negative = already started)
+        glide: o.warpT > 0 ? (o.arriveDelay || 0) - (WARP_TOTAL - o.warpT) : -99,
+      }));
+    const NX = 7, NY = 9;
+    const pick = (delay) => {
+      const others = busy.filter((b) => b.until > delay);
+      let best = null, bestS = -1e9, bestClr = -1e9;
+      for (let i = 0; i < NX; i++) {
+        for (let j = 0; j < NY; j++) {
+          const x = xMin + (xMax - xMin) * (i / (NX - 1));
+          const y = yMin + (yMax - yMin) * (j / (NY - 1));
+          let clr = 60;
+          for (const b of others) {
+            const hs = hwE + hwOf(b.o);
+            let gx = Math.abs(x - b.x) - hs;
+            // Glide path: the later glider must not slide in through the other one (same row)
+            if (Math.abs(b.glide - delay) > 0.05) {
+              const laterIsMe = delay > b.glide;
+              if (laterIsMe ? b.x > x - hs : x > b.x - hs) gx = -1e9;
+            }
+            const gy = Math.abs(y - b.y) - (hhE + hhOf(b.o) + Math.abs(bobE - bobOf(b.o)));
+            clr = Math.min(clr, Math.max(gx, gy));
+          }
+          // mild preference for the classic right-side band + randomness (no fixed grid look)
+          const sc = clr - Math.abs(x - fw * 0.79) / fw * 12 + Math.random() * 6;
+          if (sc > bestS) { bestS = sc; best = [x, y]; bestClr = clr; }
+        }
+      }
+      return { pos: best, clr: bestClr };
+    };
+    // No room now → stagger: arrive a bit later, when earlier arrivals have moved on
+    let res = null, delay = 0, fb = null, fbD = 0;
+    for (let k = 0; k <= 40; k++) {
+      delay = k * 0.4;
+      res = pick(delay);
+      if (res.clr >= 0) break;
+      if (!fb || res.clr > fb.clr + 4) { fb = res; fbD = delay; }
+    }
+    if (res.clr < 0) { res = fb; delay = fbD; } // never fits (huge unit in a tiny pane): least overlap
+    e.arriveDelay = delay > 0 ? Math.round(delay * 10) / 10 : 0;
+    e.holdX = res.pos[0];
+    e.holdY = res.pos[1];
+  }
+
+  markSentEnemy(e, fw, fh, field = null) {
     e.sent = true;
     // 攻撃力 / 防御力 (catalog.js): ATK scales this unit's bullet damage to the receiving ship,
     // DEF raises its HP. Same rule for player-sent, COM-sent and online-received units.
@@ -1052,11 +1127,13 @@ export class Game {
       e.hp = hp;
       e.maxHp = hp;
     }
-    e.holdX = fw * (0.72 + Math.random() * 0.14);
-    const mh = Math.max(28, (e.h || 30) * 0.6 + 8);
-    e.holdY = Math.max(mh, Math.min(fh - mh, e.y));
-    // Keep the whole unit + ring inside the pane
-    e.holdX = Math.max(fw * 0.5, Math.min(e.holdX, fw - (e.w || 40) * 0.56 - 12));
+    // Spread arrivals: never stacked on other sent units that just arrived (clamped inside the pane)
+    this.placeSentEnemy(e, fw, fh, field);
+    // Units of a batch bob / weave in unison while lingering → they keep their spacing
+    e.phase = 0;
+    e.surgePhase = 0;
+    e.surgeFreq = 1.4;
+    e.surgeAmp = Math.min(e.surgeAmp || 32, 24);
     // Start fully off-screen on the right; tickWarp glides it to holdX by 3s
     e.warpX0 = fw + (e.w || 40) * 0.6 + 16;
     e.x = e.warpX0;
@@ -1153,7 +1230,7 @@ export class Game {
     const fw = this.L.own.w, fh = this.L.own.h;
     if (this.useBot) {
       for (const kind of list) {
-        const e = this.markSentEnemy(spawnEnemy(fw, fh, kind), fw, fh);
+        const e = this.markSentEnemy(spawnEnemy(fw, fh, kind), fw, fh, this._bot.enemies);
         this._bot.enemies.push(e);
       }
     } else if (this.net) {
@@ -1375,13 +1452,13 @@ export class Game {
       const fw = this.L.own.w, fh = this.L.own.h;
       if (kinds && kinds.length) {
         for (const kind of kinds) {
-          this.state.enemies.push(this.markSentEnemy(spawnEnemy(fw, fh, kind), fw, fh));
+          this.state.enemies.push(this.markSentEnemy(spawnEnemy(fw, fh, kind), fw, fh, this.state.enemies));
         }
       } else {
         const n = msg.count || 3;
         for (let i = 0; i < n; i++) {
           const e = spawnEnemy(fw, fh, i === n - 1 ? 'elite' : 'swarm');
-          this.state.enemies.push(this.markSentEnemy(e, fw, fh));
+          this.state.enemies.push(this.markSentEnemy(e, fw, fh, this.state.enemies));
         }
       }
       this.setStatus('対戦相手から敵が送られてきた！');
@@ -2490,7 +2567,7 @@ export class Game {
         const kinds = this.kindsFromDeck(id, true);
         const fw = this.L.own.w, fh = this.L.own.h;
         for (const kind of kinds) {
-          this.state.enemies.push(this.markSentEnemy(spawnEnemy(fw, fh, kind), fw, fh));
+          this.state.enemies.push(this.markSentEnemy(spawnEnemy(fw, fh, kind), fw, fh, this.state.enemies));
         }
         this.setStatus(this.sendLabelForKinds(kinds, 'COM敵送信'));
         setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1400);
