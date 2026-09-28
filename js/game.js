@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20260929022434';
+import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20260929023425';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20260929022434';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929022434';
-import { sfx } from './audio.js?v=20260929022434';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929022434';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929022434';
-import { hitBattleCounter } from './stats.js?v=20260929022434';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929022434';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929022434';
+} from './entities.js?v=20260929023425';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929023425';
+import { sfx } from './audio.js?v=20260929023425';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929023425';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929023425';
+import { hitBattleCounter } from './stats.js?v=20260929023425';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929023425';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929023425';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1059,6 +1059,17 @@ export class Game {
 
   /** Core destroyed: big chain explosion + score burst (the decisive shot). */
   onCoreBreak(e, fx, mine, list) {
+    // Field flash (as in the original footage: the breaker's own field goes white for a moment, then fades).
+    // Only that field; single soft flash, at most one per second per field (photosensitivity).
+    {
+      const now = mine ? this.state.time : (this._bot ? this._bot.time : 0);
+      const key = mine ? '_flashAtP' : '_flashAtB';
+      if (!(now - (this[key] ?? -9) < 1.0)) {
+        this[key] = now;
+        const fw = this.L.own.w, fh = this.L.own.h;
+        fx.unshift({ kind: 'fieldflash', x: fw / 2, y: fh / 2, r: 1, life: 0.85, max: 0.85 });
+      }
+    }
     const chained = markCoreChain(e, list); // cascading yellow chain wipe of the pack around the core
     fx.push({ kind: 'corebreak', x: e.x + (e.core ? e.core.ox : 0), y: e.y + (e.core ? e.core.oy : 0), r: Math.max(e.w, e.h) * 0.9, life: 0.9, max: 0.9 });
     fx.push(spawnExplosion(e.x - e.w * 0.25, e.y - e.h * 0.2, true));

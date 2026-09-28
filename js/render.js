@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929022434';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929023425';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260929022434`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260929023425`;
 }
 
 function loadKindSprite(kind) {
@@ -2284,6 +2284,16 @@ function drawFx(ctx, f) {
   if (f.kind === 'deflect') { drawDeflectSpark(ctx, f); return; }
   if (f.kind === 'corebreak') { drawCoreBreak(ctx, f); return; }
   if (f.kind === 'chainboom') { drawChainBoom(ctx, f); return; }
+  if (f.kind === 'fieldflash') {
+    // Whole-field white flash on a core break: hold ~0.25 s, then fade (capped alpha, no strobe)
+    const u = 1 - f.life / f.max;
+    const a = u < 0.3 ? 0.55 : 0.55 * Math.max(0, 1 - (u - 0.3) / 0.7);
+    ctx.save();
+    ctx.fillStyle = `rgba(245,245,238,${a})`;
+    ctx.fillRect(-4, -4, f.x * 2 + 8, f.y * 2 + 8);
+    ctx.restore();
+    return;
+  }
   const t = 1 - f.life / f.max;
   ctx.save();
   ctx.globalAlpha = Math.max(0, 1 - t);

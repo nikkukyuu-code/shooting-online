@@ -324,8 +324,6 @@ export function attachCore(e) {
  */
 /** Guards around a core (tough: shooting through them is slow — snipe the core instead). */
 export const GUARD_HP = { escort: 6, cage: 9, pod: 15, claw: 30, drone: 24, seg: 30 };
-/** Core self-repair: after CORE_REGEN_DELAY s without a core hit it refills CORE_REGEN × maxHp per s. */
-export const CORE_REGEN_DELAY = 1.2, CORE_REGEN = 0.12;
 export const CORE_HP = {
   wave_swarm_core: 18, wave_grid_core: 19, wave_ring_core: 21,
   wave_snake_head: 30, wave_core_boss: 44, wave_eye_boss: 58,
@@ -484,11 +482,6 @@ export function tickCoreExtras(e, dt) {
   if (e._shake > 0) e._shake = Math.max(0, e._shake - dt);
   if (e._guardT > 0) e._guardT = Math.max(0, e._guardT - dt);
   if (e._guardCd > 0) e._guardCd = Math.max(0, e._guardCd - dt);
-  // Self-repair: chip damage fades unless the pressure is kept up (sustained accurate fire wins)
-  if (e.core && e.core.hp > 0 && e.core.hp < e.core.maxHp) {
-    e._coreIdle = (e._coreIdle || 0) + dt;
-    if (e._coreIdle > CORE_REGEN_DELAY) e.core.hp = Math.min(e.core.maxHp, e.core.hp + e.core.maxHp * CORE_REGEN * dt);
-  }
   const sh = e._sh;
   if (sh && e.core && e.core.hp > 0) {
     sh.t += dt;
@@ -544,7 +537,6 @@ export function applyCoreAwareHit(e, dmg, bx, by, fxList) {
       return { hit: 'body', killed: false };
     }
     c.hp -= dmg;
-    e._coreIdle = 0;
     e._coreFlash = 0.1;
     e._shake = 0.14;
     if (c.hp > 0) {
