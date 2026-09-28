@@ -275,13 +275,15 @@ export function attachCore(e) {
     e.drones = null;
   } else if (e.kind === 'wave_ring_core') {
     // Rotating ring: 8 small fighter pods (user art) orbit a glowing red core; pods block shots
-    e.w = 150; e.h = 150; e.hp = 40; e.maxHp = 40; e.score = Math.max(e.score || 0, 180);
-    e.core = { ox: 0, oy: 0, r: CORE_R, hp: CORE_HP.wave_ring_core, maxHp: CORE_HP.wave_ring_core, orbit: 5, ang: Math.random() * Math.PI * 2 };
+    // As in the video (1:48–2:10): a loose loop of 14 small red crab fighters (all facing left) round
+    // a red spiked core orb; the loop barely turns, pulls in before its dash wall, then breaks up
+    e.w = 96; e.h = 96; e.hp = 40; e.maxHp = 40; e.score = Math.max(e.score || 0, 180);
+    e.core = { ox: 0, oy: 0, r: CORE_R, hp: CORE_HP.wave_ring_core, maxHp: CORE_HP.wave_ring_core, orbit: 3, ang: Math.random() * Math.PI * 2 };
     e.drones = [];
-    for (let i = 0; i < 8; i++) e.drones.push({ ang: (Math.PI * 2 * i) / 8, dist: 58, r: 14, hp: GUARD_HP.pod, maxHp: GUARD_HP.pod, pod: true });
+    for (let i = 0; i < 14; i++) e.drones.push({ ang: (Math.PI * 2 * i) / 14, dist: RING_R, r: 7.5, hp: GUARD_HP.pod, maxHp: GUARD_HP.pod, pod: true });
   } else if (e.kind === 'wave_snake_head') {
-    // Snake boss head: the red glowing head IS the core (segments follow; head kill → body chain)
-    e.w = 54; e.h = 54; e.hp = 60; e.maxHp = 60; e.score = Math.max(e.score || 0, 400);
+    // Tethered striker head: the red ring's yellow-red centre IS the core (head kill → chain blows back to the tail)
+    e.w = 14; e.h = 14; e.hp = 60; e.maxHp = 60; e.score = Math.max(e.score || 0, 400); // video: ≈10–12 px red ball tip of the tethered striker
     e.core = { ox: 0, oy: 0, r: CORE_R, hp: CORE_HP.wave_snake_head, maxHp: CORE_HP.wave_snake_head, orbit: 0, ang: 0 };
     e.drones = null;
   } else {
@@ -314,7 +316,7 @@ export function attachCore(e) {
   const sc = CORE_SHUTTER[e.kind];
   if (sc) e._sh = { ...sc, t: Math.random() * sc.open * 0.6, st: 0 };
   // Ring: periodic tighten + spin-up (pods close in around the core)
-  if (e.kind === 'wave_ring_core') e._tight = { t: 1 + Math.random() * 2, k: 0 };
+
   return e;
 }
 
@@ -323,6 +325,7 @@ export function attachCore(e) {
  * bosses ≈ 10–13 hits). Chip damage shows as the ring around the core.
  */
 /** Guards around a core (tough: shooting through them is slow — snipe the core instead). */
+export const RING_R = 36;
 export const GUARD_HP = { escort: 6, cage: 9, pod: 15, claw: 30, drone: 24, seg: 30 };
 /** Every core is a small glowing point (like the original): careful aim needed. Hit radius = r + pad. */
 export const CORE_R = 9, CORE_HIT_PAD = 2;
@@ -366,7 +369,7 @@ export function markCoreChain(e, list) {
       d.hp = 0;
       const o = {
         kind: 'wave_pod', _uid: 900000 + Math.floor(Math.random() * 1e6),
-        x: e.x + Math.cos(d.ang) * d.dist, y: e.y + Math.sin(d.ang) * d.dist,
+        x: e.x + Math.cos(d.ang) * d.dist, y: e.y + Math.sin(d.ang) * d.dist * (d.ky || 1),
         w: d.r * 2.2, h: d.r * 2.2, hp: 1, maxHp: 1, score: 10, speed: 0, noFire: true, noDrop: true,
         phase: 0, surgePhase: 0, surgeAmp: 0, fireCd: 99,
         mv: 'plan', plan: [{ k: 'hold', d: 9 }], mvT: 0, dly: 0,
@@ -500,6 +503,20 @@ export function tickCoreExtras(e, dt) {
   }
   const frac = e.core && e.core.maxHp ? Math.max(0, e.core.hp / e.core.maxHp) : 1;
   let spin = 1.6 * (1 + 1.4 * (1 - frac)); // guards spin up as the core weakens
+  if (e.kind === 'wave_ring_core') spin *= 0.14; // the video's loop hardly turns
+  const rs = e._rs;
+  if (rs) {
+    // ring: measured shape timeline (compact ring → tall oval → pulled-in oval)
+    rs.t += dt;
+    const K = rs.key; let i = 0;
+    while (i < K.length - 1 && rs.t >= K[i + 1][0]) i++;
+    const a = K[i], b = K[Math.min(K.length - 1, i + 1)];
+    const u = b[0] > a[0] ? Math.max(0, Math.min(1, (rs.t - a[0]) / (b[0] - a[0]))) : 1;
+    const sm = u * u * (3 - 2 * u);
+    const rx = a[1] + (b[1] - a[1]) * sm, ry = a[2] + (b[2] - a[2]) * sm;
+    for (const d of e.drones || []) { d.dist = rx; d.ky = ry / rx; }
+    e.w = rx * 2 + 20; e.h = ry * 2 + 16;
+  }
   const tg = e._tight;
   if (tg) {
     tg.t -= dt;
@@ -507,11 +524,11 @@ export function tickCoreExtras(e, dt) {
     const want = tg.phase === 'in' ? 1 : 0;
     tg.k += (want - tg.k) * Math.min(1, dt * 6);
     spin *= 1 + 1.6 * tg.k;
-    for (const d of e.drones || []) d.dist = 58 - 22 * tg.k;
+    for (const d of e.drones || []) d.dist = (d.d0 || RING_R) * (1 - 0.3 * tg.k);
   }
   if (e.core && e.core.orbit) {
     e.core.ang = (e.core.ang || 0) + dt * 2.1;
-    const baseOx = e.kind === 'wave_core_boss' ? -e.w * 0.36 : 0;
+    const baseOx = e.kind === 'wave_core_boss' ? -e.w * 0.3 : 0;
     const baseOy = 0;
     e.core.ox = baseOx + Math.cos(e.core.ang) * e.core.orbit;
     e.core.oy = baseOy + Math.sin(e.core.ang) * e.core.orbit * 0.7;
@@ -571,7 +588,7 @@ export function applyCoreAwareHit(e, dmg, bx, by, fxList) {
     for (const d of e.drones) {
       if (d.hp <= 0) continue;
       const dx = e.x + Math.cos(d.ang) * d.dist;
-      const dy = e.y + Math.sin(d.ang) * d.dist;
+      const dy = e.y + Math.sin(d.ang) * d.dist * (d.ky || 1);
       if (Math.hypot(bx - dx, by - dy) < d.r + 4) {
         d.hp -= dmg;
         if (fxList) fxList.push(spawnHitSpark(dx, dy));
@@ -627,7 +644,7 @@ export function applyCoreAwareArea(e, dmg, ox, oy, fxList) {
       if (d.hp <= 0) continue;
       d.hp -= dmg * 0.5;
       if (d.hp <= 0 && fxList) {
-        fxList.push(spawnExplosion(e.x + Math.cos(d.ang) * d.dist, e.y + Math.sin(d.ang) * d.dist, false));
+        fxList.push(spawnExplosion(e.x + Math.cos(d.ang) * d.dist, e.y + Math.sin(d.ang) * d.dist * (d.ky || 1), false));
       }
     }
   }

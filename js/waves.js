@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20260929043600';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20260929054941';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -188,26 +188,34 @@ function splitGroup(fw, fh, fy, n = 8, sprName = 'scout_drone', fire = false) {
 }
 /** 5×5-cage of wedges around a red-core ship: box cage that rotates into a ring and back. */
 function gridCore(fw, fh, fy, fromTop = null) {
-  const cy = Math.max(118, Math.min(fh - 118, fh * fy));
-  const ey = fromTop == null ? cy : fromTop ? -120 : fh + 120;
-  const lead = mk('wave_grid_core', fw, fh, fw + 150, ey, {
+  // Video (0:56–1:50, top field, measured frame by frame): THREE upright columns of small white/red
+  // fighters slide in from the right edge together (≈2.5 s, 0.9 → parked), then stand dead still at
+  // 61.7 / 70.8 / 79.3 % across (8.7 % of the width apart) — no sway — for ~50 s, thinning only as
+  // units are shot. 10 fighters per column, 8.7 % of the height apart, spanning ≈17–96 % of the pane
+  // height (centre ≈56 %). The core ship sits mid-height in the middle column.
+  const cy = fh * 0.565, rdy = fh * 0.087;
+  const hx = fw * 0.708, cdx = fw * 0.087;
+  const lead = mk('wave_grid_core', fw, fh, fw + 150, cy, {
     mv: 'plan', noFire: false,
     fire: { type: 'fan3', spd: 155, cd: 1.5 },
-    plan: [B([fw + 150, ey], [fw * 0.95, fromTop == null ? cy : cy - (fromTop ? 1 : -1) * 90], [fw * 0.8, cy], [fw * 0.68, cy], 2.2),
-      { k: 'hold', d: 10, bob: 16, bw: 0.7, sway: 26 },
-      B([fw * 0.68, cy], [fw * 0.55, cy], [fw * 0.4, cy + 40], [-120, cy + 30], 6)],
+    plan: [B([fw + 150, cy], [fw * 0.95, cy], [fw * 0.78, cy], [hx, cy], 2.5),
+      { k: 'hold', d: 45, bob: 0, bw: 0.5, sway: 0 },
+      B([hx, cy], [fw * 0.55, cy], [fw * 0.35, cy], [-160, cy], 6)],
   });
-  // As in the original: a rigid block of fighters in columns above and below the core ship; the
-  // core's row in front stays open (no rotation / morphing — the whole block just flies as one)
   const pts = [];
-  for (const dy of [-80, -46, 46, 80]) for (const dx of [-36, 4, 44, 84]) pts.push([dx, dy]);
+  for (let k = 0; k < 10; k++) for (const c of [-1, 0, 1]) {
+    const dy = (k - 4.5) * rdy;
+    if (c === 0 && Math.abs(dy) < rdy) continue; // the core ship takes the middle column's two centre slots
+    pts.push([c * cdx, dy]);
+  }
   const G = { lead, sp: 40, wob: 0, shapes: [{ t: 0, s: 'slots', pts }] };
   let _gi = 0;
-  const cage = form(fw, fh, 'wave_escort', 16, () => {
+  const cage = form(fw, fh, 'wave_escort', pts.length, () => {
     const i = _gi++;
-    return T.wedge({ _chainOf: lead, noDrop: true, hp: GUARD_HP.cage,
-      fire: i % 2 === 0 ? aimed(3.2, 140) : null, noFire: i % 2 !== 0 });
+    return T.wedge({ _chainOf: lead, noDrop: true, hp: GUARD_HP.cage, w: 22, h: 15,
+      fire: i % 4 === 1 ? aimed(4, 140) : null, noFire: i % 4 !== 1 });
   }, G);
+  lead.w = 44; lead.h = 36; if (lead.core) lead.core.ox = -lead.w * 0.3;
   return [lead, ...cage];
 }
 
@@ -258,33 +266,68 @@ function spiders(fw, fh, fy, n = 5, amp = 0.16) {
 
 // ---------- W4 ----------
 function ring(fw, fh, fy) {
-  const y = Math.max(80, Math.min(fh - 80, fh * fy)), fromTop = fy < 0.5, ey = fromTop ? -90 : fh + 90;
-  return [mk('wave_ring_core', fw, fh, fw * 0.95, ey, {
+  // Video (1:36–2:17, bottom field, measured frame by frame, pane fractions):
+  //  96–99 s  ~15 red crabs slide in from the right edge as a COMPACT ring (≈14 % wide × 43 % high)
+  //           centred ≈(0.80, 0.78); it parks there ~7.5 s
+  //  107.5–109 the ring stretches into a tall OVAL (≈24 % × 72 %), centre rising to ≈0.65
+  //  109–124  the oval hangs, barely moving (centre x 0.79–0.81)
+  //  124–126  it pulls in vertically to ≈52 % high and stays that way (the dash-wall phase)
+  //  then it leaves / breaks up to the left
+  const RX = fw * 0.12, RY = fh * 0.35, RX0 = fw * 0.07, RY0 = fh * 0.2;
+  const low = fy >= 0.5, yc = (f) => (low ? f : 1 - f) * fh;
+  const y1 = Math.max(RY0 + 8, Math.min(fh - RY0 - 8, yc(0.78)));
+  const y2 = Math.max(RY + 6, Math.min(fh - RY - 6, yc(0.65)));
+  const e = mk('wave_ring_core', fw, fh, fw + RX0 + 30, y1, {
     mv: 'plan', tele: 0, noFire: false,
     fire: { type: 'ringcore', spd: 125, cd: 1.35 },
-    plan: [B([fw * 0.95, ey], [fw * 0.95, y], [fw * 0.85, y], [fw * 0.72, y], 2.2),
-      { k: 'hold', d: 12, bob: 44, bw: 0.7, sway: 46 },
-      B([fw * 0.72, y], [fw * 0.6, y], [fw * 0.3, y + (fromTop ? 50 : -50)], [-120, y], 7)],
-  })];
+    plan: [B([fw + RX0 + 30, y1], [fw * 0.95, y1], [fw * 0.86, y1], [fw * 0.8, y1], 3.0),
+      { k: 'hold', d: 7.5, bob: 2, bw: 0.5, sway: 2 },
+      B([fw * 0.8, y1], [fw * 0.8, y1 + (y2 - y1) * 0.4], [fw * 0.8, y2], [fw * 0.8, y2], 1.5),
+      { k: 'hold', d: 26, bob: 3, bw: 0.4, sway: 3 },
+      B([fw * 0.8, y2], [fw * 0.62, y2], [fw * 0.3, y2], [-140, y2], 7)],
+  });
+  e.w = RX * 2 + 20; e.h = RY * 2 + 16;
+  // shape timeline (seconds since spawn) → pod ellipse radii
+  e._rs = { t: 0, RX, RY, RX0, RY0, key: [[0, RX0, RY0], [10.5, RX0, RY0], [12, RX, RY], [27, RX, RY], [29, RX, RY * 0.72]] };
+  const n = 15;
+  e.drones = [];
+  for (let i = 0; i < n; i++) e.drones.push({ ang: (Math.PI * 2 * i) / n, dist: RX0, d0: RX, ky: RY0 / RX0, r: 7.5, hp: GUARD_HP.pod, maxHp: GUARD_HP.pod, pod: true });
+  return [e];
 }
 
-// ---------- snake / caterpillar ----------
-function snake(fw, fh, fy, segs = 6, tone = 'silver') {
-  const y0 = fh * fy;
-  // As in the original: a slow, gentle wave; segments evenly spaced (~32 px) along the head's path
-  const P = { v: vx(fw, 16), amp: Math.min(fh * 0.14, 48), wf: 0.85, k2: 0, sk: 0, sw: 1 };
-  const head = mk('wave_snake_head', fw, fh, fw + 40, y0, {
-    mv: 'snake', ...P, dly: 0, x0: fw + 40,
-    fire: { type: 'snakehead', spd: 175, cd: 1.15 },
+// ---------- tethered striker ("snake") ----------
+/*
+ * Rebuilt from the reference video (2:28–2:46, both fields). Not a travelling snake:
+ *  - PIVOT: a big grey rock sphere in a dark red glow; slides in from the right, then stays put.
+ *  - TAIL CHAIN: 7 grey links tapering to a RED BALL tip (= the core). At rest the chain trails
+ *    straight out behind the sphere (to the right), so the core hides behind it.
+ *  - STRIKE (ship within reach): the chain curls in, then the red tip shoots straight at where the
+ *    ship was, the links stretching from the pivot; it holds, then swings back round the pivot to
+ *    the rest position. The core is exposed (in front of the sphere) during the strike and swing.
+ *  - SAW (ship out of reach): the sphere spits a red spiked ring (yellow centre) at the ship with a
+ *    row of 5 white diamonds on each side; the ring flies out ~1.3 s and comes back to the sphere.
+ *  Cycle ≈ 4.6 s, stays ~20 s. Core break → the chain blows up link by link back to the sphere.
+ */
+function snake(fw, fh, fy, segs = 7, tone = 'silver') {
+  const y0 = Math.max(44, Math.min(fh - 44, fh * fy));
+  const head = mk('wave_snake_head', fw, fh, fw + 200, y0, {
+    mv: 'arm', dly: 0, stay: 20, segs, fire: { type: 'armhead' },
   });
-  const out = [head];
-  for (let i = 1; i <= segs; i++) {
-    out.push(mk('wave_snake_seg', fw, fh, fw + 40, y0, {
-      w: 40, h: 40, hp: GUARD_HP.seg, score: 20, mv: 'snake', ...P,
-      dly: i * (32 / P.v), x0: fw + 40, _chainOf: head, chainIdx: i, noFire: true, noDrop: true, tone,
+  head._tx = fw * 0.7; head._ty = y0; // pivot (sphere) position — owned by the tip
+  const out = [];
+  // pivot first (drawn underneath), then links from the pivot outward, the red tip last (on top)
+  out.push(mk('wave_snake_seg', fw, fh, fw + 60, y0, {
+    w: 26, h: 26, hp: 999, score: 60, mv: 'armseg', _chainOf: head, chainIdx: segs + 1,
+    noFire: true, noDrop: true, passShots: true, tone: 'anchor',
+  }));
+  for (let i = segs; i >= 1; i--) {
+    const sz = 9 + (i / segs) * 3; // video: ~8–11 px beads, tapering toward the tip
+    out.push(mk('wave_snake_seg', fw, fh, fw + 60, y0, {
+      w: sz, h: sz, hp: 999, score: 20, mv: 'armseg', _chainOf: head, chainIdx: i,
+      noFire: true, noDrop: true, passShots: true, tone,
     }));
   }
-  for (const e of out) e.y0 = y0;
+  out.push(head);
   return out;
 }
 function caterpillar(fw, fh, fy) {
@@ -348,10 +391,15 @@ function volley(esc, cd = 2.8, spd = 140) {
 
 function coreBossPack(fw, fh, fy) {
   const e = spawnEnemy(fw, fh, 'wave_core_boss');
+  // Video (1:26–2:40, top field): a mid-size grey arrowhead with a red rear, not a screen-filling
+  // boss; it hangs around the middle of the pane (≈45–58 % across), roaming slowly between rows
+  e.w = 66; e.h = 44; // video: ≈64×33 px arrowhead on a 360-wide pane
+  if (e.core) { e.core.ox = -e.w * 0.3; e.core.orbit = 5; }
   e.y = Math.max(e.h * 0.5 + 6, Math.min(fh - e.h * 0.5 - 6, fh * fy));
-  const esc = volley(spawnCoreEscorts(e, fw, fh), 2.8);
-  e._entryX = null;
-  Object.assign(e, { mv: 'boss', boss: 'tri', hx: Math.min(fw * 0.8, fw - e.w * 0.5 - 6), y0: e.y, stay: 29, mvT: 0,
+  // video: it flies alone (no escort bands) in front of the parked grid columns
+  e.x = fw + e.w * 0.5 + 30; e._entryX = null;
+  const esc = [];
+  Object.assign(e, { mv: 'boss', boss: 'tri', hx: fw * 0.515, y0: e.y, stay: 40, mvT: 0,
     fire: { type: 'boss' } });
   return [e, ...esc];
 }
@@ -425,7 +473,7 @@ export const WAVE_SCRIPT = [
   // boss snake (slow crossing)
   [137, (w, h) => zig(w, h, 0.4, 5)], // fodder (kills → drops → sends)
   [141, (w, h) => splitGroup(w, h, 0.6, 6, 'scout_drone')], // fodder (kills → drops → sends)
-  [146, (w, h) => snake(w, h, 0.5)],
+  [146, (w, h) => snake(w, h, 0.31)],
   [150, (w, h) => zig(w, h, 0.2, 4)],
   [154, (w, h) => behindArc(w, h, false, 4)],
   [160, (w, h) => zig(w, h, 0.3, 5)],
@@ -549,11 +597,19 @@ function bossMove(e, dt, fw, fh, py) {
     return;
   }
   if (e.boss === 'tri') {
-    // As in the original: parks at its station and drifts slowly and smoothly up / down (no jumps)
+    // Video (1:14–1:52, top field, tracked at 10 fps): x stays locked at 51.5 % across; it ping-pongs
+    // vertically between 9 % and 90 % of the pane height — 2.1 s per traverse (≈0.4 pane/s, eased at
+    // the ends), then ~1.2 s parked at the edge. Period ≈ 6.6 s.
     e._ph = 'b';
-    const A = Math.max(0, fh * 0.5 - half) * 0.8, ease = Math.min(1, e._bt / 2);
-    e.y = clampY(fh * 0.5 + (e._ay - fh * 0.5) * (1 - ease) + Math.sin(e._bt * 0.42) * A * ease);
-    e.x = e.hx + Math.sin(e._bt * 0.27) * fw * 0.04 * ease;
+    const ease = Math.min(1, e._bt / 1.2);
+    const top = Math.max(e.h * 0.3, fh * 0.09), bot = Math.min(fh - e.h * 0.3, fh * 0.9); // video: it pokes half out at the edges
+    const s6 = (e._bt + 1.05) % 6.6; // start mid-way down
+    let u;
+    if (s6 < 2.1) u = s6 / 2.1; else if (s6 < 3.3) u = 1; else if (s6 < 5.4) u = 1 - (s6 - 3.3) / 2.1; else u = 0;
+    const ue = u * 0.5 + u * u * (3 - 2 * u) * 0.5;
+    const yT = top + (bot - top) * ue;
+    e.y = e._ay + (yT - e._ay) * ease;
+    e.x = e.hx;
     return;
   }
   if (e.boss === 'jet') {
@@ -576,8 +632,91 @@ function bossMove(e, dt, fw, fh, py) {
   }
 }
 
+/** Tethered striker tip (core): entry → rest → strike (curl / lunge / hold / swing back) or saw → leave. */
+const ARM = { rest: 1.1, coil: 0.55, strike: 260, hold: 0.7, swingW: 1.5, sawWind: 0.5, sawCycle: 4.3, enter: 1.0 };
+function armMove(e, dt, fw, fh, px, py) {
+  const n = e.segs || 7, Lrest = n * 7 + 15; // video: sphere centre → tip ≈ 64 px at rest
+  const reach = Math.min(fw * 0.46, 170); // video: ~130 px of a 360 px pane
+  const pivX = fw * 0.70; // video 2:30–2:43: sphere parked at ≈70 % across
+  e._bt = (e._bt || 0) + dt; e._fw = fw;
+  if (e._ph == null) { e._ph = 'enter'; e._pt = 0; e._A = 0; e._L = Lrest; e._wob = Math.random() * 6; }
+  e._pt += dt;
+  e.tone = undefined; e._pivWind = 0;
+  const angTo = (x, y) => Math.atan2(y - e._ty, x - e._tx);
+  const wrap = (a) => ((a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+  switch (e._ph) {
+    case 'enter': {
+      // video: the sphere appears in place in a big red glow (no slide-in) and the chain pays out
+      const u = Math.min(1, e._pt / ARM.enter), k = 1 - (1 - u) * (1 - u);
+      e._tx = pivX; e._L = 16 + (Lrest - 16) * k; e._pivWind = 1 - u;
+      if (u >= 1) { e._ph = 'rest'; e._pt = 0; }
+      break;
+    }
+    case 'rest':
+      e._A = Math.sin(e._bt * 1.1 + e._wob) * 0.05; e._L = Lrest;
+      if (e._bt > (e.stay || 20)) { e._ph = 'leave'; e._pt = 0; }
+      else if (e._pt > ARM.rest) {
+        const inReach = Math.hypot(px - e._tx, py - e._ty) < reach + 20;
+        e._ph = inReach ? 'coil' : 'sawWind'; e._pt = 0;
+        e._aimA = angTo(px, py);
+      }
+      break;
+    case 'coil': { // telegraph: chain curls in and turns toward the ship, tip glows
+      const u = Math.min(1, e._pt / ARM.coil);
+      e._aimA = angTo(px, py); // tracks the (visible) ship during the curl
+      const side = Math.sin(e._aimA) >= 0 ? 1 : -1;
+      const tgt = e._aimA;
+      // rotate via the ship's side (down-round if the ship is below the pivot, up-round if above)
+      let d = tgt - e._A; if (side > 0) { while (d < 0) d += Math.PI * 2; } else { while (d > 0) d -= Math.PI * 2; }
+      e._A += d * Math.min(1, dt * 7); e._L = Lrest + (30 - Lrest) * u;
+      e.tone = 'wind';
+      if (u >= 1) {
+        e._A = tgt;
+        e._aimX = px; e._aimY = Math.max(12, Math.min(fh - 12, py)); // ship position at strike start
+        e._aimA = angTo(e._aimX, e._aimY); e._A = e._aimA;
+        e._Lgoal = Math.min(reach, Math.hypot(e._aimX - e._tx, e._aimY - e._ty));
+        e._ph = 'strike'; e._pt = 0;
+      }
+      break;
+    }
+    case 'strike':
+      e._L = Math.min(e._Lgoal, e._L + ARM.strike * dt);
+      if (e._L >= e._Lgoal - 0.5) { e._ph = 'hold'; e._pt = 0; }
+      break;
+    case 'hold':
+      if (e._pt >= ARM.hold) { e._ph = 'swing'; e._pt = 0; e._swDir = Math.sin(e._A) >= 0 ? -1 : 1; }
+      break;
+    case 'swing': { // swings back round the pivot (through the ship's side) to trail behind again
+      const rem = Math.abs(wrap(0 - e._A));
+      const step = ARM.swingW * dt;
+      if (rem <= step) { e._A = 0; e._ph = 'rest'; e._pt = 0; }
+      else e._A = wrap(e._A + e._swDir * step);
+      e._L += (Lrest - e._L) * Math.min(1, dt * 1.6);
+      break;
+    }
+    case 'sawWind': // sphere mouth glows, then spits the saw ring + diamond rows (fire step)
+      e._pivWind = 1;
+      if (e._pt >= ARM.sawWind) { e._sawAim = angTo(px, py); e._armFire = 'saw'; e._ph = 'sawOut'; e._pt = 0; }
+      break;
+    case 'sawOut':
+      e._A = Math.sin(e._bt * 1.1 + e._wob) * 0.05;
+      if (e._pt >= ARM.sawCycle) { e._ph = 'rest'; e._pt = 0; }
+      break;
+    case 'leave':
+      e._tx += 70 * dt; e._A = 0; e._L = Lrest;
+      if (e._tx > fw + Lrest + 60) e.x = -999;
+      break;
+  }
+  if (e._ph !== 'leave' || e._tx <= fw + Lrest + 60) {
+    const ox = e.x, oy = e.y;
+    e.x = e._tx + Math.cos(e._A) * e._L; e.y = Math.max(8, Math.min(fh - 8, e._ty + Math.sin(e._A) * e._L));
+    e._vx = (e.x - ox) / Math.max(dt, 1e-3); e._vy = (e.y - oy) / Math.max(dt, 1e-3);
+  }
+  e.rot = 0;
+}
+
 /** Scripted movement. Returns true when handled (skip the default drift). `py` = target ship row. */
-export function moveScripted(e, dt, fw, fh, py = fh * 0.5) {
+export function moveScripted(e, dt, fw, fh, py = fh * 0.5, px = 40) {
   if (!e.mv) return false;
   e.mvT = (e.mvT || 0) + dt;
   e._fh = fh;
@@ -610,6 +749,20 @@ export function moveScripted(e, dt, fw, fh, py = fh * 0.5) {
     e.x -= (e.vx || SCROLL) * dt;
     e.y = e.y0 + (e.bob || 10) * Math.sin((e.bf || 1.2) * t + (e.ph || 0));
     e.rot = Math.sin(t * 0.7 + (e.ph || 0)) * 0.25;
+  } else if (e.mv === 'arm') {
+    armMove(e, dt, fw, fh, px, py);
+  } else if (e.mv === 'armseg') {
+    // Link k of n: on the line pivot → tip, bowing a little the way the chain is swinging
+    const H = e._chainOf;
+    if (!H || H.x < -500) { e.x = -999; return true; }
+    const n = (H.segs || 7) + 1, k = 1 - e.chainIdx / n; // pivot = 0 … tip = 1
+    if (e.chainIdx === n) { e.x = H._tx; e.y = H._ty; e.tone = H._pivWind ? 'anchorWind' : 'anchor'; return true; }
+    const A = H._A || 0, L = H._L || 0, lag = (H._ph === 'swing' ? -H._swDir * 0.35 : 0) * Math.sin(Math.PI * k);
+    const ox = e.x, oy = e.y;
+    e.x = H._tx + Math.cos(A + lag) * L * k;
+    e.y = H._ty + Math.sin(A + lag) * L * k + Math.sin(t * 2 + k * 5 + (H._wob || 0)) * 1.5 * Math.sin(Math.PI * k);
+    e._vx = (e.x - ox) / Math.max(dt, 1e-3); e._vy = (e.y - oy) / Math.max(dt, 1e-3);
+    return true;
   } else if (e.mv === 'snake') {
     // Sharp weave (2nd harmonic) + speed surges; every segment replays the head's path (delay dly)
     const tt = t - (e.dly || 0);
@@ -699,6 +852,28 @@ export function fireScripted(e, bullets, tx, ty, dt, canFire) {
     return true;
   }
   if (f.type === 'boss') { bossFire(e, dt, canFire, shot, laser, aim, ox, oy); return true; }
+  if (f.type === 'armhead') {
+    // Saw: red spiked ring from the sphere's mouth (flies out, comes back) + 5 diamonds each side
+    if (e._armFire === 'saw') {
+      e._armFire = false;
+      if (e._tx < (e._fw || 1e9) - 10) {
+        const a = e._sawAim, cx = e._tx - 18 * Math.cos(0), cy = e._ty, nx = -Math.sin(a), ny = Math.cos(a);
+        // video 2:35–2:40 (tracked): out at ≈105 px/s for ≈2.2 s, straight back at ≈120 px/s, docks ~1.1 s
+        const sw = spawnBullet(cx, cy, Math.cos(a) * 105, Math.sin(a) * 105, 'enemy', false, 3, { life: 5 });
+        sw.k = 'saw'; sw.r = 9; sw.hb = 6; sw.st = 0; sw.hx = cx; sw.hy = cy; sw.out = 2.2; sw.back = 120;
+        bullets.push(sw);
+        for (const side of [-1, 1]) for (let i = 0; i < 5; i++) {
+          // video: 2 rows of 5 diamonds ±18 px either side, trailing 12–64 px BEHIND the saw at the same
+          // speed; they don't come back (fly on off the pane)
+          const x = cx + nx * 18 * side - Math.cos(a) * (12 + i * 13), y = cy + ny * 18 * side - Math.sin(a) * (12 + i * 13);
+          const b = spawnBullet(x, y, Math.cos(a) * 105, Math.sin(a) * 105, 'enemy', false, 2, { life: 6 });
+          b.k = 'dia'; b.r = 3; b.hb = 1.5;
+          bullets.push(b);
+        }
+      }
+    }
+    return true;
+  }
   if (e._burstN > 0 && canFire) {
     e._burstT -= dt;
     if (e._burstT <= 0) { e._burstN--; e._burstT = f.gap || 0.14; shot(e._burstA + (Math.random() - 0.5) * 0.12, f.spd || 160, 2); }
@@ -737,10 +912,15 @@ export function fireScripted(e, bullets, tx, ty, dt, canFire) {
       const pods = (e.drones || []).filter((d) => d.hp > 0);
       const rows = [];
       for (const d of pods) {
-        const dy = Math.round(Math.sin(d.ang) * d.dist);
+        const dy = Math.round(Math.sin(d.ang) * d.dist * (d.ky || 1));
         if (!rows.some((r) => Math.abs(r - dy) < 16)) rows.push(dy);
       }
       if (!rows.length) rows.push(-30, 30);
+      // keep lanes open: rows at least 46 px apart (a ship needs ~34 px to slip between)
+      rows.sort((p, q) => p - q);
+      const kept = [];
+      for (const r of rows) if (!kept.length || r - kept[kept.length - 1] >= 46) kept.push(r);
+      rows.length = 0; rows.push(...kept);
       e._dashWall = true;
       beginLaser(e, rows, 0.5, 0);
       e._fcd += 0.8;
@@ -752,7 +932,7 @@ export function fireScripted(e, bullets, tx, ty, dt, canFire) {
       const pods = (e.drones || []).filter((d) => d.hp > 0);
       if (pods.length) {
         for (const d of pods) {
-          const px = e.x + Math.cos(d.ang) * d.dist, py = e.y + Math.sin(d.ang) * d.dist;
+          const px = e.x + Math.cos(d.ang) * d.dist, py = e.y + Math.sin(d.ang) * d.dist * (d.ky || 1);
           const a = Math.atan2(ty - py, tx - px);
           const b = spawnBullet(px, py, Math.cos(a) * 140, Math.sin(a) * 140, 'enemy', false, 2, { life: 4 });
           b.r = 4.5; b.orb = true; bullets.push(b);

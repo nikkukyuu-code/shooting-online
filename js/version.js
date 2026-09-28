@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-09-29 04:36:00';
+export const VERSION_LABEL = '2026-09-29 05:49:41';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1790624160332;
-export const BUILD_NOTE = '短いレーザーに・コア敵の破綻修正・COMの転送とアイテム取り強化';
+export const BUILD_TIME = 1790628581160;
+export const BUILD_NOTE = '動画を計測してコア敵の動きと隊形を忠実に再現（テザー敵・リング・縦列・三角）';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

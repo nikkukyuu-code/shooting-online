@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929043600';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929054941';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260929043600`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260929054941`;
 }
 
 function loadKindSprite(kind) {
@@ -367,7 +367,8 @@ function drawEnemySprite(ctx, e, kind) {
  * assets/enemies/<wave kind>/0.png — body only for core kinds (the live core / drones / claws are
  * drawn on top so hitbox offsets stay exact). Procedural art is the fallback until loaded.
  */
-const WAVE_SPRITE_KINDS = ['wave_escort', 'wave_mech', 'wave_core_boss', 'wave_swarm_core', 'wave_eye_boss'];
+const WAVE_SPRITE_KINDS = ['wave_escort', 'wave_mech', 'wave_core_boss', 'wave_swarm_core', 'wave_eye_boss',
+  'wave_striker_pivot', 'wave_striker_link', 'wave_striker_tip', 'wave_striker_saw', 'wave_ring_crab'];
 const waveSprites = Object.create(null);
 for (const k of WAVE_SPRITE_KINDS) {
   const img = new Image();
@@ -397,31 +398,39 @@ function drawFit(ctx, img, bw, bh, flash) {
 }
 function drawCoreSpriteBody(ctx, e, kind, w, h, t, flash) {
   if (kind === 'wave_ring_core') {
-    // Ring formation: 8 pods (fighter sprite, nose along the orbit) round a bare red core
-    ctx.strokeStyle = 'rgba(255,70,60,0.22)';
-    ctx.lineWidth = 1.5;
-    const pd = (e.drones && e.drones[0] && e.drones[0].dist) || w * 0.39;
-    ctx.beginPath(); ctx.arc(0, 0, pd, 0, Math.PI * 2); ctx.stroke();
-    const pod = scriptSprite('fighter_mk2');
+    // Ring (video 1:48–2:10): 14 little red crab fighters, all facing left, in a loose loop
+    const pod = waveSprite('wave_ring_crab');
     for (const d of e.drones || []) {
       if (d.hp <= 0) continue;
       ctx.save();
-      ctx.translate(Math.cos(d.ang) * d.dist, Math.sin(d.ang) * d.dist);
-      ctx.rotate(d.ang + Math.PI / 2 - Math.PI);
-      if (pod) drawFit(ctx, pod, d.r * 2.6, d.r * 2.6, false);
-      else { ctx.fillStyle = '#b8bec8'; ctx.beginPath(); ctx.arc(0, 0, d.r, 0, Math.PI * 2); ctx.fill(); }
+      ctx.translate(Math.cos(d.ang) * d.dist, Math.sin(d.ang) * d.dist * (d.ky || 1));
+      if (pod) drawFit(ctx, pod, d.r * 2.9, d.r * 2.2, false);
+      else { ctx.fillStyle = '#d8283a'; ctx.beginPath(); ctx.arc(0, 0, d.r, 0, Math.PI * 2); ctx.fill(); }
+      ctx.restore();
+    }
+    // the red core orb carries yellow spikes (as in the video)
+    if (e.core && e.core.hp > 0) {
+      ctx.save(); ctx.translate(e.core.ox || 0, e.core.oy || 0); ctx.rotate(t * 1.3);
+      ctx.fillStyle = '#ffd23a';
+      for (let i = 0; i < 6; i++) {
+        ctx.rotate(Math.PI / 3);
+        ctx.beginPath(); ctx.moveTo(8, -2.2); ctx.lineTo(15, 0); ctx.lineTo(8, 2.2); ctx.closePath(); ctx.fill();
+      }
       ctx.restore();
     }
     return true;
   }
   if (kind === 'wave_snake_head') {
-    // Serpent head: dark armoured jaw around the glowing red core (the core IS the head)
-    ctx.fillStyle = flash ? '#d0d6de' : '#5b606c';
-    ctx.beginPath();
-    ctx.moveTo(-w * 0.62, -h * 0.12); ctx.lineTo(-w * 0.2, -h * 0.5); ctx.lineTo(w * 0.45, -h * 0.36);
-    ctx.lineTo(w * 0.52, 0); ctx.lineTo(w * 0.45, h * 0.36); ctx.lineTo(-w * 0.2, h * 0.5); ctx.lineTo(-w * 0.62, h * 0.12);
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = '#a8aeb8'; ctx.lineWidth = 1.5; ctx.stroke();
+    // Tethered striker tip: the red ball from the original (video sprite); glows before a strike
+    const r = Math.min(w, h) * 0.5;
+    if (e.tone === 'wind') {
+      const gg = ctx.createRadialGradient(0, 0, r * 0.4, 0, 0, r * 2.4);
+      gg.addColorStop(0, 'rgba(255,230,120,0.7)'); gg.addColorStop(1, 'rgba(255,60,30,0)');
+      ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(0, 0, r * 2.4, 0, Math.PI * 2); ctx.fill();
+    }
+    const img = waveSprite('wave_striker_tip');
+    if (img) drawFit(ctx, img, w * 1.25, h * 1.25, flash);
+    else { ctx.fillStyle = '#e8283a'; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill(); }
     return true;
   }
   if (kind === 'wave_grid_core') {
@@ -473,7 +482,7 @@ function drawCoreSpriteBody(ctx, e, kind, w, h, t, flash) {
   ctx.setLineDash([]);
   for (const d of e.drones || []) {
     if (d.hp <= 0) continue;
-    const dx = Math.cos(d.ang) * d.dist, dy = Math.sin(d.ang) * d.dist;
+    const dx = Math.cos(d.ang) * d.dist, dy = Math.sin(d.ang) * d.dist * (d.ky || 1);
     ctx.save(); ctx.translate(dx, dy);
     if (esc) drawFit(ctx, esc, d.r * 2.6, d.r * 2.2, false);
     else { ctx.fillStyle = '#b8bec8'; ctx.beginPath(); ctx.arc(0, 0, d.r, 0, Math.PI * 2); ctx.fill(); }
@@ -701,7 +710,7 @@ function drawCoreEnemy(ctx, e, kind, w, h, t) {
     ctx.setLineDash([]);
     for (const d of e.drones || []) {
       if (d.hp <= 0) continue;
-      const dx = Math.cos(d.ang) * d.dist, dy = Math.sin(d.ang) * d.dist;
+      const dx = Math.cos(d.ang) * d.dist, dy = Math.sin(d.ang) * d.dist * (d.ky || 1);
       ctx.fillStyle = '#b8bec8';
       ctx.beginPath();
       ctx.moveTo(dx - d.r, dy);
@@ -1101,6 +1110,17 @@ function drawWarpRing(ctx, w, h, t, warpT, warpPop) {
 /** Snake body segment (silver / green caterpillar) — glossy sphere. */
 function drawSegBall(ctx, e, w, h, t) {
   const r = Math.min(w, h) * 0.5;
+  if (e.tone === 'anchor' || e.tone === 'anchorWind' || e.tone === 'silver') {
+    const anchor = e.tone !== 'silver';
+    if (anchor) { // big rock sphere sitting in a dark red glow (brighter while it winds up the saw)
+      const hot = e.tone === 'anchorWind';
+      const gr = ctx.createRadialGradient(0, 0, r * 0.6, 0, 0, r * 2.3);
+      gr.addColorStop(0, hot ? 'rgba(220,40,30,0.85)' : 'rgba(150,20,20,0.7)'); gr.addColorStop(0.6, 'rgba(110,14,14,0.4)'); gr.addColorStop(1, 'rgba(80,0,0,0)');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(0, 0, r * 2.3, 0, Math.PI * 2); ctx.fill();
+    }
+    const img = waveSprite(anchor ? 'wave_striker_pivot' : 'wave_striker_link');
+    if (img) { drawFit(ctx, img, w * 1.08, h * 1.08, false); return; }
+  }
   const green = e.tone === 'green' || e.kind === 'wave_cater';
   const g = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r);
   if (green) { g.addColorStop(0, '#d8ffc0'); g.addColorStop(0.45, '#4fbf3a'); g.addColorStop(1, '#1d4d18'); }
@@ -1425,6 +1445,21 @@ function drawBullet(ctx, b) {
       ctx.strokeStyle = 'rgba(255,245,230,0.98)';
       ctx.lineWidth = 2.6;
       ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x + len, b.y); ctx.stroke();
+    } else if (k === 'saw') {
+      // Striker's boomerang saw: the red ring from the video (sprite), spinning, with a spiked rim
+      const img = waveSprite('wave_striker_saw'), R = 11;
+      ctx.save(); ctx.translate(b.x, b.y); ctx.rotate((b.spin != null ? b.spin : performance.now() / 110));
+      ctx.fillStyle = '#c81e3c';
+      ctx.beginPath();
+      for (let i = 0; i < 16; i++) { const a = (Math.PI * 2 * i) / 16, rr = i % 2 ? R * 0.92 : R * 1.25; if (i) ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); else ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+      ctx.closePath(); ctx.fill();
+      if (img) drawFit(ctx, img, R * 2.1, R * 2.1, false);
+      ctx.restore();
+    } else if (k === 'dia') {
+      // Small white diamond (tethered striker's escort shots)
+      const q = 3.6;
+      ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(b.x - q, b.y); ctx.lineTo(b.x, b.y - q); ctx.lineTo(b.x + q, b.y); ctx.lineTo(b.x, b.y + q); ctx.closePath(); ctx.stroke();
     } else if (k === 'dash') {
       // Short white dash laser (as in the original): thin bright streak along its flight line
       const len = 15;
@@ -2990,9 +3025,9 @@ export function drawField(ctx, area, snap, opts = {}) {
       laserTeleOffs: Array.isArray(e.laserTeleOffs ?? e.lo) ? (e.laserTeleOffs ?? e.lo).map((o) => o * sy) : undefined,
       spr: e.spr ?? e.sp, rot: e.rot ?? e.ro, tone: e.tone ?? e.tn, cm: e.cm, cs: e.cs ?? (e._sh ? e._sh.st : undefined), sk: e.sk ?? (e._shake > 0 ? 1 : 0), _coreFlash: e._coreFlash, _warn: e._warn, _dashWarn: e._dashWarn, claw: e.claw, podR: e.podR != null ? e.podR * Math.min(sx, sy) : undefined,
       core: e.core ? { ox: e.core.ox * sx, oy: e.core.oy * sy, r: e.core.r * Math.min(sx, sy), hp: e.core.hp, maxHp: e.core.maxHp }
-        : (e.ch != null ? { ox: e.kind === 'wave_core_boss' ? -(e.w || 184) * 0.36 * sx : e.kind === 'wave_grid_core' ? -(e.w || 62) * 0.3 * sx : 0, oy: 0, r: 9 * Math.min(sx, sy), hp: e.ch, maxHp: e.cm } : undefined),
-      drones: e.drones ? e.drones.map((d) => ({ ang: d.ang, dist: d.dist * Math.min(sx, sy), r: d.r * Math.min(sx, sy), hp: d.hp }))
-        : (Array.isArray(e.dr) ? e.dr.map((hp, i, a) => ({ ang: (Math.PI * 2 * i) / a.length + performance.now() / 1000 * 1.6, dist: (e.kind === 'wave_eye_boss' ? 72 : e.kind === 'wave_ring_core' ? 58 : 36 + (i % 2) * 8) * Math.min(sx, sy), r: (e.kind === 'wave_eye_boss' ? 15 : e.kind === 'wave_ring_core' ? 14 : 12) * Math.min(sx, sy), hp })) : undefined),
+        : (e.ch != null ? { ox: e.kind === 'wave_core_boss' ? -(e.w || 66) * 0.3 * sx : e.kind === 'wave_grid_core' ? -(e.w || 62) * 0.3 * sx : 0, oy: 0, r: 9 * Math.min(sx, sy), hp: e.ch, maxHp: e.cm } : undefined),
+      drones: e.drones ? e.drones.map((d) => ({ ang: d.ang, dist: d.dist * Math.min(sx, sy), ky: (d.ky || 1) * sy / Math.min(sx, sy), r: d.r * Math.min(sx, sy), hp: d.hp }))
+        : (Array.isArray(e.dr) ? e.dr.map((hp, i, a) => ({ ang: (Math.PI * 2 * i) / a.length + performance.now() / 1000 * 1.6, dist: (e.kind === 'wave_eye_boss' ? 72 : e.kind === 'wave_ring_core' ? Math.max(20, ((e.w || 92) - 20) / 2) : 36 + (i % 2) * 8) * Math.min(sx, sy), ky: e.kind === 'wave_ring_core' ? Math.max(1, ((e.h || 92) - 16) / Math.max(1, (e.w || 92) - 20)) : 1, r: (e.kind === 'wave_eye_boss' ? 15 : e.kind === 'wave_ring_core' ? 7.5 : 12) * Math.min(sx, sy), hp })) : undefined),
       bodyFlash: e._bodyFlash || 0,
     });
   }

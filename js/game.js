@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20260929043600';
+import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20260929054941';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20260929043600';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929043600';
-import { sfx } from './audio.js?v=20260929043600';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929043600';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929043600';
-import { hitBattleCounter } from './stats.js?v=20260929043600';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929043600';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929043600';
+} from './entities.js?v=20260929054941';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929054941';
+import { sfx } from './audio.js?v=20260929054941';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929054941';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929054941';
+import { hitBattleCounter } from './stats.js?v=20260929054941';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929054941';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929054941';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1790,7 +1790,7 @@ export class Game {
       if (e.lingerT > 0) e.lingerT = Math.max(0, e.lingerT - dt);
       const surge = Math.sin(e.surgePhase) * (e.surgeAmp || 32);
       // Sent: linger on the right (bob/weave OK, no left push) until lingerT expires
-      if (moveScripted(e, dt, fw, fh, P.y * fh)) { /* scripted STO path */ } else if (e.sent && e.lingerT > 0) {
+      if (moveScripted(e, dt, fw, fh, P.y * fh, P.x)) { /* scripted STO path */ } else if (e.sent && e.lingerT > 0) {
         if (e.holdX == null) e.holdX = fw * (0.72 + Math.random() * 0.14);
         if (e.holdY == null) e.holdY = e.y;
         // Enter right zone from off-screen, then weave in place
@@ -1868,7 +1868,7 @@ export class Game {
     for (const b of S.bullets) {
       if (b.owner !== 'player' || b.dvis) continue; // direct shots fly out of our pane without hitting
       for (const e of S.enemies) {
-        if (warping(e)) continue; // shots pass through warping units
+        if (warping(e) || e.passShots) continue; // shots pass through warping units / striker chain
         if (hasCore(e)) {
           // Core weak point: core = instant kill, drones/body = almost nothing (deflect)
           const r = applyCoreAwareHit(e, b.dmg || 1, b.x, b.y, S.fx);
@@ -2146,7 +2146,7 @@ export class Game {
           if (Math.random() < AI.coreSnipe) {
             const blocked = (y) => B.enemies.some((o) => o !== focus && !warping(o) && o.hp > 0 && o.x > shipX && o.x < cw.x - cw.r
               && Math.abs(o.y - y) < (o.h || 30) * 0.45 + 4);
-            const guardBlk = (y) => (focus.drones || []).some((d) => d.hp > 0 && Math.abs(focus.y + Math.sin(d.ang) * d.dist - y) < d.r + 4
+            const guardBlk = (y) => (focus.drones || []).some((d) => d.hp > 0 && Math.abs(focus.y + Math.sin(d.ang) * d.dist * (d.ky || 1) - y) < d.r + 4
               && focus.x + Math.cos(d.ang) * d.dist < cw.x);
             if (blocked(aimY) || guardBlk(aimY)) {
               for (const k of [0, -0.5, 0.5, -0.8, 0.8]) {
@@ -2217,8 +2217,14 @@ export class Game {
         // formation escorts visibly move with their leader (not at their own top speed)
         const spd = parkedE ? 0 : ((e._lead && e._lead.hp > 0 ? e._lead.speed : e.speed) || 60) * 1.55;
         const rx = (e.w || 30) * 0.4 + 8 + margin + 10, ry = (e.h || 30) * 0.4 + 8 + margin + 12;
+        // Tethered striker head: moves along its own (visible) line once the COM has noticed the lunge
+        const armH = e.mv === 'arm' ? e : e.mv === 'armseg' ? e._chainOf : null;
+        const armMv = !!armH && (armH._ph === 'strike' || armH._ph === 'swing' || armH._ph === 'coil') && armH._pt >= react;
+        const evx = armH ? (armMv ? (e._vx || 0) : 0) : -spd, evy = armMv ? (e._vy || 0) : 0;
+        // a curling striker (visible wind-up) is about to thrust: stay out of its reach
+        if (e.mv === 'arm' && e._ph === 'coil' && e._pt >= react && Math.hypot(cx - e._tx, cy - e._ty) < Math.min(fw * 0.46, 170) + 24) d += 3;
         for (const t of STEPS) {
-          const ex = e.x - spd * t, ey = e.y;
+          const ex = e.x + evx * t, ey = e.y + evy * t;
           const [sx, sy] = posAt(shipX, shipY0, cx, cy, t);
           if (Math.abs(ex - sx) < rx && Math.abs(ey - sy) < ry) { d += 12 / (0.18 + t); break; }
         }
@@ -2484,7 +2490,7 @@ export class Game {
       if (e.lingerT > 0) e.lingerT = Math.max(0, e.lingerT - dt);
       const surge = Math.sin(e.surgePhase) * (e.surgeAmp || 32);
       // Sent: linger on the right (bob/weave OK) until lingerT expires, then advance left
-      if (moveScripted(e, dt, fw, fh, B.y * fh)) { /* scripted STO path */ } else if (e.sent && e.lingerT > 0) {
+      if (moveScripted(e, dt, fw, fh, B.y * fh, shipX)) { /* scripted STO path */ } else if (e.sent && e.lingerT > 0) {
         if (e.holdX == null) e.holdX = fw * (0.72 + Math.random() * 0.14);
         if (e.holdY == null) e.holdY = e.y;
         if (e.x > e.holdX + (e.surgeAmp || 32) + 8) {
@@ -2536,7 +2542,7 @@ export class Game {
     for (const b of B.bullets) {
       if (b.owner !== 'player' || b.dir || b.dvis) continue; // direct shots only hit the COM ship
       for (const e of B.enemies) {
-        if (warping(e)) continue; // shots pass through warping units
+        if (warping(e) || e.passShots) continue; // shots pass through warping units / striker chain
         if (hasCore(e)) {
           const r = applyCoreAwareHit(e, b.dmg || 1, b.x, b.y, B.fx);
           if (r.hit === 'none') continue;

@@ -8,8 +8,8 @@
  *  - Player-hit damage per projectile: homing 3, everything else 5 (see game.js),
  *    × the firing unit's 攻撃力 multiplier (b.atk, catalog.js atkDamageMul).
  */
-import { spawnBullet, resolveEnemyTier, isLargeEnemy, isWaveKind } from './entities.js?v=20260929043600';
-import { unitAttackLoadout } from './catalog.js?v=20260929043600';
+import { spawnBullet, resolveEnemyTier, isLargeEnemy, isWaveKind } from './entities.js?v=20260929054941';
+import { unitAttackLoadout } from './catalog.js?v=20260929054941';
 
 const PI = Math.PI;
 const TAU = PI * 2;
@@ -305,6 +305,19 @@ export function tickEnemyAttackQueue(e, bullets, tx, ty, dt) {
  */
 export function updateEnemyBullet(b, dt, out) {
   switch (b.k) {
+    case 'saw': { // boomerang ring: flies out, stops, homes back to where it was spat from
+      b.st += dt;
+      b.spin = (b.spin || 0) + dt * 9;
+      if (b.st >= b.out) {
+        const dx = b.hx - b.x, dy = b.hy - b.y, d = Math.hypot(dx, dy);
+        const k = Math.min(1, (b.st - b.out) / 0.2); // turn → straight back
+        const spd = (b.back || 190) * k;
+        if (d < 10 && k >= 1) { b.life = 0; b.vx = 0; b.vy = 0; break; }
+        b.vx = (dx / (d || 1)) * spd; b.vy = (dy / (d || 1)) * spd;
+        b.life = Math.max(b.life, 0.5);
+      }
+      break;
+    }
     case 'wave': {
       b.wt += dt;
       const off = Math.sin(b.wt * b.wf + b.wp) * b.wa;
