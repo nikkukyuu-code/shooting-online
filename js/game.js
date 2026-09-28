@@ -3,14 +3,14 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260928185529';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260928185529';
-import { sfx } from './audio.js?v=20260928185529';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260928185529';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260928185529';
-import { hitBattleCounter } from './stats.js?v=20260928185529';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL } from './meta.js?v=20260928185529';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260928185529';
+} from './entities.js?v=20260928194159';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260928194159';
+import { sfx } from './audio.js?v=20260928194159';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260928194159';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260928194159';
+import { hitBattleCounter } from './stats.js?v=20260928194159';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL } from './meta.js?v=20260928194159';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260928194159';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -599,7 +599,7 @@ export class Game {
         maxSpeed: 0.55,
         aimNoiseAmp: 0.32,
         // AI quality only (same ship / items / rules as the player)
-        ai: { horizon: 0.35, react: 0.36, noise: 10, margin: 2, replan: 0.18, lapseChance: 0.8, attn: 6, overcommit: 0.3, hand: 1.4, accT: 0.2, pickW: 1.2, pickSafe: false, orbNotice: 0.6, itemReact: 1.4, think: 0.6, smart: false },
+        ai: { horizon: 0.35, react: 0.36, noise: 8, margin: 2, replan: 0.18, lapseChance: 0.55, attn: 6, overcommit: 0.22, hand: 1.4, accT: 0.2, pickW: 1.2, pickSafe: false, orbNotice: 0.6, itemReact: 1.4, think: 0.6, smart: false, lofW: 0.55, edgeW: 0.8, holdMax: 9 },
       };
     }
     return {
@@ -609,7 +609,7 @@ export class Game {
       maxSpeedDodge: 1.2,
       maxSpeed: 0.7,
       aimNoiseAmp: 0.22,
-      ai: { horizon: 0.75, react: 0.21, noise: 4, margin: 3, replan: 0.1, lapseChance: 0.12, attn: 12, alignW: 3, prefX: 0.18, overcommit: 0.15, hand: 2.2, accT: 0.16, pickW: 1.6, pickSafe: true, orbNotice: 0.3, itemReact: 0.6, think: 0.25, smart: true },
+      ai: { horizon: 0.75, react: 0.21, noise: 4, margin: 3, replan: 0.1, lapseChance: 0.12, attn: 12, alignW: 3, prefX: 0.18, overcommit: 0.15, hand: 2.2, accT: 0.16, pickW: 2.6, pickSafe: true, pickDz: 5, orbNotice: 0.22, itemReact: 0.35, think: 0.2, smart: true, lofW: 0.9, edgeW: 1.2, holdMax: 5 },
     };
   }
 
@@ -1098,19 +1098,10 @@ export class Game {
       }
       return { pos: best, clr: bestClr };
     };
-    // No room now → stagger: arrive a bit later, when earlier arrivals have moved on
-    // Stagger only briefly (≤2.4 s): long queues left big sends idling off-screen for up to ~15 s,
-    // which blunted every send (player's and COM's alike). If nothing fits in that window, take the
-    // least-overlapping spot instead of waiting.
-    let res = null, delay = 0, fb = null, fbD = 0;
-    for (let k = 0; k <= 6; k++) {
-      delay = k * 0.4;
-      res = pick(delay);
-      if (res.clr >= 0) break;
-      if (!fb || res.clr > fb.clr + 4) { fb = res; fbD = delay; }
-    }
-    if (res.clr < 0) { res = fb; delay = fbD; } // never fits (huge unit in a tiny pane): least overlap
-    e.arriveDelay = delay > 0 ? Math.round(delay * 10) / 10 : 0;
+    // No off-screen waiting: every sent unit warps in right away at the best spot available
+    // (max clearance / least overlap). A little overlap is fine when the pane is packed.
+    const res = pick(0);
+    e.arriveDelay = 0;
     e.holdX = res.pos[0];
     e.holdY = res.pos[1];
   }
@@ -2152,7 +2143,12 @@ export class Game {
           if (v <= 0) continue;
           if (it._seenT == null) it._seenT = B.time;
           if (B.time - it._seenT < (AI.orbNotice ?? 0.5)) continue; // human: notice the orb first
-          if (dz > (AI.pickSafe ? 2 : 6)) continue; // too risky here → give up on it (for now)
+          if (dz > (AI.pickSafe ? (AI.pickDz ?? 2) : 6)) continue; // too risky here → give up on it (for now)
+          if (AI.pickSafe) {
+            // only when the way there looks clear too (midpoint of the drag)
+            const mk = it._midK === B.time ? it._midD : (it._midK = B.time, it._midD = dangerOf((B.x + it.x) / 2, (shipY0 + it.y) / 2));
+            if (mk > (AI.pickDz ?? 2)) continue;
+          }
           const tArr = Math.hypot(it.x - B.x, it.y - shipY0) / Math.max(1, handPx);
           if (tArr > it.life - 0.2) continue; // can't make it in time
           const dd = Math.hypot(it.x - 30 * tArr - cx, it.y - cy);
@@ -2165,6 +2161,22 @@ export class Game {
         c += Math.abs(cx - prefX) / fw * (AI.prefW ?? 0.9);
         c += Math.hypot((cx - B.x) / fw, (cy - shipY0) / fh) * 0.5; // don't wander
         if (cy < fh * 0.1 || cy > fh * 0.9) c += 0.35; // edges trap you
+        // Line of fire: prefer rows with (visible, hittable) enemies ahead of the ship
+        if (AI.lofW) {
+          let lof = 0;
+          for (const e of B.enemies) {
+            if (warping(e) || e.x < cx + 10) continue;
+            if (Math.abs(e.y - cy) < (e.h || 30) * 0.45 + 6) lof += isLargeEnemy(e) ? 1.5 : 1;
+          }
+          c -= AI.lofW * Math.min(3, lof) / 3 * 1.2;
+        }
+        // Walls / corners: graded penalty (a human hugging an edge has nowhere to go and shoots nothing)
+        if (AI.edgeW) {
+          const ed = Math.min(cy / fh, 1 - cy / fh);
+          const eP = Math.max(0, (0.16 - ed) / 0.16);
+          const cP = cx < fw * 0.12 ? 1 : 0;
+          c += AI.edgeW * (eP * 0.8 + eP * cP * 0.7);
+        }
         if (Math.abs(cx - B._tx) < 2 && Math.abs(cy - B._ty) < 2) c -= 0.35; // hysteresis (no jitter)
         if (c < bestC) { bestC = c; best = [cx, cy]; }
       }
@@ -2389,6 +2401,7 @@ export class Game {
             B.hp = Math.min(B.maxHp || PLAYER_MAX_HP, B.hp + (it.id === 'heal_big' ? 50 : 25));
             B.fx.unshift(spawnHealFx(shipX + 8, byP, it.id === 'heal_big'));
           } else if (B.items.length < MAX_ITEM_SLOTS) {
+            if (!B.items.length) B._heldT = B.time;
             B.items.push(it.id);
             B._gotT = B.time;
             if (it.id === 'direct' && B._directHeldSince == null) B._directHeldSince = B.time;
@@ -2588,30 +2601,39 @@ export class Game {
       const clearers = (id) => id === 'bomb' || id === 'shock' || id === 'cluster' || id === 'blackhole' || id === 'freeze';
       const nThreat = threats.length;
       const full = B.items.length >= MAX_ITEM_SLOTS;
-      const oppBusy = this.state.enemies.length >= 5 || playerHp < (this.state.player.maxHp || PLAYER_MAX_HP) * 0.5;
+      const oppMax = this.state.player.maxHp || PLAYER_MAX_HP;
+      const oppBusy = this.state.enemies.filter((e) => !(e.warpT > 0)).length >= 4 || playerHp < oppMax * 0.5;
+      const oppLow = playerHp < oppMax * 0.35;
+      // Don't sit on items: after holdMax s of holding, use the best offensive one
+      const heldLong = AI.holdMax && B._heldT != null && B.time - B._heldT > AI.holdMax;
       let pick = -1;
       if (AI.smart) {
         const want = (id) => {
           if (timed(id) && B.activeTimer > 0) return -1;
-          if (isSend(id)) return 5; // send promptly
+          if (isSend(id)) return oppBusy || oppLow ? 6 : 5; // send promptly (pile on when they're busy / low)
           if (id === 'barrier') return (curDanger > 3 || nThreat >= 6) && !hasBarrierFx(B.fx) ? 6 : (full ? 1 : -1);
           if (id === 'reflect') return nThreat >= 6 ? 4.5 : (full ? 1 : -1);
           if (clearers(id)) return enemyPressure >= 4 ? 4 + enemyPressure * 0.1 : (full ? 1.5 : -1);
-          if (id === 'direct') return oppBusy || (B._directHeldSince != null && B.time - B._directHeldSince > 6) ? 3.5 : (full ? 1.2 : -1);
-          if (id === 'meteor') return 3;
+          if (id === 'direct') return oppBusy || oppLow || (B._directHeldSince != null && B.time - B._directHeldSince > 4) ? 5.5 : (full || heldLong ? 1.2 : -1);
+          if (id === 'meteor') return oppLow ? 5.5 : 3;
           if (id === 'laser' || id === 'homing' || id === 'rapid' || id === 'spread' || id === 'pbeam' || id === 'option') {
             return focus && (enemyPressure >= 2 || isLargeEnemy(focus)) ? 3.2 : (full ? 1.3 : -1);
           }
-          return full ? 1 : 2;
+          return full || heldLong ? 1 : 2;
         };
+        // held too long: anything but a heal (unless hurt) is better used than hoarded
+        const wantH = (id) => { const v = want(id); if (v >= 0 || !heldLong) return v; if ((id === 'heal' || id === 'heal_big') && B.hp > (B.maxHp || PLAYER_MAX_HP) * 0.6) return -1; if (timed(id) && B.activeTimer > 0) return -1; return 0.5; };
         let bv = 0;
-        B.items.forEach((id, i) => { const v = want(id); if (v > bv) { bv = v; pick = i; } });
+        B.items.forEach((id, i) => { const v = wantH(id); if (v > bv) { bv = v; pick = i; } });
       } else {
         // 普通: less judgment — mostly first usable item, sometimes waits too long / uses it early
         const i0 = B.items.findIndex((id) => !(timed(id) && B.activeTimer > 0));
-        if (i0 >= 0 && (full || enemyPressure >= 2 || isSend(B.items[i0]) || Math.random() < 0.35)) pick = i0;
+        // sends / direct when the opponent is busy or low; otherwise mostly first usable item
+        const iAgg = (oppBusy || oppLow) ? B.items.findIndex((id) => isSend(id) || id === 'direct' || id === 'meteor') : -1;
+        if (iAgg >= 0 && !(timed(B.items[iAgg]) && B.activeTimer > 0)) pick = iAgg;
+        else if (i0 >= 0 && (full || heldLong || enemyPressure >= 2 || isSend(B.items[i0]) || Math.random() < 0.35)) pick = i0;
       }
-      if (pick >= 0) { B._forceIdx = pick; tryUse(); }
+      if (pick >= 0) { B._forceIdx = pick; tryUse(); B._heldT = B.items.length ? B.time : null; }
     }
 
     if (!B.meteors) B.meteors = [];
