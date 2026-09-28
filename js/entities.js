@@ -146,6 +146,7 @@ export const WAVE_KIND_TIERS = {
   wave_snake_seg: 'drone',   // silver body segment
   wave_cater: 'drone',       // green caterpillar sphere
   wave_mine: 'drone',        // yellow square trap mine
+  wave_pod: 'drone',         // guard debris (ring pod / eye claw / swarm drone) left by a core break → chain
   wave_spider: 'basic',      // green spider ship (user art)
   wave_looper: 'swarm',      // red winged looper (user art)
   wave_saucer: 'swarm',      // small saucer (user art)
@@ -252,7 +253,7 @@ export function attachCore(e) {
     e.score = Math.max(e.score || 0, 350);
     // Core sits near the nose (left / toward player) — easy to spot on phone
     // Core always visible, phone-readable size, slight orbit so aiming matters
-    e.core = { ox: -e.w * 0.36, oy: 0, r: Math.max(18, Math.min(e.w, e.h) * 0.20), hp: 1, maxHp: 1, orbit: 28, ang: Math.random() * Math.PI * 2 }; // exposed at the nose; large orbit so body-centre aim often misses
+    e.core = { ox: -e.w * 0.36, oy: 0, r: Math.max(18, Math.min(e.w, e.h) * 0.20), hp: CORE_HP.wave_core_boss, maxHp: CORE_HP.wave_core_boss, orbit: 28, ang: Math.random() * Math.PI * 2 }; // exposed at the nose; large orbit so body-centre aim often misses
     e.drones = null;
   } else if (e.kind === 'wave_eye_boss') {
     // Giant red eye: huge centre core (slow wobble) guarded by 8 rotating mechanical claws.
@@ -262,7 +263,7 @@ export function attachCore(e) {
     e.maxHp = e.hp;
     e.score = Math.max(e.score || 0, 450);
     e.speed = Math.min(e.speed || 34, 30);
-    e.core = { ox: 0, oy: 0, r: 27, hp: 1, maxHp: 1, orbit: 9, ang: Math.random() * Math.PI * 2 };
+    e.core = { ox: 0, oy: 0, r: 27, hp: CORE_HP.wave_eye_boss, maxHp: CORE_HP.wave_eye_boss, orbit: 9, ang: Math.random() * Math.PI * 2 };
     e.drones = [];
     for (let i = 0; i < 8; i++) {
       e.drones.push({ ang: (Math.PI * 2 * i) / 8, dist: 72, r: 15, hp: 10, maxHp: 10, claw: true });
@@ -270,18 +271,18 @@ export function attachCore(e) {
   } else if (e.kind === 'wave_grid_core') {
     // ~1.5× player core ship in the middle of a wedge grid: core at its nose, armored hull
     e.w = 62; e.h = 52; e.hp = 30; e.maxHp = 30; e.score = Math.max(e.score || 0, 150);
-    e.core = { ox: -e.w * 0.3, oy: 0, r: 15, hp: 1, maxHp: 1, orbit: 0, ang: 0 };
+    e.core = { ox: -e.w * 0.3, oy: 0, r: 15, hp: CORE_HP.wave_grid_core, maxHp: CORE_HP.wave_grid_core, orbit: 0, ang: 0 };
     e.drones = null;
   } else if (e.kind === 'wave_ring_core') {
     // Rotating ring: 8 small fighter pods (user art) orbit a glowing red core; pods block shots
     e.w = 150; e.h = 150; e.hp = 40; e.maxHp = 40; e.score = Math.max(e.score || 0, 180);
-    e.core = { ox: 0, oy: 0, r: 17, hp: 1, maxHp: 1, orbit: 5, ang: Math.random() * Math.PI * 2 };
+    e.core = { ox: 0, oy: 0, r: 17, hp: CORE_HP.wave_ring_core, maxHp: CORE_HP.wave_ring_core, orbit: 5, ang: Math.random() * Math.PI * 2 };
     e.drones = [];
     for (let i = 0; i < 8; i++) e.drones.push({ ang: (Math.PI * 2 * i) / 8, dist: 58, r: 14, hp: 5, maxHp: 5, pod: true });
   } else if (e.kind === 'wave_snake_head') {
     // Snake boss head: the red glowing head IS the core (segments follow; head kill → body chain)
     e.w = 54; e.h = 54; e.hp = 60; e.maxHp = 60; e.score = Math.max(e.score || 0, 400);
-    e.core = { ox: 0, oy: 0, r: 22, hp: 1, maxHp: 1, orbit: 0, ang: 0 };
+    e.core = { ox: 0, oy: 0, r: 22, hp: CORE_HP.wave_snake_head, maxHp: CORE_HP.wave_snake_head, orbit: 0, ang: 0 };
     e.drones = null;
   } else {
     // Swarm-core: elite-sized formation; satellites orbit a central core
@@ -292,7 +293,7 @@ export function attachCore(e) {
     e.score = Math.max(e.score || 0, 160);
     e.speed = Math.min(e.speed || 75, 70);
     // Core is the only way to clear the swarm; drones are distractions (high HP, no formation wipe)
-    e.core = { ox: 0, oy: 0, r: 15, hp: 1, maxHp: 1, orbit: 22, ang: Math.random() * Math.PI * 2 }; // large orbit: body-centre aim often misses
+    e.core = { ox: 0, oy: 0, r: 15, hp: CORE_HP.wave_swarm_core, maxHp: CORE_HP.wave_swarm_core, orbit: 22, ang: Math.random() * Math.PI * 2 }; // large orbit: body-centre aim often misses
     const n = 6;
     e.drones = [];
     for (let i = 0; i < n; i++) {
@@ -307,7 +308,34 @@ export function attachCore(e) {
   }
   e._coreFlash = 0;
   e._bodyFlash = 0;
+  e._shake = 0;
+  e._guardT = 0; e._guardCd = 0;
+  // Defensive armour cycle (visible plates): open → warn (plates slide in, blinking) → shut (hits blocked)
+  const sc = CORE_SHUTTER[e.kind];
+  if (sc) e._sh = { ...sc, t: Math.random() * sc.open * 0.6, st: 0 };
+  // Ring: periodic tighten + spin-up (pods close in around the core)
+  if (e.kind === 'wave_ring_core') e._tight = { t: 1 + Math.random() * 2, k: 0 };
   return e;
+}
+
+/**
+ * Core HP (normal shot = 2 dmg every 0.16 s ≈ 12.5 dps → small cores ≈ 2–3 s of focused fire,
+ * bosses ≈ 5–7 s). Chip damage shows as the ring around the core.
+ */
+export const CORE_HP = {
+  wave_swarm_core: 26, wave_grid_core: 28, wave_ring_core: 32,
+  wave_snake_head: 42, wave_core_boss: 64, wave_eye_boss: 84,
+};
+/** Armour cycle seconds: open (vulnerable) / warn (telegraph) / shut (blocked). */
+export const CORE_SHUTTER = {
+  wave_core_boss: { open: 3.0, warn: 0.7, shut: 1.3 },
+  wave_eye_boss: { open: 3.4, warn: 0.7, shut: 1.5 },
+  wave_grid_core: { open: 2.8, warn: 0.6, shut: 1.1 },
+  wave_swarm_core: { open: 3.2, warn: 0.6, shut: 1.0 },
+};
+/** 0 open, 1 warn (still hittable), 2 shut. */
+export function coreShutState(e) {
+  return e && e._sh ? e._sh.st : 0;
 }
 
 /**
@@ -321,16 +349,46 @@ export function isChainable(o) {
   if (typeof o.kind !== 'string' || !o.kind.startsWith('wave_')) return false;
   return !LARGE_ENEMY_TIERS.has(resolveEnemyTier(o.kind));
 }
+export const CHAIN_STEP = 0.08; // s between consecutive chain pops (visible, steady ripple)
 export function markCoreChain(e, list) {
   const c = coreWorld(e) || e;
-  let n = 0;
-  for (const o of list || []) {
-    if (o === e || !isChainable(o)) continue;
-    const d = Math.hypot(o.x - c.x, o.y - c.y);
-    if (o._chainOf === e && o.chainIdx != null) { o._chainT = 0.1 + o.chainIdx * 0.13; n++; } // body segments pop down the chain
-    else if (d < CHAIN_R || o._lead === e || o._chainOf === e) { o._chainT = 0.08 + Math.min(1, d / CHAIN_R) * 0.6; n++; }
+  const seq = [];
+  // 1) Guards go first, one by one round the circle (starting from the one nearest the player side)
+  if (e.drones && list) {
+    const live = e.drones.filter((d) => d.hp > 0);
+    const norm = (a) => ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    live.sort((p, q) => norm(p.ang - Math.PI) - norm(q.ang - Math.PI));
+    for (const d of live) {
+      d.hp = 0;
+      const o = {
+        kind: 'wave_pod', _uid: 900000 + Math.floor(Math.random() * 1e6),
+        x: e.x + Math.cos(d.ang) * d.dist, y: e.y + Math.sin(d.ang) * d.dist,
+        w: d.r * 2.2, h: d.r * 2.2, hp: 1, maxHp: 1, score: 10, speed: 0, noFire: true, noDrop: true,
+        phase: 0, surgePhase: 0, surgeAmp: 0, fireCd: 99,
+        mv: 'plan', plan: [{ k: 'hold', d: 9 }], mvT: 0, dly: 0,
+        spr: e.kind === 'wave_ring_core' ? 'fighter_mk2' : null, rot: d.ang + Math.PI / 2 - Math.PI,
+        claw: !!d.claw, podR: d.r,
+      };
+      list.push(o);
+      seq.push(o);
+    }
   }
-  return n;
+  // 2) Snake body: segment by segment from the head
+  const segs = (list || []).filter((o) => o !== e && o._chainOf === e && o.chainIdx != null && isChainable(o))
+    .sort((p, q) => p.chainIdx - q.chainIdx);
+  seq.push(...segs);
+  // 3) Everything else in range / in formation: nearest first, rippling outward (grids go ring by ring)
+  const rest = [];
+  for (const o of list || []) {
+    if (o === e || seq.includes(o) || !isChainable(o)) continue;
+    const d = Math.hypot(o.x - c.x, o.y - c.y);
+    if (d < CHAIN_R || o._lead === e || o._chainOf === e) rest.push([d, o]);
+  }
+  rest.sort((p, q) => p[0] - q[0]);
+  for (const [, o] of rest) seq.push(o);
+  seq.forEach((o, i) => { o._chainT = 0.12 + i * CHAIN_STEP; o._chainSrc = e; });
+  e._chainTotal = seq.length; e._chainDone = 0;
+  return seq.length;
 }
 /** Tick a pending chain detonation; true on the frame it blows (caller adds FX/score as a kill). */
 export function tickChain(o, dt) {
@@ -339,6 +397,7 @@ export function tickChain(o, dt) {
   if (o._chainT > 0) return false;
   o.hp = 0;
   o._chainKill = true;
+  if (o._chainSrc) o._chainSrc._chainDone = (o._chainSrc._chainDone || 0) + 1;
   return true;
 }
 export function spawnChainBoom(o) {
@@ -386,10 +445,22 @@ export function tickEscort(e, dt, fh) {
   const L = e._lead;
   if (!L) return false;
   if (L.hp <= 0 || L.x < -60) { e._lead = null; return false; }
-  const tx = L.x + e.fdx, ty = L.y + e.fdy + Math.sin((e.phase += dt * 2)) * 4;
+  if (L._peel) {
+    // Leader starts an attack run: the pack breaks off and peels away in two arcs (scripted plan)
+    const sg = e.fdy < 0 ? -1 : e.fdy > 0 ? 1 : (e._uid % 2 ? 1 : -1);
+    e._lead = null;
+    e.mv = 'plan'; e.mvT = 0; e.dly = 0; e._pi = 0; e.face = true;
+    e.plan = [{ k: 'bez', rel: true, p: [[0, 0], [-70, sg * 15], [-170, sg * 130], [-260, sg * 320]], d: 1.5 + Math.random() * 0.4 }];
+    return false;
+  }
+  // Guard: ranks close into a wall on the core row in front of the leader for a moment
+  const g = L._guardT > 0 ? 1 : 0;
+  e._gk = (e._gk || 0) + (g - (e._gk || 0)) * Math.min(1, dt * 5);
+  const coy = L.core ? L.core.oy : 0;
+  const tx = L.x + e.fdx * (1 - 0.25 * e._gk), ty = L.y + (e.fdy * (1 - 0.6 * e._gk)) + coy * e._gk + Math.sin((e.phase += dt * 2)) * 4;
   const dx = tx - e.x, dy = ty - e.y;
   const d = Math.hypot(dx, dy);
-  const vmax = 190 * dt;
+  const vmax = (L._escV || 190) * dt;
   if (d > vmax) { e.x += (dx / d) * vmax; e.y += (dy / d) * vmax; } else { e.x = tx; e.y = ty; }
   e.y = Math.max(16, Math.min(fh - 16, e.y));
   return true;
@@ -406,6 +477,26 @@ export function tickCoreExtras(e, dt) {
   if (!e) return;
   if (e._coreFlash > 0) e._coreFlash = Math.max(0, e._coreFlash - dt);
   if (e._bodyFlash > 0) e._bodyFlash = Math.max(0, e._bodyFlash - dt);
+  if (e._shake > 0) e._shake = Math.max(0, e._shake - dt);
+  if (e._guardT > 0) e._guardT = Math.max(0, e._guardT - dt);
+  if (e._guardCd > 0) e._guardCd = Math.max(0, e._guardCd - dt);
+  const sh = e._sh;
+  if (sh && e.core && e.core.hp > 0) {
+    sh.t += dt;
+    const lim = sh.st === 0 ? sh.open : sh.st === 1 ? sh.warn : sh.shut;
+    if (sh.t >= lim) { sh.t = 0; sh.st = (sh.st + 1) % 3; }
+  }
+  const frac = e.core && e.core.maxHp ? Math.max(0, e.core.hp / e.core.maxHp) : 1;
+  let spin = 1.6 * (1 + 1.4 * (1 - frac)); // guards spin up as the core weakens
+  const tg = e._tight;
+  if (tg) {
+    tg.t -= dt;
+    if (tg.t <= 0) { tg.phase = tg.phase === 'in' ? 'out' : tg.phase === 'warn' ? 'in' : 'warn'; tg.t = tg.phase === 'warn' ? 0.5 : tg.phase === 'in' ? 1.5 : 3.2 - 1.2 * (1 - frac); }
+    const want = tg.phase === 'in' ? 1 : 0;
+    tg.k += (want - tg.k) * Math.min(1, dt * 6);
+    spin *= 1 + 1.6 * tg.k;
+    for (const d of e.drones || []) d.dist = 58 - 22 * tg.k;
+  }
   if (e.core && e.core.orbit) {
     e.core.ang = (e.core.ang || 0) + dt * 2.1;
     const baseOx = e.kind === 'wave_core_boss' ? -e.w * 0.36 : 0;
@@ -416,7 +507,7 @@ export function tickCoreExtras(e, dt) {
   if (e.drones) {
     for (const d of e.drones) {
       if (d.hp <= 0) continue;
-      d.ang += dt * 1.6;
+      d.ang += dt * spin;
     }
   }
 }
@@ -437,20 +528,29 @@ export function applyCoreAwareHit(e, dmg, bx, by, fxList) {
   const cx = e.x + c.ox, cy = e.y + c.oy;
   // 1) Core
   if (c.hp > 0 && Math.hypot(bx - cx, by - cy) < c.r + 5) {
+    if (coreShutState(e) === 2) {
+      // Armour closed: blocked (clang), no damage
+      e._bodyFlash = 0.1;
+      if (fxList) fxList.push(spawnDeflectSpark(bx, by));
+      return { hit: 'body', killed: false };
+    }
+    c.hp -= dmg;
+    e._coreFlash = 0.1;
+    e._shake = 0.14;
+    if (c.hp > 0) {
+      if (fxList) fxList.push(spawnHitSpark(bx, by));
+      // Escorts close ranks in front of a core under fire (cooldown so it is a moment, not a wall)
+      if (e._guardCd <= 0 && c.hp < c.maxHp * 0.75) { e._guardT = 1.6; e._guardCd = 5; }
+      return { hit: 'corehit', killed: false };
+    }
     c.hp = 0;
     e.hp = 0;
     e._coreBreak = true;
     if (fxList) {
       fxList.push(spawnExplosion(cx, cy, true));
       fxList.push(spawnHitSpark(cx, cy));
-      if (e.drones) {
-        e._popN = 0;
-        for (const d of e.drones) {
-          if (d.hp <= 0) continue;
-          d.hp = 0; e._popN++;
-          fxList.push(spawnExplosion(e.x + Math.cos(d.ang) * d.dist, e.y + Math.sin(d.ang) * d.dist, false));
-        }
-      }
+      // Guards (pods / claws / drones) are not popped here: markCoreChain turns them into
+      // chain debris that blows one after another round the circle.
     }
     return { hit: 'core', killed: true };
   }
@@ -691,7 +791,7 @@ export function serializeField(state) {
     at: state.player.activeTimer,
     enemies: state.enemies.slice(0, 40).map(e => ({
       x: e.x, y: e.y, w: e.w, h: e.h, kind: e.kind, hp: e.hp, c: e.color, s: !!e.sent,
-      ch: e.core ? e.core.hp : undefined,
+      ch: e.core ? e.core.hp : undefined, cm: e.core ? e.core.maxHp : undefined, cs: e._sh ? e._sh.st : undefined, sk: e._shake > 0 ? 1 : undefined,
       dr: e.drones ? e.drones.map(d => d.hp) : undefined,
       sp: e.spr || undefined, ro: e.rot || undefined, tn: e.tone || undefined,
       at: e.appearT > 0 ? +e.appearT.toFixed(3) : undefined,

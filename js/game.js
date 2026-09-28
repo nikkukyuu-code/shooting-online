@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20260929010859';
+import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20260929015905';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20260929010859';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929010859';
-import { sfx } from './audio.js?v=20260929010859';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929010859';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929010859';
-import { hitBattleCounter } from './stats.js?v=20260929010859';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929010859';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929010859';
+} from './entities.js?v=20260929015905';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929015905';
+import { sfx } from './audio.js?v=20260929015905';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929015905';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929015905';
+import { hitBattleCounter } from './stats.js?v=20260929015905';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929015905';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929015905';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1066,9 +1066,10 @@ export class Game {
     if (mine) {
       this.state.player.score += e.score; // burst on top of the normal kill score
       try { sfx.explode(); } catch (_) {}
-      const nChain = chained + (e._popN || 0);
-      this.setStatus((e.kind === 'wave_snake_head' ? 'コア撃破！ 大蛇を一撃で倒した！' : isCoreBossKind(e.kind) ? 'コア撃破！ ボスを一撃で倒した！' : 'コア撃破！ 群れを全滅させた！') + (nChain ? `　連鎖 ${nChain}機！` : ''));
-      setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
+      e._coreMsg = e.kind === 'wave_snake_head' ? 'コア撃破！ 大蛇を倒した！' : isCoreBossKind(e.kind) ? 'コア撃破！ ボスを倒した！' : 'コア撃破！';
+      this.setStatus(e._coreMsg);
+      this._chainMsgSrc = e;
+      if (!chained) setTimeout(() => { if (!this.ended && !this.waiting && this._chainMsgSrc === e) this.setStatus(HINT); }, 1600);
     }
   }
 
@@ -1766,7 +1767,7 @@ export class Game {
       if (e.lingerT > 0) e.lingerT = Math.max(0, e.lingerT - dt);
       const surge = Math.sin(e.surgePhase) * (e.surgeAmp || 32);
       // Sent: linger on the right (bob/weave OK, no left push) until lingerT expires
-      if (moveScripted(e, dt, fw, fh)) { /* scripted STO path */ } else if (e.sent && e.lingerT > 0) {
+      if (moveScripted(e, dt, fw, fh, P.y * fh)) { /* scripted STO path */ } else if (e.sent && e.lingerT > 0) {
         if (e.holdX == null) e.holdX = fw * (0.72 + Math.random() * 0.14);
         if (e.holdY == null) e.holdY = e.y;
         // Enter right zone from off-screen, then weave in place
@@ -1788,7 +1789,7 @@ export class Game {
           e.x += Math.sin(e.surgePhase * 0.7) * 22 * dt;
         }
       }
-      e.y = Math.max(16, Math.min(fh - 16, e.y));
+      if (!e.mv) e.y = Math.max(16, Math.min(fh - 16, e.y)); // scripted paths may enter / leave via the top & bottom edges
       const onScreen = e.x < fw + 10;
       const parked = (e.sent && e.lingerT > 0) ? e.x <= (e.holdX || fw) + 8 : true;
       if (!fireScripted(e, S.bullets, P.x, P.y * fh, dt, onScreen && !e.noFire)) tickEnemyLaserFire(e, S.bullets, P.x, P.y * fh, dt, onScreen && parked && !e.noFire, () => {
@@ -1868,7 +1869,15 @@ export class Game {
     const remain = [];
     for (const e of S.enemies) {
       // Core enemies only die when the core breaks (items / rams / ex-weapons can't finish them)
-      if (tickChain(e, dt)) S.fx.push(spawnChainBoom(e));
+      if (tickChain(e, dt)) {
+        S.fx.push(spawnChainBoom(e));
+        // live 「連鎖 N機！」 counter: counts up with each sequential pop
+        const src = e._chainSrc;
+        if (src && src === this._chainMsgSrc) {
+          this.setStatus(`${src._coreMsg || 'コア撃破！'}　連鎖 ${src._chainDone}機！`);
+          if (src._chainDone >= (src._chainTotal || 0)) setTimeout(() => { if (!this.ended && !this.waiting && this._chainMsgSrc === src) this.setStatus(HINT); }, 1400);
+        }
+      }
       if (hasCore(e) && !e._coreBreak && e.hp < 1) e.hp = 1;
       if (e.hp <= 0) {
         S.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
@@ -2079,6 +2088,13 @@ export class Game {
       }
       if (val > focusVal) { focusVal = val; focus = e; }
     }
+    // Human distraction (level-scaled): now and then the eye jumps to another visible enemy for ~1 s
+    if (B._distT > 0) B._distT -= dt;
+    else if (Math.random() < (AI.distract ?? 0) * dt) {
+      const others = B.enemies.filter((e) => e !== focus && !hasCore(e) && e.x > shipX + 20 && e.x < fw && e.y > 0 && e.y < fh);
+      if (others.length) { B._distE = others[Math.floor(Math.random() * others.length)]; B._distT = 0.7 + Math.random() * 0.7; }
+    }
+    if (B._distT > 0 && B._distE && B.enemies.includes(B._distE)) focus = B._distE;
     // Aim point: a core is tracked with a human hand/eye lag (no lead) + slowly drifting aim error
     let aimY = focus ? focus.y : null;
     let coreAim = false;
@@ -2392,7 +2408,7 @@ export class Game {
       if (e.lingerT > 0) e.lingerT = Math.max(0, e.lingerT - dt);
       const surge = Math.sin(e.surgePhase) * (e.surgeAmp || 32);
       // Sent: linger on the right (bob/weave OK) until lingerT expires, then advance left
-      if (moveScripted(e, dt, fw, fh)) { /* scripted STO path */ } else if (e.sent && e.lingerT > 0) {
+      if (moveScripted(e, dt, fw, fh, B.y * fh)) { /* scripted STO path */ } else if (e.sent && e.lingerT > 0) {
         if (e.holdX == null) e.holdX = fw * (0.72 + Math.random() * 0.14);
         if (e.holdY == null) e.holdY = e.y;
         if (e.x > e.holdX + (e.surgeAmp || 32) + 8) {
@@ -2410,7 +2426,7 @@ export class Game {
           e.x += Math.sin(e.surgePhase * 0.7) * 22 * dt;
         }
       }
-      e.y = Math.max(20, Math.min(fh - 20, e.y));
+      if (!e.mv) e.y = Math.max(20, Math.min(fh - 20, e.y));
       const parked = (e.sent && e.lingerT > 0) ? e.x <= (e.holdX || fw) + 8 : true;
       if (!fireScripted(e, B.bullets, shipX, B.y * fh, dt, e.x < fw - 10 && !e.noFire)) tickEnemyLaserFire(e, B.bullets, shipX, B.y * fh, dt, parked && !e.noFire, () => {
         const tier = resolveEnemyTier(e.kind);
