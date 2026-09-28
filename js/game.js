@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20260929025552';
+import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20260929032603';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20260929025552';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929025552';
-import { sfx } from './audio.js?v=20260929025552';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929025552';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929025552';
-import { hitBattleCounter } from './stats.js?v=20260929025552';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929025552';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929025552';
+} from './entities.js?v=20260929032603';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929032603';
+import { sfx } from './audio.js?v=20260929032603';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929032603';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929032603';
+import { hitBattleCounter } from './stats.js?v=20260929032603';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929032603';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929032603';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1065,9 +1065,11 @@ export class Game {
   screenFlash(kind) {
     if (typeof document === 'undefined' || !document.body) return;
     const now = performance.now();
+    // Every core hit blinks. Photosensitivity: full-strength blinks at most ~3/s (≥333 ms apart);
+    // hits arriving sooner get a weak short blink instead of being skipped.
     const gap = now - (this._scrFlashAt ?? -1e9);
-    if (kind === 'hit' ? gap < 333 : gap < 200) return;
-    this._scrFlashAt = now;
+    const strong = kind === 'break' || gap >= 333;
+    if (strong) this._scrFlashAt = now;
     let el = this._scrFlashEl;
     if (!el || !el.isConnected) {
       el = document.createElement('div');
@@ -1080,7 +1082,9 @@ export class Game {
       if (this._scrFlashAnim) this._scrFlashAnim.cancel();
       this._scrFlashAnim = kind === 'break'
         ? el.animate([{ opacity: 0.7 }, { opacity: 0.7, offset: 0.3 }, { opacity: 0 }], { duration: 350, easing: 'ease-out' })
-        : el.animate([{ opacity: 0.7 }, { opacity: 0.6, offset: 0.4 }, { opacity: 0 }], { duration: 90, easing: 'linear' });
+        : strong
+          ? el.animate([{ opacity: 0.7 }, { opacity: 0.6, offset: 0.4 }, { opacity: 0 }], { duration: 90, easing: 'linear' })
+          : el.animate([{ opacity: 0.28 }, { opacity: 0 }], { duration: 50, easing: 'linear' });
     } catch (_) { /* no WAAPI: skip */ }
   }
 
@@ -2136,6 +2140,13 @@ export class Game {
     // Aim point: a core is tracked with a human hand/eye lag (no lead) + slowly drifting aim error
     let aimY = focus ? focus.y : null;
     let coreAim = false;
+    // Before the core is noticed, a core unit is just a big target: aim at its body with the same
+    // drifting hand error (beginners spray around it; experts barely wobble)
+    if (focus && hasCore(focus) && focus.core && focus.core.hp > 0) {
+      if (B._bodyNzE !== focus) { B._bodyNzE = focus; B._bodyNz = (Math.random() - 0.5) * 2 * (AI.coreNoise ?? 10); }
+      B._bodyNz += ((Math.random() - 0.5) * 2 * (AI.coreNoise ?? 10) - B._bodyNz) * Math.min(1, 1.2 * dt);
+      aimY = focus.y + B._bodyNz;
+    }
     if (focus && hasCore(focus) && focus.core && focus.core.hp > 0 && B.time - (focus._comCoreSeenT ?? B.time) >= (AI.coreNotice ?? 0.9)) {
       const cw = coreWorld(focus);
       if (B._coreTgt !== focus) { B._coreTgt = focus; B._coreTrackY = focus.y; B._coreNz = (Math.random() - 0.5) * 2 * (AI.coreNoise ?? 10); }
@@ -2299,6 +2310,13 @@ export class Game {
           const aW = (AI.alignW ?? 1.1) * (coreAim ? (AI.coreAlignW ?? 1) : 1);
           c += al < (coreAim ? 0.035 : 0.05) ? -aW : Math.min(1.2, al * 3) * aW / 1.1;
         } else c += Math.abs(cy - fh * 0.5) / fh * 0.8;
+        // Beginner nerves: low levels shy away from the row of a big core unit (fear of its shots)
+        if (AI.coreFear) {
+          for (const e of B.enemies) {
+            if (!hasCore(e) || !e.core || e.core.hp <= 0 || e.x < cx + 20 || warping(e)) continue;
+            if (Math.abs(coreWorld(e).y - cy) < 34) { c += AI.coreFear; break; }
+          }
+        }
         c += Math.abs(cx - prefX) / fw * (AI.prefW ?? 0.9);
         c += Math.hypot((cx - B.x) / fw, (cy - shipY0) / fh) * (AI.wanderW ?? 0.5); // don't wander (higher level: calmer, shorter dodges)
         if (cy < fh * 0.1 || cy > fh * 0.9) c += 0.35; // edges trap you

@@ -24,7 +24,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20260929025552';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20260929032603';
 
 const SCROLL = 55; // px/s — trap mines drift at background scroll speed
 const rnd = (a, b) => a + Math.random() * (b - a);

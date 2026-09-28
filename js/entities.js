@@ -319,23 +319,23 @@ export function attachCore(e) {
 }
 
 /**
- * Core HP (normal shot = 2 dmg every 0.16 s ≈ 12.5 dps → small cores ≈ 2–3 s of focused fire,
- * bosses ≈ 5–7 s). Chip damage shows as the ring around the core.
+ * Core HP (normal shot = 2 dmg every 0.16 s ≈ 12.5 dps → small cores ≈ 4–5 hits,
+ * bosses ≈ 10–13 hits). Chip damage shows as the ring around the core.
  */
 /** Guards around a core (tough: shooting through them is slow — snipe the core instead). */
 export const GUARD_HP = { escort: 6, cage: 9, pod: 15, claw: 30, drone: 24, seg: 30 };
 /** Every core is a small glowing point (like the original): careful aim needed. Hit radius = r + pad. */
 export const CORE_R = 9, CORE_HIT_PAD = 2;
 export const CORE_HP = {
-  wave_swarm_core: 18, wave_grid_core: 19, wave_ring_core: 21,
-  wave_snake_head: 30, wave_core_boss: 44, wave_eye_boss: 58,
+  wave_swarm_core: 9, wave_grid_core: 10, wave_ring_core: 11,
+  wave_snake_head: 15, wave_core_boss: 22, wave_eye_boss: 28,
 };
 /** Armour cycle seconds: open (vulnerable) / warn (telegraph) / shut (blocked). */
 export const CORE_SHUTTER = {
-  wave_core_boss: { open: 3.0, warn: 0.7, shut: 1.3 },
-  wave_eye_boss: { open: 3.4, warn: 0.7, shut: 1.5 },
-  wave_grid_core: { open: 2.8, warn: 0.6, shut: 1.1 },
-  wave_swarm_core: { open: 3.2, warn: 0.6, shut: 1.0 },
+  wave_core_boss: { open: 3.2, warn: 0.6, shut: 0.9 },
+  wave_eye_boss: { open: 3.6, warn: 0.6, shut: 1.0 },
+  wave_grid_core: { open: 3.0, warn: 0.5, shut: 0.8 },
+  wave_swarm_core: { open: 3.4, warn: 0.5, shut: 0.7 },
 };
 /** 0 open, 1 warn (still hittable), 2 shut. */
 export function coreShutState(e) {
