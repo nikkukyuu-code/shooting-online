@@ -1827,18 +1827,59 @@ html, body {
   display: flex; flex-direction: column; align-items: center;
   animation: koText 2.6s ease-out forwards;
   white-space: nowrap;
+  z-index: 1;
 }
+/* Dark translucent band behind the finish text: readable on any background (red low-HP field, explosions, flashes) */
+.ko-text::before {
+  content: '';
+  position: absolute; z-index: -1;
+  left: 50%; top: 50%;
+  width: 200vw; height: 128%;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(90deg, rgba(4, 6, 18, 0) 0%, rgba(4, 6, 18, 0.78) 22%, rgba(4, 6, 18, 0.82) 50%, rgba(4, 6, 18, 0.78) 78%, rgba(4, 6, 18, 0) 100%);
+  border-top: 2px solid rgba(120, 220, 255, 0.55);
+  border-bottom: 2px solid rgba(120, 220, 255, 0.55);
+  box-shadow: 0 0 22px rgba(0, 0, 0, 0.55);
+}
+.ko-lose .ko-text::before { border-color: rgba(255, 110, 110, 0.5); }
+.ko-time .ko-text::before { border-color: rgba(255, 220, 110, 0.55); }
 .ko-time .ko-text { animation-duration: 1.8s; }
 .ko-main {
   font-size: clamp(3.2rem, 17vw, 6.5rem);
   font-weight: 900; font-style: italic; letter-spacing: 0.04em;
-  color: #fff4c0;
-  -webkit-text-stroke: 3px #b3261e;
-  text-shadow: 0 0 18px rgba(255, 120, 40, 0.9), 0 4px 0 #6a0f0a;
+  line-height: 1.05;
+  color: #ffffff;
+  -webkit-text-stroke: 0;
+  /* thick dark outline (8-way) + cool cyan glow */
+  text-shadow:
+    3px 0 0 #050818, -3px 0 0 #050818, 0 3px 0 #050818, 0 -3px 0 #050818,
+    2px 2px 0 #050818, -2px 2px 0 #050818, 2px -2px 0 #050818, -2px -2px 0 #050818,
+    0 5px 0 #050818,
+    0 0 18px rgba(80, 210, 255, 0.95), 0 0 36px rgba(60, 150, 255, 0.7);
 }
-.ko-lose .ko-main { color: #ffd0d0; -webkit-text-stroke-color: #5a0000; text-shadow: 0 0 18px rgba(255, 30, 30, 0.9), 0 4px 0 #300; }
-.ko-time .ko-main { color: #ffe680; -webkit-text-stroke-color: #7a4a00; text-shadow: 0 0 18px rgba(255, 200, 40, 0.9); }
-.ko-sub { margin-top: 2px; font-size: clamp(1rem, 4.6vw, 1.5rem); font-weight: 900; color: #fff; text-shadow: 0 2px 4px #000; }
+.ko-win .ko-main { color: #fff6cf; }
+.ko-lose .ko-main {
+  color: #ffe4e4;
+  text-shadow:
+    3px 0 0 #140006, -3px 0 0 #140006, 0 3px 0 #140006, 0 -3px 0 #140006,
+    2px 2px 0 #140006, -2px 2px 0 #140006, 2px -2px 0 #140006, -2px -2px 0 #140006,
+    0 5px 0 #140006,
+    0 0 18px rgba(255, 60, 70, 0.9);
+}
+.ko-time .ko-main {
+  color: #ffe98a;
+  text-shadow:
+    3px 0 0 #1a1000, -3px 0 0 #1a1000, 0 3px 0 #1a1000, 0 -3px 0 #1a1000,
+    2px 2px 0 #1a1000, -2px 2px 0 #1a1000, 2px -2px 0 #1a1000, -2px -2px 0 #1a1000,
+    0 5px 0 #1a1000,
+    0 0 18px rgba(255, 200, 40, 0.85);
+}
+.ko-sub {
+  margin-top: 2px; font-size: clamp(1rem, 4.6vw, 1.5rem); font-weight: 900; color: #fff; letter-spacing: 0.12em;
+  text-shadow: 2px 0 0 #000, -2px 0 0 #000, 0 2px 0 #000, 0 -2px 0 #000, 0 0 10px rgba(80, 210, 255, 0.8);
+}
+.ko-lose .ko-sub { text-shadow: 2px 0 0 #000, -2px 0 0 #000, 0 2px 0 #000, 0 -2px 0 #000, 0 0 10px rgba(255, 80, 80, 0.8); }
+.ko-time .ko-sub { text-shadow: 2px 0 0 #000, -2px 0 0 #000, 0 2px 0 #000, 0 -2px 0 #000, 0 0 10px rgba(255, 200, 60, 0.8); }
 @keyframes koText {
   0% { transform: translate(-50%, -50%) scale(2.6); opacity: 0; }
   12% { transform: translate(-50%, -50%) scale(0.95); opacity: 1; }

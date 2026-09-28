@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-09-28 12:28:52';
+export const VERSION_LABEL = '2026-09-28 12:37:27';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1790566132422;
-export const BUILD_NOTE = '転送敵の出現位置を重ならないよう分散';
+export const BUILD_TIME = 1790566647886;
+export const BUILD_NOTE = 'KO・TIME UPの文字を背景に関係なく見やすく';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
