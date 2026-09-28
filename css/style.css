@@ -2005,3 +2005,52 @@ html, body {
   #screen-menu .menu-btn.transfer-btn { padding-top: 6px; padding-bottom: 6px; }
   .cpu-diff-title { margin: 0; line-height: 1.2; }
 }
+
+/* ---- Title fit for real phones (short viewports, incl. browser bars / landscape) ----
+   The whole title screen is the scroll container (only scrolls when truly too short),
+   so nothing is ever clipped inside a hidden inner scroll box. Height follows the
+   visible viewport (100dvh), and the footer sits at the bottom when there is room. */
+@supports (height: 100dvh) { html, body, #app { height: 100dvh; } }
+#screen-menu.screen.active {
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  background: #05040f;
+}
+#screen-menu .menu-hero, #screen-menu .com-rank-panel { flex-shrink: 0; }
+#screen-menu .menu-center { flex: 0 0 auto; overflow: visible; }
+#screen-menu .menu-footer { flex: 0 0 auto; margin-top: auto; }
+#screen-menu .sky { position: fixed; left: 50%; right: auto; width: min(100%, 480px); transform: translateX(-50%); }
+/* version · access · battles: one compact line on phones */
+@media (max-height: 760px), (max-width: 420px) {
+  .menu-footer .app-meta { font-size: 0.64rem; padding: 2px 8px; white-space: nowrap; line-height: 1.3; }
+  .menu-footer .ver-note { display: none; }
+  .menu-footer { padding-bottom: max(6px, calc(env(safe-area-inset-bottom, 0px) + 4px)); }
+}
+@media (max-height: 700px) {
+  .transfer-note.dl-note { font-size: 0.64rem; line-height: 1.25; }
+}
+@media (max-height: 620px) {
+  .menu-hero { height: 66px; min-height: 66px; padding-top: max(10px, calc(env(safe-area-inset-top, 0px) + 6px)); }
+  .menu-hero-art { height: 44%; }
+  .menu-brand { padding: 1px 6px 0; }
+  .game-title { font-size: 1.12rem; }
+  .com-rank-panel { font-size: 0.72rem; line-height: 1.25; padding: 2px 8px 2px; }
+  .cr-note { font-size: 0.62rem; }
+  .menu-center { padding: 0 0 2px; }
+  .menu-panel { padding: 4px 8px; gap: 3px; }
+  #screen-menu .menu-btn, #screen-menu .menu-btn-sub { padding-top: 3px; padding-bottom: 3px; }
+  #screen-menu .menu-btn.transfer-btn { padding-top: 4px; padding-bottom: 4px; margin-top: 2px; font-size: 0.95rem; }
+  #screen-menu .menu-field.room-name { height: 22px; }
+  .transfer-note.dl-note { font-size: 0.6rem; line-height: 1.2; margin-top: 1px; }
+  .hub-link { padding: 2px 10px; font-size: 0.74rem; }
+  .menu-footer { gap: 2px; padding-top: 1px; }
+}
+/* build note next to 最新: always one short line (full text in the tooltip) */
+.menu-footer .app-meta { white-space: nowrap; }
+.menu-footer .ver-note { white-space: nowrap; max-width: 9em; display: inline-block; vertical-align: bottom; }
+@media (max-height: 760px), (max-width: 420px) { .menu-footer .ver-note { display: none; } }
+@media (min-height: 761px) and (max-height: 860px) { .transfer-note.dl-note { line-height: 1.25; } }
+@media (max-width: 360px) { .menu-footer .app-meta { font-size: 0.58rem; letter-spacing: 0; white-space: normal; padding: 2px 6px; } .menu-footer .app-meta .meta-sep { margin: 0 0.25em; } }
