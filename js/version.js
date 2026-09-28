@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-09-28 19:41:59';
+export const VERSION_LABEL = '2026-09-28 19:59:27';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1790592119168;
-export const BUILD_NOTE = '転送敵をすぐ出現させCOMの立ち回りとアイテム判断を強化';
+export const BUILD_TIME = 1790593167292;
+export const BUILD_NOTE = '強いCOMのデッキをプレイヤーの90〜100%の強さに';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
