@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929032603';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929033119';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260929032603`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260929033119`;
 }
 
 function loadKindSprite(kind) {
@@ -3045,7 +3045,23 @@ export function drawField(ctx, area, snap, opts = {}) {
     }
   }
 
+  // Core-hit blink of THIS field only (clipped to the pane; same for both sides)
+  const ffa = coreFlashAlpha(snap.ff);
+  if (ffa > 0.004) {
+    ctx.fillStyle = `rgba(255,255,255,${ffa.toFixed(3)})`;
+    ctx.fillRect(-40, -40, fw + 80, fh + 80);
+  }
+
   ctx.restore();
+}
+
+/** h: full hit 0.7 (~90 ms), w: weak 0.28 (~50 ms), b: break 0.7 (~350 ms). */
+function coreFlashAlpha(ff) {
+  if (!ff || ff.t0 == null) return 0;
+  const age = Math.max(0, performance.now() - ff.t0);
+  if (ff.k === 'b') return age >= 350 ? 0 : age < 105 ? 0.7 : 0.7 * (1 - (age - 105) / 245);
+  if (ff.k === 'w') return age >= 50 ? 0 : 0.28 * (1 - age / 50);
+  return age >= 90 ? 0 : age < 36 ? 0.7 - 0.1 * age / 36 : 0.6 * (1 - (age - 36) / 54);
 }
 
 export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
@@ -3058,6 +3074,7 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
     bullets: localState.bullets,
     worldItems: localState.items,
     fx: localState.fx,
+    ff: localState.ff,
     meteors: localState.meteors,
     scroll: localState.scroll,
     alive: localState.alive,

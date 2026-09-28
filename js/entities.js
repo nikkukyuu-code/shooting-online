@@ -815,6 +815,7 @@ export function serializeField(state) {
       r: b.r > 3.5 ? b.r : undefined,
     })),
     fx: state.fx.slice(0, 12).map(f => ({ x: f.x, y: f.y, l: f.life, m: f.max, r: f.r, k: f.kind, t: f.t, a: f.a })),
+    ff: state.ff ? { n: state.ff.n, k: state.ff.k } : undefined,
     scroll: state.scroll,
     status: state.statusText,
     alive: state.alive,
