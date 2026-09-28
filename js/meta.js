@@ -2,7 +2,7 @@
  * localStorage key: shootingOnline_meta (NEVER rename — would wipe player PT).
  * Backup key: shootingOnline_meta_bak. On every update, preserve pt; never clear storage.
  */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20260929035738';
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20260929043600';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;
@@ -613,11 +613,11 @@ export function recordComResult(diff, won) {
  * same acceleration (accT), no hidden info. Deck band / stats / drop rates are NOT touched here.
  * (A longer look-ahead / bigger safety margin made it over-cautious in tests, so horizon stays.)
  */
-const A1 = { horizon: 0.35, react: 0.36, noise: 8, margin: 2, replan: 0.18, lapseChance: 0.55, attn: 6, overcommit: 0.22, hand: 1.4, accT: 0.2, pickW: 0.45, pickDz: 6, orbNotice: 1.1, itemReact: 2.4, think: 1.1, lofW: 0, alignW: 0.4, edgeW: 0.4, holdMax: 14, idleUse: 0.2, prefX: 0.1, itemErr: 0.25, smartP: 0, wallW: 0, juke: 0, coreNotice: 2, coreNoise: 56, coreLag: 0.7, corePri: 0.1, coreAlignW: 0.7, corePull: 0.04, coreTol: 0.15, distract: 3.2, coreSnipe: 0, coreFear: 0.35,
+const A1 = { horizon: 0.35, react: 0.36, noise: 8, margin: 2, replan: 0.18, lapseChance: 0.55, attn: 6, overcommit: 0.22, hand: 1.4, accT: 0.2, pickW: 1.1, pickDz: 6, pickR: 150, orbNotice: 0.8, orbMiss: 0.18, itemReact: 2.4, think: 1.1, lofW: 0, alignW: 0.4, edgeW: 0.4, holdMax: 14, idleUse: 0.2, prefX: 0.1, itemErr: 0.25, smartP: 0, wallW: 0, juke: 0, coreNotice: 2, coreNoise: 56, coreLag: 0.7, corePri: 0.1, coreAlignW: 0.7, corePull: 0.04, coreTol: 0.15, distract: 3.2, coreSnipe: 0, coreFear: 0.35,
   aimNoiseAmp: 0.32, reactThreshold: 0.62, panicChance: 0.09, maxSpeedDodge: 1.0, maxSpeed: 0.55 };
-const A30 = { horizon: 0.75, react: 0.21, noise: 4, margin: 3, replan: 0.1, lapseChance: 0.1, attn: 12, overcommit: 0.13, hand: 2.2, accT: 0.16, pickW: 2.6, pickDz: 5, orbNotice: 0.22, itemReact: 0.35, think: 0.2, lofW: 0.9, alignW: 3, edgeW: 1.2, holdMax: 5, idleUse: 0.35, prefX: 0.18, itemErr: 0.1, smartP: 1, wallW: 0.5, juke: 0.2, coreNotice: 0.55, coreNoise: 6, coreLag: 0.22, corePri: 0.85, coreAlignW: 1.8, corePull: 0.6, coreTol: 1.6, distract: 0.14, coreSnipe: 0.45, coreFear: 0,
+const A30 = { horizon: 0.75, react: 0.21, noise: 4, margin: 3, replan: 0.1, lapseChance: 0.1, attn: 12, overcommit: 0.13, hand: 2.2, accT: 0.16, pickW: 3.6, pickDz: 7.5, pickR: 210, orbNotice: 0.22, orbMiss: 0.04, itemReact: 0.35, think: 0.2, lofW: 0.9, alignW: 3, edgeW: 1.2, holdMax: 5, idleUse: 0.35, prefX: 0.18, itemErr: 0.1, smartP: 1, wallW: 0.5, juke: 0.2, coreNotice: 0.55, coreNoise: 6, coreLag: 0.22, corePri: 0.85, coreAlignW: 1.8, corePull: 0.6, coreTol: 1.6, distract: 0.14, coreSnipe: 0.45, coreFear: 0,
   aimNoiseAmp: 0.22, reactThreshold: 0.48, panicChance: 0.05, maxSpeedDodge: 1.2, maxSpeed: 0.7 };
-const A100 = { horizon: 0.75, react: 0.18, noise: 1, margin: 3, replan: 0.07, lapseChance: 0.007, attn: 20, overcommit: 0.03, hand: 2.2, accT: 0.14, pickW: 3.5, pickDz: 6.5, orbNotice: 0.12, itemReact: 0.15, think: 0.1, lofW: 1.1, alignW: 3, edgeW: 1.6, holdMax: 3, idleUse: 0.35, prefX: 0.18, itemErr: 0.02, smartP: 1, wallW: 1.0, juke: 0.35, coreNotice: 0.28, coreNoise: 3.2, coreLag: 0.12, corePri: 1, coreAlignW: 3.2, corePull: 1, coreTol: 3, distract: 0.03, coreSnipe: 0.8, coreFear: 0,
+const A100 = { horizon: 0.75, react: 0.18, noise: 1, margin: 3, replan: 0.07, lapseChance: 0.007, attn: 20, overcommit: 0.03, hand: 2.2, accT: 0.14, pickW: 5, pickDz: 9, pickR: 240, orbNotice: 0.12, orbMiss: 0, itemReact: 0.15, think: 0.1, lofW: 1.1, alignW: 3, edgeW: 1.6, holdMax: 3, idleUse: 0.35, prefX: 0.18, itemErr: 0.02, smartP: 1, wallW: 1.0, juke: 0.35, coreNotice: 0.28, coreNoise: 3.2, coreLag: 0.12, corePri: 1, coreAlignW: 3.2, corePull: 1, coreTol: 3, distract: 0.03, coreSnipe: 0.8, coreFear: 0,
   aimNoiseAmp: 0.1, reactThreshold: 0.44, panicChance: 0.01, maxSpeedDodge: 1.2, maxSpeed: 0.7 };
 export function comAiForLevel(level) {
   const lv = Math.max(1, Math.min(COM_LEVEL_MAX, Math.round(Number(level) || 1)));

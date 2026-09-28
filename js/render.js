@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929035738';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929043600';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260929035738`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260929043600`;
 }
 
 function loadKindSprite(kind) {
@@ -964,6 +964,19 @@ function drawLaserTelegraph(ctx, e, t) {
   // Multi-beam patterns (twin / triple / sweep) warn on every lane; each lane stays horizontal.
   const offs = Array.isArray(e.laserTeleOffs) && e.laserTeleOffs.length ? e.laserTeleOffs : [0];
   const multi = offs.length > 1;
+  // Scripted wave units: short bolts only → just a muzzle glow on each firing lane, no beam line
+  if (e.laserAimX != null && Math.abs(e.laserAimX - e.x) < 4) {
+    for (const off of offs) {
+      const gr = 4 + u * 9;
+      const gg = ctx.createRadialGradient(mx, my + off, 0, mx, my + off, gr);
+      gg.addColorStop(0, `rgba(255,255,230,${0.6 + 0.35 * flash})`);
+      gg.addColorStop(0.45, `rgba(255,150,60,${0.35 + 0.4 * u})`);
+      gg.addColorStop(1, 'rgba(255,60,30,0)');
+      ctx.fillStyle = gg;
+      ctx.beginPath(); ctx.arc(mx, my + off, gr, 0, Math.PI * 2); ctx.fill();
+    }
+    return;
+  }
   for (const off of offs) {
     ctx.save();
     // Warning aim line (dashed / flickering) — always horizontal
@@ -1403,7 +1416,16 @@ function drawBullet(ctx, b) {
     ctx.shadowBlur = 0;
 
     const k = b.k;
-    if (k === 'dash') {
+    if (k === 'bolt') {
+      // Short laser bolt: hot white core with an orange-red glow, ~44 px long
+      const len = 44;
+      ctx.strokeStyle = 'rgba(255,90,50,0.35)';
+      ctx.lineWidth = 7;
+      ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x + len, b.y); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,245,230,0.98)';
+      ctx.lineWidth = 2.6;
+      ctx.beginPath(); ctx.moveTo(b.x, b.y); ctx.lineTo(b.x + len, b.y); ctx.stroke();
+    } else if (k === 'dash') {
       // Short white dash laser (as in the original): thin bright streak along its flight line
       const len = 15;
       ctx.strokeStyle = 'rgba(255,255,255,0.28)';

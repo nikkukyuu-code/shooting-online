@@ -415,32 +415,43 @@ export function spawnChainBoom(o) {
  */
 export function spawnCoreEscorts(lead, fw, fh) {
   const boss = isCoreBossKind(lead.kind);
-  const cols = boss ? 5 : 4, rows = boss ? 3 : 2;
-  const gx = 46, gy = boss ? 38 : 34; // visible gaps between fighters (escort 38×28)
-  // Front of the leader incl. its core swing / claws / drones, then a clear gap → slots never
-  // overlap the leader sprite or its core.
+  const out = [];
+  const mkEsc = (fdx, fdy, c) => {
+    const e = spawnEnemy(fw, fh, 'wave_escort');
+    e.w = 38; e.h = 28; e.hp = GUARD_HP.escort; e.maxHp = GUARD_HP.escort; e.score = 15; e.speed = 150;
+    e.noFire = true; e.noDrop = true;
+    e._lead = lead; e.fdx = fdx; e.fdy = fdy;
+    e.x = lead.x + fdx; e.y = Math.max(16, Math.min(fh - 16, lead.y + fdy));
+    e.phase = (lead.phase || 0) + c * 0.35;
+    out.push(e);
+  };
+  if (boss) {
+    // Bosses (as in the original): escort columns fly ABOVE and BELOW the boss, level with its body.
+    // The row in front of the core always stays open, and nobody sits over the player's side.
+    const bandRows = lead.h > 100 ? 1 : 2;
+    const gx = 44, gy = 34, cols = bandRows === 1 ? 6 : 5;
+    const cx0 = -(lead.w || 110) * 0.15;
+    lead.x = Math.max(lead.x, fw + (lead.w || 110) * 0.5 + 30);
+    lead._entryX = fw * 0.8;
+    for (const sg of [-1, 1]) {
+      for (let r = 0; r < bandRows; r++) {
+        for (let c = 0; c < cols; c++) {
+          mkEsc(cx0 + (c - (cols - 1) / 2) * gx, sg * ((lead.h || 80) * 0.5 + 24 + r * gy), c);
+        }
+      }
+    }
+    lead._bandH = (lead.h || 80) * 0.5 + 24 + (bandRows - 1) * gy + 16; // boss keeps its bands on screen
+    return out;
+  }
+  const cols = 4, rows = 2, gx = 46, gy = 34;
   let front = (lead.w || 110) * 0.5;
   if (lead.core) front = Math.max(front, -(lead.core.ox || 0) + (lead.core.orbit || 0) + (lead.core.r || 0));
   if (lead.drones) for (const d of lead.drones) front = Math.max(front, d.dist + d.r * 1.4);
   const x0 = -front - 40;
-  // Whole group enters together from off-screen right (pack first, leader behind);
-  // the leader flies in fast until it is on stage (see _entryX), escorts hold their slots.
   lead.x = Math.max(lead.x, fw + 24 - x0 + (cols - 1) * gx);
   lead._entryX = fw * 0.8;
-  const out = [];
   for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const e = spawnEnemy(fw, fh, 'wave_escort');
-      e.w = 38; e.h = 28; e.hp = GUARD_HP.escort; e.maxHp = GUARD_HP.escort; e.score = 15; e.speed = 150;
-      e.noFire = true; e.noDrop = true;
-      e._lead = lead;
-      e.fdx = x0 - c * gx;
-      e.fdy = (r - (rows - 1) / 2) * gy;
-      e.x = lead.x + e.fdx;
-      e.y = Math.max(16, Math.min(fh - 16, lead.y + e.fdy));
-      e.phase = (lead.phase || 0) + c * 0.35;
-      out.push(e);
-    }
+    for (let c = 0; c < cols; c++) mkEsc(x0 - c * gx, (r - (rows - 1) / 2) * gy * 2.2, c); // rows split above / below the core row
   }
   return out;
 }
@@ -457,11 +468,8 @@ export function tickEscort(e, dt, fh) {
     e.plan = [{ k: 'bez', rel: true, p: [[0, 0], [-70, sg * 15], [-170, sg * 130], [-260, sg * 320]], d: 1.5 + Math.random() * 0.4 }];
     return false;
   }
-  // Guard: ranks close into a wall on the core row in front of the leader for a moment
-  const g = L._guardT > 0 ? 1 : 0;
-  e._gk = (e._gk || 0) + (g - (e._gk || 0)) * Math.min(1, dt * 5);
-  const coy = L.core ? L.core.oy : 0;
-  const tx = L.x + e.fdx * (1 - 0.25 * e._gk), ty = L.y + (e.fdy * (1 - 0.6 * e._gk)) + coy * e._gk + Math.sin((e.phase += dt * 2)) * 4;
+  // Hold the slot (no wall closing over the core row — the core must stay shootable)
+  const tx = L.x + e.fdx, ty = L.y + e.fdy + Math.sin((e.phase += dt * 2)) * 3;
   const dx = tx - e.x, dy = ty - e.y;
   const d = Math.hypot(dx, dy);
   const vmax = (L._escV || 190) * dt;
@@ -578,7 +586,10 @@ export function applyCoreAwareHit(e, dmg, bx, by, fxList) {
     && Math.hypot(bx - e.x, by - e.y) < e.w * 0.4 && Math.abs(by - cy) > c.r + CORE_HIT_PAD;
   const triHull = (e.kind === 'wave_core_boss' || e.kind === 'wave_grid_core')
     && Math.abs(bx - e.x) < e.w * 0.45 + 4 && Math.abs(by - e.y) < e.h * 0.45 + 4;
-  if (eyeHull || triHull) {
+  // The core sits in an open slot in the hull: shots on the core's row, left of the core, fly on
+  // to it (never blocked by the hull in front of it)
+  const coreLane = Math.abs(by - cy) < c.r + CORE_HIT_PAD && bx < cx + 2;
+  if ((eyeHull || triHull) && !coreLane) {
     e.hp -= Math.max(0.05, dmg * CORE_BODY_DMG_MUL);
     e._bodyFlash = 0.16;
     if (fxList) fxList.push(spawnDeflectSpark(bx, by));

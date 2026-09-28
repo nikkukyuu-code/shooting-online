@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20260929035738';
+import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20260929043600';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20260929035738';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929035738';
-import { sfx } from './audio.js?v=20260929035738';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929035738';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929035738';
-import { hitBattleCounter } from './stats.js?v=20260929035738';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929035738';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929035738';
+} from './entities.js?v=20260929043600';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929043600';
+import { sfx } from './audio.js?v=20260929043600';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929043600';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929043600';
+import { hitBattleCounter } from './stats.js?v=20260929043600';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929043600';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929043600';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1933,7 +1933,8 @@ export class Game {
       // Use real ship Y even when slightly past 0/1 (overhang still hittable)
       const py = P.y * fh;
       const hb = b.hb || 0; // bigger hurtbox for big orbs / mines / beams
-      if (Math.abs(b.x - P.x) < 16 + hb && Math.abs(b.y - py) < 16 + hb) {
+      const bx = b.k === 'bolt' ? Math.max(b.x, Math.min(b.x + 44, P.x)) : b.x; // short bolt = 44 px segment
+      if (Math.abs(bx - P.x) < 16 + hb && Math.abs(b.y - py) < 16 + hb) {
         if (playerBarrier) {
           b.life = 0;
           const bar = S.fx.find((f) => f.kind === 'barrier' && f.life > 0);
@@ -2202,8 +2203,9 @@ export class Game {
         const bny = b._nz || 0;
         for (const t of STEPS) {
           if (t > b.life) break;
-          const bx = b.x + bvx * t, by = b.y + bvy * t + bny;
+          const bx0 = b.x + bvx * t, by = b.y + bvy * t + bny;
           const [sx, sy] = posAt(shipX, shipY0, cx, cy, t);
+          const bx = b.k === 'bolt' ? Math.max(bx0, Math.min(bx0 + 44, sx)) : bx0; // short bolt = 44 px segment
           const ax = Math.abs(bx - sx), ay = Math.abs(by - sy);
           if (ax < 16 + hb && ay < 16 + hb) { d += 10 / (0.18 + t); break; }
           if (ax < 26 + hb && ay < 22 + hb) d += 0.6 / (0.25 + t);
@@ -2255,7 +2257,12 @@ export class Game {
       const cands = [[B._tx, B._ty], [B.x, shipY0]];
       const xs = [0.07, 0.13, 0.2, 0.28, 0.37, 0.47, 0.6, 0.74].map((k) => k * fw);
       for (const cx of xs) for (let k = 0; k <= 12; k++) cands.push([cx, fh * (0.04 + 0.92 * k / 12)]);
-      for (const it of B.orbs) if (it._seenT != null && B.time - it._seenT >= (AI.orbNotice ?? 0.5)) cands.push([it.x - 30 * 0.3, it.y]);
+      for (const it of B.orbs) {
+        if (it._seenT == null || it._skip || B.time - it._seenT < (AI.orbNotice ?? 0.5)) continue;
+        cands.push([it.x - 30 * 0.3, it.y]);
+        // smart route (strong COM): meet the drifting orb where the magnet can catch it, not where it is now
+        if (AI.pickSafe) { const tA = Math.max(0, Math.hypot(it.x - B.x, it.y - shipY0) - ITEM_MAGNET_R * 0.8) / Math.max(1, handPx); cands.push([it.x - 30 * tA - ITEM_MAGNET_R * 0.5, it.y]); }
+      }
       // Line-up spots on the (tracked, noisy) core row: here, a bit back, a bit forward
       if (coreAim) for (const kx of [0, -0.06, 0.06]) cands.push([B.x + kx * fw, aimY]);
       // fine candidates around the current position
@@ -2270,21 +2277,30 @@ export class Game {
         for (const it of B.orbs) {
           const heal = it.id === 'heal' || it.id === 'heal_big';
           const hpR = B.hp / (B.maxHp || PLAYER_MAX_HP);
-          const v = heal ? (hpR < 0.5 ? 3 : hpR < 0.85 ? 1.6 : 0.3) : (B.items.length < MAX_ITEM_SLOTS ? 1.4 : 0);
+          const v = heal ? (hpR < 0.5 ? 3 : hpR < 0.85 ? 1.6 : 0.5) : (B.items.length < MAX_ITEM_SLOTS ? 1.9 : 0);
           if (v <= 0) continue;
-          if (it._seenT == null) it._seenT = B.time;
+          if (it._seenT == null) { it._seenT = B.time; it._skip = Math.random() < (AI.orbMiss || 0); } // weak COM overlooks some orbs
+          if (it._skip) continue;
           if (B.time - it._seenT < (AI.orbNotice ?? 0.5)) continue; // human: notice the orb first
           if (dz > (AI.pickSafe ? (AI.pickDz ?? 2) : 6)) continue; // too risky here → give up on it (for now)
           if (AI.pickSafe) {
             // only when the way there looks clear too (midpoint of the drag)
-            const mk = it._midK === B.time ? it._midD : (it._midK = B.time, it._midD = dangerOf((B.x + it.x) / 2, (shipY0 + it.y) / 2));
+            // smart route: straight drag, or an L-shaped detour (vertical first / horizontal first) — the safest one counts
+            const mk = it._midK === B.time ? it._midD : (it._midK = B.time, it._midD = (() => {
+              const gx = Math.max(B.x, it.x - ITEM_MAGNET_R * 0.6), gy = it.y;
+              const straight = Math.max(dangerOf((B.x + gx) / 2, (shipY0 + gy) / 2), dangerOf((B.x * 3 + gx) / 4, (shipY0 * 3 + gy) / 4));
+              const vFirst = Math.max(dangerOf(B.x, (shipY0 + gy) / 2), dangerOf(B.x, gy), dangerOf((B.x + gx) / 2, gy));
+              const hFirst = Math.max(dangerOf((B.x + gx) / 2, shipY0), dangerOf(gx, shipY0), dangerOf(gx, (shipY0 + gy) / 2));
+              return Math.min(straight, vFirst, hFirst);
+            })());
             if (mk > (AI.pickDz ?? 2)) continue;
           }
           // Magnet: it only needs to get within ~ITEM_MAGNET_R, the orb flies in by itself
           const tArr = Math.max(0, Math.hypot(it.x - B.x, it.y - shipY0) - ITEM_MAGNET_R * 0.8) / Math.max(1, handPx);
           if (tArr > it.life - 0.2) continue; // can't make it in time
           const dd = Math.max(0, Math.hypot(it.x - 30 * tArr - cx, it.y - cy) - ITEM_MAGNET_R * 0.6);
-          if (dd < 110) c -= (AI.pickW || 1) * v * (1 - dd / 110);
+          const pR = AI.pickR || 165;
+          if (dd < pR) c -= (AI.pickW || 1) * v * (1 - dd / pR); // go for items fairly actively (wider pull at higher level)
         }
         if (focus) {
           // Core target: tighter band + extra pull (coreAlignW); danger terms above still win
@@ -2602,7 +2618,8 @@ export class Game {
     for (const b of B.bullets) {
       if (b.owner !== 'enemy' || b.life <= 0) continue;
       const hb = b.hb || 0;
-      if (Math.abs(b.x - shipX) < 16 + hb && Math.abs(b.y - B.y * fh) < 16 + hb) { // same hurtbox as the player
+      const bx = b.k === 'bolt' ? Math.max(b.x, Math.min(b.x + 44, shipX)) : b.x;
+      if (Math.abs(bx - shipX) < 16 + hb && Math.abs(b.y - B.y * fh) < 16 + hb) { // same hurtbox as the player
         if (botBarrier) {
           b.life = 0;
           const bar = B.fx.find((f) => f.kind === 'barrier' && f.life > 0);
