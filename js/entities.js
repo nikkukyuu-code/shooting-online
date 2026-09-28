@@ -139,6 +139,16 @@ export const WAVE_KIND_TIERS = {
   wave_mech: 'elite',
   // Giant red eye boss: huge central core behind rotating mechanical claws (wave-only)
   wave_eye_boss: 'boss',
+  // Scripted STO-recreation kinds (js/waves.js) — wave-only
+  wave_grid_core: 'elite',   // red-core ship in the centre of a wedge grid
+  wave_ring_core: 'elite',   // red core with a rotating ring of fighter pods
+  wave_snake_head: 'boss',   // snake boss head = core
+  wave_snake_seg: 'drone',   // silver body segment
+  wave_cater: 'drone',       // green caterpillar sphere
+  wave_mine: 'drone',        // yellow square trap mine
+  wave_spider: 'basic',      // green spider ship (user art)
+  wave_looper: 'swarm',      // red winged looper (user art)
+  wave_saucer: 'swarm',      // small saucer (user art)
 };
 export const WAVE_KIND_IDS = Object.keys(WAVE_KIND_TIERS);
 export function isWaveKind(kind) {
@@ -218,9 +228,14 @@ export function isCoreBossKind(kind) {
   return kind === 'wave_core_boss' || kind === 'wave_eye_boss';
 }
 
+export const CORE_KINDS = new Set(['wave_core_boss', 'wave_swarm_core', 'wave_eye_boss', 'wave_grid_core', 'wave_ring_core', 'wave_snake_head']);
+/** Core kinds whose core break drops 大回復 (big units). */
+export function bigCoreKind(kind) {
+  return kind === 'wave_core_boss' || kind === 'wave_eye_boss' || kind === 'wave_snake_head';
+}
 /** True for wave kinds that carry a destructible glowing core. */
 export function hasCore(e) {
-  return !!(e && (e.kind === 'wave_core_boss' || e.kind === 'wave_swarm_core' || e.kind === 'wave_eye_boss'));
+  return !!(e && CORE_KINDS.has(e.kind));
 }
 
 /**
@@ -252,6 +267,22 @@ export function attachCore(e) {
     for (let i = 0; i < 8; i++) {
       e.drones.push({ ang: (Math.PI * 2 * i) / 8, dist: 72, r: 15, hp: 10, maxHp: 10, claw: true });
     }
+  } else if (e.kind === 'wave_grid_core') {
+    // ~1.5× player core ship in the middle of a wedge grid: core at its nose, armored hull
+    e.w = 62; e.h = 52; e.hp = 30; e.maxHp = 30; e.score = Math.max(e.score || 0, 150);
+    e.core = { ox: -e.w * 0.3, oy: 0, r: 15, hp: 1, maxHp: 1, orbit: 0, ang: 0 };
+    e.drones = null;
+  } else if (e.kind === 'wave_ring_core') {
+    // Rotating ring: 8 small fighter pods (user art) orbit a glowing red core; pods block shots
+    e.w = 150; e.h = 150; e.hp = 40; e.maxHp = 40; e.score = Math.max(e.score || 0, 180);
+    e.core = { ox: 0, oy: 0, r: 17, hp: 1, maxHp: 1, orbit: 5, ang: Math.random() * Math.PI * 2 };
+    e.drones = [];
+    for (let i = 0; i < 8; i++) e.drones.push({ ang: (Math.PI * 2 * i) / 8, dist: 58, r: 14, hp: 5, maxHp: 5, pod: true });
+  } else if (e.kind === 'wave_snake_head') {
+    // Snake boss head: the red glowing head IS the core (segments follow; head kill → body chain)
+    e.w = 54; e.h = 54; e.hp = 60; e.maxHp = 60; e.score = Math.max(e.score || 0, 400);
+    e.core = { ox: 0, oy: 0, r: 22, hp: 1, maxHp: 1, orbit: 0, ang: 0 };
+    e.drones = null;
   } else {
     // Swarm-core: elite-sized formation; satellites orbit a central core
     e.w = Math.max(e.w || 92, 110);
@@ -296,7 +327,8 @@ export function markCoreChain(e, list) {
   for (const o of list || []) {
     if (o === e || !isChainable(o)) continue;
     const d = Math.hypot(o.x - c.x, o.y - c.y);
-    if (d < CHAIN_R || o._lead === e) { o._chainT = 0.08 + Math.min(1, d / CHAIN_R) * 0.6; n++; }
+    if (o._chainOf === e && o.chainIdx != null) { o._chainT = 0.1 + o.chainIdx * 0.13; n++; } // body segments pop down the chain
+    else if (d < CHAIN_R || o._lead === e || o._chainOf === e) { o._chainT = 0.08 + Math.min(1, d / CHAIN_R) * 0.6; n++; }
   }
   return n;
 }
@@ -321,8 +353,17 @@ export function spawnChainBoom(o) {
 export function spawnCoreEscorts(lead, fw, fh) {
   const boss = isCoreBossKind(lead.kind);
   const cols = boss ? 5 : 4, rows = boss ? 3 : 2;
-  const gx = 36, gy = boss ? 34 : 30;
-  const x0 = -(lead.w || 110) * 0.55 - 20;
+  const gx = 46, gy = boss ? 38 : 34; // visible gaps between fighters (escort 38×28)
+  // Front of the leader incl. its core swing / claws / drones, then a clear gap → slots never
+  // overlap the leader sprite or its core.
+  let front = (lead.w || 110) * 0.5;
+  if (lead.core) front = Math.max(front, -(lead.core.ox || 0) + (lead.core.orbit || 0) + (lead.core.r || 0));
+  if (lead.drones) for (const d of lead.drones) front = Math.max(front, d.dist + d.r * 1.4);
+  const x0 = -front - 40;
+  // Whole group enters together from off-screen right (pack first, leader behind);
+  // the leader flies in fast until it is on stage (see _entryX), escorts hold their slots.
+  lead.x = Math.max(lead.x, fw + 24 - x0 + (cols - 1) * gx);
+  lead._entryX = fw * 0.8;
   const out = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
@@ -332,7 +373,7 @@ export function spawnCoreEscorts(lead, fw, fh) {
       e._lead = lead;
       e.fdx = x0 - c * gx;
       e.fdy = (r - (rows - 1) / 2) * gy;
-      e.x = fw + 30 + c * gx * 0.6 + r * 8;
+      e.x = lead.x + e.fdx;
       e.y = Math.max(16, Math.min(fh - 16, lead.y + e.fdy));
       e.phase = (lead.phase || 0) + c * 0.35;
       out.push(e);
@@ -403,9 +444,10 @@ export function applyCoreAwareHit(e, dmg, bx, by, fxList) {
       fxList.push(spawnExplosion(cx, cy, true));
       fxList.push(spawnHitSpark(cx, cy));
       if (e.drones) {
+        e._popN = 0;
         for (const d of e.drones) {
           if (d.hp <= 0) continue;
-          d.hp = 0;
+          d.hp = 0; e._popN++;
           fxList.push(spawnExplosion(e.x + Math.cos(d.ang) * d.dist, e.y + Math.sin(d.ang) * d.dist, false));
         }
       }
@@ -430,7 +472,7 @@ export function applyCoreAwareHit(e, dmg, bx, by, fxList) {
   //    Eye boss: round flesh, but the core row is open (shots there fly on to the core).
   const eyeHull = e.kind === 'wave_eye_boss'
     && Math.hypot(bx - e.x, by - e.y) < e.w * 0.4 && Math.abs(by - cy) > c.r + 5;
-  const triHull = e.kind === 'wave_core_boss'
+  const triHull = (e.kind === 'wave_core_boss' || e.kind === 'wave_grid_core')
     && Math.abs(bx - e.x) < e.w * 0.45 + 4 && Math.abs(by - e.y) < e.h * 0.45 + 4;
   if (eyeHull || triHull) {
     e.hp -= Math.max(0.05, dmg * CORE_BODY_DMG_MUL);
@@ -474,7 +516,7 @@ export function applyCoreAwareArea(e, dmg, ox, oy, fxList) {
       }
     }
   }
-  if (isCoreBossKind(e.kind)) {
+  if (isCoreBossKind(e.kind) || e.kind === 'wave_grid_core') {
     e.hp -= Math.max(0.05, dmg * CORE_BODY_DMG_MUL);
     if (e.hp < 1) e.hp = 1; // only core ends them
     e._bodyFlash = 0.12;
@@ -651,6 +693,7 @@ export function serializeField(state) {
       x: e.x, y: e.y, w: e.w, h: e.h, kind: e.kind, hp: e.hp, c: e.color, s: !!e.sent,
       ch: e.core ? e.core.hp : undefined,
       dr: e.drones ? e.drones.map(d => d.hp) : undefined,
+      sp: e.spr || undefined, ro: e.rot || undefined, tn: e.tone || undefined,
       at: e.appearT > 0 ? +e.appearT.toFixed(3) : undefined,
       wt: e.warpT > 0 ? +e.warpT.toFixed(2) : undefined,
       wp: e.warpPop > 0 ? +e.warpPop.toFixed(2) : undefined,

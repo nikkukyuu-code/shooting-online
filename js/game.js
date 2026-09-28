@@ -1,18 +1,19 @@
+import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20260929010859';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
-  markCoreChain, tickChain, spawnChainBoom, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind,
-} from './entities.js?v=20260929005001';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929005001';
-import { sfx } from './audio.js?v=20260929005001';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929005001';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929005001';
-import { hitBattleCounter } from './stats.js?v=20260929005001';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929005001';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929005001';
+  markCoreChain, tickChain, spawnChainBoom, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
+} from './entities.js?v=20260929010859';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929010859';
+import { sfx } from './audio.js?v=20260929010859';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929010859';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929010859';
+import { hitBattleCounter } from './stats.js?v=20260929010859';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929010859';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929010859';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1065,7 +1066,8 @@ export class Game {
     if (mine) {
       this.state.player.score += e.score; // burst on top of the normal kill score
       try { sfx.explode(); } catch (_) {}
-      this.setStatus((isCoreBossKind(e.kind) ? 'コア撃破！ ボスを一撃で倒した！' : 'コア撃破！ 群れを全滅させた！') + (chained ? `　連鎖 ${chained}機！` : ''));
+      const nChain = chained + (e._popN || 0);
+      this.setStatus((e.kind === 'wave_snake_head' ? 'コア撃破！ 大蛇を一撃で倒した！' : isCoreBossKind(e.kind) ? 'コア撃破！ ボスを一撃で倒した！' : 'コア撃破！ 群れを全滅させた！') + (nChain ? `　連鎖 ${nChain}機！` : ''));
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
     }
   }
@@ -1734,31 +1736,21 @@ export class Game {
     // v1.5.67 extra attack items (beam / pods / missiles / vortex / freeze / discs)
     tickExItems(this.exField(), dt);
 
-    // Spawn enemies
-    this._spawnAcc += dt;
-    const spawnEvery = Math.max(0.35, 0.85 - S.time * 0.01);
-    if (this._spawnAcc >= spawnEvery) {
-      this._spawnAcc = 0;
-      const n = 1 + (Math.random() > 0.65 ? 1 : 0);
-      for (let i = 0; i < n; i++) {
-        const roll = Math.random();
-        // Wave-only kinds (not catalog/deck units). ~7% mid-wave: swarm with a core (max 1 on field).
-        let kind = roll > 0.85 ? (roll > 0.9 && S.time > 20 ? 'wave_mech' : 'wave_elite') : roll > 0.5 ? 'wave_swarm' : 'wave_basic';
-        if (roll > 0.93 && S.time > 12 && !S.enemies.some((e) => e.kind === 'wave_swarm_core')) kind = 'wave_swarm_core';
-        const ne = spawnEnemy(fw, fh, kind);
-        S.enemies.push(ne);
-        if (kind === 'wave_swarm_core') { S.enemies.push(...spawnCoreEscorts(ne, fw, fh)); this.coreTip(); }
+    // Spawn enemies — scripted STO-recreation waves (js/waves.js), same script on the COM field
+    {
+      const n0 = S.enemies.length;
+      const tags = runWaveScript(S, S.time, S.enemies, fw, fh);
+      if (S.enemies.slice(n0).some((e) => hasCore(e))) this.coreTip();
+      if (tags.includes('round2')) {
+        this.setStatus('ROUND 2');
+        setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1800);
       }
-    }
-    this._bossAcc += dt;
-    if (this._bossAcc > 22 && !S.enemies.some((e) => resolveEnemyTier(e.kind) === 'boss')) {
-      this._bossAcc = 0;
-      // Core boss is the highlight: 2 of every 3 boss spawns, classic boss otherwise
-      this._bossN = (this._bossN || 0) + 1;
-      const bk = ['wave_boss', 'wave_core_boss', 'wave_eye_boss'][this._bossN % 3];
-      const be = spawnEnemy(fw, fh, bk);
-      S.enemies.push(be);
-      if (isCoreBossKind(bk)) { S.enemies.push(...spawnCoreEscorts(be, fw, fh)); this.coreTip(); }
+      // light filler so a quiet stretch never goes empty (same on both fields)
+      this._spawnAcc += dt;
+      if (this._spawnAcc >= 3 && S.enemies.filter((e) => !e.sent).length < 4) {
+        this._spawnAcc = 0;
+        S.enemies.push(spawnEnemy(fw, fh, Math.random() < 0.5 ? 'wave_basic' : 'wave_swarm'));
+      }
     }
 
     // Update enemies (vertical weave + forward/back surge)
@@ -1767,13 +1759,14 @@ export class Game {
       if (e.frozenT > 0) continue; // フリーズ: no movement / no fire while frozen
       tickCoreExtras(e, dt);
       if (tickEscort(e, dt, fh)) continue; // formation escort: follows its core unit, no guns
+      if (e._entryX != null) { if (e.x > e._entryX) e.x -= 120 * dt; else e._entryX = null; } // core boss + pack fly in together
       e.phase += dt * 2;
       e.surgePhase = (e.surgePhase || 0) + dt * (e.surgeFreq || 1.4);
       if (e.appearT > 0) e.appearT = Math.max(0, e.appearT - dt);
       if (e.lingerT > 0) e.lingerT = Math.max(0, e.lingerT - dt);
       const surge = Math.sin(e.surgePhase) * (e.surgeAmp || 32);
       // Sent: linger on the right (bob/weave OK, no left push) until lingerT expires
-      if (e.sent && e.lingerT > 0) {
+      if (moveScripted(e, dt, fw, fh)) { /* scripted STO path */ } else if (e.sent && e.lingerT > 0) {
         if (e.holdX == null) e.holdX = fw * (0.72 + Math.random() * 0.14);
         if (e.holdY == null) e.holdY = e.y;
         // Enter right zone from off-screen, then weave in place
@@ -1798,7 +1791,7 @@ export class Game {
       e.y = Math.max(16, Math.min(fh - 16, e.y));
       const onScreen = e.x < fw + 10;
       const parked = (e.sent && e.lingerT > 0) ? e.x <= (e.holdX || fw) + 8 : true;
-      tickEnemyLaserFire(e, S.bullets, P.x, P.y * fh, dt, onScreen && parked && !e.noFire, () => {
+      if (!fireScripted(e, S.bullets, P.x, P.y * fh, dt, onScreen && !e.noFire)) tickEnemyLaserFire(e, S.bullets, P.x, P.y * fh, dt, onScreen && parked && !e.noFire, () => {
         const tier = resolveEnemyTier(e.kind);
         return e.sent
           ? ((tier === 'boss' || tier === 'tank' || tier === 'mech') ? 0.95
@@ -1883,13 +1876,13 @@ export class Game {
         P.score += e.score;
         if (e._coreBreak) {
           // コア撃破: 大回復確定 + アイテム確定 (swarm: 回復 + アイテム)
-          S.items.push(spawnItemWithId(e.x, e.y, isCoreBossKind(e.kind) ? 'heal_big' : 'heal'));
+          S.items.push(spawnItemWithId(e.x, e.y, bigCoreKind(e.kind) ? 'heal_big' : 'heal'));
           S.items.push(spawnItem(e.x + 26, e.y));
         } else if (isLargeEnemy(e)) {
           // デカギャラ撃破: 回復確定（ボス級は大回復）
           const healId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';
           S.items.push(spawnItemWithId(e.x, e.y, healId));
-        } else if (!e.noDrop && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : ITEM_DROP_CHANCE)) {
+        } else if (!e.noDrop && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : ITEM_DROP_CHANCE * (e.dropMul ?? 1))) {
           S.items.push(spawnItem(e.x, e.y));
         }
         // Damage bot passively a bit when scoring? No — only via powers / race.
@@ -2104,7 +2097,7 @@ export class Game {
       const mx = vxMax * t, my = vyMax * t;
       return [x0 + Math.sign(dx) * Math.min(Math.abs(dx), mx), y0 + Math.sign(dy) * Math.min(Math.abs(dy), my)];
     };
-    const dangerOf = (cx, cy, noHoming = false) => {
+    const dangerOf = (cx, cy, noHoming = false, shotsOnly = false) => {
       let d = 0;
       for (const b of threats) {
         if (b.homing && !b.laser && b.owner === 'enemy' && b.homeT > 0) {
@@ -2147,10 +2140,11 @@ export class Game {
           if (ax < 26 + hb && ay < 22 + hb) d += 0.6 / (0.25 + t);
         }
       }
-      for (const e of B.enemies) {
+      if (!shotsOnly) for (const e of B.enemies) {
         if (warping(e)) continue;
         const parkedE = e.sent && e.lingerT > 0;
-        const spd = parkedE ? 0 : (e.speed || 60) * 1.55;
+        // formation escorts visibly move with their leader (not at their own top speed)
+        const spd = parkedE ? 0 : ((e._lead && e._lead.hp > 0 ? e._lead.speed : e.speed) || 60) * 1.55;
         const rx = (e.w || 30) * 0.4 + 8 + margin + 10, ry = (e.h || 30) * 0.4 + 8 + margin + 12;
         for (const t of STEPS) {
           const ex = e.x - spd * t, ey = e.y;
@@ -2175,7 +2169,7 @@ export class Game {
           for (const o of offs) if (Math.abs(cy - (e.y + o)) < 16 + margin) d += 5;
         }
         // don't sit in the firing line of a unit that is about to shoot
-        if (e.x > cx && Math.abs(e.y - cy) < 14 && (e.fireCd || 0) < 0.35) d += 0.7;
+        if (!e.noFire && e.x > cx && Math.abs(e.y - cy) < 14 && (e.fireCd || 0) < 0.35) d += 0.7; // escorts never shoot (visible)
       }
       return d;
     };
@@ -2270,7 +2264,19 @@ export class Game {
     curDanger = dangerOf(B.x, shipY0);
     const dodging = curDanger > 1.5;
     // Human-like core pursuit: when relatively safe, gently pull the pointer onto the (lagged, noisy) core row
-    if (coreAim && !dodging && curDanger < 1.8 && B._ty != null && dangerOf(B._tx, aimY) < 1.8) {
+    // Core window (human skill, scaled by level): the core row is judged by the visible SHOTS on it
+    // (escorts never shoot; the pack is slow) plus a body-clearance check right around the spot.
+    // Accept a window when the shots there are about as safe as here; lower levels are more hesitant.
+    let coreWin = false;
+    if (coreAim && B._ty != null) {
+      const sx = Math.min(B._tx, B.x);
+      const shotsHere = dangerOf(B.x, shipY0, false, true);
+      const shotsRow = dangerOf(sx, aimY, false, true);
+      const bodyNear = B.enemies.some((e) => !warping(e) && Math.abs(e.x - sx) < (e.w || 30) * 0.5 + 34 && Math.abs(e.y - aimY) < (e.h || 30) * 0.5 + 22);
+      coreWin = !bodyNear && shotsRow < (AI.coreTol ?? 1.2) && shotsHere < (AI.coreTol ?? 1.2) + 1.5;
+      if (globalThis.__comDbg) globalThis.__comDbg.push([+shotsHere.toFixed(2), +shotsRow.toFixed(2), bodyNear ? 1 : 0, coreWin ? 1 : 0]);
+    }
+    if (coreWin) {
       B._ty += (aimY - B._ty) * Math.min(1, (AI.corePull ?? 0.45) * Math.min(1, 4 * dt) * 10);
     }
 
@@ -2367,28 +2373,11 @@ export class Game {
     // --- Spawns (slightly denser so AI has something to think about) ---
     // Same wave rules as the player's field (interval, 1–2 per wave, kind mix, wave boss every 22s)
     // so COM gets the same number of kill → item-drop chances.
-    B.spawnAcc += dt;
-    const botSpawnEvery = Math.max(0.35, 0.85 - (B.time || 0) * 0.01);
-    if (B.spawnAcc >= botSpawnEvery) {
+    runWaveScript(B, B.time || 0, B.enemies, fw, fh); // same script / clock rules as the player field
+    B.spawnAcc = (B.spawnAcc || 0) + dt;
+    if (B.spawnAcc >= 3 && B.enemies.filter((e) => !e.sent).length < 4) {
       B.spawnAcc = 0;
-      const n = 1 + (Math.random() > 0.65 ? 1 : 0);
-      for (let i = 0; i < n; i++) {
-        const r = Math.random();
-        // Same mix as the player field (incl. swarm-core)
-        let kind = r > 0.85 ? (r > 0.9 && (B.time || 0) > 20 ? 'wave_mech' : 'wave_elite') : r > 0.5 ? 'wave_swarm' : 'wave_basic';
-        if (r > 0.93 && (B.time || 0) > 12 && !B.enemies.some((e) => e.kind === 'wave_swarm_core')) kind = 'wave_swarm_core';
-        const ne = spawnEnemy(fw, fh, kind);
-        B.enemies.push(ne);
-        if (kind === 'wave_swarm_core') B.enemies.push(...spawnCoreEscorts(ne, fw, fh)); // same pack as the player field
-      }
-    }
-    B.bossAcc = (B.bossAcc || 0) + dt;
-    if (B.bossAcc > 22 && !B.enemies.some((e) => resolveEnemyTier(e.kind) === 'boss')) {
-      B.bossAcc = 0;
-      B.bossN = (B.bossN || 0) + 1;
-      const be = spawnEnemy(fw, fh, ['wave_boss', 'wave_core_boss', 'wave_eye_boss'][B.bossN % 3]);
-      B.enemies.push(be);
-      if (isCoreBossKind(be.kind)) B.enemies.push(...spawnCoreEscorts(be, fw, fh));
+      B.enemies.push(spawnEnemy(fw, fh, Math.random() < 0.5 ? 'wave_basic' : 'wave_swarm'));
     }
 
     for (const e of B.enemies) {
@@ -2396,13 +2385,14 @@ export class Game {
       if (e.frozenT > 0) continue; // フリーズ: no movement / no fire while frozen
       tickCoreExtras(e, dt);
       if (tickEscort(e, dt, fh)) continue; // formation escort: follows its core unit, no guns
+      if (e._entryX != null) { if (e.x > e._entryX) e.x -= 120 * dt; else e._entryX = null; } // core boss + pack fly in together
       e.phase += dt * 2;
       e.surgePhase = (e.surgePhase || 0) + dt * (e.surgeFreq || 1.4);
       if (e.appearT > 0) e.appearT = Math.max(0, e.appearT - dt);
       if (e.lingerT > 0) e.lingerT = Math.max(0, e.lingerT - dt);
       const surge = Math.sin(e.surgePhase) * (e.surgeAmp || 32);
       // Sent: linger on the right (bob/weave OK) until lingerT expires, then advance left
-      if (e.sent && e.lingerT > 0) {
+      if (moveScripted(e, dt, fw, fh)) { /* scripted STO path */ } else if (e.sent && e.lingerT > 0) {
         if (e.holdX == null) e.holdX = fw * (0.72 + Math.random() * 0.14);
         if (e.holdY == null) e.holdY = e.y;
         if (e.x > e.holdX + (e.surgeAmp || 32) + 8) {
@@ -2422,7 +2412,7 @@ export class Game {
       }
       e.y = Math.max(20, Math.min(fh - 20, e.y));
       const parked = (e.sent && e.lingerT > 0) ? e.x <= (e.holdX || fw) + 8 : true;
-      tickEnemyLaserFire(e, B.bullets, shipX, B.y * fh, dt, parked && !e.noFire, () => {
+      if (!fireScripted(e, B.bullets, shipX, B.y * fh, dt, e.x < fw - 10 && !e.noFire)) tickEnemyLaserFire(e, B.bullets, shipX, B.y * fh, dt, parked && !e.noFire, () => {
         const tier = resolveEnemyTier(e.kind);
         return e.sent
           ? ((['elite', 'boss', 'mech', 'tank'].includes(tier)) ? 1.1 : 1.55)
@@ -2477,12 +2467,12 @@ export class Game {
         B.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
         // Same as the player: drops are orbs that the COM ship must fly into (8s life)
         if (e._coreBreak) {
-          B.orbs.push(spawnItemWithId(e.x, e.y, isCoreBossKind(e.kind) ? 'heal_big' : 'heal'));
+          B.orbs.push(spawnItemWithId(e.x, e.y, bigCoreKind(e.kind) ? 'heal_big' : 'heal'));
           B.orbs.push(spawnItem(e.x + 26, e.y));
         } else if (isLargeEnemy(e)) {
           const healId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';
           B.orbs.push(spawnItemWithId(e.x, e.y, healId));
-        } else if (!e.noDrop && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : ITEM_DROP_CHANCE)) {
+        } else if (!e.noDrop && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : ITEM_DROP_CHANCE * (e.dropMul ?? 1))) {
           B.orbs.push(spawnItem(e.x, e.y));
         }
       } else if (e.x > -40) {

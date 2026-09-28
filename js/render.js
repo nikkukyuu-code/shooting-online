@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929005001';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929010859';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260929005001`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260929010859`;
 }
 
 function loadKindSprite(kind) {
@@ -339,6 +339,7 @@ export function registerEnemyKinds(ids) {
 
 // Kick off load as soon as this module evaluates
 preloadEnemySprites();
+for (const id of ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2']) loadKindSprite(id);
 
 function drawEnemySprite(ctx, e, kind) {
   const frames = enemySprites[kind];
@@ -378,6 +379,14 @@ function waveSprite(kind) {
   const img = waveSprites[kind];
   return img && img.complete && img.naturalWidth ? img : null;
 }
+/** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
+const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
+function scriptSprite(id) {
+  if (!enemySprites[id]) loadKindSprite(id);
+  const img = enemySprites[id] && enemySprites[id][ENEMY_STATIC_FRAME];
+  return img && img.complete && img.naturalWidth ? img : null;
+}
+const CORE_DRAW_KINDS = new Set(['wave_core_boss', 'wave_swarm_core', 'wave_eye_boss', 'wave_grid_core', 'wave_ring_core', 'wave_snake_head']);
 /** Draw sprite centred, aspect kept, fitted inside bw×bh. */
 function drawFit(ctx, img, bw, bh, flash) {
   const k = Math.min(bw / img.naturalWidth, bh / img.naturalHeight);
@@ -387,6 +396,40 @@ function drawFit(ctx, img, bw, bh, flash) {
   if (flash) ctx.filter = 'none';
 }
 function drawCoreSpriteBody(ctx, e, kind, w, h, t, flash) {
+  if (kind === 'wave_ring_core') {
+    // Ring formation: 8 pods (fighter sprite, nose along the orbit) round a bare red core
+    ctx.strokeStyle = 'rgba(255,70,60,0.22)';
+    ctx.lineWidth = 1.5;
+    const pd = (e.drones && e.drones[0] && e.drones[0].dist) || w * 0.39;
+    ctx.beginPath(); ctx.arc(0, 0, pd, 0, Math.PI * 2); ctx.stroke();
+    const pod = scriptSprite('fighter_mk2');
+    for (const d of e.drones || []) {
+      if (d.hp <= 0) continue;
+      ctx.save();
+      ctx.translate(Math.cos(d.ang) * d.dist, Math.sin(d.ang) * d.dist);
+      ctx.rotate(d.ang + Math.PI / 2 - Math.PI);
+      if (pod) drawFit(ctx, pod, d.r * 2.6, d.r * 2.6, false);
+      else { ctx.fillStyle = '#b8bec8'; ctx.beginPath(); ctx.arc(0, 0, d.r, 0, Math.PI * 2); ctx.fill(); }
+      ctx.restore();
+    }
+    return true;
+  }
+  if (kind === 'wave_snake_head') {
+    // Serpent head: dark armoured jaw around the glowing red core (the core IS the head)
+    ctx.fillStyle = flash ? '#d0d6de' : '#5b606c';
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.62, -h * 0.12); ctx.lineTo(-w * 0.2, -h * 0.5); ctx.lineTo(w * 0.45, -h * 0.36);
+    ctx.lineTo(w * 0.52, 0); ctx.lineTo(w * 0.45, h * 0.36); ctx.lineTo(-w * 0.2, h * 0.5); ctx.lineTo(-w * 0.62, h * 0.12);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#a8aeb8'; ctx.lineWidth = 1.5; ctx.stroke();
+    return true;
+  }
+  if (kind === 'wave_grid_core') {
+    const sc = waveSprite('wave_swarm_core');
+    if (!sc) return false;
+    drawFit(ctx, sc, w * 1.1, h * 1.1, flash);
+    return true;
+  }
   const img = waveSprite(kind);
   if (!img) return false;
   if (kind === 'wave_core_boss') {
@@ -1003,6 +1046,29 @@ function drawWarpRing(ctx, w, h, t, warpT, warpPop) {
   ctx.restore();
 }
 
+/** Snake body segment (silver / green caterpillar) — glossy sphere. */
+function drawSegBall(ctx, e, w, h, t) {
+  const r = Math.min(w, h) * 0.5;
+  const green = e.tone === 'green' || e.kind === 'wave_cater';
+  const g = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r);
+  if (green) { g.addColorStop(0, '#d8ffc0'); g.addColorStop(0.45, '#4fbf3a'); g.addColorStop(1, '#1d4d18'); }
+  else { g.addColorStop(0, '#ffffff'); g.addColorStop(0.45, '#aab2be'); g.addColorStop(1, '#3a404c'); }
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = green ? 'rgba(20,60,20,0.8)' : 'rgba(30,34,44,0.8)';
+  ctx.lineWidth = 1.2; ctx.stroke();
+}
+/** Floating mine: yellow plate with a ring (scrolls with the field). */
+function drawMine(ctx, w, h, t) {
+  const s = Math.min(w, h);
+  ctx.save(); ctx.rotate(t * 0.8);
+  ctx.fillStyle = '#e8c21c'; ctx.strokeStyle = '#6b5608'; ctx.lineWidth = 1.5;
+  ctx.fillRect(-s * 0.45, -s * 0.45, s * 0.9, s * 0.9); ctx.strokeRect(-s * 0.45, -s * 0.45, s * 0.9, s * 0.9);
+  ctx.strokeStyle = `rgba(200,30,20,${0.6 + 0.4 * Math.sin(t * 5)})`; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(0, 0, s * 0.26, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+}
+
 function drawEnemy(ctx, e) {
   ctx.save();
   ctx.translate(e.x, e.y);
@@ -1053,7 +1119,14 @@ function drawEnemy(ctx, e) {
 
   // Wave ambient kinds: procedural only (never catalog sprites)
   if (isWaveKindId(kind)) {
-    if (kind === 'wave_core_boss' || kind === 'wave_swarm_core' || kind === 'wave_eye_boss') drawCoreEnemy(ctx, e, kind, w, h, t);
+    if (CORE_DRAW_KINDS.has(kind)) drawCoreEnemy(ctx, e, kind, w, h, t);
+    else if (e.spr && scriptSprite(e.spr)) {
+      ctx.save(); if (e.rot) ctx.rotate(e.rot);
+      drawFit(ctx, scriptSprite(e.spr), w * 1.2, h * 1.2, (e.bodyFlash || 0) > 0);
+      ctx.restore();
+    }
+    else if (kind === 'wave_snake_seg' || kind === 'wave_cater') drawSegBall(ctx, e, w, h, t);
+    else if (kind === 'wave_mine') drawMine(ctx, w, h, t);
     else if ((kind === 'wave_escort' || kind === 'wave_mech') && waveSprite(kind)) drawFit(ctx, waveSprite(kind), w * 1.15, h * 1.15, false);
     else if (kind === 'wave_escort') drawEscort(ctx, w, h, t, e);
     else drawWaveEnemy(ctx, e, kind, sent, w, h, t, pulse);
@@ -1070,7 +1143,7 @@ function drawEnemy(ctx, e) {
   const tierKey = isWaveKindId(kind) ? kind.replace(/^wave_/, '') : kind;
   const tiny = tierKey === 'swarm' || tierKey === 'basic'
     || (e.w && e.w <= 70 && e.h && e.h <= 60);
-  if (!tiny && kind !== 'wave_core_boss' && kind !== 'wave_swarm_core' && kind !== 'wave_eye_boss') drawHpPip(ctx, e);
+  if (!tiny && !CORE_DRAW_KINDS.has(kind) && kind !== 'wave_snake_seg' && kind !== 'wave_cater' && kind !== 'wave_mine') drawHpPip(ctx, e);
 
   if (sent) {
     const labelA = appearT > 0 ? (0.55 + 0.45 * (0.5 + 0.5 * Math.sin(t * 18))) : 0.9;
@@ -2789,10 +2862,11 @@ export function drawField(ctx, area, snap, opts = {}) {
       laserAimX: (e.laserAimX ?? e.ax) != null ? (e.laserAimX ?? e.ax) * sx : undefined,
       laserAimY: (e.laserAimY ?? e.ay) != null ? (e.laserAimY ?? e.ay) * sy : undefined,
       laserTeleOffs: Array.isArray(e.laserTeleOffs ?? e.lo) ? (e.laserTeleOffs ?? e.lo).map((o) => o * sy) : undefined,
+      spr: e.spr ?? e.sp, rot: e.rot ?? e.ro, tone: e.tone ?? e.tn,
       core: e.core ? { ox: e.core.ox * sx, oy: e.core.oy * sy, r: e.core.r * Math.min(sx, sy), hp: e.core.hp }
-        : (e.ch != null ? { ox: e.kind === 'wave_core_boss' ? -(e.w || 184) * 0.36 * sx : 0, oy: 0, r: (e.kind === 'wave_core_boss' ? 23 : e.kind === 'wave_eye_boss' ? 27 : 15) * Math.min(sx, sy), hp: e.ch } : undefined),
+        : (e.ch != null ? { ox: e.kind === 'wave_core_boss' ? -(e.w || 184) * 0.36 * sx : e.kind === 'wave_grid_core' ? -(e.w || 62) * 0.3 * sx : 0, oy: 0, r: ({ wave_core_boss: 23, wave_eye_boss: 27, wave_ring_core: 17, wave_snake_head: 22 }[e.kind] || 15) * Math.min(sx, sy), hp: e.ch } : undefined),
       drones: e.drones ? e.drones.map((d) => ({ ang: d.ang, dist: d.dist * Math.min(sx, sy), r: d.r * Math.min(sx, sy), hp: d.hp }))
-        : (Array.isArray(e.dr) ? e.dr.map((hp, i, a) => ({ ang: (Math.PI * 2 * i) / a.length + performance.now() / 1000 * 1.6, dist: (e.kind === 'wave_eye_boss' ? 72 : 36 + (i % 2) * 8) * Math.min(sx, sy), r: (e.kind === 'wave_eye_boss' ? 15 : 12) * Math.min(sx, sy), hp })) : undefined),
+        : (Array.isArray(e.dr) ? e.dr.map((hp, i, a) => ({ ang: (Math.PI * 2 * i) / a.length + performance.now() / 1000 * 1.6, dist: (e.kind === 'wave_eye_boss' ? 72 : e.kind === 'wave_ring_core' ? 58 : 36 + (i % 2) * 8) * Math.min(sx, sy), r: (e.kind === 'wave_eye_boss' ? 15 : e.kind === 'wave_ring_core' ? 14 : 12) * Math.min(sx, sy), hp })) : undefined),
       bodyFlash: e._bodyFlash || 0,
     });
   }
