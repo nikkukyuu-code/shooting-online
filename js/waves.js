@@ -11,7 +11,8 @@
  *               (row → V → rotating circle, column → split → re-merge, box ↔ circle round a core)
  *   snake       sharp weave with speed surges (segments follow the head's exact path)
  *   zig / drift zig-zag lines, bobbing mines
- *   boss        tri boss (reposition + stop-and-fan), eye boss (figure-8), jet boss (sweep → dash → spiral)
+ *   boss        tri boss (fan / 3-burst / twin laser), eye boss (core laser when open + 3-way),
+ *               jet boss (laser sweep → dash → spiral)
  *
  *  0:02 W1  mechs arc in from the edges, stop-and-shoot walkers, zig-zag darts, split cluster
  *  0:14 W2  morphing wedge formation, swoopers, behind-entry arc, split grid, core grids (box ↔ ring)
@@ -24,8 +25,10 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20260929033119';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20260929035738';
 
+/** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
+const FIRE_CD_MUL = 0.6;
 const SCROLL = 55; // px/s — trap mines drift at background scroll speed
 const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -49,12 +52,12 @@ const B = (p0, p1, p2, p3, d) => ({ k: 'bez', p: [p0, p1, p2, p3], d });
 
 // ---------- unit templates ----------
 const T = {
-  mech: (o) => ({ w: 40, h: 48, hp: 4, score: 10, dropMul: 0.4, ...o }),
-  wedge: (o) => ({ w: 38, h: 28, hp: 3, score: 10, dropMul: 0.3, noFire: true, ...o }),
-  dart: (o) => ({ spr: 'drone', w: 34, h: 30, hp: 2, score: 8, dropMul: 0.3, noFire: true, face: true, ...o }),
-  swooper: (o) => ({ spr: 'fighter_mk2', w: 42, h: 38, hp: 4, score: 15, dropMul: 0.5, face: true, ...o }),
-  gunship: (o) => ({ spr: 'gunship_alpha_b', w: 58, h: 52, hp: 9, score: 25, dropMul: 0.7, ...o }),
-  spider: (o) => ({ spr: 'gunship_alpha', w: 46, h: 44, hp: 6, score: 15, dropMul: 0.6, ...o }),
+  mech: (o) => ({ w: 40, h: 48, hp: 4, score: 10, ...o }),
+  wedge: (o) => ({ w: 38, h: 28, hp: 3, score: 10, fire: aimed(2.4, 140), ...o }),
+  dart: (o) => ({ spr: 'drone', w: 34, h: 30, hp: 2, score: 8, face: true, fire: aimed(2.8, 145), ...o }),
+  swooper: (o) => ({ spr: 'fighter_mk2', w: 42, h: 38, hp: 4, score: 15, face: true, ...o }),
+  gunship: (o) => ({ spr: 'gunship_alpha_b', w: 58, h: 52, hp: 9, score: 25, ...o }),
+  spider: (o) => ({ spr: 'gunship_alpha', w: 46, h: 44, hp: 6, score: 15, ...o }),
 };
 const aimed = (cd, spd = 150, noise = 0.3) => ({ type: 'aimed', spd, cd: cd * rnd(0.85, 1.25), noise });
 const straight = (cd, spd = 150) => ({ type: 'straight', spd, cd: cd * rnd(0.85, 1.25) });
@@ -69,7 +72,7 @@ function mechArc(fw, fh, fromTop, n = 4, fire = false) {
       mv: 'plan', dly: i * 0.38, tele: 0.8,
       plan: [B([fw * (0.78 + i * 0.03), ey], [fw * 0.7, yy - s * 60], [fw * 0.62, yy], [fw * 0.4, yy], d * 0.6),
         B([fw * 0.4, yy], [fw * 0.2, yy], [fw * 0.05, yy + s * 30], [-70, yy + s * 50], d * 0.5)],
-      fire: fire ? straight(1.8, 150) : null, noFire: !fire,
+      fire: fire ? aimed(1.6, 155) : straight(2.0, 150), noFire: false,
     })));
   }
   return out;
@@ -86,7 +89,7 @@ function stopShoot(fw, fh, rows, spr = null, kind = 'wave_mech') {
         { k: 'hold', d: 2.2, bob: 6, warn: 0.5 },
         { k: 'bez', rel: true, p: [[0, 0], [10, 0], [20, 0], [24, 0]], d: 0.3 },
         { k: 'bez', rel: true, p: [[0, 0], [-150, 0], [-380, (fy < 0.5 ? 1 : -1) * 40], [-fw, (fy < 0.5 ? 1 : -1) * 90]], d: 1.7 }],
-      fire: { type: 'burst', spd: 165, cd: 0.9, n: 3, gap: 0.14, holdOnly: true },
+      fire: { type: 'burst', spd: 170, cd: 0.7, n: 3, gap: 0.12, holdOnly: true },
     });
   });
 }
@@ -187,13 +190,19 @@ function gridCore(fw, fh, fy, fromTop = null) {
   const cy = Math.max(110, Math.min(fh - 110, fh * fy));
   const ey = fromTop == null ? cy : fromTop ? -120 : fh + 120;
   const lead = mk('wave_grid_core', fw, fh, fw + 150, ey, {
-    mv: 'plan', noFire: true,
+    mv: 'plan', noFire: false,
+    fire: { type: 'fan3', spd: 155, cd: 1.5 },
     plan: [B([fw + 150, ey], [fw * 0.95, fromTop == null ? cy : cy - (fromTop ? 1 : -1) * 90], [fw * 0.8, cy], [fw * 0.68, cy], 2.2),
       { k: 'hold', d: 10, bob: 30, bw: 0.9, sway: 34 },
       B([fw * 0.68, cy], [fw * 0.55, cy], [fw * 0.4, cy + 40], [-120, cy + 30], 6)],
   });
   const G = { lead, sp: 40, wob: 2, shapes: [{ t: 0, s: 'box', L: 80 }, { t: 4, s: 'circle', R: 88, w: 1.3 }, { t: 8.5, s: 'box', L: 80, w: 0.35 }, { t: 12.5, s: 'circle', R: 84, w: -1.1 }] };
-  const cage = form(fw, fh, 'wave_escort', 16, () => T.wedge({ _chainOf: lead, noDrop: true, hp: GUARD_HP.cage }), G);
+  let _gi = 0;
+  const cage = form(fw, fh, 'wave_escort', 16, () => {
+    const i = _gi++;
+    return T.wedge({ _chainOf: lead, noDrop: true, hp: GUARD_HP.cage,
+      fire: i % 2 === 0 ? aimed(3.2, 140) : null, noFire: i % 2 !== 0 });
+  }, G);
   return [lead, ...cage];
 }
 
@@ -208,7 +217,7 @@ function swoopers(fw, fh, fromTop, n = 3, sprName = 'fighter_mk2') {
       plan: [B([hx + 60, ey], [hx + 80, hy - s * 40], [hx + 30, hy], [hx, hy], 1.2),
         { k: 'hold', d: 0.9 + i * 0.35, bob: 5, warn: 0.6 },
         { k: 'dive' }],
-      fire: aimed(2.6, 140), noFire: false,
+      fire: sprName === 'plasma_bomber' ? { type: 'dashfan', n: 3, sp: 0.17, spd: 215, cd: 2.2 } : aimed(2.6, 140), noFire: false,
     })));
   }
   return out;
@@ -246,7 +255,8 @@ function spiders(fw, fh, fy, n = 5, amp = 0.16) {
 function ring(fw, fh, fy) {
   const y = Math.max(80, Math.min(fh - 80, fh * fy)), fromTop = fy < 0.5, ey = fromTop ? -90 : fh + 90;
   return [mk('wave_ring_core', fw, fh, fw * 0.95, ey, {
-    mv: 'plan', tele: 0, noFire: true,
+    mv: 'plan', tele: 0, noFire: false,
+    fire: { type: 'ringcore', spd: 125, cd: 1.35 },
     plan: [B([fw * 0.95, ey], [fw * 0.95, y], [fw * 0.85, y], [fw * 0.72, y], 2.2),
       { k: 'hold', d: 12, bob: 44, bw: 0.7, sway: 46 },
       B([fw * 0.72, y], [fw * 0.6, y], [fw * 0.3, y + (fromTop ? 50 : -50)], [-120, y], 7)],
@@ -259,7 +269,7 @@ function snake(fw, fh, fy, segs = 6, tone = 'silver') {
   const P = { v: vx(fw, 17), amp: Math.min(fh * 0.3, 100), wf: 1.8, k2: 0.35, sk: 0.6, sw: 0.8 };
   const head = mk('wave_snake_head', fw, fh, fw + 40, y0, {
     mv: 'snake', ...P, dly: 0, x0: fw + 40,
-    fire: aimed(1.6, 165, 0.2),
+    fire: { type: 'snakehead', spd: 175, cd: 1.15 },
   });
   const out = [head];
   for (let i = 1; i <= segs; i++) {
@@ -277,7 +287,7 @@ function caterpillar(fw, fh, fy) {
   for (let i = 0; i < 5; i++) {
     out.push(mk('wave_cater', fw, fh, fw + 40, fh * fy, {
       w: 30, h: 30, hp: 4, score: 10, mv: 'snake', ...P, x0: fw + 40,
-      dly: i * 0.22, noFire: true, dropMul: 0.3, tone: 'green',
+      dly: i * 0.22, noFire: i % 2 !== 0, fire: i % 2 === 0 ? aimed(2.2, 140) : null, tone: 'green',
     }));
   }
   for (const e of out) e.y0 = fh * fy;
@@ -285,7 +295,7 @@ function caterpillar(fw, fh, fy) {
 }
 function mines(fw, fh, rowsF) {
   return rowsF.map((fy, i) => mk('wave_mine', fw, fh, fw + 30 + i * rnd(70, 110), fh * fy, {
-    w: 34, h: 34, hp: 8, score: 10, mv: 'drift', vx: SCROLL * rnd(0.9, 1.15), bob: rnd(8, 16), bf: rnd(0.9, 1.6), ph: rnd(0, 6), noFire: true, dropMul: 0.3,
+    w: 34, h: 34, hp: 8, score: 10, mv: 'drift', vx: SCROLL * rnd(0.9, 1.15), bob: rnd(8, 16), bf: rnd(0.9, 1.6), ph: rnd(0, 6), noFire: true,
   }));
 }
 
@@ -295,7 +305,7 @@ function loopers(fw, fh, fy, n = 4) {
   for (let i = 0; i < n; i++) {
     out.push(mk('wave_looper', fw, fh, fw + 30 + i * 56, fh * fy, {
       spr: 'light_destroyer', w: 44, h: 40, hp: 4, score: 15, mv: 'loop', vx: vx(fw, 4.2) * rnd(0.9, 1.12),
-      loopX: fw * rnd(0.45, 0.62), R: Math.min(fh * 0.22, 70) * rnd(0.8, 1.1), loopDur: rnd(1.4, 1.8), dropMul: 0.5,
+      loopX: fw * rnd(0.45, 0.62), R: Math.min(fh * 0.22, 70) * rnd(0.8, 1.1), loopDur: rnd(1.4, 1.8),
       loopDir: i % 2 ? -1 : 1,
       fire: straight(2.2, 160), noFire: false,
     }));
@@ -309,13 +319,13 @@ function saucerCircle(fw, fh, fy, n = 8) {
     path: [B([fw + 120, y], [fw * 0.8, y - 60], [fw * 0.7, y + 60], [fw * 0.55, y], 3), B([fw * 0.55, y], [fw * 0.45, y - 50], [fw * 0.4, y + 50], [fw * 0.3, y], 2.6)],
     shapes: [{ t: 0, s: 'circle', R: 58, w: 2.4 }, { t: 3.0, s: 'row' }, { t: 4.4, s: 'circle', R: 70, w: -2.4 }],
   };
-  return form(fw, fh, 'wave_saucer', n, (i) => ({ spr: 'swarm', w: 34, h: 30, hp: 3, score: 8, dropMul: 0.3, noFire: i % 4 !== 0, fire: i % 4 === 0 ? aimed(2.6, 140) : null }), G);
+  return form(fw, fh, 'wave_saucer', n, (i) => ({ spr: 'swarm', w: 34, h: 30, hp: 3, score: 8, noFire: i % 4 !== 0, fire: i % 4 === 0 ? aimed(2.6, 140) : null }), G);
 }
 function saucers(fw, fh, fy, n = 8, wavy = false) {
   const out = [];
   for (let i = 0; i < n; i++) {
     out.push(mk('wave_saucer', fw, fh, fw + 30 + i * 40, fh * fy, {
-      spr: 'swarm', w: 34, h: 30, hp: 3, score: 8, mv: 'plan', dropMul: 0.3, noFire: i % 3 !== 0,
+      spr: 'swarm', w: 34, h: 30, hp: 3, score: 8, mv: 'plan', noFire: i % 3 !== 0,
       plan: [{ k: 'line', vx: vx(fw, 4.4) * rnd(0.9, 1.1), amp: wavy ? fh * 0.14 : fh * 0.03, wf: 3, ph: -i * 0.55, surge: 0.25 }],
       fire: i % 3 === 0 ? straight(2.4, 150) : null,
     }));
@@ -324,10 +334,16 @@ function saucers(fw, fh, fy, n = 8, wavy = false) {
 }
 
 // ---------- bosses ----------
+/** Escorts fire together in volleys (every other fighter, synced), like the original pack. */
+function volley(esc, cd = 2.8, spd = 140) {
+  esc.forEach((s, i) => { if (i % 2 === 0) Object.assign(s, { noFire: false, fire: { type: 'aimed', spd, cd, noise: 0.12, sync: true }, _fcd: 1.6 }); });
+  return esc;
+}
+
 function coreBossPack(fw, fh, fy) {
   const e = spawnEnemy(fw, fh, 'wave_core_boss');
   e.y = Math.max(e.h * 0.5 + 6, Math.min(fh - e.h * 0.5 - 6, fh * fy));
-  const esc = spawnCoreEscorts(e, fw, fh);
+  const esc = volley(spawnCoreEscorts(e, fw, fh), 2.8);
   e._entryX = null;
   Object.assign(e, { mv: 'boss', boss: 'tri', hx: fw * 0.8, y0: e.y, stay: 29, mvT: 0,
     fire: { type: 'boss' } });
@@ -336,7 +352,7 @@ function coreBossPack(fw, fh, fy) {
 function eyeBoss(fw, fh) {
   const e = spawnEnemy(fw, fh, 'wave_eye_boss');
   e.y = fh * 0.5;
-  const esc = spawnCoreEscorts(e, fw, fh);
+  const esc = volley(spawnCoreEscorts(e, fw, fh), 3.2);
   e._entryX = null;
   Object.assign(e, { mv: 'boss', boss: 'eye', hx: fw * 0.66, y0: fh * 0.5, stay: 36, mvT: 0, fire: { type: 'boss' } });
   return [e, ...esc];
@@ -345,7 +361,7 @@ function jetBoss(fw, fh) {
   const e = mk('wave_core_boss', fw, fh, fw + 110, fh * 0.5, {
     mv: 'boss', boss: 'jet', hx: fw * 0.7, stay: 32, fire: { type: 'boss' },
   });
-  const esc = spawnCoreEscorts(e, fw, fh).map((s) => Object.assign(s, { noFire: true }));
+  const esc = volley(spawnCoreEscorts(e, fw, fh), 3.4);
   e._entryX = null;
   return [e, ...esc];
 }
@@ -363,31 +379,43 @@ export const WAVE_SCRIPT = [
   [17.5, (w, h) => swoopers(w, h, true, 3)],
   [19.5, (w, h) => behindArc(w, h, true, 5)],
   [21.8, (w, h) => splitGroup(w, h, 0.5, 8, 'drone')],
-  [24.5, (w, h) => gridCore(w, h, 0.45, true)],   // lingers ~12 s in the right half
+  [24.5, (w, h) => gridCore(w, h, 0.45, true)],
+  [27, (w, h) => zig(w, h, 0.25, 5)],
   [29, (w, h) => swoopers(w, h, false, 2)],
+  [32, (w, h) => mechArc(w, h, true, 3, true)],
   [34, (w, h) => zig(w, h, 0.8, 4, 0.1)],
-  [40, (w, h) => coreBossPack(w, h, 0.5)],        // stays ~29 s
+  [40, (w, h) => coreBossPack(w, h, 0.5)],
   // W3 (light while the tri boss is up)
+  [45, (w, h) => zig(w, h, 0.2, 4)],
   [47, (w, h) => spiders(w, h, 0.25, 4)],
+  [52, (w, h) => zig(w, h, 0.85, 4)],
   [55, (w, h) => stopShoot(w, h, [0.22, 0.78], null, 'wave_spider')],
+  [60, (w, h) => swoopers(w, h, true, 2)],
   [62, (w, h) => zig(w, h, 0.75, 4, 0.1)],
   // W4 rings
   [70, (w, h) => ring(w, h, 0.4)],
+  [73, (w, h) => zig(w, h, 0.75, 5)],
   [75, (w, h) => swoopers(w, h, true, 2)],
+  [80, (w, h) => stopShoot(w, h, [0.35, 0.65])],
   [86, (w, h) => ring(w, h, 0.6)],
+  [90, (w, h) => zig(w, h, 0.25, 5)],
   [92, (w, h) => swoopers(w, h, false, 2)],
   // midboss eye (~36 s)
   [104, (w, h) => eyeBoss(w, h)],
+  [112, (w, h) => zig(w, h, 0.2, 4)],
   [118, (w, h) => swoopers(w, h, true, 2)],
+  [124, (w, h) => zig(w, h, 0.8, 4)],
   [130, (w, h) => swoopers(w, h, false, 2)],
   // boss snake (slow crossing)
   [146, (w, h) => snake(w, h, 0.5)],
+  [150, (w, h) => zig(w, h, 0.2, 4)],
   [154, (w, h) => behindArc(w, h, false, 4)],
   [160, (w, h) => zig(w, h, 0.3, 5)],
   // trap zone
   [166, (w, h) => mines(w, h, [0.2, 0.55, 0.85])],
   [170, (w, h) => caterpillar(w, h, 0.35)],
   [174, (w, h) => gridCore(w, h, 0.5, false)],
+  [178, (w, h) => zig(w, h, 0.75, 4)],
   [180, (w, h) => mines(w, h, [0.3, 0.8])],
   [186, (w, h) => swoopers(w, h, true, 2)],
   [192, (w, h) => mines(w, h, [0.15, 0.5, 0.85])],
@@ -400,8 +428,11 @@ export const WAVE_SCRIPT = [
   [222, (w, h) => loopers(w, h, 0.35)],
   [226, (w, h) => loopers(w, h, 0.65)],
   [230, (w, h) => swoopers(w, h, true, 3, 'plasma_bomber')],
-  [238, (w, h) => jetBoss(w, h)],                 // ~32 s of sweep / dash / spiral
+  [234, (w, h) => zig(w, h, 0.5, 5)],
+  [238, (w, h) => jetBoss(w, h)],
+  [248, (w, h) => zig(w, h, 0.25, 4)],
   [252, (w, h) => loopers(w, h, 0.5, 3)],
+  [258, (w, h) => stopShoot(w, h, [0.3, 0.7])],
   [264, (w, h) => saucerCircle(w, h, 0.35)],
   [274, (w, h) => gridCore(w, h, 0.45, true)],
   [282, (w, h) => saucerCircle(w, h, 0.7)],
@@ -623,49 +654,163 @@ export function fireScripted(e, bullets, tx, ty, dt, canFire) {
     b.r = 5; b.orb = true;
     bullets.push(b);
   };
+  const dash = (x, y, a, spd = 230) => {
+    const b = spawnBullet(x, y, Math.cos(a) * spd, Math.sin(a) * spd, 'enemy', false, 2, { life: 3.2 });
+    b.k = 'dash'; b.r = 2.5; b.hb = 1;
+    bullets.push(b);
+  };
+  const laser = (dy = 0, spd = 480) => {
+    const b = spawnBullet(ox, oy + dy, -Math.abs(spd), 0, 'enemy', false, 2, { laser: true, life: 1.6 });
+    b.r = 3.5; b.hb = 2;
+    bullets.push(b);
+  };
   const aim = Math.atan2(ty - oy, tx - ox);
-  if (f.type === 'boss') { bossFire(e, dt, canFire, shot, aim); return true; }
-  // queued burst shots
+  // In-progress laser telegraph (field-only warning line, then the beam)
+  if (e._laserTele > 0) {
+    e._laserTele -= dt;
+    e.laserTeleT = Math.max(0, e._laserTele);
+    if (e._laserTele <= 0) {
+      e.laserTeleT = 0; e.laserAimX = undefined; e.laserAimY = undefined; e.laserTeleOffs = undefined;
+      if (e._dashWall) {
+        // Dash wall: every telegraphed row fires 3 short white dashes in quick succession
+        e._dwRows = e._laserOffs.slice(); e._dwN = 3; e._dwT = 0; e._dashWall = false;
+      } else for (const dy of (e._laserOffs || [0])) laser(dy, e._laserSpd || 480);
+    }
+    return true;
+  }
+  if (e._dwN > 0) {
+    e._dwT -= dt;
+    if (e._dwT <= 0) {
+      e._dwN--; e._dwT = 0.13;
+      for (const dy of e._dwRows) dash(e.x - 20, e.y + dy, Math.PI, 235);
+    }
+    return true;
+  }
+  if (f.type === 'boss') { bossFire(e, dt, canFire, shot, laser, aim, ox, oy); return true; }
   if (e._burstN > 0 && canFire) {
     e._burstT -= dt;
     if (e._burstT <= 0) { e._burstN--; e._burstT = f.gap || 0.14; shot(e._burstA + (Math.random() - 0.5) * 0.12, f.spd || 160, 2); }
     return true;
   }
-  e._fcd = (e._fcd ?? (0.6 + Math.random() * (f.cd || 2))) - dt;
+  e._fcd = (e._fcd ?? (0.4 + Math.random() * (f.cd || 2) * FIRE_CD_MUL)) - dt;
   if (!canFire || e.noFireLeave || e._fcd > 0) return true;
   if (f.holdOnly && !e._holding) return true;
-  if (f.holdOnly && e._warn) return true; // blink first, then shoot
-  e._fcd = (f.cd || 2) * (0.8 + Math.random() * 0.4);
+  if (f.holdOnly && e._warn) return true;
+  // Armour shut: cores with a shutter hold fire while plates are closed
+  if (e._sh && e._sh.st === 2 && (f.type === 'fan3' || f.type === 'ringcore' || f.type === 'laser')) return true;
+  e._fcd = f.sync ? f.cd : (f.cd || 2) * FIRE_CD_MUL * (0.8 + Math.random() * 0.4);
   if (f.type === 'straight') shot(Math.PI, f.spd || 150, 2);
   else if (f.type === 'aimed') shot(aim + (Math.random() - 0.5) * 2 * (f.noise || 0.3), f.spd || 150, 2);
   else if (f.type === 'burst') { e._burstN = f.n || 3; e._burstT = 0; e._burstA = aim; }
   else if (f.type === 'fan') { const n = f.n || 5; for (let i = 0; i < n; i++) shot(aim + (i - (n - 1) / 2) * (f.sp || 0.2), f.spd || 140, 2); }
+  else if (f.type === 'snakehead') {
+    // Head spits a twin pair of white dashes straight ahead, then an aimed 3-shot burst
+    e._sk = (e._sk || 0) + 1;
+    if (e._sk % 2) { dash(ox, oy - 7, aim, 240); dash(ox, oy + 7, aim, 240); }
+    else { e._burstN = 3; e._burstT = 0; e._burstA = aim; }
+  } else if (f.type === 'dashfan') {
+    // Round-2 style: a slanted fan of white dashes toward the player
+    const n = f.n || 3;
+    for (let i = 0; i < n; i++) dash(ox, oy, aim + (i - (n - 1) / 2) * (f.sp || 0.16), f.spd || 220);
+  }
+  else if (f.type === 'fan3') { for (let i = -1; i <= 1; i++) shot(aim + i * 0.22, f.spd || 155, 2); }
+  else if (f.type === 'ring') {
+    const n = f.n || 8; e._ringA = (e._ringA || 0) + (f.spin || 0.35);
+    for (let i = 0; i < n; i++) shot(e._ringA + (Math.PI * 2 * i) / n, f.spd || 120, 2);
+  } else if (f.type === 'ringcore') {
+    // Cycle (as in the original ring): pods fire aimed orbs → core aimed 3-way → DASH WALL
+    // (0.6 s warning lines on every pod row, then 3 waves of short white dashes; gaps between rows)
+    e._rk = (e._rk || 0) + 1;
+    if (e._rk % 3 === 2) {
+      const pods = (e.drones || []).filter((d) => d.hp > 0);
+      const rows = [];
+      for (const d of pods) {
+        const dy = Math.round(Math.sin(d.ang) * d.dist);
+        if (!rows.some((r) => Math.abs(r - dy) < 16)) rows.push(dy);
+      }
+      if (!rows.length) rows.push(-30, 30);
+      e._dashWall = true;
+      beginLaser(e, rows, 0.6, 0);
+      e._fcd += 0.8;
+    } else if (e._rk % 3 === 0) {
+      // Aimed volley from the glowing core
+      for (let i = -1; i <= 1; i++) shot(aim + i * 0.2, (f.spd || 125) + 30, 2);
+    } else {
+      const n = 8; e._ringA = (e._ringA || 0) + 0.4;
+      const pods = (e.drones || []).filter((d) => d.hp > 0);
+      if (pods.length) {
+        for (const d of pods) {
+          const px = e.x + Math.cos(d.ang) * d.dist, py = e.y + Math.sin(d.ang) * d.dist;
+          const a = Math.atan2(ty - py, tx - px);
+          const b = spawnBullet(px, py, Math.cos(a) * 140, Math.sin(a) * 140, 'enemy', false, 2, { life: 4 });
+          b.r = 4.5; b.orb = true; bullets.push(b);
+        }
+      } else {
+        for (let i = 0; i < n; i++) shot(e._ringA + (Math.PI * 2 * i) / n, f.spd || 120, 2);
+      }
+    }
+  } else if (f.type === 'laser') {
+    beginLaser(e, f.offs || [0], f.tele || 0.55, f.spd || 500);
+  }
   return true;
 }
 
-function bossFire(e, dt, canFire, shot, aim) {
+function beginLaser(e, offs, tele, spd) {
+  e._laserTele = tele; e._laserOffs = offs; e._laserSpd = spd;
+  e.laserTeleT = tele; e.laserTeleMax = tele;
+  e.laserAimX = e.x - 400; e.laserAimY = e.y;
+  e.laserTeleOffs = offs.length === 1 && offs[0] === 0 ? undefined : offs;
+}
+
+function bossFire(e, dt, canFire, shot, laser, aim, ox, oy) {
   if (!canFire || e._bt == null || e._ph === 'leave') return;
-  e._fcd = (e._fcd ?? 1) - dt;
-  if (e.boss === 'tri') {
-    // stop-and-fan: two 5-way fans while parked
-    if (e._ph === 'b' && e._fcd <= 0 && e._pt > 0.7) {
-      e._fcd = 2.4;
-      for (let i = -2; i <= 2; i++) shot(aim + i * 0.2, 140, 2);
+  // Finish any laser telegraph first
+  if (e._laserTele > 0) {
+    e._laserTele -= dt;
+    e.laserTeleT = Math.max(0, e._laserTele);
+    if (e._laserTele <= 0) {
+      e.laserTeleT = 0; e.laserAimX = undefined; e.laserAimY = undefined; e.laserTeleOffs = undefined;
+      for (const dy of (e._laserOffs || [0])) laser(dy, e._laserSpd || 500);
     }
+    return;
+  }
+  e._fcd = (e._fcd ?? 0.8) - dt;
+  if (e._fcd > 0) return;
+  const open = !(e._sh && e._sh.st === 2);
+  if (e.boss === 'tri') {
+    // Cycle: 5-way fan → aimed 3-burst → telegraphed twin laser (while parked)
+    e._atkI = (e._atkI || 0) + 1;
+    if (e._ph === 'b' && e._pt > 0.5) {
+      const step = e._atkI % 3;
+      if (step === 1) { e._fcd = 1.6; for (let i = -2; i <= 2; i++) shot(aim + i * 0.2, 145, 2); }
+      else if (step === 2) { e._fcd = 1.4; for (let i = 0; i < 3; i++) shot(aim + (Math.random() - 0.5) * 0.15, 165, 2); }
+      else { e._fcd = 2.2; beginLaser(e, [-10, 10], 0.55, 520); }
+    } else { e._fcd = 0.8; }
   } else if (e.boss === 'eye') {
-    if (e._fcd <= 0) {
-      e._fcd = 2.6 - 0.6 * (1 - (e.core ? e.core.hp / e.core.maxHp : 1));
-      for (let i = -1; i <= 1; i++) shot(aim + i * 0.22, 135, 2);
+    // When armour open: telegraphed core laser; otherwise aimed 3-way. Faster as core HP drops.
+    const hurt = 1 - (e.core ? e.core.hp / e.core.maxHp : 1);
+    e._atkI = (e._atkI || 0) + 1;
+    if (open && e._atkI % 2 === 0) {
+      e._fcd = 2.4 - 0.5 * hurt;
+      beginLaser(e, [0], 0.6, 540);
+    } else {
+      e._fcd = 1.8 - 0.4 * hurt;
+      for (let i = -1; i <= 1; i++) shot(aim + i * 0.22, 140, 2);
     }
   } else if (e.boss === 'jet') {
-    if (e._ph === 'sweep' && e._fcd <= 0) { e._fcd = 0.62; shot(Math.PI, 170, 2); }
-    else if (e._ph === 'spiral') {
-      // 3-arm rotating spiral, slow bullets: wide gaps to slip through
-      if (e._fcd <= 0) {
-        e._fcd = 0.27;
-        e._spA = (e._spA || 0) + 0.38;
-        for (let k = 0; k < 3; k++) shot(e._spA + (Math.PI * 2 * k) / 3, 115, 2);
-      }
-    } else if (e._ph === 'back' && e._fcd <= 0) { e._fcd = 0.6; for (let i = -1; i <= 1; i++) shot(aim + i * 0.25, 150, 2); }
+    if (e._ph === 'sweep') {
+      // Sweep phase: telegraphed laser every ~2 s, plus a straight orb between
+      e._atkI = (e._atkI || 0) + 1;
+      if (e._atkI % 3 === 0) { e._fcd = 1.8; beginLaser(e, [0], 0.55, 560); }
+      else { e._fcd = 0.55; shot(Math.PI, 175, 2); }
+    } else if (e._ph === 'spiral') {
+      e._fcd = 0.24;
+      e._spA = (e._spA || 0) + 0.38;
+      for (let k = 0; k < 3; k++) shot(e._spA + (Math.PI * 2 * k) / 3, 118, 2);
+    } else if (e._ph === 'back') {
+      e._fcd = 0.55;
+      for (let i = -1; i <= 1; i++) shot(aim + i * 0.25, 155, 2);
+    } else { e._fcd = 0.6; }
   }
 }
+

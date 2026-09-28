@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929033119';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929035738';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260929033119`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260929035738`;
 }
 
 function loadKindSprite(kind) {
@@ -1403,7 +1403,16 @@ function drawBullet(ctx, b) {
     ctx.shadowBlur = 0;
 
     const k = b.k;
-    if (laser) {
+    if (k === 'dash') {
+      // Short white dash laser (as in the original): thin bright streak along its flight line
+      const len = 15;
+      ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+      ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(b.x - ux * len, b.y - uy * len); ctx.lineTo(b.x + ux * 3, b.y + uy * 3); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,250,0.97)';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.moveTo(b.x - ux * len, b.y - uy * len); ctx.lineTo(b.x + ux * 3, b.y + uy * 3); ctx.stroke();
+    } else if (laser) {
       // Fast cyan laser pulse streak (distinct from orange missiles)
       // k: 'beam' = long thick beam, 'pulse' = short green pulse
       const beam = k === 'beam';
