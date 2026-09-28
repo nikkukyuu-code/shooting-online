@@ -15,7 +15,7 @@
  *
  *  0:02 W1  mechs arc in from the edges, stop-and-shoot walkers, zig-zag darts, split cluster
  *  0:14 W2  morphing wedge formation, swoopers, behind-entry arc, split grid, core grids (box ↔ ring)
- *  0:32     triangular core boss + escort pack
+ *  0:40     triangular core boss + escort pack (core groups linger: cages / rings ~12 s, bosses ~30 s)
  *  0:37 W3  spiders on arcs / sines, stop-and-shoot gunships
  *  0:53 W4  rotating rings (pods tighten + spin up)
  *  1:04     midboss: giant red eye (figure-8, claws speed up at low core HP)
@@ -24,7 +24,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet } from './entities.js?v=20260929015905';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20260929022434';
 
 const SCROLL = 55; // px/s — trap mines drift at background scroll speed
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -189,11 +189,11 @@ function gridCore(fw, fh, fy, fromTop = null) {
   const lead = mk('wave_grid_core', fw, fh, fw + 150, ey, {
     mv: 'plan', noFire: true,
     plan: [B([fw + 150, ey], [fw * 0.95, fromTop == null ? cy : cy - (fromTop ? 1 : -1) * 90], [fw * 0.8, cy], [fw * 0.68, cy], 2.2),
-      { k: 'hold', d: 5.5, bob: 26, bw: 1.1 },
-      B([fw * 0.68, cy], [fw * 0.55, cy], [fw * 0.4, cy + 40], [-120, cy + 30], 4.2)],
+      { k: 'hold', d: 10, bob: 30, bw: 0.9, sway: 34 },
+      B([fw * 0.68, cy], [fw * 0.55, cy], [fw * 0.4, cy + 40], [-120, cy + 30], 6)],
   });
-  const G = { lead, sp: 40, wob: 2, shapes: [{ t: 0, s: 'box', L: 80 }, { t: 3.2, s: 'circle', R: 88, w: 1.3 }, { t: 6.4, s: 'box', L: 80, w: 0.35 }] };
-  const cage = form(fw, fh, 'wave_escort', 16, () => T.wedge({ _chainOf: lead, noDrop: true }), G);
+  const G = { lead, sp: 40, wob: 2, shapes: [{ t: 0, s: 'box', L: 80 }, { t: 4, s: 'circle', R: 88, w: 1.3 }, { t: 8.5, s: 'box', L: 80, w: 0.35 }, { t: 12.5, s: 'circle', R: 84, w: -1.1 }] };
+  const cage = form(fw, fh, 'wave_escort', 16, () => T.wedge({ _chainOf: lead, noDrop: true, hp: GUARD_HP.cage }), G);
   return [lead, ...cage];
 }
 
@@ -248,15 +248,15 @@ function ring(fw, fh, fy) {
   return [mk('wave_ring_core', fw, fh, fw * 0.95, ey, {
     mv: 'plan', tele: 0, noFire: true,
     plan: [B([fw * 0.95, ey], [fw * 0.95, y], [fw * 0.85, y], [fw * 0.72, y], 2.2),
-      { k: 'hold', d: 6.5, bob: 40, bw: 0.8, sway: 40 },
-      B([fw * 0.72, y], [fw * 0.6, y], [fw * 0.3, y + (fromTop ? 50 : -50)], [-120, y], 5)],
+      { k: 'hold', d: 12, bob: 44, bw: 0.7, sway: 46 },
+      B([fw * 0.72, y], [fw * 0.6, y], [fw * 0.3, y + (fromTop ? 50 : -50)], [-120, y], 7)],
   })];
 }
 
 // ---------- snake / caterpillar ----------
 function snake(fw, fh, fy, segs = 6, tone = 'silver') {
   const y0 = fh * fy;
-  const P = { v: vx(fw, 10), amp: Math.min(fh * 0.3, 100), wf: 2.1, k2: 0.35, sk: 0.55, sw: 0.9 };
+  const P = { v: vx(fw, 17), amp: Math.min(fh * 0.3, 100), wf: 1.8, k2: 0.35, sk: 0.6, sw: 0.8 };
   const head = mk('wave_snake_head', fw, fh, fw + 40, y0, {
     mv: 'snake', ...P, dly: 0, x0: fw + 40,
     fire: aimed(1.6, 165, 0.2),
@@ -264,7 +264,7 @@ function snake(fw, fh, fy, segs = 6, tone = 'silver') {
   const out = [head];
   for (let i = 1; i <= segs; i++) {
     out.push(mk('wave_snake_seg', fw, fh, fw + 40, y0, {
-      w: 40, h: 40, hp: 10, score: 20, mv: 'snake', ...P,
+      w: 40, h: 40, hp: GUARD_HP.seg, score: 20, mv: 'snake', ...P,
       dly: i * 0.3, x0: fw + 40, _chainOf: head, chainIdx: i, noFire: true, noDrop: true, tone,
     }));
   }
@@ -329,7 +329,7 @@ function coreBossPack(fw, fh, fy) {
   e.y = Math.max(e.h * 0.5 + 6, Math.min(fh - e.h * 0.5 - 6, fh * fy));
   const esc = spawnCoreEscorts(e, fw, fh);
   e._entryX = null;
-  Object.assign(e, { mv: 'boss', boss: 'tri', hx: fw * 0.7, y0: e.y, stay: 17, mvT: 0,
+  Object.assign(e, { mv: 'boss', boss: 'tri', hx: fw * 0.8, y0: e.y, stay: 29, mvT: 0,
     fire: { type: 'boss' } });
   return [e, ...esc];
 }
@@ -338,12 +338,12 @@ function eyeBoss(fw, fh) {
   e.y = fh * 0.5;
   const esc = spawnCoreEscorts(e, fw, fh);
   e._entryX = null;
-  Object.assign(e, { mv: 'boss', boss: 'eye', hx: fw * 0.66, y0: fh * 0.5, stay: 22, mvT: 0, fire: { type: 'boss' } });
+  Object.assign(e, { mv: 'boss', boss: 'eye', hx: fw * 0.66, y0: fh * 0.5, stay: 36, mvT: 0, fire: { type: 'boss' } });
   return [e, ...esc];
 }
 function jetBoss(fw, fh) {
   const e = mk('wave_core_boss', fw, fh, fw + 110, fh * 0.5, {
-    mv: 'boss', boss: 'jet', hx: fw * 0.7, stay: 20, fire: { type: 'boss' },
+    mv: 'boss', boss: 'jet', hx: fw * 0.7, stay: 32, fire: { type: 'boss' },
   });
   const esc = spawnCoreEscorts(e, fw, fh).map((s) => Object.assign(s, { noFire: true }));
   e._entryX = null;
@@ -362,72 +362,50 @@ export const WAVE_SCRIPT = [
   [14.5, (w, h) => morphWedges(w, h, 0.4)],
   [17.5, (w, h) => swoopers(w, h, true, 3)],
   [19.5, (w, h) => behindArc(w, h, true, 5)],
-  [21.8, (w, h) => splitGroup(w, h, 0.5, 10, 'drone')],
-  [24.5, (w, h) => gridCore(w, h, 0.4, true)],
-  [27, (w, h) => swoopers(w, h, false, 3)],
-  [29, (w, h) => gridCore(w, h, 0.6, false)],
-  [32.5, (w, h) => coreBossPack(w, h, 0.5)],
-  // W3
-  [38, (w, h) => spiders(w, h, 0.3)],
-  [41, (w, h) => stopShoot(w, h, [0.22, 0.78], null, 'wave_spider')],
-  [44, (w, h) => spiders(w, h, 0.7, 5, 0.22)],
-  [47.5, (w, h) => [...zig(w, h, 0.25, 4, 0.1), ...zig(w, h, 0.75, 4, 0.1)]],
-  [50, (w, h) => swoopers(w, h, true, 2, 'plasma_bomber')],
-  // W4
-  [53, (w, h) => ring(w, h, 0.36)],
-  [56, (w, h) => zig(w, h, 0.8, 5, 0.12)],
-  [58.5, (w, h) => ring(w, h, 0.64)],
-  // midboss
-  [64, (w, h) => eyeBoss(w, h)],
-  [74, (w, h) => swoopers(w, h, false, 2)],
-  [80, (w, h) => swoopers(w, h, true, 2)],
-  // boss snake
-  [88, (w, h) => snake(w, h, 0.5)],
-  [96, (w, h) => behindArc(w, h, false, 4)],
-  [100, (w, h) => zig(w, h, 0.3, 5)],
-  // reprise
-  [106, (w, h) => morphWedges(w, h, 0.62, 'scout_frigate')],
-  [109, (w, h) => stopShoot(w, h, [0.25, 0.5, 0.75])],
-  [113, (w, h) => gridCore(w, h, 0.5)],
-  [117, (w, h) => swoopers(w, h, true, 3)],
-  [120, (w, h) => ring(w, h, 0.4)],
-  [124, (w, h) => spiders(w, h, 0.6)],
-  [127, (w, h) => splitGroup(w, h, 0.45, 8, 'scout_drone', true)],
+  [21.8, (w, h) => splitGroup(w, h, 0.5, 8, 'drone')],
+  [24.5, (w, h) => gridCore(w, h, 0.45, true)],   // lingers ~12 s in the right half
+  [29, (w, h) => swoopers(w, h, false, 2)],
+  [34, (w, h) => zig(w, h, 0.8, 4, 0.1)],
+  [40, (w, h) => coreBossPack(w, h, 0.5)],        // stays ~29 s
+  // W3 (light while the tri boss is up)
+  [47, (w, h) => spiders(w, h, 0.25, 4)],
+  [55, (w, h) => stopShoot(w, h, [0.22, 0.78], null, 'wave_spider')],
+  [62, (w, h) => zig(w, h, 0.75, 4, 0.1)],
+  // W4 rings
+  [70, (w, h) => ring(w, h, 0.4)],
+  [75, (w, h) => swoopers(w, h, true, 2)],
+  [86, (w, h) => ring(w, h, 0.6)],
+  [92, (w, h) => swoopers(w, h, false, 2)],
+  // midboss eye (~36 s)
+  [104, (w, h) => eyeBoss(w, h)],
+  [118, (w, h) => swoopers(w, h, true, 2)],
+  [130, (w, h) => swoopers(w, h, false, 2)],
+  // boss snake (slow crossing)
+  [146, (w, h) => snake(w, h, 0.5)],
+  [154, (w, h) => behindArc(w, h, false, 4)],
+  [160, (w, h) => zig(w, h, 0.3, 5)],
   // trap zone
-  [131, (w, h) => mines(w, h, [0.2, 0.55, 0.85])],
-  [135, (w, h) => caterpillar(w, h, 0.35)],
-  [138, (w, h) => mines(w, h, [0.35, 0.7])],
-  [141, (w, h) => swoopers(w, h, false, 2)],
-  [145, (w, h) => mines(w, h, [0.15, 0.5, 0.8])],
-  [148, (w, h) => gridCore(w, h, 0.4, true)],
-  [152, (w, h) => mines(w, h, [0.3, 0.65])],
-  [155, (w, h) => caterpillar(w, h, 0.65)],
-  [159, (w, h) => mines(w, h, [0.2, 0.5, 0.85])],
-  [162, (w, h) => ring(w, h, 0.55)],
-  [166, (w, h) => mines(w, h, [0.4, 0.75])],
-  [172, (w, h) => snake(w, h, 0.45, 7)],
-  [180, (w, h) => mines(w, h, [0.15, 0.85])],
-  [184, (w, h) => stopShoot(w, h, [0.3, 0.7], null, 'wave_spider')],
-  [188, (w, h) => caterpillar(w, h, 0.3)],
-  [192, (w, h) => mines(w, h, [0.25, 0.6, 0.9])],
-  [198, (w, h) => coreBossPack(w, h, 0.45)],
-  [206, (w, h) => mines(w, h, [0.3, 0.7])],
-  [212, (w, h) => behindArc(w, h, true, 5)],
+  [166, (w, h) => mines(w, h, [0.2, 0.55, 0.85])],
+  [170, (w, h) => caterpillar(w, h, 0.35)],
+  [174, (w, h) => gridCore(w, h, 0.5, false)],
+  [180, (w, h) => mines(w, h, [0.3, 0.8])],
+  [186, (w, h) => swoopers(w, h, true, 2)],
+  [192, (w, h) => mines(w, h, [0.15, 0.5, 0.85])],
+  [196, (w, h) => ring(w, h, 0.55)],
+  [200, (w, h) => caterpillar(w, h, 0.7)],
+  [206, (w, h) => mines(w, h, [0.35, 0.7])],
+  [212, (w, h) => stopShoot(w, h, [0.3, 0.7])],
   // round 2
   [220, () => [], 'round2'],
   [222, (w, h) => loopers(w, h, 0.35)],
   [226, (w, h) => loopers(w, h, 0.65)],
   [230, (w, h) => swoopers(w, h, true, 3, 'plasma_bomber')],
-  [233, (w, h) => loopers(w, h, 0.45, 5)],
-  [238, (w, h) => jetBoss(w, h)],
-  [258, (w, h) => saucerCircle(w, h, 0.35)],
-  [262, (w, h) => saucerCircle(w, h, 0.68)],
-  [266, (w, h) => saucers(w, h, 0.5, 10, true)],
-  [270, (w, h) => gridCore(w, h, 0.45, false)],
-  [276, (w, h) => swoopers(w, h, false, 3)],
-  [280, (w, h) => ring(w, h, 0.6)],
-  [285, (w, h) => saucerCircle(w, h, 0.4)],
-  [289, (w, h) => zig(w, h, 0.7, 6)],
+  [238, (w, h) => jetBoss(w, h)],                 // ~32 s of sweep / dash / spiral
+  [252, (w, h) => loopers(w, h, 0.5, 3)],
+  [264, (w, h) => saucerCircle(w, h, 0.35)],
+  [274, (w, h) => gridCore(w, h, 0.45, true)],
+  [282, (w, h) => saucerCircle(w, h, 0.7)],
+  [289, (w, h) => zig(w, h, 0.3, 5)],
 ];
 
 /**
@@ -516,7 +494,7 @@ function bossMove(e, dt, fw, fh, py) {
   if (e.boss === 'tri') {
     // reposition (1.4 s arc) → stop and fan (2.4 s) → …
     if (e._ph === 'a') {
-      if (!e._aInit) { e._aInit = true; e._fromY = e.y; e._toY = clampY(fh * (0.25 + Math.random() * 0.5)); e._fromX = e.x; e._toX = fw * rnd(0.62, 0.78); }
+      if (!e._aInit) { e._aInit = true; e._fromY = e.y; e._toY = clampY(fh * (0.25 + Math.random() * 0.5)); e._fromX = e.x; e._toX = fw * rnd(0.74, 0.84); }
       const u = Math.min(1, e._pt / 1.4), s = u * u * (3 - 2 * u);
       e.x = e._fromX + (e._toX - e._fromX) * s;
       e.y = e._fromY + (e._toY - e._fromY) * s;

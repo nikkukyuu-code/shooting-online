@@ -266,7 +266,7 @@ export function attachCore(e) {
     e.core = { ox: 0, oy: 0, r: 27, hp: CORE_HP.wave_eye_boss, maxHp: CORE_HP.wave_eye_boss, orbit: 9, ang: Math.random() * Math.PI * 2 };
     e.drones = [];
     for (let i = 0; i < 8; i++) {
-      e.drones.push({ ang: (Math.PI * 2 * i) / 8, dist: 72, r: 15, hp: 10, maxHp: 10, claw: true });
+      e.drones.push({ ang: (Math.PI * 2 * i) / 8, dist: 72, r: 15, hp: GUARD_HP.claw, maxHp: GUARD_HP.claw, claw: true });
     }
   } else if (e.kind === 'wave_grid_core') {
     // ~1.5× player core ship in the middle of a wedge grid: core at its nose, armored hull
@@ -278,7 +278,7 @@ export function attachCore(e) {
     e.w = 150; e.h = 150; e.hp = 40; e.maxHp = 40; e.score = Math.max(e.score || 0, 180);
     e.core = { ox: 0, oy: 0, r: 17, hp: CORE_HP.wave_ring_core, maxHp: CORE_HP.wave_ring_core, orbit: 5, ang: Math.random() * Math.PI * 2 };
     e.drones = [];
-    for (let i = 0; i < 8; i++) e.drones.push({ ang: (Math.PI * 2 * i) / 8, dist: 58, r: 14, hp: 5, maxHp: 5, pod: true });
+    for (let i = 0; i < 8; i++) e.drones.push({ ang: (Math.PI * 2 * i) / 8, dist: 58, r: 14, hp: GUARD_HP.pod, maxHp: GUARD_HP.pod, pod: true });
   } else if (e.kind === 'wave_snake_head') {
     // Snake boss head: the red glowing head IS the core (segments follow; head kill → body chain)
     e.w = 54; e.h = 54; e.hp = 60; e.maxHp = 60; e.score = Math.max(e.score || 0, 400);
@@ -301,8 +301,8 @@ export function attachCore(e) {
         ang: (Math.PI * 2 * i) / n,
         dist: 36 + (i % 2) * 8,
         r: 12,
-        hp: 8,
-        maxHp: 8,
+        hp: GUARD_HP.drone,
+        maxHp: GUARD_HP.drone,
       });
     }
   }
@@ -322,9 +322,13 @@ export function attachCore(e) {
  * Core HP (normal shot = 2 dmg every 0.16 s ≈ 12.5 dps → small cores ≈ 2–3 s of focused fire,
  * bosses ≈ 5–7 s). Chip damage shows as the ring around the core.
  */
+/** Guards around a core (tough: shooting through them is slow — snipe the core instead). */
+export const GUARD_HP = { escort: 6, cage: 9, pod: 15, claw: 30, drone: 24, seg: 30 };
+/** Core self-repair: after CORE_REGEN_DELAY s without a core hit it refills CORE_REGEN × maxHp per s. */
+export const CORE_REGEN_DELAY = 1.2, CORE_REGEN = 0.12;
 export const CORE_HP = {
-  wave_swarm_core: 26, wave_grid_core: 28, wave_ring_core: 32,
-  wave_snake_head: 42, wave_core_boss: 64, wave_eye_boss: 84,
+  wave_swarm_core: 18, wave_grid_core: 19, wave_ring_core: 21,
+  wave_snake_head: 30, wave_core_boss: 44, wave_eye_boss: 58,
 };
 /** Armour cycle seconds: open (vulnerable) / warn (telegraph) / shut (blocked). */
 export const CORE_SHUTTER = {
@@ -427,7 +431,7 @@ export function spawnCoreEscorts(lead, fw, fh) {
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const e = spawnEnemy(fw, fh, 'wave_escort');
-      e.w = 38; e.h = 28; e.hp = 2; e.maxHp = 2; e.score = 15; e.speed = 150;
+      e.w = 38; e.h = 28; e.hp = GUARD_HP.escort; e.maxHp = GUARD_HP.escort; e.score = 15; e.speed = 150;
       e.noFire = true; e.noDrop = true;
       e._lead = lead;
       e.fdx = x0 - c * gx;
@@ -480,6 +484,11 @@ export function tickCoreExtras(e, dt) {
   if (e._shake > 0) e._shake = Math.max(0, e._shake - dt);
   if (e._guardT > 0) e._guardT = Math.max(0, e._guardT - dt);
   if (e._guardCd > 0) e._guardCd = Math.max(0, e._guardCd - dt);
+  // Self-repair: chip damage fades unless the pressure is kept up (sustained accurate fire wins)
+  if (e.core && e.core.hp > 0 && e.core.hp < e.core.maxHp) {
+    e._coreIdle = (e._coreIdle || 0) + dt;
+    if (e._coreIdle > CORE_REGEN_DELAY) e.core.hp = Math.min(e.core.maxHp, e.core.hp + e.core.maxHp * CORE_REGEN * dt);
+  }
   const sh = e._sh;
   if (sh && e.core && e.core.hp > 0) {
     sh.t += dt;
@@ -535,6 +544,7 @@ export function applyCoreAwareHit(e, dmg, bx, by, fxList) {
       return { hit: 'body', killed: false };
     }
     c.hp -= dmg;
+    e._coreIdle = 0;
     e._coreFlash = 0.1;
     e._shake = 0.14;
     if (c.hp > 0) {

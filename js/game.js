@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20260929015905';
+import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20260929022434';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20260929015905';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929015905';
-import { sfx } from './audio.js?v=20260929015905';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929015905';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929015905';
-import { hitBattleCounter } from './stats.js?v=20260929015905';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929015905';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929015905';
+} from './entities.js?v=20260929022434';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929022434';
+import { sfx } from './audio.js?v=20260929022434';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929022434';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929022434';
+import { hitBattleCounter } from './stats.js?v=20260929022434';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929022434';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929022434';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -2104,6 +2104,28 @@ export class Game {
       B._coreTrackY += (cw.y - B._coreTrackY) * Math.min(1, dt / Math.max(0.05, AI.coreLag ?? 0.3));
       B._coreNz += ((Math.random() - 0.5) * 2 * (AI.coreNoise ?? 10) - B._coreNz) * Math.min(1, 1.2 * dt);
       aimY = B._coreTrackY + B._coreNz;
+      // Sniping (skill, level-scaled): look for a clear lane past the guards onto the core and aim
+      // through it (visible bodies only; re-judged every ~0.3 s with the usual hand lag)
+      if ((AI.coreSnipe ?? 0) > 0) {
+        B._snipeT = (B._snipeT || 0) - dt;
+        if (B._snipeT <= 0) {
+          B._snipeT = 0.3;
+          B._snipeOff = null;
+          if (Math.random() < AI.coreSnipe) {
+            const blocked = (y) => B.enemies.some((o) => o !== focus && !warping(o) && o.hp > 0 && o.x > shipX && o.x < cw.x - cw.r
+              && Math.abs(o.y - y) < (o.h || 30) * 0.45 + 4);
+            const guardBlk = (y) => (focus.drones || []).some((d) => d.hp > 0 && Math.abs(focus.y + Math.sin(d.ang) * d.dist - y) < d.r + 4
+              && focus.x + Math.cos(d.ang) * d.dist < cw.x);
+            if (blocked(aimY) || guardBlk(aimY)) {
+              for (const k of [0, -0.5, 0.5, -0.8, 0.8]) {
+                const y = cw.y + k * (cw.r - 2);
+                if (!blocked(y) && !guardBlk(y)) { B._snipeOff = y - cw.y; break; }
+              }
+            }
+          }
+        }
+        if (B._snipeOff != null) aimY = B._coreTrackY + B._snipeOff + B._coreNz * 0.5;
+      }
       coreAim = true;
     } else B._coreTgt = null;
 

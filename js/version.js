@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-09-29 01:59:05';
+export const VERSION_LABEL = '2026-09-29 02:24:34';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1790614745420;
-export const BUILD_NOTE = 'コア強化（HP・装甲）・敵の動きを多彩に・順番に連鎖爆発';
+export const BUILD_TIME = 1790616274213;
+export const BUILD_NOTE = '護衛を固く・コアを弱めに・コア編隊の滞在を長く';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
