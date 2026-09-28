@@ -133,6 +133,8 @@ export const WAVE_KIND_TIERS = {
   // Core weak-point kinds (wave-only, never shop/deck): map to combat tiers for attacks/size
   wave_core_boss: 'boss',
   wave_swarm_core: 'elite',
+  // Escort fighters packed in formation around a core unit (fodder for the core chain wipe)
+  wave_escort: 'swarm',
 };
 export const WAVE_KIND_IDS = Object.keys(WAVE_KIND_TIERS);
 export function isWaveKind(kind) {
@@ -222,7 +224,7 @@ export function attachCore(e) {
     e.score = Math.max(e.score || 0, 350);
     // Core sits near the nose (left / toward player) — easy to spot on phone
     // Core always visible, phone-readable size, slight orbit so aiming matters
-    e.core = { ox: -e.w * 0.36, oy: 0, r: Math.max(16, Math.min(e.w, e.h) * 0.18), hp: 1, maxHp: 1, orbit: 10, ang: 0 }; // exposed at the nose (faces the player)
+    e.core = { ox: -e.w * 0.36, oy: 0, r: Math.max(18, Math.min(e.w, e.h) * 0.20), hp: 1, maxHp: 1, orbit: 28, ang: Math.random() * Math.PI * 2 }; // exposed at the nose; large orbit so body-centre aim often misses
     e.drones = null;
   } else {
     // Swarm-core: elite-sized formation; satellites orbit a central core
@@ -233,7 +235,7 @@ export function attachCore(e) {
     e.score = Math.max(e.score || 0, 160);
     e.speed = Math.min(e.speed || 75, 70);
     // Core is the only way to clear the swarm; drones are distractions (high HP, no formation wipe)
-    e.core = { ox: 0, oy: 0, r: 15, hp: 1, maxHp: 1, orbit: 6, ang: 0 };
+    e.core = { ox: 0, oy: 0, r: 15, hp: 1, maxHp: 1, orbit: 22, ang: Math.random() * Math.PI * 2 }; // large orbit: body-centre aim often misses
     const n = 6;
     e.drones = [];
     for (let i = 0; i < n; i++) {
@@ -251,6 +253,81 @@ export function attachCore(e) {
   return e;
 }
 
+/**
+ * Core chain reaction: breaking a core detonates every non-core wave grunt/elite within CHAIN_R px
+ * of the core (plus that unit's own escort formation wherever it is), cascading outward:
+ * delay = 0.08 + 0.6 × (distance / CHAIN_R) s. Sent (opponent) units and big tiers are not chained.
+ */
+export const CHAIN_R = 300;
+export function isChainable(o) {
+  if (!o || o.sent || hasCore(o) || o.hp <= 0 || o._chainT != null) return false;
+  if (typeof o.kind !== 'string' || !o.kind.startsWith('wave_')) return false;
+  return !LARGE_ENEMY_TIERS.has(resolveEnemyTier(o.kind));
+}
+export function markCoreChain(e, list) {
+  const c = coreWorld(e) || e;
+  let n = 0;
+  for (const o of list || []) {
+    if (o === e || !isChainable(o)) continue;
+    const d = Math.hypot(o.x - c.x, o.y - c.y);
+    if (d < CHAIN_R || o._lead === e) { o._chainT = 0.08 + Math.min(1, d / CHAIN_R) * 0.6; n++; }
+  }
+  return n;
+}
+/** Tick a pending chain detonation; true on the frame it blows (caller adds FX/score as a kill). */
+export function tickChain(o, dt) {
+  if (o._chainT == null || o.hp <= 0) return false;
+  o._chainT -= dt;
+  if (o._chainT > 0) return false;
+  o.hp = 0;
+  o._chainKill = true;
+  return true;
+}
+export function spawnChainBoom(o) {
+  return { kind: 'chainboom', x: o.x, y: o.y, r: Math.max(o.w || 30, o.h || 24) * 1.25, life: 0.55, max: 0.55 };
+}
+
+/**
+ * Dense escort formation for a core unit (like the original's packed rectangular packs).
+ * Escorts enter from just off the right edge and fly into slots ahead of (left of) the leader,
+ * then hold formation while it lives. 2 HP, no guns (contact only), no item drops.
+ */
+export function spawnCoreEscorts(lead, fw, fh) {
+  const boss = lead.kind === 'wave_core_boss';
+  const cols = boss ? 5 : 4, rows = boss ? 3 : 2;
+  const gx = 36, gy = boss ? 34 : 30;
+  const x0 = -(lead.w || 110) * 0.55 - 20;
+  const out = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const e = spawnEnemy(fw, fh, 'wave_escort');
+      e.w = 38; e.h = 28; e.hp = 2; e.maxHp = 2; e.score = 15; e.speed = 150;
+      e.noFire = true; e.noDrop = true;
+      e._lead = lead;
+      e.fdx = x0 - c * gx;
+      e.fdy = (r - (rows - 1) / 2) * gy;
+      e.x = fw + 30 + c * gx * 0.6 + r * 8;
+      e.y = Math.max(16, Math.min(fh - 16, lead.y + e.fdy));
+      e.phase = (lead.phase || 0) + c * 0.35;
+      out.push(e);
+    }
+  }
+  return out;
+}
+/** Formation flight; returns true while following a live leader (skip normal drift / fire). */
+export function tickEscort(e, dt, fh) {
+  const L = e._lead;
+  if (!L) return false;
+  if (L.hp <= 0 || L.x < -60) { e._lead = null; return false; }
+  const tx = L.x + e.fdx, ty = L.y + e.fdy + Math.sin((e.phase += dt * 2)) * 4;
+  const dx = tx - e.x, dy = ty - e.y;
+  const d = Math.hypot(dx, dy);
+  const vmax = 190 * dt;
+  if (d > vmax) { e.x += (dx / d) * vmax; e.y += (dy / d) * vmax; } else { e.x = tx; e.y = ty; }
+  e.y = Math.max(16, Math.min(fh - 16, e.y));
+  return true;
+}
+
 /** World-space core centre. */
 export function coreWorld(e) {
   if (!e || !e.core) return null;
@@ -263,7 +340,7 @@ export function tickCoreExtras(e, dt) {
   if (e._coreFlash > 0) e._coreFlash = Math.max(0, e._coreFlash - dt);
   if (e._bodyFlash > 0) e._bodyFlash = Math.max(0, e._bodyFlash - dt);
   if (e.core && e.core.orbit) {
-    e.core.ang = (e.core.ang || 0) + dt * 1.35;
+    e.core.ang = (e.core.ang || 0) + dt * 2.1;
     const baseOx = e.kind === 'wave_core_boss' ? -e.w * 0.36 : 0;
     const baseOy = 0;
     e.core.ox = baseOx + Math.cos(e.core.ang) * e.core.orbit;
@@ -384,6 +461,26 @@ export function applyCoreAwareBeam(e, dmg, ly, fxList) {
   if (c && e.core.hp > 0 && Math.abs(c.y - ly) < c.r + 6) return applyCoreAwareHit(e, dmg, c.x, c.y, fxList);
   if (fxList) fxList.push(spawnDeflectSpark(e.x - e.w * 0.35, ly));
   return applyCoreAwareArea(e, dmg, null, null, fxList);
+}
+
+/**
+ * Item magnet (same rule on every field: player, COM, online opponent).
+ * Pickup box stays ±32 px; an orb within ITEM_MAGNET_R (≈1.9×) of the ship is caught and pulled
+ * in with increasing speed until collected. Once caught it stays caught (no drift / no escape).
+ */
+export const ITEM_PICK_R = 32;
+export const ITEM_MAGNET_R = 62;
+export function magnetStep(it, sx, sy, dt) {
+  const dx = sx - it.x, dy = sy - it.y;
+  const d = Math.hypot(dx, dy);
+  if (!it._mag && d < ITEM_MAGNET_R) it._mag = 60; // caught: start at 60 px/s
+  if (!it._mag) return false;
+  it._mag = Math.min(560, it._mag + 900 * dt); // accelerate (≈0.3 s from the edge)
+  const step = Math.min(d, it._mag * dt);
+  if (d > 1e-6) { it.x += (dx / d) * step; it.y += (dy / d) * step; }
+  (it._tr || (it._tr = [])).push([it.x, it.y]);
+  if (it._tr.length > 6) it._tr.shift();
+  return true;
 }
 
 export function spawnBullet(x, y, vx, vy, owner = 'player', homing = false, dmg = 1, opts = {}) {

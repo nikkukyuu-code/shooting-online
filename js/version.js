@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-09-29 00:07:34';
+export const VERSION_LABEL = '2026-09-29 00:33:14';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1790608054674;
-export const BUILD_NOTE = 'コアを壊すと一撃で倒せるボスと群れを追加';
+export const BUILD_TIME = 1790609594573;
+export const BUILD_NOTE = 'COMがコアを狙う・アイテム吸い寄せ・コア連鎖爆発';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

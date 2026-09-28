@@ -3,15 +3,16 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-  hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam,
-} from './entities.js?v=20260929000734';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929000734';
-import { sfx } from './audio.js?v=20260929000734';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929000734';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929000734';
-import { hitBattleCounter } from './stats.js?v=20260929000734';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929000734';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929000734';
+  hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
+  markCoreChain, tickChain, spawnChainBoom, spawnCoreEscorts, tickEscort, CHAIN_R,
+} from './entities.js?v=20260929003314';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929003314';
+import { sfx } from './audio.js?v=20260929003314';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929003314';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929003314';
+import { hitBattleCounter } from './stats.js?v=20260929003314';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929003314';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929003314';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1051,19 +1052,20 @@ export class Game {
   coreTip() {
     if (this._coreTipShown || this.ended || this.waiting) return;
     this._coreTipShown = true;
-    this.setStatus('コアを狙え！ 光るコアを壊すと一撃で倒せる');
+    this.setStatus('コアを狙え！ 壊すとまわりの敵も連鎖で倒せる');
     setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 2600);
   }
 
   /** Core destroyed: big chain explosion + score burst (the decisive shot). */
-  onCoreBreak(e, fx, mine) {
+  onCoreBreak(e, fx, mine, list) {
+    const chained = markCoreChain(e, list); // cascading yellow chain wipe of the pack around the core
     fx.push({ kind: 'corebreak', x: e.x + (e.core ? e.core.ox : 0), y: e.y + (e.core ? e.core.oy : 0), r: Math.max(e.w, e.h) * 0.9, life: 0.9, max: 0.9 });
     fx.push(spawnExplosion(e.x - e.w * 0.25, e.y - e.h * 0.2, true));
     fx.push(spawnExplosion(e.x + e.w * 0.25, e.y + e.h * 0.2, true));
     if (mine) {
       this.state.player.score += e.score; // burst on top of the normal kill score
       try { sfx.explode(); } catch (_) {}
-      this.setStatus(e.kind === 'wave_core_boss' ? 'コア撃破！ ボスを一撃で倒した！' : 'コア撃破！ 群れを全滅させた！');
+      this.setStatus((e.kind === 'wave_core_boss' ? 'コア撃破！ ボスを一撃で倒した！' : 'コア撃破！ 群れを全滅させた！') + (chained ? `　連鎖 ${chained}機！` : ''));
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
     }
   }
@@ -1583,7 +1585,7 @@ export class Game {
   syncOut() {
     if (!this.net || this.useBot || !this.net.ready) return;
     const snap = serializeField(this.state);
-    snap.worldItems = this.state.items.map((it) => ({ x: it.x, y: it.y, id: it.id, life: it.life }));
+    snap.worldItems = this.state.items.map((it) => ({ x: it.x, y: it.y, id: it.id, life: it.life, _mag: it._mag, _tr: it._tr }));
     this.net.send({
       type: 'state',
       state: snap,
@@ -1721,7 +1723,7 @@ export class Game {
         for (const e of S.enemies) {
           if (warping(e)) continue;
           if (Math.abs(e.y - ly) < e.h * 0.55 + 8 && e.x > P.x) {
-            if (hasCore(e)) { if (applyCoreAwareBeam(e, 1.05, ly, S.fx).hit === 'core') this.onCoreBreak(e, S.fx, true); continue; }
+            if (hasCore(e)) { if (applyCoreAwareBeam(e, 1.05, ly, S.fx).hit === 'core') this.onCoreBreak(e, S.fx, true, S.enemies); continue; }
             e.hp -= 1.05; // staccato ticks a bit harder, slightly slower
             S.fx.push(spawnHitSpark(e.x - e.w * 0.35, ly));
           }
@@ -1743,8 +1745,9 @@ export class Game {
         // Wave-only kinds (not catalog/deck units). ~7% mid-wave: swarm with a core (max 1 on field).
         let kind = roll > 0.85 ? 'wave_elite' : roll > 0.5 ? 'wave_swarm' : 'wave_basic';
         if (roll > 0.93 && S.time > 12 && !S.enemies.some((e) => e.kind === 'wave_swarm_core')) kind = 'wave_swarm_core';
-        S.enemies.push(spawnEnemy(fw, fh, kind));
-        if (kind === 'wave_swarm_core') this.coreTip();
+        const ne = spawnEnemy(fw, fh, kind);
+        S.enemies.push(ne);
+        if (kind === 'wave_swarm_core') { S.enemies.push(...spawnCoreEscorts(ne, fw, fh)); this.coreTip(); }
       }
     }
     this._bossAcc += dt;
@@ -1753,8 +1756,9 @@ export class Game {
       // Core boss is the highlight: 2 of every 3 boss spawns, classic boss otherwise
       this._bossN = (this._bossN || 0) + 1;
       const bk = this._bossN % 3 === 0 ? 'wave_boss' : 'wave_core_boss';
-      S.enemies.push(spawnEnemy(fw, fh, bk));
-      if (bk === 'wave_core_boss') this.coreTip();
+      const be = spawnEnemy(fw, fh, bk);
+      S.enemies.push(be);
+      if (bk === 'wave_core_boss') { S.enemies.push(...spawnCoreEscorts(be, fw, fh)); this.coreTip(); }
     }
 
     // Update enemies (vertical weave + forward/back surge)
@@ -1762,6 +1766,7 @@ export class Game {
       if (tickWarp(e, dt)) continue; // warp-in: scripted glide / hold, no fire
       if (e.frozenT > 0) continue; // フリーズ: no movement / no fire while frozen
       tickCoreExtras(e, dt);
+      if (tickEscort(e, dt, fh)) continue; // formation escort: follows its core unit, no guns
       e.phase += dt * 2;
       e.surgePhase = (e.surgePhase || 0) + dt * (e.surgeFreq || 1.4);
       if (e.appearT > 0) e.appearT = Math.max(0, e.appearT - dt);
@@ -1793,7 +1798,7 @@ export class Game {
       e.y = Math.max(16, Math.min(fh - 16, e.y));
       const onScreen = e.x < fw + 10;
       const parked = (e.sent && e.lingerT > 0) ? e.x <= (e.holdX || fw) + 8 : true;
-      tickEnemyLaserFire(e, S.bullets, P.x, P.y * fh, dt, onScreen && parked, () => {
+      tickEnemyLaserFire(e, S.bullets, P.x, P.y * fh, dt, onScreen && parked && !e.noFire, () => {
         const tier = resolveEnemyTier(e.kind);
         return e.sent
           ? ((tier === 'boss' || tier === 'tank' || tier === 'mech') ? 0.95
@@ -1832,10 +1837,11 @@ export class Game {
 
     // Items float
     for (const it of S.items) {
+      it.life -= dt;
+      if (magnetStep(it, P.x, P.y * fh, dt)) continue; // magnet: pulled to the ship
       it.y += Math.sin(S.time * 3 + it.x) * 10 * dt;
       it.x -= 30 * dt;
       it.y = Math.max(24, Math.min(fh - 24, it.y)); // bigger orb stays inside the pane
-      it.life -= dt;
     }
 
     // FX
@@ -1850,7 +1856,7 @@ export class Game {
           // Core weak point: core = instant kill, drones/body = almost nothing (deflect)
           const r = applyCoreAwareHit(e, b.dmg || 1, b.x, b.y, S.fx);
           if (r.hit === 'none') continue;
-          if (r.hit === 'core') this.onCoreBreak(e, S.fx, true);
+          if (r.hit === 'core') this.onCoreBreak(e, S.fx, true, S.enemies);
           if (!b.pierce) b.life = 0;
           break;
         }
@@ -1869,6 +1875,7 @@ export class Game {
     const remain = [];
     for (const e of S.enemies) {
       // Core enemies only die when the core breaks (items / rams / ex-weapons can't finish them)
+      if (tickChain(e, dt)) S.fx.push(spawnChainBoom(e));
       if (hasCore(e) && !e._coreBreak && e.hp < 1) e.hp = 1;
       if (e.hp <= 0) {
         S.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
@@ -1882,7 +1889,7 @@ export class Game {
           // デカギャラ撃破: 回復確定（ボス級は大回復）
           const healId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';
           S.items.push(spawnItemWithId(e.x, e.y, healId));
-        } else if (Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : ITEM_DROP_CHANCE)) {
+        } else if (!e.noDrop && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : ITEM_DROP_CHANCE)) {
           S.items.push(spawnItem(e.x, e.y));
         }
         // Damage bot passively a bit when scoring? No — only via powers / race.
@@ -2071,9 +2078,25 @@ export class Game {
       const kindW = ({ boss: 5, mech: 4, golem: 4, tank: 4, elite: 3, drone: 2, basic: 1.5, swarm: 1 })[resolveEnemyTier(e.kind)] || 1;
       const dist = Math.max(20, e.x - shipX);
       const align = 1 - Math.min(1, Math.abs(e.y / fh - B.y) / 0.28);
-      const val = kindW * 16 / Math.sqrt(dist) + align * 5 + (e.x < 160 ? 1.8 : 0);
+      let val = kindW * 16 / Math.sqrt(dist) + align * 5 + (e.x < 160 ? 1.8 : 0);
+      // Visible core (human-like): noticed only after coreNotice s; then it becomes a priority target
+      if (hasCore(e) && e.core && e.core.hp > 0) {
+        if (e._comCoreSeenT == null) e._comCoreSeenT = B.time;
+        if (B.time - e._comCoreSeenT >= (AI.coreNotice ?? 0.9)) val += 30 * (AI.corePri ?? 0);
+      }
       if (val > focusVal) { focusVal = val; focus = e; }
     }
+    // Aim point: a core is tracked with a human hand/eye lag (no lead) + slowly drifting aim error
+    let aimY = focus ? focus.y : null;
+    let coreAim = false;
+    if (focus && hasCore(focus) && focus.core && focus.core.hp > 0 && B.time - (focus._comCoreSeenT ?? B.time) >= (AI.coreNotice ?? 0.9)) {
+      const cw = coreWorld(focus);
+      if (B._coreTgt !== focus) { B._coreTgt = focus; B._coreTrackY = focus.y; B._coreNz = (Math.random() - 0.5) * 2 * (AI.coreNoise ?? 10); }
+      B._coreTrackY += (cw.y - B._coreTrackY) * Math.min(1, dt / Math.max(0.05, AI.coreLag ?? 0.3));
+      B._coreNz += ((Math.random() - 0.5) * 2 * (AI.coreNoise ?? 10) - B._coreNz) * Math.min(1, 1.2 * dt);
+      aimY = B._coreTrackY + B._coreNz;
+      coreAim = true;
+    } else B._coreTgt = null;
 
     const STEPS = [0.06, 0.13, 0.2, 0.28, 0.36, 0.45, 0.55, 0.66, 0.78, 0.9].filter((t) => t <= horizon + 1e-6);
     const posAt = (x0, y0, cx, cy, t) => {
@@ -2170,6 +2193,8 @@ export class Game {
       const xs = [0.07, 0.13, 0.2, 0.28, 0.37, 0.47, 0.6, 0.74].map((k) => k * fw);
       for (const cx of xs) for (let k = 0; k <= 12; k++) cands.push([cx, fh * (0.04 + 0.92 * k / 12)]);
       for (const it of B.orbs) if (it._seenT != null && B.time - it._seenT >= (AI.orbNotice ?? 0.5)) cands.push([it.x - 30 * 0.3, it.y]);
+      // Line-up spots on the (tracked, noisy) core row: here, a bit back, a bit forward
+      if (coreAim) for (const kx of [0, -0.06, 0.06]) cands.push([B.x + kx * fw, aimY]);
       // fine candidates around the current position
       for (const [ox, oy] of [[0, -0.06], [0, 0.06], [-0.05, 0], [0.05, 0], [0, -0.12], [0, 0.12]]) cands.push([B.x + ox * fw, shipY0 + oy * fh]);
       let best = null, bestC = 1e9;
@@ -2192,14 +2217,17 @@ export class Game {
             const mk = it._midK === B.time ? it._midD : (it._midK = B.time, it._midD = dangerOf((B.x + it.x) / 2, (shipY0 + it.y) / 2));
             if (mk > (AI.pickDz ?? 2)) continue;
           }
-          const tArr = Math.hypot(it.x - B.x, it.y - shipY0) / Math.max(1, handPx);
+          // Magnet: it only needs to get within ~ITEM_MAGNET_R, the orb flies in by itself
+          const tArr = Math.max(0, Math.hypot(it.x - B.x, it.y - shipY0) - ITEM_MAGNET_R * 0.8) / Math.max(1, handPx);
           if (tArr > it.life - 0.2) continue; // can't make it in time
-          const dd = Math.hypot(it.x - 30 * tArr - cx, it.y - cy);
+          const dd = Math.max(0, Math.hypot(it.x - 30 * tArr - cx, it.y - cy) - ITEM_MAGNET_R * 0.6);
           if (dd < 110) c -= (AI.pickW || 1) * v * (1 - dd / 110);
         }
         if (focus) {
-          const al = Math.abs(cy - focus.y) / fh;
-          c += al < 0.05 ? -(AI.alignW ?? 1.1) : Math.min(1.2, al * 3) * (AI.alignW ?? 1.1) / 1.1;
+          // Core target: tighter band + extra pull (coreAlignW); danger terms above still win
+          const al = Math.abs(cy - aimY) / fh;
+          const aW = (AI.alignW ?? 1.1) * (coreAim ? (AI.coreAlignW ?? 1) : 1);
+          c += al < (coreAim ? 0.035 : 0.05) ? -aW : Math.min(1.2, al * 3) * aW / 1.1;
         } else c += Math.abs(cy - fh * 0.5) / fh * 0.8;
         c += Math.abs(cx - prefX) / fw * (AI.prefW ?? 0.9);
         c += Math.hypot((cx - B.x) / fw, (cy - shipY0) / fh) * (AI.wanderW ?? 0.5); // don't wander (higher level: calmer, shorter dodges)
@@ -2241,6 +2269,10 @@ export class Game {
     }
     curDanger = dangerOf(B.x, shipY0);
     const dodging = curDanger > 1.5;
+    // Human-like core pursuit: when relatively safe, gently pull the pointer onto the (lagged, noisy) core row
+    if (coreAim && !dodging && curDanger < 1.8 && B._ty != null && dangerOf(B._tx, aimY) < 1.8) {
+      B._ty += (aimY - B._ty) * Math.min(1, (AI.corePull ?? 0.45) * Math.min(1, 4 * dt) * 10);
+    }
 
     // Bait a homing missile: keep still while it is still steering (if nothing else is coming)
     const jukeHold = threats.some((b) => b._juke && b.homeT > 0.04 && Math.hypot(b.x - shipX, b.y - shipY0) < 240)
@@ -2273,7 +2305,7 @@ export class Game {
 
     // --- Fire control: lead aim, burst when aligned, powers ---
     B.fireCd -= dt;
-    const aligned = focus && Math.abs(focus.y / fh - (B.y + (B.aimNoise || 0))) < (dodging ? 0.1 : 0.12);
+    const aligned = focus && Math.abs(aimY / fh - (B.y + (B.aimNoise || 0))) < (dodging ? 0.1 : 0.12);
     // Offense matches the player exactly (same rates / damage) — fairness.
     // Softness comes from reaction / aim / movement / items elsewhere.
     const fireRate = B.activePower === 'homing' ? 0.16
@@ -2315,7 +2347,7 @@ export class Game {
         for (const e of B.enemies) {
           if (warping(e)) continue;
           if (e.x > shipX && Math.abs(e.y - by) < (e.h * 0.55 + 8)) {
-            if (hasCore(e)) { if (applyCoreAwareBeam(e, 1.05, by, B.fx).hit === 'core') this.onCoreBreak(e, B.fx, false); continue; }
+            if (hasCore(e)) { if (applyCoreAwareBeam(e, 1.05, by, B.fx).hit === 'core') this.onCoreBreak(e, B.fx, false, B.enemies); continue; }
             e.hp -= 1.05; // match player laser tick
             B.fx.push(spawnHitSpark(e.x - e.w * 0.35, by));
           }
@@ -2345,20 +2377,25 @@ export class Game {
         // Same mix as the player field (incl. swarm-core)
         let kind = r > 0.85 ? 'wave_elite' : r > 0.5 ? 'wave_swarm' : 'wave_basic';
         if (r > 0.93 && (B.time || 0) > 12 && !B.enemies.some((e) => e.kind === 'wave_swarm_core')) kind = 'wave_swarm_core';
-        B.enemies.push(spawnEnemy(fw, fh, kind));
+        const ne = spawnEnemy(fw, fh, kind);
+        B.enemies.push(ne);
+        if (kind === 'wave_swarm_core') B.enemies.push(...spawnCoreEscorts(ne, fw, fh)); // same pack as the player field
       }
     }
     B.bossAcc = (B.bossAcc || 0) + dt;
     if (B.bossAcc > 22 && !B.enemies.some((e) => resolveEnemyTier(e.kind) === 'boss')) {
       B.bossAcc = 0;
       B.bossN = (B.bossN || 0) + 1;
-      B.enemies.push(spawnEnemy(fw, fh, B.bossN % 3 === 0 ? 'wave_boss' : 'wave_core_boss'));
+      const be = spawnEnemy(fw, fh, B.bossN % 3 === 0 ? 'wave_boss' : 'wave_core_boss');
+      B.enemies.push(be);
+      if (be.kind === 'wave_core_boss') B.enemies.push(...spawnCoreEscorts(be, fw, fh));
     }
 
     for (const e of B.enemies) {
       if (tickWarp(e, dt)) continue; // warp-in: scripted glide / hold, no fire
       if (e.frozenT > 0) continue; // フリーズ: no movement / no fire while frozen
       tickCoreExtras(e, dt);
+      if (tickEscort(e, dt, fh)) continue; // formation escort: follows its core unit, no guns
       e.phase += dt * 2;
       e.surgePhase = (e.surgePhase || 0) + dt * (e.surgeFreq || 1.4);
       if (e.appearT > 0) e.appearT = Math.max(0, e.appearT - dt);
@@ -2385,7 +2422,7 @@ export class Game {
       }
       e.y = Math.max(20, Math.min(fh - 20, e.y));
       const parked = (e.sent && e.lingerT > 0) ? e.x <= (e.holdX || fw) + 8 : true;
-      tickEnemyLaserFire(e, B.bullets, shipX, B.y * fh, dt, parked, () => {
+      tickEnemyLaserFire(e, B.bullets, shipX, B.y * fh, dt, parked && !e.noFire, () => {
         const tier = resolveEnemyTier(e.kind);
         return e.sent
           ? ((['elite', 'boss', 'mech', 'tank'].includes(tier)) ? 1.1 : 1.55)
@@ -2421,7 +2458,7 @@ export class Game {
         if (hasCore(e)) {
           const r = applyCoreAwareHit(e, b.dmg || 1, b.x, b.y, B.fx);
           if (r.hit === 'none') continue;
-          if (r.hit === 'core') this.onCoreBreak(e, B.fx, false);
+          if (r.hit === 'core') this.onCoreBreak(e, B.fx, false, B.enemies);
           if (!b.pierce) b.life = 0;
           break;
         }
@@ -2434,6 +2471,7 @@ export class Game {
     }
     const kept = [];
     for (const e of B.enemies) {
+      if (tickChain(e, dt)) B.fx.push(spawnChainBoom(e));
       if (hasCore(e) && !e._coreBreak && e.hp < 1) e.hp = 1;
       if (e.hp <= 0) {
         B.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
@@ -2444,7 +2482,7 @@ export class Game {
         } else if (isLargeEnemy(e)) {
           const healId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';
           B.orbs.push(spawnItemWithId(e.x, e.y, healId));
-        } else if (Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : ITEM_DROP_CHANCE)) {
+        } else if (!e.noDrop && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : ITEM_DROP_CHANCE)) {
           B.orbs.push(spawnItem(e.x, e.y));
         }
       } else if (e.x > -40) {
@@ -2458,10 +2496,12 @@ export class Game {
       const byP = B.y * fh;
       const left = [];
       for (const it of B.orbs) {
-        it.y += Math.sin(B.time * 3 + it.x) * 10 * dt;
-        it.x -= 30 * dt;
-        it.y = Math.max(24, Math.min(fh - 24, it.y));
         it.life -= dt;
+        if (!magnetStep(it, shipX, byP, dt)) { // same magnet rule as the player
+          it.y += Math.sin(B.time * 3 + it.x) * 10 * dt;
+          it.x -= 30 * dt;
+          it.y = Math.max(24, Math.min(fh - 24, it.y));
+        }
         if (Math.abs(it.x - shipX) < 32 && Math.abs(it.y - byP) < 32) {
           if (it.id === 'heal' || it.id === 'heal_big') {
             B.hp = Math.min(B.maxHp || PLAYER_MAX_HP, B.hp + (it.id === 'heal_big' ? 50 : 25));
