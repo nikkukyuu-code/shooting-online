@@ -3,14 +3,14 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260928201702';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260928201702';
-import { sfx } from './audio.js?v=20260928201702';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260928201702';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260928201702';
-import { hitBattleCounter } from './stats.js?v=20260928201702';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL } from './meta.js?v=20260928201702';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260928201702';
+} from './entities.js?v=20260928205746';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260928205746';
+import { sfx } from './audio.js?v=20260928205746';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260928205746';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260928205746';
+import { hitBattleCounter } from './stats.js?v=20260928205746';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260928205746';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260928205746';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -485,6 +485,13 @@ export class Game {
     this.comDifficulty = (bot && (comDifficulty === 'normal' || comDifficulty === 'strong'))
       ? comDifficulty
       : 'strong';
+    // Enemy level (win-rate based) is fixed at match start; only COM behaviour depends on it
+    this._comRank = null;
+    this._comRankChange = null;
+    this._tutorialMatch = false;
+    try { this._comRank = bot ? comRankInfo(this.comDifficulty) : null; } catch (_) { this._comRank = null; }
+    this.comLevel = this._comRank ? this._comRank.level : null;
+    this._comProf = null;
     this.resetLocal();
     this.L = resizeCanvas(this.canvas);
     window.addEventListener('resize', this._onResize);
@@ -586,31 +593,18 @@ export class Game {
     this.state.botHp = PLAYER_MAX_HP;
   }
 
-  /** COM AI + reward profile for the selected difficulty. */
+  /**
+   * COM AI + reward profile for the selected difficulty. Behaviour comes from the enemy level
+   * (meta.js comAiForLevel: win-rate based, fixed for the whole match); PT from the difficulty.
+   */
   comProfile() {
     const d = this.comDifficulty === 'normal' ? 'normal' : 'strong';
     const meta = COM_DIFFICULTY[d] || COM_DIFFICULTY.strong;
-    if (d === 'normal') {
-      return {
-        ...meta,
-        reactThreshold: 0.62,
-        panicChance: 0.09,
-        maxSpeedDodge: 1.0,
-        maxSpeed: 0.55,
-        aimNoiseAmp: 0.32,
-        // AI quality only (same ship / items / rules as the player)
-        ai: { horizon: 0.35, react: 0.36, noise: 8, margin: 2, replan: 0.18, lapseChance: 0.55, attn: 6, overcommit: 0.22, hand: 1.4, accT: 0.2, pickW: 0.45, pickSafe: false, orbNotice: 1.1, itemReact: 2.4, think: 1.1, smart: false, lofW: 0, alignW: 0.4, edgeW: 0.4, holdMax: 14, idleUse: 0.2, lazySend: true },
-      };
+    const lv = this.comLevel || (d === 'normal' ? 1 : 30);
+    if (!this._comProf || this._comProf.level !== lv || this._comProf.id !== meta.id) {
+      this._comProf = { ...meta, ...comAiForLevel(lv) };
     }
-    return {
-      ...meta,
-      reactThreshold: 0.48,
-      panicChance: 0.05,
-      maxSpeedDodge: 1.2,
-      maxSpeed: 0.7,
-      aimNoiseAmp: 0.22,
-      ai: { horizon: 0.75, react: 0.21, noise: 4, margin: 3, replan: 0.1, lapseChance: 0.12, attn: 12, alignW: 3, prefX: 0.18, overcommit: 0.15, hand: 2.2, accT: 0.16, pickW: 2.6, pickSafe: true, pickDz: 5, orbNotice: 0.22, itemReact: 0.35, think: 0.2, smart: true, lofW: 0.9, edgeW: 1.2, holdMax: 5 },
-    };
+    return this._comProf;
   }
 
   stopLoop() {
@@ -1190,8 +1184,8 @@ export class Game {
     const lv = this._comDeckInfo && this._comDeckInfo.level;
     const diff = (this.comProfile && this.comProfile().label) || '';
     const ctr = this._comDeckInfo && COUNTER_LABEL[this._comDeckInfo.counter];
-    const head = (lv ? `相手デッキ Lv${lv}` : '相手デッキ') + (ctr ? `・${ctr}` : '');
-    const tag = diff ? `【${diff}】` : '';
+    const head = (lv ? `相手デッキ 強さ${lv}/10` : '相手デッキ') + (ctr ? `・${ctr}` : '');
+    const tag = diff ? `【${diff} 敵Lv${this.comLevel || '?'}】` : '';
     return `${tag}${head}：${names.join(' / ')}`;
   }
 
@@ -2686,6 +2680,12 @@ export class Game {
     void msg;
     this.setStatus('');
 
+    // COM win-rate record → enemy level (COM matches only; online / room PvP never counted)
+    this._comRankChange = null;
+    if (this.useBot && !this.isOnline() && !this._tutorialMatch) {
+      try { this._comRankChange = recordComResult(this.comDifficulty, !!won); } catch (_) { this._comRankChange = null; }
+    }
+
     // PT only on COM (CPU) victory: remaining HP scaled to 0–100 → PT
     this._ptReward = null;
     // Human-vs-human (online room / matchmaking) never grants PT — any end reason (KO, time-up,
@@ -2920,7 +2920,7 @@ export class Game {
     if (!ov || !msgEl) return;
 
     // Clear prior celebration nodes
-    ov.querySelectorAll('.vic-fx, .pt-reward, .vic-banner, .end-reason').forEach((el) => el.remove());
+    ov.querySelectorAll('.vic-fx, .pt-reward, .vic-banner, .end-reason, .com-rank').forEach((el) => el.remove());
     // Time-limit / sudden-death reason line (above the menu button)
     const info = this._endInfo;
     if (info && (info.reason === 'time' || info.reason === 'sudden')) {
@@ -2935,6 +2935,19 @@ export class Game {
       if (btn0) ov.insertBefore(r, btn0); else ov.appendChild(r);
     }
     ov.querySelectorAll('.pt-none').forEach((el) => el.remove());
+    // COM only: win rate + enemy level change (PvP result shows nothing about this)
+    const rc = this.useBot && !this.isOnline() ? this._comRankChange : null;
+    if (rc && rc.after) {
+      const a = rc.after, b = rc.before || a;
+      const diffLabel = this.comDifficulty === 'normal' ? '普通' : '強い';
+      const arrow = a.level > b.level ? 'up' : a.level < b.level ? 'down' : 'same';
+      const r = document.createElement('div');
+      r.className = 'com-rank';
+      r.innerHTML = `<div class="cr-line">${diffLabel}　勝率 <b>${a.pct}%</b>（${a.w}勝${a.l}敗）</div>`
+        + `<div class="cr-line cr-lv cr-${arrow}">敵Lv ${b.level} → <b>${a.level}</b>${arrow === 'up' ? ' ▲' : arrow === 'down' ? ' ▼' : ''}</div>`;
+      const btn1 = ov.querySelector('#btn-again');
+      if (btn1) ov.insertBefore(r, btn1); else ov.appendChild(r);
+    }
     ov.classList.remove('victory', 'defeat', 'pt-show', 'hidden');
     ov.classList.add(won ? 'victory' : 'defeat');
 

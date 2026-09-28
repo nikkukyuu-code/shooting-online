@@ -2,7 +2,7 @@
  * localStorage key: shootingOnline_meta (NEVER rename — would wipe player PT).
  * Backup key: shootingOnline_meta_bak. On every update, preserve pt; never clear storage.
  */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20260928201702';
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20260928205746';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;
@@ -503,3 +503,119 @@ export const COM_DIFFICULTY = {
 };
 
 export { CATALOG, CATALOG_BY_ID, STARTER_DECK };
+
+/* ======================================================================== */
+/**
+ * COM win-rate record + 敵レベル (enemy level) — COM matches only (online / room PvP never counted).
+ *
+ * localStorage (NEW keys, never rename):
+ *   shootingOnline_comRecord      {v:1, normal:{w,l}, strong:{w,l}}   w = wins, l = losses
+ *   shootingOnline_comRecord_bak  previous value (written before every save)
+ * A finished COM match is always a win or a loss (TIME UP / 延長戦 are decided by life), so there
+ * are no draws. Quitting with ストップ is not counted.
+ * Transfer merge (portal /transfer/): per difficulty keep the record with MORE matches (never reduces).
+ *
+ * ── Enemy level formula ─────────────────────────────────────────────────────────────
+ *   n = w + l,  shown win rate = w / n (plain, 0% when n = 0)
+ *   smoothed p = (w + K·0.5) / (n + K),  K = 10  (few matches stay near 50% → no big jumps)
+ *   t = clamp((p − 0.5) / 0.35, 0, 1)           (≤50% → t=0, smoothed ≥85% → t=1)
+ *   普通: Lv = 1  + round(69·t)   → 1 … 70
+ *   強い: Lv = 30 + round(70·t)   → 30 … 100
+ * The level only picks COM BEHAVIOUR (see comAiForLevel): same level = same behaviour in either
+ * mode. Deck strength (90–100% band), ship stats, fire rate, drop rates and item rules never change.
+ */
+export const COM_RECORD_KEY = 'shootingOnline_comRecord';
+export const COM_RECORD_BAK_KEY = 'shootingOnline_comRecord_bak';
+export const COM_LEVEL_MAX = 100;
+const PRIOR_K = 10;
+const LV_RANGE = { normal: [1, 70], strong: [30, 100] };
+
+function cleanSide(s) {
+  const w = Math.max(0, Math.floor(Number(s && s.w) || 0));
+  const l = Math.max(0, Math.floor(Number(s && s.l) || 0));
+  return { w, l };
+}
+function clean(raw) {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  return { v: 1, normal: cleanSide(r.normal), strong: cleanSide(r.strong) };
+}
+export function loadComRecord() {
+  for (const k of [COM_RECORD_KEY, COM_RECORD_BAK_KEY]) {
+    try {
+      const s = localStorage.getItem(k);
+      if (s) return clean(JSON.parse(s));
+    } catch (_) { /* try next */ }
+  }
+  return clean(null);
+}
+function saveComRecord(rec) {
+  try {
+    const prev = localStorage.getItem(COM_RECORD_KEY);
+    if (prev) localStorage.setItem(COM_RECORD_BAK_KEY, prev);
+    localStorage.setItem(COM_RECORD_KEY, JSON.stringify(clean(rec)));
+  } catch (_) { /* ignore */ }
+}
+
+const diffKey = (d) => (d === 'normal' ? 'normal' : 'strong');
+
+/** Plain win rate 0..1 (0 when no matches). */
+export function winRate(side) {
+  const n = side.w + side.l;
+  return n > 0 ? side.w / n : 0;
+}
+/** Enemy level for a difficulty from its record (formula in the header). */
+export function comLevelFor(diff, side) {
+  const d = diffKey(diff);
+  const s = cleanSide(side);
+  const n = s.w + s.l;
+  const p = (s.w + PRIOR_K * 0.5) / (n + PRIOR_K);
+  const t = Math.max(0, Math.min(1, (p - 0.5) / 0.35));
+  const [lo, hi] = LV_RANGE[d];
+  return Math.max(1, Math.min(COM_LEVEL_MAX, lo + Math.round((hi - lo) * t)));
+}
+/** { w, l, n, rate, pct, level } for the menu / result screen. */
+export function comRankInfo(diff, rec = loadComRecord()) {
+  const s = rec[diffKey(diff)];
+  const rate = winRate(s);
+  return { w: s.w, l: s.l, n: s.w + s.l, rate, pct: Math.round(rate * 100), level: comLevelFor(diff, s) };
+}
+/** Count one finished COM match. Returns { before, after } rank info. */
+export function recordComResult(diff, won) {
+  const d = diffKey(diff);
+  const rec = loadComRecord();
+  const before = comRankInfo(d, rec);
+  if (won) rec[d].w++; else rec[d].l++;
+  saveComRecord(rec);
+  return { before, after: comRankInfo(d, rec) };
+}
+
+/* ── Behaviour ladder ─────────────────────────────────────────────────────────────────
+ * Anchors: Lv1 = the 普通 profile, Lv30 = the 強い profile, Lv100 = 'expert' (human cap).
+ * Numeric params are interpolated linearly between anchors. Human limits kept at Lv100:
+ * reaction 0.18 s, hand speed 2.2 field-heights/s (= 強い, the finger-drag cap), still lapses,
+ * overshoot and bullet misjudgement, attention limited to the nearest 14 shots, no hidden info.
+ * (A longer look-ahead / bigger safety margin made it over-cautious in tests — it hid and scored
+ * less — so Lv100 keeps 強い's horizon and gains through reaction, fewer mistakes and item play.)
+ */
+const A1 = { horizon: 0.35, react: 0.36, noise: 8, margin: 2, replan: 0.18, lapseChance: 0.55, attn: 6, overcommit: 0.22, hand: 1.4, accT: 0.2, pickW: 0.45, pickDz: 6, orbNotice: 1.1, itemReact: 2.4, think: 1.1, lofW: 0, alignW: 0.4, edgeW: 0.4, holdMax: 14, idleUse: 0.2, prefX: 0.1,
+  aimNoiseAmp: 0.32, reactThreshold: 0.62, panicChance: 0.09, maxSpeedDodge: 1.0, maxSpeed: 0.55 };
+const A30 = { horizon: 0.75, react: 0.21, noise: 4, margin: 3, replan: 0.1, lapseChance: 0.12, attn: 12, overcommit: 0.15, hand: 2.2, accT: 0.16, pickW: 2.6, pickDz: 5, orbNotice: 0.22, itemReact: 0.35, think: 0.2, lofW: 0.9, alignW: 3, edgeW: 1.2, holdMax: 5, idleUse: 0.35, prefX: 0.18,
+  aimNoiseAmp: 0.22, reactThreshold: 0.48, panicChance: 0.05, maxSpeedDodge: 1.2, maxSpeed: 0.7 };
+const A100 = { horizon: 0.75, react: 0.18, noise: 2.5, margin: 3, replan: 0.08, lapseChance: 0.05, attn: 14, overcommit: 0.08, hand: 2.2, accT: 0.14, pickW: 3.5, pickDz: 6.5, orbNotice: 0.18, itemReact: 0.25, think: 0.15, lofW: 1.1, alignW: 3, edgeW: 1.3, holdMax: 3.5, idleUse: 0.35, prefX: 0.18,
+  aimNoiseAmp: 0.16, reactThreshold: 0.44, panicChance: 0.03, maxSpeedDodge: 1.2, maxSpeed: 0.7 };
+
+/** COM behaviour for an enemy level 1..100: { ai:{...}, aimNoiseAmp, ... } */
+export function comAiForLevel(level) {
+  const lv = Math.max(1, Math.min(COM_LEVEL_MAX, Math.round(Number(level) || 1)));
+  const [a, b, t] = lv <= 30 ? [A1, A30, (lv - 1) / 29] : [A30, A100, (lv - 30) / 70];
+  const m = {};
+  for (const k of Object.keys(A1)) m[k] = a[k] + (b[k] - a[k]) * t;
+  m.attn = Math.round(m.attn);
+  const smart = lv >= 30; // 強い-level item judgement (smart use, safe pickups only)
+  const { aimNoiseAmp, reactThreshold, panicChance, maxSpeedDodge, maxSpeed, ...ai } = m;
+  return {
+    level: lv,
+    aimNoiseAmp, reactThreshold, panicChance, maxSpeedDodge, maxSpeed,
+    ai: { ...ai, smart, pickSafe: smart, lazySend: !smart },
+  };
+}

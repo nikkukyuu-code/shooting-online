@@ -1,12 +1,12 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20260928201702';
-import { Net } from './net.js?v=20260928201702';
-import { Game } from './game.js?v=20260928201702';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20260928201702';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew } from './meta.js?v=20260928201702';
-import { loadBattleCount } from './stats.js?v=20260928201702';
-import { registerEnemyKinds } from './render.js?v=20260928201702';
-import { ALL_KIND_IDS } from './catalog.js?v=20260928201702';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20260928201702';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20260928205746';
+import { Net } from './net.js?v=20260928205746';
+import { Game } from './game.js?v=20260928205746';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20260928205746';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX } from './meta.js?v=20260928205746';
+import { loadBattleCount } from './stats.js?v=20260928205746';
+import { registerEnemyKinds } from './render.js?v=20260928205746';
+import { ALL_KIND_IDS } from './catalog.js?v=20260928205746';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20260928205746';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -123,10 +123,30 @@ function refreshPtDisplay(meta) {
   const label = `PT: ${m.pt.toLocaleString('ja-JP')}`;
   if (els.menuPt) els.menuPt.textContent = label;
   if (els.shopPt) els.shopPt.textContent = label;
+  refreshComRank();
+}
+
+/** Title: COM win rate + enemy level per difficulty (COM matches only). */
+function refreshComRank() {
+  try {
+    for (const d of ['normal', 'strong']) {
+      const r = comRankInfo(d);
+      const row = document.getElementById(`cr-${d}`);
+      if (row) {
+        row.querySelector('.cr-rate').textContent = r.n ? `勝率 ${r.pct}%` : '勝率 ―';
+        row.querySelector('.cr-rec').textContent = `（${r.w}勝${r.l}敗）`;
+        row.querySelector('.cr-lv-n').textContent = String(r.level);
+      }
+      const tag = document.getElementById(`cpu-lv-${d}`);
+      if (tag) tag.textContent = `敵Lv${r.level}`;
+    }
+    const mx = document.getElementById('cr-max');
+    if (mx) mx.textContent = String(COM_LEVEL_MAX);
+  } catch (_) { /* ignore */ }
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20260928201702`;
+  return `assets/enemies/${id}/0.png?v=20260928205746`;
 }
 
 function unitName(id) {
@@ -504,7 +524,14 @@ els.btnTutorial?.addEventListener('click', () => {
   els.fieldFind.value = 'チュートリアル（CPU）';
   try {
     startGameSession({ bot: true, comDifficulty: 'normal' });
-    if (game) game._forceTutorial = true;
+    if (game) {
+      game._forceTutorial = true;
+      // Tutorial: easiest COM, not counted in the win-rate record
+      game._tutorialMatch = true;
+      game.comLevel = 1;
+      game._comProf = null;
+      game.setStatus(game.comDeckStatusText());
+    }
     game.beginMatch();
     // bot path already schedules maybeStartTutorial; force flag ensures it shows
     if (game) game.maybeStartTutorial(true);
