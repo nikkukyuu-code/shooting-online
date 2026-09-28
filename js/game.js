@@ -3,14 +3,14 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260928195927';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260928195927';
-import { sfx } from './audio.js?v=20260928195927';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260928195927';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260928195927';
-import { hitBattleCounter } from './stats.js?v=20260928195927';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL } from './meta.js?v=20260928195927';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260928195927';
+} from './entities.js?v=20260928201702';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260928201702';
+import { sfx } from './audio.js?v=20260928201702';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260928201702';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260928201702';
+import { hitBattleCounter } from './stats.js?v=20260928201702';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL } from './meta.js?v=20260928201702';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260928201702';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -599,7 +599,7 @@ export class Game {
         maxSpeed: 0.55,
         aimNoiseAmp: 0.32,
         // AI quality only (same ship / items / rules as the player)
-        ai: { horizon: 0.35, react: 0.36, noise: 8, margin: 2, replan: 0.18, lapseChance: 0.55, attn: 6, overcommit: 0.22, hand: 1.4, accT: 0.2, pickW: 1.2, pickSafe: false, orbNotice: 0.6, itemReact: 1.4, think: 0.6, smart: false, lofW: 0.55, edgeW: 0.8, holdMax: 9 },
+        ai: { horizon: 0.35, react: 0.36, noise: 8, margin: 2, replan: 0.18, lapseChance: 0.55, attn: 6, overcommit: 0.22, hand: 1.4, accT: 0.2, pickW: 0.45, pickSafe: false, orbNotice: 1.1, itemReact: 2.4, think: 1.1, smart: false, lofW: 0, alignW: 0.4, edgeW: 0.4, holdMax: 14, idleUse: 0.2, lazySend: true },
       };
     }
     return {
@@ -2629,9 +2629,10 @@ export class Game {
         // 普通: less judgment — mostly first usable item, sometimes waits too long / uses it early
         const i0 = B.items.findIndex((id) => !(timed(id) && B.activeTimer > 0));
         // sends / direct when the opponent is busy or low; otherwise mostly first usable item
-        const iAgg = (oppBusy || oppLow) ? B.items.findIndex((id) => isSend(id) || id === 'direct' || id === 'meteor') : -1;
+        // (lazySend: 普通 doesn't jump on sends — it tends to hold them until full / held long / they're low)
+        const iAgg = (AI.lazySend ? oppLow : (oppBusy || oppLow)) ? B.items.findIndex((id) => isSend(id) || id === 'direct' || id === 'meteor') : -1;
         if (iAgg >= 0 && !(timed(B.items[iAgg]) && B.activeTimer > 0)) pick = iAgg;
-        else if (i0 >= 0 && (full || heldLong || enemyPressure >= 2 || isSend(B.items[i0]) || Math.random() < 0.35)) pick = i0;
+        else if (i0 >= 0 && (full || heldLong || enemyPressure >= 2 || (!AI.lazySend && isSend(B.items[i0])) || Math.random() < (AI.idleUse ?? 0.35))) pick = i0;
       }
       if (pick >= 0) { B._forceIdx = pick; tryUse(); B._heldT = B.items.length ? B.time : null; }
     }

@@ -2,7 +2,7 @@
  * localStorage key: shootingOnline_meta (NEVER rename — would wipe player PT).
  * Backup key: shootingOnline_meta_bak. On every update, preserve pt; never clear storage.
  */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20260928195927';
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20260928201702';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;
@@ -75,8 +75,9 @@ function isValidComDeck(deck) {
  *                                 attackers, free slot also likes small fast units.
  *      otherwise   → 'balanced' 「対策：バランス」: favor 攻撃力+防御力 evenly.
  *    Scores are normalized 0..1 inside each class so every class slot can express the counter.
- * 3) Strength: sum of unitPower within the difficulty band of the player's deck power
- *      強い 90–100%, 普通 48–72%  (coverage wins: cheap player decks overshoot with the cheapest
+ * 3) Strength: sum of unitPower within one band of the player's deck power
+ *      90–100% for both 強い and 普通 — difficulty comes only from COM behaviour, never deck
+ *      strength  (coverage wins: cheap player decks overshoot with the cheapest
  *      units of each required class).
  * 4) Variety: 120 randomized attempts; prefers units not in the previous COM deck; picks at random
  *    among the best candidates.
@@ -140,7 +141,7 @@ const CLASS_POOLS = (() => {
 
 /**
  * Build the COM deck. Strength target: difficulty band of the player's deck power
- * (強い 90–100%, 普通 48–72%), with send-class coverage and counter-picking (see above).
+ * (90–100%, same for every difficulty), with send-class coverage and counter-picking (see above).
  * @returns {{ deck: string[], score: number, playerScore: number, level: number, counter: string, over: number }}
  */
 export function buildComDeck(playerDeck, rng = Math.random, opts = {}) {
@@ -155,9 +156,9 @@ export function buildComDeck(playerDeck, rng = Math.random, opts = {}) {
   try {
     if (COM_POOL.length < DECK_SIZE || COM_COVER_CLASSES.some((c) => !CLASS_POOLS[c].length)) return fallback();
     const P = Math.max(POOL_MIN, deckPower(playerDeck));
-    const diff = (opts && opts.difficulty) || 'strong';
-    const hiMul = diff === 'normal' ? 0.72 : 1.00;
-    const loMul = diff === 'normal' ? 0.48 : 0.90;
+    // One band for all difficulties: 普通/強い differ only in AI behaviour
+    const hiMul = 1.00;
+    const loMul = 0.90;
     let hi = Math.min(P * hiMul, POOL_MAX);
     let lo = Math.min(P * loMul, POOL_MAX * 0.85);
     if (lo > hi) lo = hi * 0.9;
