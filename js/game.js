@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20260929023425';
+import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20260929024517';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20260929023425';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929023425';
-import { sfx } from './audio.js?v=20260929023425';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929023425';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929023425';
-import { hitBattleCounter } from './stats.js?v=20260929023425';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929023425';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929023425';
+} from './entities.js?v=20260929024517';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929024517';
+import { sfx } from './audio.js?v=20260929024517';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929024517';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929024517';
+import { hitBattleCounter } from './stats.js?v=20260929024517';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929024517';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929024517';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1057,17 +1057,43 @@ export class Game {
     setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 2600);
   }
 
+  /**
+   * Whole-screen white blink when OUR shot hits a core (as in the original: the hitter's screen flashes).
+   * hit: ~90 ms, break: ~350 ms. Peak opacity 0.7; at most one flash per 333 ms (photosensitivity).
+   * Only this device's screen — the opponent / COM never flash the human's screen.
+   */
+  screenFlash(kind) {
+    if (typeof document === 'undefined' || !document.body) return;
+    const now = performance.now();
+    const gap = now - (this._scrFlashAt ?? -1e9);
+    if (kind === 'hit' ? gap < 333 : gap < 200) return;
+    this._scrFlashAt = now;
+    let el = this._scrFlashEl;
+    if (!el || !el.isConnected) {
+      el = document.createElement('div');
+      el.setAttribute('aria-hidden', 'true');
+      el.style.cssText = 'position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:2147483000;';
+      document.body.appendChild(el);
+      this._scrFlashEl = el;
+    }
+    try {
+      if (this._scrFlashAnim) this._scrFlashAnim.cancel();
+      this._scrFlashAnim = kind === 'break'
+        ? el.animate([{ opacity: 0.7 }, { opacity: 0.7, offset: 0.3 }, { opacity: 0 }], { duration: 350, easing: 'ease-out' })
+        : el.animate([{ opacity: 0.7 }, { opacity: 0.6, offset: 0.4 }, { opacity: 0 }], { duration: 90, easing: 'linear' });
+    } catch (_) { /* no WAAPI: skip */ }
+  }
+
   /** Core destroyed: big chain explosion + score burst (the decisive shot). */
   onCoreBreak(e, fx, mine, list) {
-    // Field flash (as in the original footage: the breaker's own field goes white for a moment, then fades).
-    // Only that field; single soft flash, at most one per second per field (photosensitivity).
-    {
-      const now = mine ? this.state.time : (this._bot ? this._bot.time : 0);
-      const key = mine ? '_flashAtP' : '_flashAtB';
-      if (!(now - (this[key] ?? -9) < 1.0)) {
-        this[key] = now;
+    // Core break: the breaker's whole screen blinks white (a bit longer than a hit). COM: faint field-only flash.
+    if (mine) this.screenFlash('break');
+    else {
+      const now = this._bot ? this._bot.time : 0;
+      if (!(now - (this._flashAtB ?? -9) < 1.0)) {
+        this._flashAtB = now;
         const fw = this.L.own.w, fh = this.L.own.h;
-        fx.unshift({ kind: 'fieldflash', x: fw / 2, y: fh / 2, r: 1, life: 0.85, max: 0.85 });
+        fx.unshift({ kind: 'fieldflash', x: fw / 2, y: fh / 2, r: 1, life: 0.3, max: 0.3, a: 0.22 });
       }
     }
     const chained = markCoreChain(e, list); // cascading yellow chain wipe of the pack around the core
@@ -1737,7 +1763,7 @@ export class Game {
         for (const e of S.enemies) {
           if (warping(e)) continue;
           if (Math.abs(e.y - ly) < e.h * 0.55 + 8 && e.x > P.x) {
-            if (hasCore(e)) { if (applyCoreAwareBeam(e, 1.05, ly, S.fx).hit === 'core') this.onCoreBreak(e, S.fx, true, S.enemies); continue; }
+            if (hasCore(e)) { const bh = applyCoreAwareBeam(e, 1.05, ly, S.fx).hit; if (bh === 'core') this.onCoreBreak(e, S.fx, true, S.enemies); else if (bh === 'corehit') this.screenFlash('hit'); continue; }
             e.hp -= 1.05; // staccato ticks a bit harder, slightly slower
             S.fx.push(spawnHitSpark(e.x - e.w * 0.35, ly));
           }
@@ -1862,6 +1888,7 @@ export class Game {
           const r = applyCoreAwareHit(e, b.dmg || 1, b.x, b.y, S.fx);
           if (r.hit === 'none') continue;
           if (r.hit === 'core') this.onCoreBreak(e, S.fx, true, S.enemies);
+          else if (r.hit === 'corehit') this.screenFlash('hit');
           if (!b.pierce) b.life = 0;
           break;
         }
