@@ -4,15 +4,15 @@ import {
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
-  markCoreChain, tickChain, spawnChainBoom, spawnCoreEscorts, tickEscort, CHAIN_R,
-} from './entities.js?v=20260929003314';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929003314';
-import { sfx } from './audio.js?v=20260929003314';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929003314';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929003314';
-import { hitBattleCounter } from './stats.js?v=20260929003314';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929003314';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929003314';
+  markCoreChain, tickChain, spawnChainBoom, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind,
+} from './entities.js?v=20260929005001';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929005001';
+import { sfx } from './audio.js?v=20260929005001';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929005001';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929005001';
+import { hitBattleCounter } from './stats.js?v=20260929005001';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929005001';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929005001';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1065,7 +1065,7 @@ export class Game {
     if (mine) {
       this.state.player.score += e.score; // burst on top of the normal kill score
       try { sfx.explode(); } catch (_) {}
-      this.setStatus((e.kind === 'wave_core_boss' ? 'コア撃破！ ボスを一撃で倒した！' : 'コア撃破！ 群れを全滅させた！') + (chained ? `　連鎖 ${chained}機！` : ''));
+      this.setStatus((isCoreBossKind(e.kind) ? 'コア撃破！ ボスを一撃で倒した！' : 'コア撃破！ 群れを全滅させた！') + (chained ? `　連鎖 ${chained}機！` : ''));
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
     }
   }
@@ -1743,7 +1743,7 @@ export class Game {
       for (let i = 0; i < n; i++) {
         const roll = Math.random();
         // Wave-only kinds (not catalog/deck units). ~7% mid-wave: swarm with a core (max 1 on field).
-        let kind = roll > 0.85 ? 'wave_elite' : roll > 0.5 ? 'wave_swarm' : 'wave_basic';
+        let kind = roll > 0.85 ? (roll > 0.9 && S.time > 20 ? 'wave_mech' : 'wave_elite') : roll > 0.5 ? 'wave_swarm' : 'wave_basic';
         if (roll > 0.93 && S.time > 12 && !S.enemies.some((e) => e.kind === 'wave_swarm_core')) kind = 'wave_swarm_core';
         const ne = spawnEnemy(fw, fh, kind);
         S.enemies.push(ne);
@@ -1755,10 +1755,10 @@ export class Game {
       this._bossAcc = 0;
       // Core boss is the highlight: 2 of every 3 boss spawns, classic boss otherwise
       this._bossN = (this._bossN || 0) + 1;
-      const bk = this._bossN % 3 === 0 ? 'wave_boss' : 'wave_core_boss';
+      const bk = ['wave_boss', 'wave_core_boss', 'wave_eye_boss'][this._bossN % 3];
       const be = spawnEnemy(fw, fh, bk);
       S.enemies.push(be);
-      if (bk === 'wave_core_boss') { S.enemies.push(...spawnCoreEscorts(be, fw, fh)); this.coreTip(); }
+      if (isCoreBossKind(bk)) { S.enemies.push(...spawnCoreEscorts(be, fw, fh)); this.coreTip(); }
     }
 
     // Update enemies (vertical weave + forward/back surge)
@@ -1883,7 +1883,7 @@ export class Game {
         P.score += e.score;
         if (e._coreBreak) {
           // コア撃破: 大回復確定 + アイテム確定 (swarm: 回復 + アイテム)
-          S.items.push(spawnItemWithId(e.x, e.y, e.kind === 'wave_core_boss' ? 'heal_big' : 'heal'));
+          S.items.push(spawnItemWithId(e.x, e.y, isCoreBossKind(e.kind) ? 'heal_big' : 'heal'));
           S.items.push(spawnItem(e.x + 26, e.y));
         } else if (isLargeEnemy(e)) {
           // デカギャラ撃破: 回復確定（ボス級は大回復）
@@ -2375,7 +2375,7 @@ export class Game {
       for (let i = 0; i < n; i++) {
         const r = Math.random();
         // Same mix as the player field (incl. swarm-core)
-        let kind = r > 0.85 ? 'wave_elite' : r > 0.5 ? 'wave_swarm' : 'wave_basic';
+        let kind = r > 0.85 ? (r > 0.9 && (B.time || 0) > 20 ? 'wave_mech' : 'wave_elite') : r > 0.5 ? 'wave_swarm' : 'wave_basic';
         if (r > 0.93 && (B.time || 0) > 12 && !B.enemies.some((e) => e.kind === 'wave_swarm_core')) kind = 'wave_swarm_core';
         const ne = spawnEnemy(fw, fh, kind);
         B.enemies.push(ne);
@@ -2386,9 +2386,9 @@ export class Game {
     if (B.bossAcc > 22 && !B.enemies.some((e) => resolveEnemyTier(e.kind) === 'boss')) {
       B.bossAcc = 0;
       B.bossN = (B.bossN || 0) + 1;
-      const be = spawnEnemy(fw, fh, B.bossN % 3 === 0 ? 'wave_boss' : 'wave_core_boss');
+      const be = spawnEnemy(fw, fh, ['wave_boss', 'wave_core_boss', 'wave_eye_boss'][B.bossN % 3]);
       B.enemies.push(be);
-      if (be.kind === 'wave_core_boss') B.enemies.push(...spawnCoreEscorts(be, fw, fh));
+      if (isCoreBossKind(be.kind)) B.enemies.push(...spawnCoreEscorts(be, fw, fh));
     }
 
     for (const e of B.enemies) {
@@ -2477,7 +2477,7 @@ export class Game {
         B.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
         // Same as the player: drops are orbs that the COM ship must fly into (8s life)
         if (e._coreBreak) {
-          B.orbs.push(spawnItemWithId(e.x, e.y, e.kind === 'wave_core_boss' ? 'heal_big' : 'heal'));
+          B.orbs.push(spawnItemWithId(e.x, e.y, isCoreBossKind(e.kind) ? 'heal_big' : 'heal'));
           B.orbs.push(spawnItem(e.x + 26, e.y));
         } else if (isLargeEnemy(e)) {
           const healId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';

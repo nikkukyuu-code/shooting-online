@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929003314';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929005001';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260929003314`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260929005001`;
 }
 
 function loadKindSprite(kind) {
@@ -358,6 +358,85 @@ function drawEnemySprite(ctx, e, kind) {
   ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
   ctx.filter = 'none';
   ctx.restore();
+  return true;
+}
+
+/**
+ * Wave-only brushed-up sprites (redraws of Sakata's スタートリックオンライン enemies), facing left.
+ * assets/enemies/<wave kind>/0.png — body only for core kinds (the live core / drones / claws are
+ * drawn on top so hitbox offsets stay exact). Procedural art is the fallback until loaded.
+ */
+const WAVE_SPRITE_KINDS = ['wave_escort', 'wave_mech', 'wave_core_boss', 'wave_swarm_core', 'wave_eye_boss'];
+const waveSprites = Object.create(null);
+for (const k of WAVE_SPRITE_KINDS) {
+  const img = new Image();
+  img.decoding = 'async';
+  img.src = enemyAssetUrl(k, 0);
+  waveSprites[k] = img;
+}
+function waveSprite(kind) {
+  const img = waveSprites[kind];
+  return img && img.complete && img.naturalWidth ? img : null;
+}
+/** Draw sprite centred, aspect kept, fitted inside bw×bh. */
+function drawFit(ctx, img, bw, bh, flash) {
+  const k = Math.min(bw / img.naturalWidth, bh / img.naturalHeight);
+  const dw = img.naturalWidth * k, dh = img.naturalHeight * k;
+  if (flash) ctx.filter = 'brightness(1.6)';
+  ctx.drawImage(img, -dw / 2, -dh / 2, dw, dh);
+  if (flash) ctx.filter = 'none';
+}
+function drawCoreSpriteBody(ctx, e, kind, w, h, t, flash) {
+  const img = waveSprite(kind);
+  if (!img) return false;
+  if (kind === 'wave_core_boss') {
+    drawFit(ctx, img, w * 1.12, h * 1.12, flash);
+    return true;
+  }
+  if (kind === 'wave_eye_boss') {
+    // Rotating mechanical claws (= drones: they block shots) behind/around the red flesh
+    for (const d of e.drones || []) {
+      if (d.hp <= 0) continue;
+      ctx.save();
+      ctx.rotate(d.ang);
+      ctx.translate(d.dist, 0);
+      const r = d.r;
+      ctx.fillStyle = '#5a5f6c';
+      ctx.strokeStyle = '#262a33';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(-r * 1.1, -r * 0.9);
+      ctx.lineTo(r * 0.7, -r * 0.55);
+      ctx.lineTo(r * 1.35, 0);
+      ctx.lineTo(r * 0.7, r * 0.55);
+      ctx.lineTo(-r * 1.1, r * 0.9);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#8a909c';
+      ctx.fillRect(-r * 0.9, -r * 0.25, r * 1.2, r * 0.5);
+      ctx.fillStyle = `rgba(255,70,60,${0.7 + 0.3 * Math.sin(t * 6 + d.ang)})`;
+      ctx.beginPath(); ctx.arc(r * 0.55, 0, r * 0.22, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    drawFit(ctx, img, w * 0.84, h * 0.84, flash);
+    return true;
+  }
+  // Swarm-core: mid triangle ship + grunt-sprite drones
+  const esc = waveSprite('wave_escort');
+  ctx.strokeStyle = 'rgba(255,70,60,0.25)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 5]);
+  ctx.beginPath(); ctx.arc(0, 0, Math.min(w, h) * 0.38, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
+  for (const d of e.drones || []) {
+    if (d.hp <= 0) continue;
+    const dx = Math.cos(d.ang) * d.dist, dy = Math.sin(d.ang) * d.dist;
+    ctx.save(); ctx.translate(dx, dy);
+    if (esc) drawFit(ctx, esc, d.r * 2.6, d.r * 2.2, false);
+    else { ctx.fillStyle = '#b8bec8'; ctx.beginPath(); ctx.arc(0, 0, d.r, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+  }
+  drawFit(ctx, img, Math.min(w, h) * 0.7, Math.min(w, h) * 0.7, flash);
   return true;
 }
 
@@ -502,7 +581,9 @@ function drawWaveEnemy(ctx, e, kind, sent, w, h, t, pulse) {
 function drawCoreEnemy(ctx, e, kind, w, h, t) {
   ctx.save();
   const flash = (e.bodyFlash || e._bodyFlash || 0) > 0;
-  if (kind === 'wave_core_boss') {
+  if (drawCoreSpriteBody(ctx, e, kind, w, h, t, flash)) {
+    // brushed-up sprite body + guards (drones / claws) drawn; core overlay below
+  } else if (kind === 'wave_core_boss') {
     // Large grey triangular midboss (nose left), swept red-tipped wings, dark mechanical spine
     const hull = flash ? '#c8d4e0' : '#8a909c';
     const dark = '#3a3f4a';
@@ -972,7 +1053,8 @@ function drawEnemy(ctx, e) {
 
   // Wave ambient kinds: procedural only (never catalog sprites)
   if (isWaveKindId(kind)) {
-    if (kind === 'wave_core_boss' || kind === 'wave_swarm_core') drawCoreEnemy(ctx, e, kind, w, h, t);
+    if (kind === 'wave_core_boss' || kind === 'wave_swarm_core' || kind === 'wave_eye_boss') drawCoreEnemy(ctx, e, kind, w, h, t);
+    else if ((kind === 'wave_escort' || kind === 'wave_mech') && waveSprite(kind)) drawFit(ctx, waveSprite(kind), w * 1.15, h * 1.15, false);
     else if (kind === 'wave_escort') drawEscort(ctx, w, h, t, e);
     else drawWaveEnemy(ctx, e, kind, sent, w, h, t, pulse);
   } else {
@@ -988,7 +1070,7 @@ function drawEnemy(ctx, e) {
   const tierKey = isWaveKindId(kind) ? kind.replace(/^wave_/, '') : kind;
   const tiny = tierKey === 'swarm' || tierKey === 'basic'
     || (e.w && e.w <= 70 && e.h && e.h <= 60);
-  if (!tiny && kind !== 'wave_core_boss' && kind !== 'wave_swarm_core') drawHpPip(ctx, e);
+  if (!tiny && kind !== 'wave_core_boss' && kind !== 'wave_swarm_core' && kind !== 'wave_eye_boss') drawHpPip(ctx, e);
 
   if (sent) {
     const labelA = appearT > 0 ? (0.55 + 0.45 * (0.5 + 0.5 * Math.sin(t * 18))) : 0.9;
@@ -2708,9 +2790,9 @@ export function drawField(ctx, area, snap, opts = {}) {
       laserAimY: (e.laserAimY ?? e.ay) != null ? (e.laserAimY ?? e.ay) * sy : undefined,
       laserTeleOffs: Array.isArray(e.laserTeleOffs ?? e.lo) ? (e.laserTeleOffs ?? e.lo).map((o) => o * sy) : undefined,
       core: e.core ? { ox: e.core.ox * sx, oy: e.core.oy * sy, r: e.core.r * Math.min(sx, sy), hp: e.core.hp }
-        : (e.ch != null ? { ox: e.kind === 'wave_core_boss' ? -(e.w || 184) * 0.36 * sx : 0, oy: 0, r: (e.kind === 'wave_core_boss' ? 20 : 15) * Math.min(sx, sy), hp: e.ch } : undefined),
+        : (e.ch != null ? { ox: e.kind === 'wave_core_boss' ? -(e.w || 184) * 0.36 * sx : 0, oy: 0, r: (e.kind === 'wave_core_boss' ? 23 : e.kind === 'wave_eye_boss' ? 27 : 15) * Math.min(sx, sy), hp: e.ch } : undefined),
       drones: e.drones ? e.drones.map((d) => ({ ang: d.ang, dist: d.dist * Math.min(sx, sy), r: d.r * Math.min(sx, sy), hp: d.hp }))
-        : (Array.isArray(e.dr) ? e.dr.map((hp, i, a) => ({ ang: (Math.PI * 2 * i) / a.length + performance.now() / 1000 * 1.6, dist: (36 + (i % 2) * 8) * Math.min(sx, sy), r: 12 * Math.min(sx, sy), hp })) : undefined),
+        : (Array.isArray(e.dr) ? e.dr.map((hp, i, a) => ({ ang: (Math.PI * 2 * i) / a.length + performance.now() / 1000 * 1.6, dist: (e.kind === 'wave_eye_boss' ? 72 : 36 + (i % 2) * 8) * Math.min(sx, sy), r: (e.kind === 'wave_eye_boss' ? 15 : 12) * Math.min(sx, sy), hp })) : undefined),
       bodyFlash: e._bodyFlash || 0,
     });
   }

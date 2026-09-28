@@ -135,6 +135,10 @@ export const WAVE_KIND_TIERS = {
   wave_swarm_core: 'elite',
   // Escort fighters packed in formation around a core unit (fodder for the core chain wipe)
   wave_escort: 'swarm',
+  // Grey bipedal walker (elite-class stats, wave-only)
+  wave_mech: 'elite',
+  // Giant red eye boss: huge central core behind rotating mechanical claws (wave-only)
+  wave_eye_boss: 'boss',
 };
 export const WAVE_KIND_IDS = Object.keys(WAVE_KIND_TIERS);
 export function isWaveKind(kind) {
@@ -202,12 +206,21 @@ export function spawnEnemy(fieldW, fieldH, kind = 'basic') {
     fireCd: 1.2 + Math.random() * 0.8,
     sent: false, // was sent by opponent
   };
-  return attachCore(e);
+  if (kind === 'wave_mech') { e.w = 78; e.h = 94; } // upright walker silhouette (same elite HP/score)
+  attachCore(e);
+  // Big core bosses spawn fully inside the pane so the core is always reachable / readable
+  if (isCoreBossKind(kind)) e.y = Math.max(e.h * 0.5 + 6, Math.min(fieldH - e.h * 0.5 - 6, e.y));
+  return e;
+}
+
+/** Big core units (armored hull + one-shot core): the triangular midboss and the giant red eye. */
+export function isCoreBossKind(kind) {
+  return kind === 'wave_core_boss' || kind === 'wave_eye_boss';
 }
 
 /** True for wave kinds that carry a destructible glowing core. */
 export function hasCore(e) {
-  return !!(e && (e.kind === 'wave_core_boss' || e.kind === 'wave_swarm_core'));
+  return !!(e && (e.kind === 'wave_core_boss' || e.kind === 'wave_swarm_core' || e.kind === 'wave_eye_boss'));
 }
 
 /**
@@ -226,6 +239,19 @@ export function attachCore(e) {
     // Core always visible, phone-readable size, slight orbit so aiming matters
     e.core = { ox: -e.w * 0.36, oy: 0, r: Math.max(18, Math.min(e.w, e.h) * 0.20), hp: 1, maxHp: 1, orbit: 28, ang: Math.random() * Math.PI * 2 }; // exposed at the nose; large orbit so body-centre aim often misses
     e.drones = null;
+  } else if (e.kind === 'wave_eye_boss') {
+    // Giant red eye: huge centre core (slow wobble) guarded by 8 rotating mechanical claws.
+    // Shots on the core row pass the flesh and reach the core unless a claw is in the way.
+    e.w = 176; e.h = 176;
+    e.hp = Math.round((e.hp || 125) * 1.3);
+    e.maxHp = e.hp;
+    e.score = Math.max(e.score || 0, 450);
+    e.speed = Math.min(e.speed || 34, 30);
+    e.core = { ox: 0, oy: 0, r: 27, hp: 1, maxHp: 1, orbit: 9, ang: Math.random() * Math.PI * 2 };
+    e.drones = [];
+    for (let i = 0; i < 8; i++) {
+      e.drones.push({ ang: (Math.PI * 2 * i) / 8, dist: 72, r: 15, hp: 10, maxHp: 10, claw: true });
+    }
   } else {
     // Swarm-core: elite-sized formation; satellites orbit a central core
     e.w = Math.max(e.w || 92, 110);
@@ -293,7 +319,7 @@ export function spawnChainBoom(o) {
  * then hold formation while it lives. 2 HP, no guns (contact only), no item drops.
  */
 export function spawnCoreEscorts(lead, fw, fh) {
-  const boss = lead.kind === 'wave_core_boss';
+  const boss = isCoreBossKind(lead.kind);
   const cols = boss ? 5 : 4, rows = boss ? 3 : 2;
   const gx = 36, gy = boss ? 34 : 30;
   const x0 = -(lead.w || 110) * 0.55 - 20;
@@ -400,9 +426,13 @@ export function applyCoreAwareHit(e, dmg, bx, by, fxList) {
       }
     }
   }
-  // 3) Body hull (core boss) — reduced damage + deflect feel
-  if (e.kind === 'wave_core_boss'
-      && Math.abs(bx - e.x) < e.w * 0.45 + 4 && Math.abs(by - e.y) < e.h * 0.45 + 4) {
+  // 3) Body hull (core bosses) — reduced damage + deflect feel.
+  //    Eye boss: round flesh, but the core row is open (shots there fly on to the core).
+  const eyeHull = e.kind === 'wave_eye_boss'
+    && Math.hypot(bx - e.x, by - e.y) < e.w * 0.4 && Math.abs(by - cy) > c.r + 5;
+  const triHull = e.kind === 'wave_core_boss'
+    && Math.abs(bx - e.x) < e.w * 0.45 + 4 && Math.abs(by - e.y) < e.h * 0.45 + 4;
+  if (eyeHull || triHull) {
     e.hp -= Math.max(0.05, dmg * CORE_BODY_DMG_MUL);
     e._bodyFlash = 0.16;
     if (fxList) fxList.push(spawnDeflectSpark(bx, by));
@@ -444,7 +474,7 @@ export function applyCoreAwareArea(e, dmg, ox, oy, fxList) {
       }
     }
   }
-  if (e.kind === 'wave_core_boss') {
+  if (isCoreBossKind(e.kind)) {
     e.hp -= Math.max(0.05, dmg * CORE_BODY_DMG_MUL);
     if (e.hp < 1) e.hp = 1; // only core ends them
     e._bodyFlash = 0.12;
