@@ -253,7 +253,7 @@ export function attachCore(e) {
     e.score = Math.max(e.score || 0, 350);
     // Core sits near the nose (left / toward player) — easy to spot on phone
     // Core always visible, phone-readable size, slight orbit so aiming matters
-    e.core = { ox: -e.w * 0.36, oy: 0, r: Math.max(18, Math.min(e.w, e.h) * 0.20), hp: CORE_HP.wave_core_boss, maxHp: CORE_HP.wave_core_boss, orbit: 28, ang: Math.random() * Math.PI * 2 }; // exposed at the nose; large orbit so body-centre aim often misses
+    e.core = { ox: -e.w * 0.36, oy: 0, r: CORE_R, hp: CORE_HP.wave_core_boss, maxHp: CORE_HP.wave_core_boss, orbit: 28, ang: Math.random() * Math.PI * 2 }; // exposed at the nose; large orbit so body-centre aim often misses
     e.drones = null;
   } else if (e.kind === 'wave_eye_boss') {
     // Giant red eye: huge centre core (slow wobble) guarded by 8 rotating mechanical claws.
@@ -263,7 +263,7 @@ export function attachCore(e) {
     e.maxHp = e.hp;
     e.score = Math.max(e.score || 0, 450);
     e.speed = Math.min(e.speed || 34, 30);
-    e.core = { ox: 0, oy: 0, r: 27, hp: CORE_HP.wave_eye_boss, maxHp: CORE_HP.wave_eye_boss, orbit: 9, ang: Math.random() * Math.PI * 2 };
+    e.core = { ox: 0, oy: 0, r: CORE_R, hp: CORE_HP.wave_eye_boss, maxHp: CORE_HP.wave_eye_boss, orbit: 9, ang: Math.random() * Math.PI * 2 };
     e.drones = [];
     for (let i = 0; i < 8; i++) {
       e.drones.push({ ang: (Math.PI * 2 * i) / 8, dist: 72, r: 15, hp: GUARD_HP.claw, maxHp: GUARD_HP.claw, claw: true });
@@ -271,18 +271,18 @@ export function attachCore(e) {
   } else if (e.kind === 'wave_grid_core') {
     // ~1.5× player core ship in the middle of a wedge grid: core at its nose, armored hull
     e.w = 62; e.h = 52; e.hp = 30; e.maxHp = 30; e.score = Math.max(e.score || 0, 150);
-    e.core = { ox: -e.w * 0.3, oy: 0, r: 15, hp: CORE_HP.wave_grid_core, maxHp: CORE_HP.wave_grid_core, orbit: 0, ang: 0 };
+    e.core = { ox: -e.w * 0.3, oy: 0, r: CORE_R, hp: CORE_HP.wave_grid_core, maxHp: CORE_HP.wave_grid_core, orbit: 0, ang: 0 };
     e.drones = null;
   } else if (e.kind === 'wave_ring_core') {
     // Rotating ring: 8 small fighter pods (user art) orbit a glowing red core; pods block shots
     e.w = 150; e.h = 150; e.hp = 40; e.maxHp = 40; e.score = Math.max(e.score || 0, 180);
-    e.core = { ox: 0, oy: 0, r: 17, hp: CORE_HP.wave_ring_core, maxHp: CORE_HP.wave_ring_core, orbit: 5, ang: Math.random() * Math.PI * 2 };
+    e.core = { ox: 0, oy: 0, r: CORE_R, hp: CORE_HP.wave_ring_core, maxHp: CORE_HP.wave_ring_core, orbit: 5, ang: Math.random() * Math.PI * 2 };
     e.drones = [];
     for (let i = 0; i < 8; i++) e.drones.push({ ang: (Math.PI * 2 * i) / 8, dist: 58, r: 14, hp: GUARD_HP.pod, maxHp: GUARD_HP.pod, pod: true });
   } else if (e.kind === 'wave_snake_head') {
     // Snake boss head: the red glowing head IS the core (segments follow; head kill → body chain)
     e.w = 54; e.h = 54; e.hp = 60; e.maxHp = 60; e.score = Math.max(e.score || 0, 400);
-    e.core = { ox: 0, oy: 0, r: 22, hp: CORE_HP.wave_snake_head, maxHp: CORE_HP.wave_snake_head, orbit: 0, ang: 0 };
+    e.core = { ox: 0, oy: 0, r: CORE_R, hp: CORE_HP.wave_snake_head, maxHp: CORE_HP.wave_snake_head, orbit: 0, ang: 0 };
     e.drones = null;
   } else {
     // Swarm-core: elite-sized formation; satellites orbit a central core
@@ -293,7 +293,7 @@ export function attachCore(e) {
     e.score = Math.max(e.score || 0, 160);
     e.speed = Math.min(e.speed || 75, 70);
     // Core is the only way to clear the swarm; drones are distractions (high HP, no formation wipe)
-    e.core = { ox: 0, oy: 0, r: 15, hp: CORE_HP.wave_swarm_core, maxHp: CORE_HP.wave_swarm_core, orbit: 22, ang: Math.random() * Math.PI * 2 }; // large orbit: body-centre aim often misses
+    e.core = { ox: 0, oy: 0, r: CORE_R, hp: CORE_HP.wave_swarm_core, maxHp: CORE_HP.wave_swarm_core, orbit: 22, ang: Math.random() * Math.PI * 2 }; // large orbit: body-centre aim often misses
     const n = 6;
     e.drones = [];
     for (let i = 0; i < n; i++) {
@@ -324,6 +324,8 @@ export function attachCore(e) {
  */
 /** Guards around a core (tough: shooting through them is slow — snipe the core instead). */
 export const GUARD_HP = { escort: 6, cage: 9, pod: 15, claw: 30, drone: 24, seg: 30 };
+/** Every core is a small glowing point (like the original): careful aim needed. Hit radius = r + pad. */
+export const CORE_R = 9, CORE_HIT_PAD = 2;
 export const CORE_HP = {
   wave_swarm_core: 18, wave_grid_core: 19, wave_ring_core: 21,
   wave_snake_head: 30, wave_core_boss: 44, wave_eye_boss: 58,
@@ -529,7 +531,7 @@ export function applyCoreAwareHit(e, dmg, bx, by, fxList) {
   const c = e.core;
   const cx = e.x + c.ox, cy = e.y + c.oy;
   // 1) Core
-  if (c.hp > 0 && Math.hypot(bx - cx, by - cy) < c.r + 5) {
+  if (c.hp > 0 && Math.hypot(bx - cx, by - cy) < c.r + CORE_HIT_PAD) {
     if (coreShutState(e) === 2) {
       // Armour closed: blocked (clang), no damage
       e._bodyFlash = 0.1;
@@ -573,7 +575,7 @@ export function applyCoreAwareHit(e, dmg, bx, by, fxList) {
   // 3) Body hull (core bosses) — reduced damage + deflect feel.
   //    Eye boss: round flesh, but the core row is open (shots there fly on to the core).
   const eyeHull = e.kind === 'wave_eye_boss'
-    && Math.hypot(bx - e.x, by - e.y) < e.w * 0.4 && Math.abs(by - cy) > c.r + 5;
+    && Math.hypot(bx - e.x, by - e.y) < e.w * 0.4 && Math.abs(by - cy) > c.r + CORE_HIT_PAD;
   const triHull = (e.kind === 'wave_core_boss' || e.kind === 'wave_grid_core')
     && Math.abs(bx - e.x) < e.w * 0.45 + 4 && Math.abs(by - e.y) < e.h * 0.45 + 4;
   if (eyeHull || triHull) {
@@ -632,7 +634,7 @@ export function applyCoreAwareArea(e, dmg, ox, oy, fxList) {
 /** Beam tick along row `ly` (x beyond sx): core if the beam crosses it, else area chip. */
 export function applyCoreAwareBeam(e, dmg, ly, fxList) {
   const c = coreWorld(e);
-  if (c && e.core.hp > 0 && Math.abs(c.y - ly) < c.r + 6) return applyCoreAwareHit(e, dmg, c.x, c.y, fxList);
+  if (c && e.core.hp > 0 && Math.abs(c.y - ly) < c.r + CORE_HIT_PAD + 1) return applyCoreAwareHit(e, dmg, c.x, c.y, fxList);
   if (fxList) fxList.push(spawnDeflectSpark(e.x - e.w * 0.35, ly));
   return applyCoreAwareArea(e, dmg, null, null, fxList);
 }

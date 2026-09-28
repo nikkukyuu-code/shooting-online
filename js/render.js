@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929024517';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929025552';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -106,39 +106,39 @@ export function itemButtonRect(ctrl) {
   return { x: r.btnX, y: r.btnY, w: r.btnW, h: r.btnH };
 }
 
-/** Fiery orange/red nebula (play / opponent views). */
+/**
+ * Battle background as in the original footage: plain black, small sparse stars scrolling right → left
+ * in 3 depth layers; now and then a star twinkles. Deterministic per seed, ~50 rects per frame (light).
+ */
+const STAR_LAYERS = [
+  { n: 30, spd: 0.22, sz: 1, a: 0.38 },
+  { n: 16, spd: 0.5, sz: 1.3, a: 0.55 },
+  { n: 7, spd: 1.0, sz: 1.8, a: 0.75 },
+];
 function nebula(ctx, w, h, scroll, seed = 0) {
-  const g = ctx.createLinearGradient(0, 0, w, h);
-  g.addColorStop(0, '#2a0c08');
-  g.addColorStop(0.35, '#6a220e');
-  g.addColorStop(0.65, '#c44518');
-  g.addColorStop(1, '#3a100a');
-  ctx.fillStyle = g;
+  ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, w, h);
-
+  const t = performance.now() / 1000;
+  const k = Math.max(1, Math.min(w, h * 2) / 360); // star size follows canvas scale (DPR)
   ctx.save();
-  ctx.globalAlpha = 0.35;
-  for (let i = 0; i < 18; i++) {
-    const n = (i * 97 + seed * 13) % 200;
-    const x = ((n * 17 + scroll * (0.15 + (i % 5) * 0.04)) % (w + 80)) - 40;
-    const y = ((n * 31) % (h - 20)) + 10;
-    const r = 30 + (n % 50);
-    const rg = ctx.createRadialGradient(x, y, 0, x, y, r);
-    rg.addColorStop(0, i % 2 ? 'rgba(255,160,40,0.55)' : 'rgba(255,80,20,0.4)');
-    rg.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = rg;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // stars
-  ctx.globalAlpha = 0.7;
-  ctx.fillStyle = '#ffe8c8';
-  for (let i = 0; i < 40; i++) {
-    const n = (i * 53 + seed) % 300;
-    const x = ((n * 23 + scroll * 0.5) % (w + 10));
-    const y = (n * 41) % h;
-    ctx.fillRect(x, y, 1.5, 1.5);
+  let idx = 0;
+  for (const L of STAR_LAYERS) {
+    for (let i = 0; i < L.n; i++, idx++) {
+      const h1 = Math.sin((idx + 1) * 12.9898 + seed * 78.233) * 43758.5453;
+      const h2 = Math.sin((idx + 1) * 39.3468 + seed * 11.135) * 24634.6345;
+      const fx = h1 - Math.floor(h1), fy = h2 - Math.floor(h2);
+      const span = w + 8;
+      const x = (((fx * span - scroll * L.spd) % span) + span) % span - 4;
+      const y = fy * h;
+      // twinkle: brief brightening, each star on its own slow cycle (only a few at any time)
+      const tw = Math.sin(t * (0.7 + fx * 0.9) + fy * 40);
+      const bright = tw > 0.965;
+      ctx.globalAlpha = bright ? 1 : L.a;
+      ctx.fillStyle = bright ? '#ffffff' : (idx % 5 === 0 ? '#c8d4ff' : '#d8d8d8');
+      const s = (L.sz + (bright ? 1 : 0)) * k * 0.5;
+      ctx.fillRect(x - s / 2, y - s / 2, s, s);
+      if (bright) { ctx.globalAlpha = 0.35; ctx.fillRect(x - s * 1.5, y - s / 4, s * 3, s / 2); ctx.fillRect(x - s / 4, y - s * 1.5, s / 2, s * 3); }
+    }
   }
   ctx.restore();
 }
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260929024517`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260929025552`;
 }
 
 function loadKindSprite(kind) {
@@ -781,8 +781,8 @@ function drawCoreEnemy(ctx, e, kind, w, h, t) {
     // Core HP ring
     const cmax = c.maxHp || e.cm || c.hp;
     const fr = Math.max(0, Math.min(1, c.hp / (cmax || 1)));
-    const rr = r * 1.72;
-    ctx.lineWidth = Math.max(3, r * 0.2);
+    const rr = r + 5;
+    ctx.lineWidth = 2;
     ctx.strokeStyle = 'rgba(0,0,0,0.55)';
     ctx.beginPath(); ctx.arc(c.ox, c.oy, rr, 0, Math.PI * 2); ctx.stroke();
     ctx.strokeStyle = fr > 0.5 ? '#ffe070' : fr > 0.25 ? '#ff9a3a' : '#ff3a2a';
@@ -2959,7 +2959,7 @@ export function drawField(ctx, area, snap, opts = {}) {
       laserTeleOffs: Array.isArray(e.laserTeleOffs ?? e.lo) ? (e.laserTeleOffs ?? e.lo).map((o) => o * sy) : undefined,
       spr: e.spr ?? e.sp, rot: e.rot ?? e.ro, tone: e.tone ?? e.tn, cm: e.cm, cs: e.cs ?? (e._sh ? e._sh.st : undefined), sk: e.sk ?? (e._shake > 0 ? 1 : 0), _coreFlash: e._coreFlash, _warn: e._warn, _dashWarn: e._dashWarn, claw: e.claw, podR: e.podR != null ? e.podR * Math.min(sx, sy) : undefined,
       core: e.core ? { ox: e.core.ox * sx, oy: e.core.oy * sy, r: e.core.r * Math.min(sx, sy), hp: e.core.hp, maxHp: e.core.maxHp }
-        : (e.ch != null ? { ox: e.kind === 'wave_core_boss' ? -(e.w || 184) * 0.36 * sx : e.kind === 'wave_grid_core' ? -(e.w || 62) * 0.3 * sx : 0, oy: 0, r: ({ wave_core_boss: 23, wave_eye_boss: 27, wave_ring_core: 17, wave_snake_head: 22 }[e.kind] || 15) * Math.min(sx, sy), hp: e.ch, maxHp: e.cm } : undefined),
+        : (e.ch != null ? { ox: e.kind === 'wave_core_boss' ? -(e.w || 184) * 0.36 * sx : e.kind === 'wave_grid_core' ? -(e.w || 62) * 0.3 * sx : 0, oy: 0, r: 9 * Math.min(sx, sy), hp: e.ch, maxHp: e.cm } : undefined),
       drones: e.drones ? e.drones.map((d) => ({ ang: d.ang, dist: d.dist * Math.min(sx, sy), r: d.r * Math.min(sx, sy), hp: d.hp }))
         : (Array.isArray(e.dr) ? e.dr.map((hp, i, a) => ({ ang: (Math.PI * 2 * i) / a.length + performance.now() / 1000 * 1.6, dist: (e.kind === 'wave_eye_boss' ? 72 : e.kind === 'wave_ring_core' ? 58 : 36 + (i % 2) * 8) * Math.min(sx, sy), r: (e.kind === 'wave_eye_boss' ? 15 : e.kind === 'wave_ring_core' ? 14 : 12) * Math.min(sx, sy), hp })) : undefined),
       bodyFlash: e._bodyFlash || 0,
