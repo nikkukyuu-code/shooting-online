@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260928222631';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929000734';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260928222631`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260929000734`;
 }
 
 function loadKindSprite(kind) {
@@ -492,6 +492,166 @@ function drawWaveEnemy(ctx, e, kind, sent, w, h, t, pulse) {
     ctx.globalAlpha = 1;
   }
 
+  ctx.restore();
+}
+
+/**
+ * Core weak-point enemies (wave-only). Dark armored hull / drone ring + a big pulsing
+ * cyan-magenta core that is obviously "the target". Local space (translated to e.x,e.y).
+ */
+function drawCoreEnemy(ctx, e, kind, w, h, t) {
+  ctx.save();
+  const flash = (e.bodyFlash || e._bodyFlash || 0) > 0;
+  if (kind === 'wave_core_boss') {
+    // Heavy armored shell (reads as "hard" — bullets bounce)
+    ctx.fillStyle = flash ? '#9fb4c8' : '#4a5264';
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.5, 0);
+    ctx.lineTo(-w * 0.2, -h * 0.46);
+    ctx.lineTo(w * 0.42, -h * 0.34);
+    ctx.lineTo(w * 0.5, 0);
+    ctx.lineTo(w * 0.42, h * 0.34);
+    ctx.lineTo(-w * 0.2, h * 0.46);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = flash ? '#e8f6ff' : '#8a96ac';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // Armor plates
+    ctx.fillStyle = '#2c3240';
+    for (let i = -1; i <= 1; i += 2) {
+      ctx.fillRect(w * 0.02, i * h * 0.24 - h * 0.06, w * 0.34, h * 0.12);
+    }
+    // Thrusters
+    ctx.fillStyle = '#ff5533';
+    ctx.globalAlpha = 0.6 + 0.4 * Math.sin(t * 9);
+    ctx.fillRect(w * 0.46, -h * 0.12, w * 0.08, h * 0.08);
+    ctx.fillRect(w * 0.46, h * 0.04, w * 0.08, h * 0.08);
+    ctx.globalAlpha = 1;
+  } else {
+    // Swarm-core: faint tether ring + drones
+    ctx.strokeStyle = 'rgba(255,90,200,0.28)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 5]);
+    ctx.beginPath();
+    ctx.arc(0, 0, Math.min(w, h) * 0.38, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    for (const d of e.drones || []) {
+      if (d.hp <= 0) continue;
+      const dx = Math.cos(d.ang) * d.dist, dy = Math.sin(d.ang) * d.dist;
+      ctx.fillStyle = '#e84858';
+      ctx.beginPath();
+      ctx.moveTo(dx - d.r, dy);
+      ctx.lineTo(dx + d.r * 0.7, dy - d.r * 0.75);
+      ctx.lineTo(dx + d.r * 0.35, dy);
+      ctx.lineTo(dx + d.r * 0.7, dy + d.r * 0.75);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,90,200,0.35)';
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(dx, dy); ctx.stroke();
+    }
+  }
+  // The CORE — strong pulse + rings, cyan/magenta
+  const c = e.core;
+  if (c && c.hp > 0) {
+    const pu = 0.5 + 0.5 * Math.sin(t * 8);
+    const r = c.r;
+    ctx.shadowBlur = 0;
+    const halo = ctx.createRadialGradient(c.ox, c.oy, r * 0.2, c.ox, c.oy, r * (2.1 + pu * 0.5));
+    halo.addColorStop(0, 'rgba(255,255,255,0.95)');
+    halo.addColorStop(0.3, 'rgba(90,255,255,0.85)');
+    halo.addColorStop(0.62, 'rgba(255,60,220,0.45)');
+    halo.addColorStop(1, 'rgba(255,60,220,0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(c.ox, c.oy, r * (2.1 + pu * 0.5), 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = pu > 0.5 ? '#aaffff' : '#ff7ae6';
+    ctx.beginPath(); ctx.arc(c.ox, c.oy, r * (0.72 + pu * 0.12), 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(c.ox, c.oy, r * 0.32, 0, Math.PI * 2); ctx.fill();
+    // Target brackets (reads as "aim here")
+    ctx.strokeStyle = `rgba(255,255,255,${0.55 + 0.45 * pu})`;
+    ctx.lineWidth = 2;
+    const b = r * 1.35, L = r * 0.5;
+    for (const [sxx, syy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      ctx.beginPath();
+      ctx.moveTo(c.ox + sxx * b, c.oy + syy * (b - L));
+      ctx.lineTo(c.ox + sxx * b, c.oy + syy * b);
+      ctx.lineTo(c.ox + sxx * (b - L), c.oy + syy * b);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${Math.max(9, Math.round(r * 0.62))}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.globalAlpha = 0.9;
+    ctx.fillText('CORE', c.ox, c.oy - b - 3);
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+}
+
+/** Body hit on a core unit: blue-white "弾かれた" spark with a short ricochet line. */
+function drawDeflectSpark(ctx, f) {
+  const t = 1 - f.life / f.max;
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, 1 - t);
+  ctx.strokeStyle = '#cfe8ff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(f.x, f.y, (f.r || 10) * (0.4 + t * 0.8), Math.PI * 0.6, Math.PI * 1.4);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(f.x, f.y);
+  ctx.lineTo(f.x - 10 - t * 14, f.y - 6 - t * 10);
+  ctx.moveTo(f.x, f.y);
+  ctx.lineTo(f.x - 10 - t * 14, f.y + 6 + t * 10);
+  ctx.stroke();
+  if (t < 0.5) {
+    ctx.fillStyle = '#e8f4ff';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('カン', f.x + 2, f.y - 10 - t * 10);
+  }
+  ctx.restore();
+}
+
+/** Core destroyed: bright white flash, cyan/magenta double shockwave, rays, 「コア撃破!」 text. */
+function drawCoreBreak(ctx, f) {
+  const t = 1 - f.life / f.max;
+  const R = f.r || 120;
+  ctx.save();
+  if (t < 0.18) {
+    ctx.globalAlpha = (0.18 - t) / 0.18 * 0.85;
+    const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, R * 0.9);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(f.x, f.y, R * 0.9, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = Math.max(0, 1 - t);
+  ctx.lineWidth = 4 * (1 - t) + 1;
+  ctx.strokeStyle = '#6ffcff';
+  ctx.beginPath(); ctx.arc(f.x, f.y, R * (0.2 + t * 1.1), 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = '#ff5ae0';
+  ctx.beginPath(); ctx.arc(f.x, f.y, R * (0.1 + t * 0.8), 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 12; i++) {
+    const a = (Math.PI * 2 * i) / 12 + t;
+    const r0 = R * (0.15 + t * 0.4), r1 = R * (0.35 + t * 0.9);
+    ctx.beginPath();
+    ctx.moveTo(f.x + Math.cos(a) * r0, f.y + Math.sin(a) * r0);
+    ctx.lineTo(f.x + Math.cos(a) * r1, f.y + Math.sin(a) * r1);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = Math.min(1, (1 - t) * 1.6);
+  ctx.font = 'bold 18px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#300838';
+  ctx.strokeText('コア撃破！', f.x, f.y - 14 - t * 18);
+  ctx.fillStyle = '#fff36a';
+  ctx.fillText('コア撃破！', f.x, f.y - 14 - t * 18);
   ctx.restore();
 }
 
@@ -709,7 +869,8 @@ function drawEnemy(ctx, e) {
 
   // Wave ambient kinds: procedural only (never catalog sprites)
   if (isWaveKindId(kind)) {
-    drawWaveEnemy(ctx, e, kind, sent, w, h, t, pulse);
+    if (kind === 'wave_core_boss' || kind === 'wave_swarm_core') drawCoreEnemy(ctx, e, kind, w, h, t);
+    else drawWaveEnemy(ctx, e, kind, sent, w, h, t, pulse);
   } else {
     const drew = drawEnemySprite(ctx, e, kind);
     if (!drew) {
@@ -723,7 +884,7 @@ function drawEnemy(ctx, e) {
   const tierKey = isWaveKindId(kind) ? kind.replace(/^wave_/, '') : kind;
   const tiny = tierKey === 'swarm' || tierKey === 'basic'
     || (e.w && e.w <= 70 && e.h && e.h <= 60);
-  if (!tiny) drawHpPip(ctx, e);
+  if (!tiny && kind !== 'wave_core_boss' && kind !== 'wave_swarm_core') drawHpPip(ctx, e);
 
   if (sent) {
     const labelA = appearT > 0 ? (0.55 + 0.45 * (0.5 + 0.5 * Math.sin(t * 18))) : 0.9;
@@ -1759,6 +1920,8 @@ function drawFx(ctx, f) {
   if (f.kind === 'bomb') { drawBombFx(ctx, f); return; }
   if (f.kind === 'heal') { drawHealFx(ctx, f); return; }
   if (f.kind === 'hit') { drawHitSpark(ctx, f); return; }
+  if (f.kind === 'deflect') { drawDeflectSpark(ctx, f); return; }
+  if (f.kind === 'corebreak') { drawCoreBreak(ctx, f); return; }
   const t = 1 - f.life / f.max;
   ctx.save();
   ctx.globalAlpha = Math.max(0, 1 - t);
@@ -2421,6 +2584,11 @@ export function drawField(ctx, area, snap, opts = {}) {
       laserAimX: (e.laserAimX ?? e.ax) != null ? (e.laserAimX ?? e.ax) * sx : undefined,
       laserAimY: (e.laserAimY ?? e.ay) != null ? (e.laserAimY ?? e.ay) * sy : undefined,
       laserTeleOffs: Array.isArray(e.laserTeleOffs ?? e.lo) ? (e.laserTeleOffs ?? e.lo).map((o) => o * sy) : undefined,
+      core: e.core ? { ox: e.core.ox * sx, oy: e.core.oy * sy, r: e.core.r * Math.min(sx, sy), hp: e.core.hp }
+        : (e.ch != null ? { ox: e.kind === 'wave_core_boss' ? -(e.w || 184) * 0.36 * sx : 0, oy: 0, r: (e.kind === 'wave_core_boss' ? 20 : 15) * Math.min(sx, sy), hp: e.ch } : undefined),
+      drones: e.drones ? e.drones.map((d) => ({ ang: d.ang, dist: d.dist * Math.min(sx, sy), r: d.r * Math.min(sx, sy), hp: d.hp }))
+        : (Array.isArray(e.dr) ? e.dr.map((hp, i, a) => ({ ang: (Math.PI * 2 * i) / a.length + performance.now() / 1000 * 1.6, dist: (36 + (i % 2) * 8) * Math.min(sx, sy), r: 12 * Math.min(sx, sy), hp })) : undefined),
+      bodyFlash: e._bodyFlash || 0,
     });
   }
 

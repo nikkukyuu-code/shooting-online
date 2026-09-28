@@ -3,14 +3,15 @@ import {
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-} from './entities.js?v=20260928222631';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260928222631';
-import { sfx } from './audio.js?v=20260928222631';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260928222631';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260928222631';
-import { hitBattleCounter } from './stats.js?v=20260928222631';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260928222631';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260928222631';
+  hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam,
+} from './entities.js?v=20260929000734';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929000734';
+import { sfx } from './audio.js?v=20260929000734';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929000734';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929000734';
+import { hitBattleCounter } from './stats.js?v=20260929000734';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929000734';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929000734';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1046,6 +1047,27 @@ export class Game {
    * Runs on the receiving field only (online: the receiver places them locally and streams its
    * field as usual), so both peers see the same thing. Same rule for player / COM / online.
    */
+  /** First core enemy of the match: one-line tip. */
+  coreTip() {
+    if (this._coreTipShown || this.ended || this.waiting) return;
+    this._coreTipShown = true;
+    this.setStatus('コアを狙え！ 光るコアを壊すと一撃で倒せる');
+    setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 2600);
+  }
+
+  /** Core destroyed: big chain explosion + score burst (the decisive shot). */
+  onCoreBreak(e, fx, mine) {
+    fx.push({ kind: 'corebreak', x: e.x + (e.core ? e.core.ox : 0), y: e.y + (e.core ? e.core.oy : 0), r: Math.max(e.w, e.h) * 0.9, life: 0.9, max: 0.9 });
+    fx.push(spawnExplosion(e.x - e.w * 0.25, e.y - e.h * 0.2, true));
+    fx.push(spawnExplosion(e.x + e.w * 0.25, e.y + e.h * 0.2, true));
+    if (mine) {
+      this.state.player.score += e.score; // burst on top of the normal kill score
+      try { sfx.explode(); } catch (_) {}
+      this.setStatus(e.kind === 'wave_core_boss' ? 'コア撃破！ ボスを一撃で倒した！' : 'コア撃破！ 群れを全滅させた！');
+      setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
+    }
+  }
+
   placeSentEnemy(e, fw, fh, field) {
     const bobOf = (u) => { const t = resolveEnemyTier(u.kind); return (t === 'swarm' || t === 'drone') ? 28 : 18; };
     const hwOf = (u) => (u.w || 40) * 0.5 + 4;
@@ -1299,6 +1321,7 @@ export class Game {
       const targets = [];
       for (const e of this.state.enemies) {
         if (warping(e)) continue;
+        if (hasCore(e)) applyCoreAwareArea(e, 28, null, null, null); else
         e.hp -= 28;
         this.state.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
         targets.push([e.x, e.y]);
@@ -1321,6 +1344,7 @@ export class Game {
         const dx = e.x - p.x;
         const dy = e.y - py;
         if (dx * dx + dy * dy < SHOCK_RADIUS * SHOCK_RADIUS) {
+          if (hasCore(e)) applyCoreAwareArea(e, 18, null, null, null); else
           e.hp -= 18;
           this.state.fx.push(spawnExplosion(e.x, e.y, false));
           targets.push([e.x, e.y]);
@@ -1697,6 +1721,7 @@ export class Game {
         for (const e of S.enemies) {
           if (warping(e)) continue;
           if (Math.abs(e.y - ly) < e.h * 0.55 + 8 && e.x > P.x) {
+            if (hasCore(e)) { if (applyCoreAwareBeam(e, 1.05, ly, S.fx).hit === 'core') this.onCoreBreak(e, S.fx, true); continue; }
             e.hp -= 1.05; // staccato ticks a bit harder, slightly slower
             S.fx.push(spawnHitSpark(e.x - e.w * 0.35, ly));
           }
@@ -1715,21 +1740,28 @@ export class Game {
       const n = 1 + (Math.random() > 0.65 ? 1 : 0);
       for (let i = 0; i < n; i++) {
         const roll = Math.random();
-        // Wave-only kinds (not catalog/deck units)
-        const kind = roll > 0.85 ? 'wave_elite' : roll > 0.5 ? 'wave_swarm' : 'wave_basic';
+        // Wave-only kinds (not catalog/deck units). ~7% mid-wave: swarm with a core (max 1 on field).
+        let kind = roll > 0.85 ? 'wave_elite' : roll > 0.5 ? 'wave_swarm' : 'wave_basic';
+        if (roll > 0.93 && S.time > 12 && !S.enemies.some((e) => e.kind === 'wave_swarm_core')) kind = 'wave_swarm_core';
         S.enemies.push(spawnEnemy(fw, fh, kind));
+        if (kind === 'wave_swarm_core') this.coreTip();
       }
     }
     this._bossAcc += dt;
     if (this._bossAcc > 22 && !S.enemies.some((e) => resolveEnemyTier(e.kind) === 'boss')) {
       this._bossAcc = 0;
-      S.enemies.push(spawnEnemy(fw, fh, 'wave_boss'));
+      // Core boss is the highlight: 2 of every 3 boss spawns, classic boss otherwise
+      this._bossN = (this._bossN || 0) + 1;
+      const bk = this._bossN % 3 === 0 ? 'wave_boss' : 'wave_core_boss';
+      S.enemies.push(spawnEnemy(fw, fh, bk));
+      if (bk === 'wave_core_boss') this.coreTip();
     }
 
     // Update enemies (vertical weave + forward/back surge)
     for (const e of S.enemies) {
       if (tickWarp(e, dt)) continue; // warp-in: scripted glide / hold, no fire
       if (e.frozenT > 0) continue; // フリーズ: no movement / no fire while frozen
+      tickCoreExtras(e, dt);
       e.phase += dt * 2;
       e.surgePhase = (e.surgePhase || 0) + dt * (e.surgeFreq || 1.4);
       if (e.appearT > 0) e.appearT = Math.max(0, e.appearT - dt);
@@ -1814,6 +1846,14 @@ export class Game {
       if (b.owner !== 'player' || b.dvis) continue; // direct shots fly out of our pane without hitting
       for (const e of S.enemies) {
         if (warping(e)) continue; // shots pass through warping units
+        if (hasCore(e)) {
+          // Core weak point: core = instant kill, drones/body = almost nothing (deflect)
+          const r = applyCoreAwareHit(e, b.dmg || 1, b.x, b.y, S.fx);
+          if (r.hit === 'none') continue;
+          if (r.hit === 'core') this.onCoreBreak(e, S.fx, true);
+          if (!b.pierce) b.life = 0;
+          break;
+        }
         if (Math.abs(b.x - e.x) < e.w * 0.45 + 4 && Math.abs(b.y - e.y) < e.h * 0.45 + 4) {
           e.hp -= b.dmg;
           // pierce (direct volley / laser bullets): keep flying until off-screen
@@ -1828,11 +1868,17 @@ export class Game {
     // Enemy death -> items
     const remain = [];
     for (const e of S.enemies) {
+      // Core enemies only die when the core breaks (items / rams / ex-weapons can't finish them)
+      if (hasCore(e) && !e._coreBreak && e.hp < 1) e.hp = 1;
       if (e.hp <= 0) {
         S.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
         sfx.explode();
         P.score += e.score;
-        if (isLargeEnemy(e)) {
+        if (e._coreBreak) {
+          // コア撃破: 大回復確定 + アイテム確定 (swarm: 回復 + アイテム)
+          S.items.push(spawnItemWithId(e.x, e.y, e.kind === 'wave_core_boss' ? 'heal_big' : 'heal'));
+          S.items.push(spawnItem(e.x + 26, e.y));
+        } else if (isLargeEnemy(e)) {
           // デカギャラ撃破: 回復確定（ボス級は大回復）
           const healId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';
           S.items.push(spawnItemWithId(e.x, e.y, healId));
@@ -2269,6 +2315,7 @@ export class Game {
         for (const e of B.enemies) {
           if (warping(e)) continue;
           if (e.x > shipX && Math.abs(e.y - by) < (e.h * 0.55 + 8)) {
+            if (hasCore(e)) { if (applyCoreAwareBeam(e, 1.05, by, B.fx).hit === 'core') this.onCoreBreak(e, B.fx, false); continue; }
             e.hp -= 1.05; // match player laser tick
             B.fx.push(spawnHitSpark(e.x - e.w * 0.35, by));
           }
@@ -2295,20 +2342,23 @@ export class Game {
       const n = 1 + (Math.random() > 0.65 ? 1 : 0);
       for (let i = 0; i < n; i++) {
         const r = Math.random();
-        // Wave-only kinds (not catalog/deck units)
-        const kind = r > 0.85 ? 'wave_elite' : r > 0.5 ? 'wave_swarm' : 'wave_basic';
+        // Same mix as the player field (incl. swarm-core)
+        let kind = r > 0.85 ? 'wave_elite' : r > 0.5 ? 'wave_swarm' : 'wave_basic';
+        if (r > 0.93 && (B.time || 0) > 12 && !B.enemies.some((e) => e.kind === 'wave_swarm_core')) kind = 'wave_swarm_core';
         B.enemies.push(spawnEnemy(fw, fh, kind));
       }
     }
     B.bossAcc = (B.bossAcc || 0) + dt;
     if (B.bossAcc > 22 && !B.enemies.some((e) => resolveEnemyTier(e.kind) === 'boss')) {
       B.bossAcc = 0;
-      B.enemies.push(spawnEnemy(fw, fh, 'wave_boss'));
+      B.bossN = (B.bossN || 0) + 1;
+      B.enemies.push(spawnEnemy(fw, fh, B.bossN % 3 === 0 ? 'wave_boss' : 'wave_core_boss'));
     }
 
     for (const e of B.enemies) {
       if (tickWarp(e, dt)) continue; // warp-in: scripted glide / hold, no fire
       if (e.frozenT > 0) continue; // フリーズ: no movement / no fire while frozen
+      tickCoreExtras(e, dt);
       e.phase += dt * 2;
       e.surgePhase = (e.surgePhase || 0) + dt * (e.surgeFreq || 1.4);
       if (e.appearT > 0) e.appearT = Math.max(0, e.appearT - dt);
@@ -2368,6 +2418,13 @@ export class Game {
       if (b.owner !== 'player' || b.dir || b.dvis) continue; // direct shots only hit the COM ship
       for (const e of B.enemies) {
         if (warping(e)) continue; // shots pass through warping units
+        if (hasCore(e)) {
+          const r = applyCoreAwareHit(e, b.dmg || 1, b.x, b.y, B.fx);
+          if (r.hit === 'none') continue;
+          if (r.hit === 'core') this.onCoreBreak(e, B.fx, false);
+          if (!b.pierce) b.life = 0;
+          break;
+        }
         if (Math.abs(b.x - e.x) < e.w * 0.45 && Math.abs(b.y - e.y) < e.h * 0.45) {
           e.hp -= b.dmg;
           if (!b.pierce) b.life = 0;
@@ -2377,10 +2434,14 @@ export class Game {
     }
     const kept = [];
     for (const e of B.enemies) {
+      if (hasCore(e) && !e._coreBreak && e.hp < 1) e.hp = 1;
       if (e.hp <= 0) {
         B.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
         // Same as the player: drops are orbs that the COM ship must fly into (8s life)
-        if (isLargeEnemy(e)) {
+        if (e._coreBreak) {
+          B.orbs.push(spawnItemWithId(e.x, e.y, e.kind === 'wave_core_boss' ? 'heal_big' : 'heal'));
+          B.orbs.push(spawnItem(e.x + 26, e.y));
+        } else if (isLargeEnemy(e)) {
           const healId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';
           B.orbs.push(spawnItemWithId(e.x, e.y, healId));
         } else if (Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : ITEM_DROP_CHANCE)) {
@@ -2556,6 +2617,7 @@ export class Game {
         const targets = [];
         for (const e of B.enemies) {
           if (warping(e)) continue;
+          if (hasCore(e)) applyCoreAwareArea(e, 28, null, null, null); else
           e.hp -= 28;
           B.fx.push(spawnExplosion(e.x, e.y, true));
           targets.push([e.x, e.y]);
@@ -2571,6 +2633,7 @@ export class Game {
           const dx = e.x - cx;
           const dy = e.y - by;
           if (dx * dx + dy * dy < SHOCK_RADIUS * SHOCK_RADIUS) {
+            if (hasCore(e)) applyCoreAwareArea(e, 18, null, null, null); else
             e.hp -= 18;
             B.fx.push(spawnExplosion(e.x, e.y, false));
             targets.push([e.x, e.y]);

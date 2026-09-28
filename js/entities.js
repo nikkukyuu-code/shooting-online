@@ -130,6 +130,9 @@ export const WAVE_KIND_TIERS = {
   wave_swarm: 'swarm',
   wave_elite: 'elite',
   wave_boss: 'boss',
+  // Core weak-point kinds (wave-only, never shop/deck): map to combat tiers for attacks/size
+  wave_core_boss: 'boss',
+  wave_swarm_core: 'elite',
 };
 export const WAVE_KIND_IDS = Object.keys(WAVE_KIND_TIERS);
 export function isWaveKind(kind) {
@@ -180,7 +183,7 @@ export function spawnEnemy(fieldW, fieldH, kind = 'basic') {
     w: base.w, h: base.h, hp: base.hp, score: base.score, color: base.color,
     speed: base.speedBase + Math.random() * (base.speedRand || 0),
   };
-  return {
+  const e = {
     kind,
     _uid: _enemyUidSeq++,
     x: fieldW + 20 + Math.random() * 40,
@@ -197,6 +200,190 @@ export function spawnEnemy(fieldW, fieldH, kind = 'basic') {
     fireCd: 1.2 + Math.random() * 0.8,
     sent: false, // was sent by opponent
   };
+  return attachCore(e);
+}
+
+/** True for wave kinds that carry a destructible glowing core. */
+export function hasCore(e) {
+  return !!(e && (e.kind === 'wave_core_boss' || e.kind === 'wave_swarm_core'));
+}
+
+/**
+ * Attach a readable weak-point core (and optional orbiting drones) after spawn.
+ * Core is always visible. Body shots deal BODY_DMG_MUL; core destruction kills the unit.
+ */
+export const CORE_BODY_DMG_MUL = 0.05; // body spray is almost useless — aim the core
+export function attachCore(e) {
+  if (!e || !hasCore(e)) return e;
+  if (e.kind === 'wave_core_boss') {
+    // Slightly tankier hull than classic boss; reward is the core one-shot
+    e.hp = Math.round((e.hp || 125) * 1.15);
+    e.maxHp = e.hp;
+    e.score = Math.max(e.score || 0, 350);
+    // Core sits near the nose (left / toward player) — easy to spot on phone
+    // Core always visible, phone-readable size, slight orbit so aiming matters
+    e.core = { ox: -e.w * 0.36, oy: 0, r: Math.max(16, Math.min(e.w, e.h) * 0.18), hp: 1, maxHp: 1, orbit: 10, ang: 0 }; // exposed at the nose (faces the player)
+    e.drones = null;
+  } else {
+    // Swarm-core: elite-sized formation; satellites orbit a central core
+    e.w = Math.max(e.w || 92, 110);
+    e.h = Math.max(e.h || 76, 110);
+    e.hp = 40;
+    e.maxHp = 40;
+    e.score = Math.max(e.score || 0, 160);
+    e.speed = Math.min(e.speed || 75, 70);
+    // Core is the only way to clear the swarm; drones are distractions (high HP, no formation wipe)
+    e.core = { ox: 0, oy: 0, r: 15, hp: 1, maxHp: 1, orbit: 6, ang: 0 };
+    const n = 6;
+    e.drones = [];
+    for (let i = 0; i < n; i++) {
+      e.drones.push({
+        ang: (Math.PI * 2 * i) / n,
+        dist: 36 + (i % 2) * 8,
+        r: 12,
+        hp: 8,
+        maxHp: 8,
+      });
+    }
+  }
+  e._coreFlash = 0;
+  e._bodyFlash = 0;
+  return e;
+}
+
+/** World-space core centre. */
+export function coreWorld(e) {
+  if (!e || !e.core) return null;
+  return { x: e.x + e.core.ox, y: e.y + e.core.oy, r: e.core.r };
+}
+
+/** Advance swarm-core drone orbits (call each tick). */
+export function tickCoreExtras(e, dt) {
+  if (!e) return;
+  if (e._coreFlash > 0) e._coreFlash = Math.max(0, e._coreFlash - dt);
+  if (e._bodyFlash > 0) e._bodyFlash = Math.max(0, e._bodyFlash - dt);
+  if (e.core && e.core.orbit) {
+    e.core.ang = (e.core.ang || 0) + dt * 1.35;
+    const baseOx = e.kind === 'wave_core_boss' ? -e.w * 0.36 : 0;
+    const baseOy = 0;
+    e.core.ox = baseOx + Math.cos(e.core.ang) * e.core.orbit;
+    e.core.oy = baseOy + Math.sin(e.core.ang) * e.core.orbit * 0.7;
+  }
+  if (e.drones) {
+    for (const d of e.drones) {
+      if (d.hp <= 0) continue;
+      d.ang += dt * 1.6;
+    }
+  }
+}
+
+/**
+ * Apply bullet damage with core / drone / body rules.
+ * Returns { hit:'core'|'drone'|'body'|'none', killed:boolean }.
+ * fxList receives sparks / deflect / core-break FX entries (plain objects).
+ */
+export function applyCoreAwareHit(e, dmg, bx, by, fxList) {
+  if (!e || e.hp <= 0) return { hit: 'none', killed: false };
+  if (!hasCore(e) || !e.core) {
+    e.hp -= dmg;
+    if (fxList) fxList.push(spawnHitSpark(bx, by));
+    return { hit: 'body', killed: e.hp <= 0 };
+  }
+  const c = e.core;
+  const cx = e.x + c.ox, cy = e.y + c.oy;
+  // 1) Core
+  if (c.hp > 0 && Math.hypot(bx - cx, by - cy) < c.r + 5) {
+    c.hp = 0;
+    e.hp = 0;
+    e._coreBreak = true;
+    if (fxList) {
+      fxList.push(spawnExplosion(cx, cy, true));
+      fxList.push(spawnHitSpark(cx, cy));
+      if (e.drones) {
+        for (const d of e.drones) {
+          if (d.hp <= 0) continue;
+          d.hp = 0;
+          fxList.push(spawnExplosion(e.x + Math.cos(d.ang) * d.dist, e.y + Math.sin(d.ang) * d.dist, false));
+        }
+      }
+    }
+    return { hit: 'core', killed: true };
+  }
+  // 2) Drones (swarm only)
+  if (e.drones) {
+    for (const d of e.drones) {
+      if (d.hp <= 0) continue;
+      const dx = e.x + Math.cos(d.ang) * d.dist;
+      const dy = e.y + Math.sin(d.ang) * d.dist;
+      if (Math.hypot(bx - dx, by - dy) < d.r + 4) {
+        d.hp -= dmg;
+        if (fxList) fxList.push(spawnHitSpark(dx, dy));
+        if (d.hp <= 0 && fxList) fxList.push(spawnExplosion(dx, dy, false));
+        return { hit: 'drone', killed: false };
+      }
+    }
+  }
+  // 3) Body hull (core boss) — reduced damage + deflect feel
+  if (e.kind === 'wave_core_boss'
+      && Math.abs(bx - e.x) < e.w * 0.45 + 4 && Math.abs(by - e.y) < e.h * 0.45 + 4) {
+    e.hp -= Math.max(0.05, dmg * CORE_BODY_DMG_MUL);
+    e._bodyFlash = 0.16;
+    if (fxList) fxList.push(spawnDeflectSpark(bx, by));
+    // Body never kills a core boss — only the core does (decisive skill shot)
+    if (e.hp < 1) e.hp = 1;
+    return { hit: 'body', killed: false };
+  }
+  // Swarm: shots through empty space between drones miss (no body hull)
+  return { hit: 'none', killed: false };
+}
+
+/** Soft cyan "弾かれた" spark for body hits on a core boss. */
+export function spawnDeflectSpark(x, y) {
+  return { kind: 'deflect', x, y, life: 0.22, max: 0.22, r: 10 };
+}
+
+/**
+ * Area / laser / bomb damage: still damages the unit, but a direct core strike
+ * (blast centred on the core) triggers the same instant kill as a bullet.
+ */
+export function applyCoreAwareArea(e, dmg, ox, oy, fxList) {
+  if (!e || e.hp <= 0) return { hit: 'none', killed: false };
+  if (!hasCore(e) || !e.core) {
+    e.hp -= dmg;
+    return { hit: 'body', killed: e.hp <= 0 };
+  }
+  const c = e.core;
+  const cx = e.x + c.ox, cy = e.y + c.oy;
+  if (c.hp > 0 && ox != null && Math.hypot(ox - cx, oy - cy) < c.r + 18) {
+    return applyCoreAwareHit(e, dmg, cx, cy, fxList);
+  }
+  // Area hits body (reduced) + chips drones
+  if (e.drones) {
+    for (const d of e.drones) {
+      if (d.hp <= 0) continue;
+      d.hp -= dmg * 0.5;
+      if (d.hp <= 0 && fxList) {
+        fxList.push(spawnExplosion(e.x + Math.cos(d.ang) * d.dist, e.y + Math.sin(d.ang) * d.dist, false));
+      }
+    }
+  }
+  if (e.kind === 'wave_core_boss') {
+    e.hp -= Math.max(0.05, dmg * CORE_BODY_DMG_MUL);
+    if (e.hp < 1) e.hp = 1; // only core ends them
+    e._bodyFlash = 0.12;
+    return { hit: 'body', killed: false };
+  }
+  // Swarm: area only thins the drones — the formation survives until its core breaks
+  e._bodyFlash = 0.1;
+  return { hit: 'body', killed: false };
+}
+
+/** Beam tick along row `ly` (x beyond sx): core if the beam crosses it, else area chip. */
+export function applyCoreAwareBeam(e, dmg, ly, fxList) {
+  const c = coreWorld(e);
+  if (c && e.core.hp > 0 && Math.abs(c.y - ly) < c.r + 6) return applyCoreAwareHit(e, dmg, c.x, c.y, fxList);
+  if (fxList) fxList.push(spawnDeflectSpark(e.x - e.w * 0.35, ly));
+  return applyCoreAwareArea(e, dmg, null, null, fxList);
 }
 
 export function spawnBullet(x, y, vx, vy, owner = 'player', homing = false, dmg = 1, opts = {}) {
@@ -335,6 +522,8 @@ export function serializeField(state) {
     at: state.player.activeTimer,
     enemies: state.enemies.slice(0, 40).map(e => ({
       x: e.x, y: e.y, w: e.w, h: e.h, kind: e.kind, hp: e.hp, c: e.color, s: !!e.sent,
+      ch: e.core ? e.core.hp : undefined,
+      dr: e.drones ? e.drones.map(d => d.hp) : undefined,
       at: e.appearT > 0 ? +e.appearT.toFixed(3) : undefined,
       wt: e.warpT > 0 ? +e.warpT.toFixed(2) : undefined,
       wp: e.warpPop > 0 ? +e.warpPop.toFixed(2) : undefined,
