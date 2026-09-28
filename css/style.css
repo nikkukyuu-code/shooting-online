@@ -1945,3 +1945,12 @@ html, body {
   text-underline-offset: 2px;
   white-space: nowrap;
 }
+
+/* Data-loss notice (title): heading + 3 short bullets + 2 sentences */
+.dl-note .dl-h, .dl-note .dl-li, .dl-note .dl-p { display: block; }
+.dl-note .dl-h { font-weight: 900; }
+.dl-note .dl-li { text-align: left; padding-left: 1em; text-indent: -1em; }
+.dl-note .dl-p { margin-top: 1px; }
+.dl-note .dl-lis { display: inline-block; text-align: left; }
+.transfer-note.dl-note { text-align: center; }
+.transfer-note.dl-note .transfer-easy { display: inline-block; margin-left: 4px; color: #fff; font-weight: 800; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
