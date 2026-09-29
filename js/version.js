@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-09-29 21:34:01';
+export const VERSION_LABEL = '2026-09-30 01:05:10';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1790685241296;
-export const BUILD_NOTE = 'コアにくっついた敵の硬さを全部同じ硬めに（コアを壊して連鎖爆破を楽しめるように）';
+export const BUILD_TIME = 1790697910777;
+export const BUILD_NOTE = 'コアにくっついた敵のライフ表示をなくした';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

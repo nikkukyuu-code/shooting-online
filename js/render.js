@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929213401';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260930010510';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260929213401`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260930010510`;
 }
 
 function loadKindSprite(kind) {
@@ -1269,7 +1269,7 @@ function drawEnemy(ctx, e) {
   const tierKey = isWaveKindId(kind) ? kind.replace(/^wave_/, '') : kind;
   const tiny = tierKey === 'swarm' || tierKey === 'basic'
     || (e.w && e.w <= 70 && e.h && e.h <= 60);
-  if (!tiny && !CORE_DRAW_KINDS.has(kind) && kind !== 'wave_snake_seg' && kind !== 'wave_cater' && kind !== 'wave_mine' && kind !== 'wave_pod') drawHpPip(ctx, e);
+  if (!tiny && !CORE_DRAW_KINDS.has(kind) && kind !== 'wave_snake_seg' && kind !== 'wave_cater' && kind !== 'wave_mine' && kind !== 'wave_pod' && !e.att) drawHpPip(ctx, e); // core-attached units: no life bar
 
   if (sent) {
     const labelA = appearT > 0 ? (0.55 + 0.45 * (0.5 + 0.5 * Math.sin(t * 18))) : 0.9;
@@ -3096,7 +3096,7 @@ export function drawField(ctx, area, snap, opts = {}) {
   for (const e of enemies) {
     drawEnemy(ctx, {
       x: e.x * sx, y: e.y * sy, w: (e.w || 20) * sx, h: (e.h || 16) * sy,
-      kind: e.kind, hp: e.hp, maxHp: e.maxHp || e.hp || 1, color: e.c || e.color || '#c44', sent: e.s || e.sent,
+      kind: e.kind, hp: e.hp, maxHp: e.maxHp || e.hp || 1, att: (e._chainOf || e._lead || e.at2) ? 1 : 0, color: e.c || e.color || '#c44', sent: e.s || e.sent,
       appearT: e.appearT ?? e.at, appearMax: e.appearMax || 0.9, _uid: e._uid,
       warpT: e.warpT ?? e.wt, warpPop: e.warpPop ?? e.wp,
       laserTeleT: e.laserTeleT ?? e.lt, laserTeleMax: e.laserTeleMax ?? e.lm ?? 0.55,
