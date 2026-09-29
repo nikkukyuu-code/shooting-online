@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20260929054941';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20260929125046';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -473,7 +473,7 @@ export const WAVE_SCRIPT = [
   // boss snake (slow crossing)
   [137, (w, h) => zig(w, h, 0.4, 5)], // fodder (kills → drops → sends)
   [141, (w, h) => splitGroup(w, h, 0.6, 6, 'scout_drone')], // fodder (kills → drops → sends)
-  [146, (w, h) => snake(w, h, 0.31)],
+  [146, (w, h) => snake(w, h, 0.31, 12)],
   [150, (w, h) => zig(w, h, 0.2, 4)],
   [154, (w, h) => behindArc(w, h, false, 4)],
   [160, (w, h) => zig(w, h, 0.3, 5)],
@@ -633,11 +633,15 @@ function bossMove(e, dt, fw, fh, py) {
 }
 
 /** Tethered striker tip (core): entry → rest → strike (curl / lunge / hold / swing back) or saw → leave. */
-const ARM = { rest: 1.1, coil: 0.55, strike: 260, hold: 0.7, swingW: 1.5, sawWind: 0.5, sawCycle: 4.3, enter: 1.0 };
+export function armReach(fw) { return fw * 0.56; }
+const ARM = { rest: 1.1, coil: 0.75, strike: 260, retract: 170, hold: 0.6, swingW: 1.5, sawWind: 0.5, sawCycle: 4.3, enter: 1.0 };
 function armMove(e, dt, fw, fh, px, py) {
-  const n = e.segs || 7, Lrest = n * 7 + 15; // video: sphere centre → tip ≈ 64 px at rest
-  const reach = Math.min(fw * 0.46, 170); // video: ~130 px of a 360 px pane
+  const n = e.segs || 7, Lrest = 64; // video: sphere centre → tip ≈ 64 px at rest (links bunched up)
   const pivX = fw * 0.70; // video 2:30–2:43: sphere parked at ≈70 % across
+  // User 09-29: the lunge must reach the ship's normal area (x ≈ 14 % of the pane at the ship's row),
+  // so the player has to back off (or step aside) to dodge. Links keep their size; only the gaps
+  // between them widen on the thrust and close up again on the retract.
+  const reach = armReach(fw); e._reach = reach;
   e._bt = (e._bt || 0) + dt; e._fw = fw;
   if (e._ph == null) { e._ph = 'enter'; e._pt = 0; e._A = 0; e._L = Lrest; e._wob = Math.random() * 6; }
   e._pt += dt;
@@ -684,7 +688,11 @@ function armMove(e, dt, fw, fh, px, py) {
       if (e._L >= e._Lgoal - 0.5) { e._ph = 'hold'; e._pt = 0; }
       break;
     case 'hold':
-      if (e._pt >= ARM.hold) { e._ph = 'swing'; e._pt = 0; e._swDir = Math.sin(e._A) >= 0 ? -1 : 1; }
+      if (e._pt >= ARM.hold) { e._ph = 'retract'; e._pt = 0; }
+      break;
+    case 'retract': // chain reels back in along the same line (gaps close up), then swings home
+      e._L = Math.max(Lrest, e._L - ARM.retract * dt);
+      if (e._L <= Lrest + 0.5) { e._ph = 'swing'; e._pt = 0; e._swDir = Math.sin(e._A) >= 0 ? -1 : 1; }
       break;
     case 'swing': { // swings back round the pivot (through the ship's side) to trail behind again
       const rem = Math.abs(wrap(0 - e._A));

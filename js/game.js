@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20260929054941';
+import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20260929125046';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20260929054941';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929054941';
-import { sfx } from './audio.js?v=20260929054941';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929054941';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929054941';
-import { hitBattleCounter } from './stats.js?v=20260929054941';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929054941';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929054941';
+} from './entities.js?v=20260929125046';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260929125046';
+import { sfx } from './audio.js?v=20260929125046';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260929125046';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260929125046';
+import { hitBattleCounter } from './stats.js?v=20260929125046';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260929125046';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260929125046';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1781,6 +1781,7 @@ export class Game {
     for (const e of S.enemies) {
       if (tickWarp(e, dt)) continue; // warp-in: scripted glide / hold, no fire
       if (e.frozenT > 0) continue; // フリーズ: no movement / no fire while frozen
+      if (e._chainT != null) continue; // doomed by a core chain: holds its place until its turn to pop
       tickCoreExtras(e, dt);
       if (tickEscort(e, dt, fh)) continue; // formation escort: follows its core unit, no guns
       if (e._entryX != null) { if (e.x > e._entryX) e.x -= 120 * dt; else e._entryX = null; } // core boss + pack fly in together
@@ -1904,7 +1905,11 @@ export class Game {
       }
       if (hasCore(e) && !e._coreBreak && e.hp < 1) e.hp = 1;
       if (e.hp <= 0) {
-        S.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
+        if (e._chainT != null && !e._chainKill) { // doomed unit finished off early (shot / rammed): still part of the chain
+          e._chainKill = true; S.fx.push(spawnChainBoom(e));
+          if (e._chainSrc) e._chainSrc._chainDone = (e._chainSrc._chainDone || 0) + 1;
+        }
+        if (!e._chainKill) S.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss')); // chain pops use the 2× chain boom
         sfx.explode();
         P.score += e.score;
         if (e._coreBreak) {
@@ -2222,7 +2227,14 @@ export class Game {
         const armMv = !!armH && (armH._ph === 'strike' || armH._ph === 'swing' || armH._ph === 'coil') && armH._pt >= react;
         const evx = armH ? (armMv ? (e._vx || 0) : 0) : -spd, evy = armMv ? (e._vy || 0) : 0;
         // a curling striker (visible wind-up) is about to thrust: stay out of its reach
-        if (e.mv === 'arm' && e._ph === 'coil' && e._pt >= react && Math.hypot(cx - e._tx, cy - e._ty) < Math.min(fw * 0.46, 170) + 24) d += 3;
+        if (e.mv === 'arm' && (e._ph === 'coil' || e._ph === 'strike') && e._pt >= react) {
+          // visible wind-up aim line / the thrusting chain itself: get off that lane or back out of reach
+          const R = (e._reach || fw * 0.56) + 18, A = e._ph === 'coil' ? (e._aimA ?? Math.PI) : (e._A ?? Math.PI);
+          const ux = Math.cos(A), uy = Math.sin(A), W = 28 + margin;
+          const qx = cx - e._tx, qy = cy - e._ty, along = qx * ux + qy * uy, side = Math.abs(qx * uy - qy * ux);
+          if (along > 0 && along < R && side < W) d += (e._ph === 'strike' ? 10 : 5) * (1 - side / (W + 1)) * (along > R - 18 ? (R - along) / 18 : 1);
+          else if (e._ph === 'coil' && Math.hypot(qx, qy) < R) d += 0.4;
+        }
         for (const t of STEPS) {
           const ex = e.x + evx * t, ey = e.y + evy * t;
           const [sx, sy] = posAt(shipX, shipY0, cx, cy, t);
@@ -2372,6 +2384,9 @@ export class Game {
       const shotsRow = dangerOf(sx, aimY, false, true);
       const bodyNear = B.enemies.some((e) => !warping(e) && Math.abs(e.x - sx) < (e.w || 30) * 0.5 + 34 && Math.abs(e.y - aimY) < (e.h || 30) * 0.5 + 22);
       coreWin = !bodyNear && shotsRow < (AI.coreTol ?? 1.2) && shotsHere < (AI.coreTol ?? 1.2) + 1.5;
+      // a tethered striker winding up / thrusting (visible): its tip is the core, so its row IS the lunge lane
+      const armBusy = B.enemies.some((e) => e.mv === 'arm' && (e._ph === 'coil' || e._ph === 'strike' || e._ph === 'hold') && (e._ph !== 'coil' || e._pt >= react));
+      if (armBusy) coreWin = false;
       if (globalThis.__comDbg) globalThis.__comDbg.push([+shotsHere.toFixed(2), +shotsRow.toFixed(2), bodyNear ? 1 : 0, coreWin ? 1 : 0]);
     }
     if (coreWin) {
@@ -2481,6 +2496,7 @@ export class Game {
     for (const e of B.enemies) {
       if (tickWarp(e, dt)) continue; // warp-in: scripted glide / hold, no fire
       if (e.frozenT > 0) continue; // フリーズ: no movement / no fire while frozen
+      if (e._chainT != null) continue; // doomed by a core chain: holds its place until its turn to pop
       tickCoreExtras(e, dt);
       if (tickEscort(e, dt, fh)) continue; // formation escort: follows its core unit, no guns
       if (e._entryX != null) { if (e.x > e._entryX) e.x -= 120 * dt; else e._entryX = null; } // core boss + pack fly in together
@@ -2563,7 +2579,8 @@ export class Game {
       if (tickChain(e, dt)) B.fx.push(spawnChainBoom(e));
       if (hasCore(e) && !e._coreBreak && e.hp < 1) e.hp = 1;
       if (e.hp <= 0) {
-        B.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
+        if (e._chainT != null && !e._chainKill) { e._chainKill = true; B.fx.push(spawnChainBoom(e)); }
+        if (!e._chainKill) B.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
         // Same as the player: drops are orbs that the COM ship must fly into (8s life)
         if (e._coreBreak) {
           B.orbs.push(spawnItemWithId(e.x, e.y, bigCoreKind(e.kind) ? 'heal_big' : 'heal'));

@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929054941';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929125046';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260929054941`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260929125046`;
 }
 
 function loadKindSprite(kind) {
@@ -423,6 +423,13 @@ function drawCoreSpriteBody(ctx, e, kind, w, h, t, flash) {
   if (kind === 'wave_snake_head') {
     // Tethered striker tip: the red ball from the original (video sprite); glows before a strike
     const r = Math.min(w, h) * 0.5;
+    if (e.tone === 'wind' && e._reach && e._tx != null) {
+      // wind-up telegraph: faint dashed aim line from the sphere to the full lunge reach
+      const px = e._tx - e.x, py = e._ty - e.y, a = e._aimA || Math.PI;
+      ctx.save(); ctx.strokeStyle = 'rgba(255,90,60,0.55)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]);
+      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + Math.cos(a) * e._reach, py + Math.sin(a) * e._reach); ctx.stroke();
+      ctx.restore();
+    }
     if (e.tone === 'wind') {
       const gg = ctx.createRadialGradient(0, 0, r * 0.4, 0, 0, r * 2.4);
       gg.addColorStop(0, 'rgba(255,230,120,0.7)'); gg.addColorStop(1, 'rgba(255,60,30,0)');
@@ -905,27 +912,29 @@ function drawCoreBreak(ctx, f) {
 
 /** Core chain reaction: one yellow fireball per chained unit (cascades outward from the core). */
 function drawChainBoom(ctx, f) {
+  // fireball grows fast to radius R (= unit size → diameter ≈ 2× the unit), holds, then fades;
+  // a white flash at the start, a shock ring and flying sparks. ~3 gradient-free fills per frame.
   const t = 1 - f.life / f.max;
-  const R = f.r || 40;
+  const R = f.r || 30;
+  const grow = Math.min(1, t / 0.28), ease = 1 - (1 - grow) * (1 - grow);
+  const fade = t < 0.45 ? 1 : Math.max(0, 1 - (t - 0.45) / 0.55);
+  const rr = R * (0.45 + 0.55 * ease);
   ctx.save();
-  ctx.globalAlpha = Math.max(0, 1 - t);
-  const rr = R * (0.35 + t * 0.9);
-  const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, rr);
-  g.addColorStop(0, '#ffffff');
-  g.addColorStop(0.25, '#fff27a');
-  g.addColorStop(0.6, 'rgba(255,190,40,0.85)');
-  g.addColorStop(1, 'rgba(255,110,0,0)');
-  ctx.fillStyle = g;
-  ctx.beginPath(); ctx.arc(f.x, f.y, rr, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = `rgba(255,236,120,${0.9 * (1 - t)})`;
-  ctx.lineWidth = 3 * (1 - t) + 1;
-  ctx.beginPath(); ctx.arc(f.x, f.y, R * (0.5 + t * 1.2), 0, Math.PI * 2); ctx.stroke();
-  // debris sparks
+  ctx.globalAlpha = fade * 0.9;
+  ctx.fillStyle = '#ff6a10'; ctx.beginPath(); ctx.arc(f.x, f.y, rr, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ffc233'; ctx.beginPath(); ctx.arc(f.x, f.y, rr * 0.74, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = fade;
+  ctx.fillStyle = t < 0.12 ? '#ffffff' : '#fff6b0'; ctx.beginPath(); ctx.arc(f.x, f.y, rr * (t < 0.12 ? 0.62 : 0.42 * fade), 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = Math.max(0, 1 - t) * 0.85;
+  ctx.strokeStyle = '#ffe98a'; ctx.lineWidth = Math.max(1, 3 * (1 - t));
+  ctx.beginPath(); ctx.arc(f.x, f.y, R * (0.6 + t * 0.9), 0, Math.PI * 2); ctx.stroke();
   ctx.fillStyle = '#ffe066';
-  for (let i = 0; i < 6; i++) {
-    const a = i * 1.047 + (f.x % 7);
-    const d = R * (0.3 + t * 1.3);
-    ctx.fillRect(f.x + Math.cos(a) * d - 1.5, f.y + Math.sin(a) * d - 1.5, 3, 3);
+  const sd = f.sd || 0;
+  for (let i = 0; i < 8; i++) {
+    const a = i * 0.785 + sd;
+    const d = R * (0.4 + t * 1.25);
+    const s = Math.max(1.5, R * 0.09 * (1 - t));
+    ctx.fillRect(f.x + Math.cos(a) * d - s / 2, f.y + Math.sin(a) * d - s / 2, s, s);
   }
   ctx.restore();
 }

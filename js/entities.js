@@ -408,7 +408,8 @@ export function tickChain(o, dt) {
   return true;
 }
 export function spawnChainBoom(o) {
-  return { kind: 'chainboom', x: o.x, y: o.y, r: Math.max(o.w || 30, o.h || 24) * 1.25, life: 0.55, max: 0.55 };
+  // User 09-29: each chained unit blows up at about TWICE its own size (fireball diameter ≈ 2 × unit)
+  return { kind: 'chainboom', x: o.x, y: o.y, r: Math.max(o.w || 30, o.h || 24), life: 0.6, max: 0.6, sd: (o._uid || 1) % 7 };
 }
 
 /**

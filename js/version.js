@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-09-29 05:49:41';
+export const VERSION_LABEL = '2026-09-29 12:50:46';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1790628581160;
-export const BUILD_NOTE = '動画を計測してコア敵の動きと隊形を忠実に再現（テザー敵・リング・縦列・三角）';
+export const BUILD_TIME = 1790653846864;
+export const BUILD_NOTE = 'テザー敵の突きを長く（鎖の間隔が伸び縮み）・コア撃破後の連鎖を順番に2倍の爆発で・アプリ追加の表示を削除';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
