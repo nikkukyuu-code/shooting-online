@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929125046';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20260929152105';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20260929125046`;
+  return `assets/enemies/${kind}/${frame}.png?v=20260929152105`;
 }
 
 function loadKindSprite(kind) {
@@ -2991,6 +2991,75 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+
+/**
+ * Core ↔ attached-unit bond (user 09-29: it must be obvious which units belong to which core).
+ * Every live core draws pulsing energy tethers to each unit docked on it (formation / escort pack,
+ * guards, chain links) and every attached unit gets an outline in the core's colour, pulsing in
+ * sync with the core. Loose enemies never get this. Local objects only (remote snapshots carry no
+ * attachment refs). Cost: 2 strokes per core per pass.
+ */
+const CORE_BOND_COL = {
+  wave_core_boss: [255, 170, 60], wave_grid_core: [255, 90, 90], wave_ring_core: [255, 70, 110],
+  wave_eye_boss: [200, 120, 255], wave_snake_head: [255, 110, 70], wave_swarm_core: [120, 255, 140],
+};
+const CORE_KIND_SET = new Set(Object.keys(CORE_BOND_COL));
+function coreBondGroups(enemies) {
+  let out = null;
+  for (const e of enemies) {
+    if (!CORE_KIND_SET.has(e.kind) || !e.core || e.core.hp <= 0 || e.hp <= 0) continue;
+    (out || (out = [])).push({ e, m: [] });
+  }
+  if (!out) return [];
+  for (const o of enemies) {
+    const L = o._chainOf || o._lead;
+    if (!L || o.hp <= 0 || o._chainT != null) continue;
+    const g = out.find((q) => q.e === L);
+    if (g) g.m.push(o);
+  }
+  return out;
+}
+function drawCoreBonds(ctx, groups, sx, sy, pass) {
+  const now = performance.now() / 1000;
+  for (const { e, m } of groups) {
+    const col = CORE_BOND_COL[e.kind] || [255, 200, 80];
+    const jet = e.boss === 'jet';
+    const [r, g, b] = jet ? [80, 210, 255] : col;
+    const p = 0.5 + 0.5 * Math.sin(now * 5.5 + (e._uid || 0));
+    const cx = (e.x + (e.core.ox || 0)) * sx, cy = (e.y + (e.core.oy || 0)) * sy;
+    const pts = [];
+    const snake = e.kind === 'wave_snake_head';
+    for (const o of m) pts.push([o.x * sx, o.y * sy, Math.max(o.w || 20, o.h || 16) * 0.62 * Math.min(sx, sy), o]);
+    for (const d of e.drones || []) {
+      if (d.hp <= 0) continue;
+      pts.push([(e.x + Math.cos(d.ang) * d.dist) * sx, (e.y + Math.sin(d.ang) * d.dist * (d.ky || 1)) * sy, d.r * 1.35 * Math.min(sx, sy), null]);
+    }
+    if (!pts.length) continue;
+    ctx.save();
+    if (pass === 0) {
+      if (!snake) { // the tether's own chain already shows the bond
+        ctx.strokeStyle = `rgba(${r},${g},${b},${0.22 + 0.3 * p})`;
+        ctx.lineWidth = 1.6;
+        ctx.setLineDash([5, 4]); ctx.lineDashOffset = -now * 30;
+        ctx.beginPath();
+        for (const [x, y] of pts) { ctx.moveTo(cx, cy); ctx.lineTo(x, y); }
+        ctx.stroke();
+      }
+    } else {
+      ctx.strokeStyle = `rgba(${r},${g},${b},${0.55 + 0.4 * p})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (const [x, y, rr] of pts) { ctx.moveTo(x + rr, y); ctx.arc(x, y, rr, 0, Math.PI * 2); }
+      ctx.stroke();
+      // core beacon ring in the same colour, same pulse
+      ctx.strokeStyle = `rgba(${r},${g},${b},${0.5 + 0.45 * p})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(cx, cy, (e.core.r || 9) * (1.9 + 0.35 * p) * Math.min(sx, sy), 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
 /** Draw one field into a clipped region. `snap` is local state or remote snapshot. */
 export function drawField(ctx, area, snap, opts = {}) {
   const { darkened = false } = opts;
@@ -3022,6 +3091,8 @@ export function drawField(ctx, area, snap, opts = {}) {
   }
 
   const enemies = snap.enemies || [];
+  const bonds = coreBondGroups(enemies);
+  if (bonds.length) drawCoreBonds(ctx, bonds, sx, sy, 0);
   for (const e of enemies) {
     drawEnemy(ctx, {
       x: e.x * sx, y: e.y * sy, w: (e.w || 20) * sx, h: (e.h || 16) * sy,
@@ -3040,6 +3111,7 @@ export function drawField(ctx, area, snap, opts = {}) {
       bodyFlash: e._bodyFlash || 0,
     });
   }
+  if (bonds.length) drawCoreBonds(ctx, bonds, sx, sy, 1);
 
   const bullets = snap.bullets || [];
   for (const b of bullets) {

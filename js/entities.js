@@ -346,8 +346,8 @@ export function coreShutState(e) {
 }
 
 /**
- * Core chain reaction: breaking a core detonates every non-core wave grunt/elite within CHAIN_R px
- * of the core (plus that unit's own escort formation wherever it is), cascading outward:
+ * Core chain reaction: breaking a core detonates every unit attached to it (guards, chain links,
+ * formation / escort pack), one by one, nearest first:
  * delay = 0.08 + 0.6 × (distance / CHAIN_R) s. Sent (opponent) units and big tiers are not chained.
  */
 export const CHAIN_R = 300;
@@ -388,8 +388,9 @@ export function markCoreChain(e, list) {
   const rest = [];
   for (const o of list || []) {
     if (o === e || seq.includes(o) || !isChainable(o)) continue;
+    // User 09-29: only the units ATTACHED to this core (its formation / escort pack) go up — not strays nearby
     const d = Math.hypot(o.x - c.x, o.y - c.y);
-    if (d < CHAIN_R || o._lead === e || o._chainOf === e) rest.push([d, o]);
+    if (o._lead === e || o._chainOf === e) rest.push([d, o]);
   }
   rest.sort((p, q) => p[0] - q[0]);
   for (const [, o] of rest) seq.push(o);
@@ -473,7 +474,7 @@ export function tickEscort(e, dt, fh) {
     return false;
   }
   // Hold the slot (no wall closing over the core row — the core must stay shootable)
-  const tx = L.x + e.fdx, ty = L.y + e.fdy + Math.sin((e.phase += dt * 2)) * 3;
+  const tx = L.x + e.fdx, ty = L.y + e.fdy + Math.sin((e.phase += dt * 2)) * 1.5; // docked: rides with the core unit
   const dx = tx - e.x, dy = ty - e.y;
   const d = Math.hypot(dx, dy);
   const vmax = (L._escV || 190) * dt;

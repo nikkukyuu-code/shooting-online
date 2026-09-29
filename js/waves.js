@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20260929125046';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20260929152105';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -396,9 +396,22 @@ function coreBossPack(fw, fh, fy) {
   e.w = 66; e.h = 44; // video: ≈64×33 px arrowhead on a 360-wide pane
   if (e.core) { e.core.ox = -e.w * 0.3; e.core.orbit = 5; }
   e.y = Math.max(e.h * 0.5 + 6, Math.min(fh - e.h * 0.5 - 6, fh * fy));
-  // video: it flies alone (no escort bands) in front of the parked grid columns
+  // User 09-29: a core never flies alone — the arrowhead carries a docked pack that moves rigidly
+  // with it (a 3×3 block of small fighters behind the red rear + 2 pairs riding its upper / lower
+  // rear edges) and all of it goes up in the chain when the core breaks. The core row in front of
+  // the nose stays clear.
   e.x = fw + e.w * 0.5 + 30; e._entryX = null;
-  const esc = [];
+  const pts = [];
+  for (let c = 0; c < 3; c++) for (let r = -1; r <= 1; r++) pts.push([e.w * 0.5 + 12 + c * 22, r * 16]);
+  for (const sg of [-1, 1]) for (let c = 0; c < 2; c++) pts.push([e.w * 0.18 + c * 22, sg * (e.h * 0.5 + 8)]);
+  e._bandH = e.h * 0.5 + 8 + 9; // keep the docked riders on screen at the ends of the sweep
+  const G = { lead: e, sp: 40, wob: 0, shapes: [{ t: 0, s: 'slots', pts }] };
+  let gi = 0;
+  const esc = form(fw, fh, 'wave_escort', pts.length, () => {
+    const i = gi++;
+    return T.wedge({ _chainOf: e, noDrop: true, hp: GUARD_HP.cage, w: 22, h: 15,
+      fire: i % 4 === 1 ? aimed(4.5, 140) : null, noFire: i % 4 !== 1 });
+  }, G);
   Object.assign(e, { mv: 'boss', boss: 'tri', hx: fw * 0.515, y0: e.y, stay: 40, mvT: 0,
     fire: { type: 'boss' } });
   return [e, ...esc];
@@ -602,7 +615,7 @@ function bossMove(e, dt, fw, fh, py) {
     // the ends), then ~1.2 s parked at the edge. Period ≈ 6.6 s.
     e._ph = 'b';
     const ease = Math.min(1, e._bt / 1.2);
-    const top = Math.max(e.h * 0.3, fh * 0.09), bot = Math.min(fh - e.h * 0.3, fh * 0.9); // video: it pokes half out at the edges
+    const top = Math.max(e._bandH || e.h * 0.3, fh * 0.09), bot = Math.min(fh - (e._bandH || e.h * 0.3), fh * 0.9); // video: it pokes half out at the edges
     const s6 = (e._bt + 1.05) % 6.6; // start mid-way down
     let u;
     if (s6 < 2.1) u = s6 / 2.1; else if (s6 < 3.3) u = 1; else if (s6 < 5.4) u = 1 - (s6 - 3.3) / 2.1; else u = 0;
