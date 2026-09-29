@@ -326,7 +326,10 @@ export function attachCore(e) {
  */
 /** Guards around a core (tough: shooting through them is slow — snipe the core instead). */
 export const RING_R = 36;
-export const GUARD_HP = { escort: 6, cage: 9, pod: 15, claw: 30, drone: 24, seg: 30 };
+// User 09-29 21:19: every unit attached to a core has the SAME, fairly tough HP (≈4.8 s of normal
+// fire each: 2 dmg / 0.16 s) so breaking the core — and watching the chain blow them all — pays off.
+export const ATTACHED_HP = 60;
+export const GUARD_HP = { escort: ATTACHED_HP, cage: ATTACHED_HP, pod: ATTACHED_HP, claw: ATTACHED_HP, drone: ATTACHED_HP, seg: ATTACHED_HP };
 /** Every core is a small glowing point (like the original): careful aim needed. Hit radius = r + pad. */
 export const CORE_R = 9, CORE_HIT_PAD = 2;
 export const CORE_HP = {
@@ -505,7 +508,7 @@ export function tickCoreExtras(e, dt) {
   }
   const frac = e.core && e.core.maxHp ? Math.max(0, e.core.hp / e.core.maxHp) : 1;
   let spin = 1.6 * (1 + 1.4 * (1 - frac)); // guards spin up as the core weakens
-  if (e.kind === 'wave_ring_core') spin *= 0.14; // the video's loop hardly turns
+  if (e.kind === 'wave_ring_core') spin = 0; // the video's loop doesn't turn; its mouth stays on the core row
   const rs = e._rs;
   if (rs) {
     // ring: measured shape timeline (compact ring → tall oval → pulled-in oval)

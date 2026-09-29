@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20260929152105';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20260929213401';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -205,7 +205,7 @@ function gridCore(fw, fh, fy, fromTop = null) {
   const pts = [];
   for (let k = 0; k < 10; k++) for (const c of [-1, 0, 1]) {
     const dy = (k - 4.5) * rdy;
-    if (c === 0 && Math.abs(dy) < rdy) continue; // the core ship takes the middle column's two centre slots
+    if (c <= 0 && Math.abs(dy) < rdy) continue; // core ship takes the middle column's centre slots; the front column leaves the core row open (units are tough now)
     pts.push([c * cdx, dy]);
   }
   const G = { lead, sp: 40, wob: 0, shapes: [{ t: 0, s: 'slots', pts }] };
@@ -291,7 +291,13 @@ function ring(fw, fh, fy) {
   e._rs = { t: 0, RX, RY, RX0, RY0, key: [[0, RX0, RY0], [10.5, RX0, RY0], [12, RX, RY], [27, RX, RY], [29, RX, RY * 0.72]] };
   const n = 15;
   e.drones = [];
-  for (let i = 0; i < n; i++) e.drones.push({ ang: (Math.PI * 2 * i) / n, dist: RX0, d0: RX, ky: RY0 / RX0, r: 7.5, hp: GUARD_HP.pod, maxHp: GUARD_HP.pod, pod: true });
+  // tough pods (uniform attached HP) → the loop keeps a small mouth on the core row facing the ship
+  // (±40°), so the core stays shootable; the loop doesn't turn (video: it hardly moves)
+  const gap = 40 * Math.PI / 180;
+  for (let i = 0; i < n; i++) {
+    const ang = Math.PI + gap + (Math.PI * 2 - 2 * gap) * (i / (n - 1));
+    e.drones.push({ ang, dist: RX0, d0: RX, ky: RY0 / RX0, r: 7.5, hp: GUARD_HP.pod, maxHp: GUARD_HP.pod, pod: true });
+  }
   return [e];
 }
 
@@ -317,13 +323,13 @@ function snake(fw, fh, fy, segs = 7, tone = 'silver') {
   const out = [];
   // pivot first (drawn underneath), then links from the pivot outward, the red tip last (on top)
   out.push(mk('wave_snake_seg', fw, fh, fw + 60, y0, {
-    w: 26, h: 26, hp: 999, score: 60, mv: 'armseg', _chainOf: head, chainIdx: segs + 1,
+    w: 26, h: 26, hp: GUARD_HP.seg, score: 60, mv: 'armseg', _chainOf: head, chainIdx: segs + 1,
     noFire: true, noDrop: true, passShots: true, tone: 'anchor',
   }));
   for (let i = segs; i >= 1; i--) {
     const sz = 9 + (i / segs) * 3; // video: ~8–11 px beads, tapering toward the tip
     out.push(mk('wave_snake_seg', fw, fh, fw + 60, y0, {
-      w: sz, h: sz, hp: 999, score: 20, mv: 'armseg', _chainOf: head, chainIdx: i,
+      w: sz, h: sz, hp: GUARD_HP.seg, score: 20, mv: 'armseg', _chainOf: head, chainIdx: i,
       noFire: true, noDrop: true, passShots: true, tone,
     }));
   }
