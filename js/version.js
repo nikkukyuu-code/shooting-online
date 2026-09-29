@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-09-30 01:05:10';
+export const VERSION_LABEL = '2026-09-30 01:14:14';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1790697910777;
-export const BUILD_NOTE = 'コアにくっついた敵のライフ表示をなくした';
+export const BUILD_TIME = 1790698454120;
+export const BUILD_NOTE = 'コアにくっついた敵から回復アイテムが出ないようにした';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20260930010510';
+import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20260930011414';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20260930010510';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260930010510';
-import { sfx } from './audio.js?v=20260930010510';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260930010510';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260930010510';
-import { hitBattleCounter } from './stats.js?v=20260930010510';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260930010510';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260930010510';
+} from './entities.js?v=20260930011414';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20260930011414';
+import { sfx } from './audio.js?v=20260930011414';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20260930011414';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20260930011414';
+import { hitBattleCounter } from './stats.js?v=20260930011414';
+import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20260930011414';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20260930011414';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1916,7 +1916,7 @@ export class Game {
           // コア撃破: 大回復確定 + アイテム確定 (swarm: 回復 + アイテム)
           S.items.push(spawnItemWithId(e.x, e.y, bigCoreKind(e.kind) ? 'heal_big' : 'heal'));
           S.items.push(spawnItem(e.x + 26, e.y));
-        } else if (isLargeEnemy(e)) {
+        } else if (isLargeEnemy(e) && !(e._chainOf || e._lead || e._chainT != null)) { // core-attached units: no guaranteed heal
           // デカギャラ撃破: 回復確定（ボス級は大回復）
           const healId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';
           S.items.push(spawnItemWithId(e.x, e.y, healId));
@@ -2585,7 +2585,7 @@ export class Game {
         if (e._coreBreak) {
           B.orbs.push(spawnItemWithId(e.x, e.y, bigCoreKind(e.kind) ? 'heal_big' : 'heal'));
           B.orbs.push(spawnItem(e.x + 26, e.y));
-        } else if (isLargeEnemy(e)) {
+        } else if (isLargeEnemy(e) && !(e._chainOf || e._lead || e._chainT != null)) { // core-attached units: no guaranteed heal
           const healId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';
           B.orbs.push(spawnItemWithId(e.x, e.y, healId));
         } else if (!e.noDrop && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : ITEM_DROP_CHANCE * (e.dropMul ?? 1))) {
