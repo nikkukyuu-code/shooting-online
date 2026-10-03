@@ -25,18 +25,22 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20260930011414';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004080322';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
 const SCROLL = 55; // px/s — trap mines drift at background scroll speed
 const rnd = (a, b) => a + Math.random() * (b - a);
 
+// User 10-04: regular scripted enemies had become too soft (2–9 HP vs. 4–18 for the tier enemies).
+// Non-core, non-attached units get ×1.8 (≈ the v1.5.72 toughness the tier table still has).
+export const WAVE_HP_MUL = 1.8;
 function mk(kind, fw, fh, x, y, o = {}) {
   const e = spawnEnemy(fw, fh, kind);
   e.x = x; e.y = y;
   Object.assign(e, o);
-  if (o.hp != null) e.maxHp = o.hp;
+  if (o.hp != null && !o._chainOf && !e.core && o.hp < 50) e.hp = Math.round(o.hp * WAVE_HP_MUL);
+  if (o.hp != null) e.maxHp = e.hp;
   e.mvT = 0;
   e.y0 = e.y; e.x0 = e.x;
   return e;
@@ -132,6 +136,11 @@ function shapeOff(sh, i, n, t, sp) {
       return q === 0 ? [r, -L] : q === 1 ? [L, r] : q === 2 ? [-r, L] : [-L, -r];
     }
     case 'slots': return sh.pts[i % sh.pts.length];
+    case 'bounce': { // [x, lo, hi, s0]: slides between lo and hi at sh.v, turning back at the ends
+      const q = sh.pts[i % sh.pts.length], L = Math.max(1, q[2] - q[1]);
+      const u = (((q[3] + (sh.v || 40) * t) % (2 * L)) + 2 * L) % (2 * L);
+      return [q[0], q[1] + (u < L ? u : 2 * L - u)];
+    }
     default: return [0, 0];
   }
 }
@@ -202,13 +211,20 @@ function gridCore(fw, fh, fy, fromTop = null) {
       { k: 'hold', d: 45, bob: 0, bw: 0.5, sway: 0 },
       B([hx, cy], [fw * 0.55, cy], [fw * 0.35, cy], [-160, cy], 6)],
   });
-  const pts = [];
+  // Motion (video 1:00–1:12 kymograph of each column): the fighters are NOT still — every column
+  // is two interleaved streams sliding up and down through each other at ≈0.2 pane-heights/s and
+  // turning back at the column ends (an X-lattice in the time plot). Front / middle columns keep to
+  // the bands above and below the core row (the lane to the core stays open); the back column
+  // runs the full height.
+  const pts = [], v = fh * 0.19;
   for (let k = 0; k < 10; k++) for (const c of [-1, 0, 1]) {
     const dy = (k - 4.5) * rdy;
     if (c <= 0 && Math.abs(dy) < rdy) continue; // core ship takes the middle column's centre slots; the front column leaves the core row open (units are tough now)
-    pts.push([c * cdx, dy]);
+    const lo = c <= 0 ? (dy < 0 ? -4.5 * rdy : 1.5 * rdy) : -4.5 * rdy, hi = c <= 0 ? (dy < 0 ? -1.5 * rdy : 4.5 * rdy) : 4.5 * rdy;
+    const L = hi - lo, u = dy - lo;
+    pts.push([c * cdx, lo, hi, k % 2 ? u : 2 * L - u]); // alternate units start moving the other way
   }
-  const G = { lead, sp: 40, wob: 0, shapes: [{ t: 0, s: 'slots', pts }] };
+  const G = { lead, sp: 40, wob: 0, shapes: [{ t: 0, s: 'bounce', pts, v }] };
   let _gi = 0;
   const cage = form(fw, fh, 'wave_escort', pts.length, () => {
     const i = _gi++;
@@ -411,7 +427,7 @@ function coreBossPack(fw, fh, fy) {
   for (let c = 0; c < 3; c++) for (let r = -1; r <= 1; r++) pts.push([e.w * 0.5 + 12 + c * 22, r * 16]);
   for (const sg of [-1, 1]) for (let c = 0; c < 2; c++) pts.push([e.w * 0.18 + c * 22, sg * (e.h * 0.5 + 8)]);
   e._bandH = e.h * 0.5 + 8 + 9; // keep the docked riders on screen at the ends of the sweep
-  const G = { lead: e, sp: 40, wob: 0, shapes: [{ t: 0, s: 'slots', pts }] };
+  const G = { lead: e, sp: 40, wob: 2.5, shapes: [{ t: 0, s: 'slots', pts }] };
   let gi = 0;
   const esc = form(fw, fh, 'wave_escort', pts.length, () => {
     const i = gi++;

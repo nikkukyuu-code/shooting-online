@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-09-30 01:14:14';
+export const VERSION_LABEL = '2026-10-04 08:03:22';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1790698454120;
-export const BUILD_NOTE = 'コアにくっついた敵から回復アイテムが出ないようにした';
+export const BUILD_TIME = 1791068602787;
+export const BUILD_NOTE = 'コアの堅さを全種同じに・護衛が動画どおり動く・通常の敵を固めに戻す';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

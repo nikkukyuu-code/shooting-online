@@ -332,9 +332,11 @@ export const ATTACHED_HP = 60;
 export const GUARD_HP = { escort: ATTACHED_HP, cage: ATTACHED_HP, pod: ATTACHED_HP, claw: ATTACHED_HP, drone: ATTACHED_HP, seg: ATTACHED_HP };
 /** Every core is a small glowing point (like the original): careful aim needed. Hit radius = r + pad. */
 export const CORE_R = 9, CORE_HIT_PAD = 2;
+// User 10-04: every core has the same toughness
+export const SHARED_CORE_HP = 14;
 export const CORE_HP = {
-  wave_swarm_core: 9, wave_grid_core: 10, wave_ring_core: 11,
-  wave_snake_head: 15, wave_core_boss: 22, wave_eye_boss: 28,
+  wave_swarm_core: SHARED_CORE_HP, wave_grid_core: SHARED_CORE_HP, wave_ring_core: SHARED_CORE_HP,
+  wave_snake_head: SHARED_CORE_HP, wave_core_boss: SHARED_CORE_HP, wave_eye_boss: SHARED_CORE_HP,
 };
 /** Armour cycle seconds: open (vulnerable) / warn (telegraph) / shut (blocked). */
 export const CORE_SHUTTER = {
@@ -477,7 +479,8 @@ export function tickEscort(e, dt, fh) {
     return false;
   }
   // Hold the slot (no wall closing over the core row — the core must stay shootable)
-  const tx = L.x + e.fdx, ty = L.y + e.fdy + Math.sin((e.phase += dt * 2)) * 1.5; // docked: rides with the core unit
+  // docked: rides with the core unit, each fighter bobbing a little out of step (never into the core row)
+  const tx = L.x + e.fdx + Math.cos((e.phase || 0) * 0.7) * 2, ty = L.y + e.fdy + Math.sin((e.phase += dt * 2.2)) * 4;
   const dx = tx - e.x, dy = ty - e.y;
   const d = Math.hypot(dx, dy);
   const vmax = (L._escV || 190) * dt;
@@ -519,7 +522,13 @@ export function tickCoreExtras(e, dt) {
     const u = b[0] > a[0] ? Math.max(0, Math.min(1, (rs.t - a[0]) / (b[0] - a[0]))) : 1;
     const sm = u * u * (3 - 2 * u);
     const rx = a[1] + (b[1] - a[1]) * sm, ry = a[2] + (b[2] - a[2]) * sm;
-    for (const d of e.drones || []) { d.dist = rx; d.ky = ry / rx; }
+    // video 1:52–2:04 (kymograph): each crab keeps shuffling a few px along the loop, out of step
+    let k = 0;
+    for (const d of e.drones || []) {
+      if (d.a0 == null) d.a0 = d.ang;
+      d.ang = d.a0 + Math.sin(rs.t * 5.7 + k++ * 1.9) * 0.08;
+      d.dist = rx; d.ky = ry / rx;
+    }
     e.w = rx * 2 + 20; e.h = ry * 2 + 16;
   }
   const tg = e._tight;
