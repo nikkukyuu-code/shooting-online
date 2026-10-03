@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004080322';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004082348';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261004080322`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261004082348`;
 }
 
 function loadKindSprite(kind) {
@@ -2350,11 +2350,39 @@ function drawHitSpark(ctx, f) {
   ctx.restore();
 }
 
+/** Spinning coin (video: flat yellow disc whose width flips; gold bigger than silver). */
+function drawCoin(ctx, f) {
+  const r = f.r || 6, sxk = Math.cos(f.ph || 0);
+  const w = Math.max(0.8, Math.abs(sxk) * r);
+  const gold = !!f.g;
+  ctx.save();
+  ctx.fillStyle = gold ? (sxk > 0 ? '#ffd21e' : '#e0a800') : (sxk > 0 ? '#e8ecf2' : '#a9b0bc');
+  ctx.beginPath(); ctx.ellipse(f.x, f.y, w, r, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = gold ? '#9a6a00' : '#6c7380'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.ellipse(f.x, f.y, w * 0.62, r * 0.62, 0, 0, Math.PI * 2); ctx.stroke();
+  if (w > r * 0.5) { ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(f.x - w * 0.35, f.y - r * 0.55, Math.max(1, w * 0.22), r * 0.5); }
+  ctx.restore();
+}
+
+/** Running coin PT in the own field (COM / solo only). */
+function drawCoinHud(ctx, L, pt) {
+  const x = L.own.x + L.own.w - 10, y = L.own.y + 16;
+  ctx.save();
+  ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const txt = `${pt} PT`;
+  const tw = ctx.measureText(txt).width;
+  ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(x - tw - 24, y - 9, tw + 30, 18);
+  drawCoin(ctx, { x: x - tw - 12, y, r: 6, g: 1, ph: 0 });
+  ctx.fillStyle = '#ffe27a'; ctx.fillText(txt, x, y + 1);
+  ctx.restore();
+}
+
 function drawFx(ctx, f) {
   if (drawExFx(ctx, f)) return; // v1.5.67 extra attack items (attack_items.js)
   if (f.kind === 'shock') { drawShockFx(ctx, f); return; }
   if (f.kind === 'bomb') { drawBombFx(ctx, f); return; }
   if (f.kind === 'heal') { drawHealFx(ctx, f); return; }
+  if (f.kind === 'coin') { drawCoin(ctx, f); return; }
   if (f.kind === 'hit') { drawHitSpark(ctx, f); return; }
   if (f.kind === 'deflect') { drawDeflectSpark(ctx, f); return; }
   if (f.kind === 'corebreak') { drawCoreBreak(ctx, f); return; }
@@ -3150,7 +3178,7 @@ export function drawField(ctx, area, snap, opts = {}) {
     const tg = f.t || null;
     drawFx(ctx, {
       x: f.x * sx, y: f.y * sy, life: f.l ?? f.life, max: f.m ?? f.max, r: (f.r || 14) * sx,
-      kind: f.k ?? f.kind, sc: sx,
+      kind: f.k ?? f.kind, sc: sx, g: f.g, ph: f.ph,
       t: tg ? tg.map(([tx, ty]) => [tx * sx, ty * sy]) : undefined,
       a: f.a,
     });
@@ -3256,6 +3284,7 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
 
   // Direct-attack remaining-seconds HUD (own or incoming)
   drawDirectTimerHud(ctx, L, localState);
+  if (localState.coinHud) drawCoinHud(ctx, L, localState.coinPt || 0);
 
 
   drawDamageFlash(ctx, L, localState.damageFlash);

@@ -111,14 +111,15 @@ let _enemyUidSeq = 1;
 export const ENEMY_TIER_STATS = {
   // Visual + hitbox sizes ×2 (drawEnemy uses e.w/e.h; player ship unchanged)
   // v1.5.72: HP ≈1.75× for slower TTK (じっくり倒す) — restored; COM nerf is separate
-  basic:  { w: 68,  h: 56,  hp: 7,  speedBase: 100, speedRand: 50, score: 10,  color: '#9aa0a8' },
-  elite:  { w: 92,  h: 76,  hp: 18, speedBase: 75,  speedRand: 35, score: 30,  color: '#f2f2f6' },
-  swarm:  { w: 52,  h: 40,  hp: 4,  speedBase: 150, speedRand: 55, score: 5,   color: '#ff2a3a' },
-  boss:   { w: 184, h: 116, hp: 125, speedBase: 34,  speedRand: 0,  score: 200, color: '#b0b4bc' },
-  mech:   { w: 176, h: 96,  hp: 50, speedBase: 42,  speedRand: 0,  score: 80,  color: '#f4f4f8' },
-  golem:  { w: 168, h: 140, hp: 64, speedBase: 28,  speedRand: 0,  score: 100, color: '#3cbc48' },
-  tank:   { w: 180, h: 88,  hp: 70, speedBase: 32,  speedRand: 0,  score: 110, color: '#e02028' },
-  drone:  { w: 56,  h: 44,  hp: 9,  speedBase: 130, speedRand: 40, score: 20,  color: '#ffd428' },
+  // 10-04b: laser now multi-hits by hull width → small ×1.25, large ×1.6
+  basic:  { w: 68,  h: 56,  hp: 9,  speedBase: 100, speedRand: 50, score: 10,  color: '#9aa0a8' },
+  elite:  { w: 92,  h: 76,  hp: 23, speedBase: 75,  speedRand: 35, score: 30,  color: '#f2f2f6' },
+  swarm:  { w: 52,  h: 40,  hp: 5,  speedBase: 150, speedRand: 55, score: 5,   color: '#ff2a3a' },
+  boss:   { w: 184, h: 116, hp: 200, speedBase: 34,  speedRand: 0,  score: 200, color: '#b0b4bc' },
+  mech:   { w: 176, h: 96,  hp: 80, speedBase: 42,  speedRand: 0,  score: 80,  color: '#f4f4f8' },
+  golem:  { w: 168, h: 140, hp: 100, speedBase: 28,  speedRand: 0,  score: 100, color: '#3cbc48' },
+  tank:   { w: 180, h: 88,  hp: 110, speedBase: 32,  speedRand: 0,  score: 110, color: '#e02028' },
+  drone:  { w: 56,  h: 44,  hp: 11, speedBase: 130, speedRand: 40, score: 20,  color: '#ffd428' },
 };
 
 /**
@@ -415,7 +416,7 @@ export function tickChain(o, dt) {
 }
 export function spawnChainBoom(o) {
   // User 09-29: each chained unit blows up at about TWICE its own size (fireball diameter ≈ 2 × unit)
-  return { kind: 'chainboom', x: o.x, y: o.y, r: Math.max(o.w || 30, o.h || 24), life: 0.6, max: 0.6, sd: (o._uid || 1) % 7 };
+  return { kind: 'chainboom', x: o.x, y: o.y, r: Math.max(o.w || 30, o.h || 24) * 2, life: 1.8, max: 1.8, sd: (o._uid || 1) % 7 };
 }
 
 /**
@@ -750,6 +751,11 @@ export function spawnMeteor(x, y, tx, ty) {
   };
 }
 
+/** Kill explosion (user 10-04b): 2× the old size, 3× the old duration. */
+export function spawnKillBoom(x, y, big = false) {
+  return { x, y, life: big ? 1.65 : 1.05, max: big ? 1.65 : 1.05, r: big ? 56 : 28 };
+}
+
 export function spawnExplosion(x, y, big = false) {
   return {
     x, y,
@@ -763,6 +769,72 @@ export function spawnExplosion(x, y, big = false) {
  * Compact per-hit spark (bullet / laser / pierce tick).
  * One call per successful hit-detection / damage tick — not a death blast.
  */
+/**
+ * Laser multi-hit (user 10-04b): one beam tick registers up to 10 hits on an enemy,
+ * scaled by its hull width (≈1 hit per 18 px). Every hit spawns a small explosion at its
+ * point along the hull. Same function for player and COM.
+ */
+export const LASER_HIT_DMG = 0.5;
+export const LASER_MAX_HITS = 10;
+export const FX_SOFT_CAP = 90; // phone guard: past this, laser booms reuse a cheaper life
+export function laserHitCount(e) {
+  return Math.max(1, Math.min(LASER_MAX_HITS, Math.round((e.w || 20) / 18)));
+}
+export function spawnLaserBoom(x, y, cheap = false) {
+  const l = cheap ? 0.12 : 0.24;
+  return { x, y, life: l, max: l, r: 9 + Math.random() * 4 };
+}
+/** Returns 'core' / 'corehit' / 'body' like applyCoreAwareBeam. */
+export function applyLaserTick(e, ly, fxList, shipX) {
+  if (hasCore(e)) {
+    const h = applyCoreAwareBeam(e, 1.05, ly, fxList).hit; // core: one strike per tick (core HP is shared)
+    if (fxList) fxList.push(spawnLaserBoom(Math.max(shipX, e.x - e.w * 0.35), ly));
+    return h;
+  }
+  const n = laserHitCount(e);
+  const x0 = Math.max(shipX + 6, e.x - e.w / 2);
+  const span = Math.max(1, e.x + e.w / 2 - x0);
+  for (let i = 0; i < n; i++) {
+    if (e.hp <= 0) break;
+    e.hp -= LASER_HIT_DMG;
+    if (fxList) fxList.push(spawnLaserBoom(x0 + span * (i + 0.5) / n, ly + (Math.random() - 0.5) * 6, fxList.length > FX_SOFT_CAP));
+  }
+  return 'body';
+}
+
+/** Trim oldest FX down to n, never dropping coins (they carry PT). */
+export function trimFx(fx, n) {
+  let drop = fx.length - n;
+  if (drop <= 0) return;
+  const out = [];
+  for (const f of fx) { if (drop > 0 && f.kind !== 'coin') { drop--; continue; } out.push(f); }
+  fx.length = 0; fx.push(...out);
+}
+
+/** Coin drop (user 10-04b): spins (scale-x flip) and is sucked into the destroyer's ship. */
+export function spawnCoin(x, y, gold) {
+  const a = Math.random() * Math.PI * 2, sp = 50 + Math.random() * 60;
+  return { kind: 'coin', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 6, max: 6, r: gold ? 9 : 6, g: gold ? 1 : 0, ph: Math.random() * 6, age: 0 };
+}
+/** Move coins toward (sx,sy); returns PT collected this frame (silver 1, gold 3). */
+export function tickCoins(fxList, sx, sy, dt) {
+  let pt = 0;
+  for (const c of fxList) {
+    if (c.kind !== 'coin' || c.life <= 0) continue;
+    c.age += dt; c.ph += dt * 9;
+    const dx = sx - c.x, dy = sy - c.y, d = Math.hypot(dx, dy) || 1;
+    const pull = c.age < 0.25 ? 0 : Math.min(900, 120 + c.age * 900);
+    c.vx = c.vx * Math.exp(-4 * dt) + (dx / d) * pull * dt * 6;
+    c.vy = c.vy * Math.exp(-4 * dt) + (dy / d) * pull * dt * 6;
+    const v = Math.hypot(c.vx, c.vy), vmax = 140 + c.age * 700;
+    if (v > vmax) { c.vx *= vmax / v; c.vy *= vmax / v; }
+    c.x += c.vx * dt; c.y += c.vy * dt;
+    c.life = Math.max(c.life, 1); // never expire before it reaches the ship
+    if (Math.hypot(sx - c.x, sy - c.y) < 14 || c.age > 5) { c.life = 0; pt += c.g ? 3 : 1; }
+  }
+  return pt;
+}
+
 export function spawnHitSpark(x, y) {
   return {
     kind: 'hit',
@@ -856,7 +928,7 @@ export function serializeField(state) {
       k: b.k || undefined,
       r: b.r > 3.5 ? b.r : undefined,
     })),
-    fx: state.fx.slice(0, 12).map(f => ({ x: f.x, y: f.y, l: f.life, m: f.max, r: f.r, k: f.kind, t: f.t, a: f.a })),
+    fx: state.fx.slice(0, 12).map(f => ({ x: f.x, y: f.y, l: f.life, m: f.max, r: f.r, k: f.kind, t: f.t, a: f.a, g: f.g, ph: f.ph })),
     ff: state.ff ? { n: state.ff.n, k: state.ff.k } : undefined,
     scroll: state.scroll,
     status: state.statusText,

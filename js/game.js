@@ -1,19 +1,19 @@
-import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20261004080322';
+import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20261004082348';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
-  markCoreChain, tickChain, spawnChainBoom, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261004080322';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261004080322';
-import { sfx } from './audio.js?v=20261004080322';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261004080322';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261004080322';
-import { hitBattleCounter } from './stats.js?v=20261004080322';
-import { loadMeta, grantComVictoryPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261004080322';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261004080322';
+  markCoreChain, tickChain, spawnChainBoom, spawnKillBoom, applyLaserTick, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
+} from './entities.js?v=20261004082348';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261004082348';
+import { sfx } from './audio.js?v=20261004082348';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261004082348';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261004082348';
+import { hitBattleCounter } from './stats.js?v=20261004082348';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261004082348';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261004082348';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1749,9 +1749,9 @@ export class Game {
         for (const e of S.enemies) {
           if (warping(e)) continue;
           if (Math.abs(e.y - ly) < e.h * 0.55 + 8 && e.x > P.x) {
-            if (hasCore(e)) { const bh = applyCoreAwareBeam(e, 1.05, ly, S.fx).hit; if (bh === 'core') this.onCoreBreak(e, S.fx, true, S.enemies); else if (bh === 'corehit') this.fieldFlash(S, 'hit'); continue; }
-            e.hp -= 1.05; // staccato ticks a bit harder, slightly slower
-            S.fx.push(spawnHitSpark(e.x - e.w * 0.35, ly));
+            // 10-04b: up to 10 hits per tick by hull width, a small explosion at every hit
+            const bh = applyLaserTick(e, ly, S.fx, P.x);
+            if (bh === 'core') this.onCoreBreak(e, S.fx, true, S.enemies); else if (bh === 'corehit') this.fieldFlash(S, 'hit');
           }
         }
       }
@@ -1863,6 +1863,8 @@ export class Game {
     }
 
     // FX
+    S.coinPt = (S.coinPt || 0) + tickCoins(S.fx, P.x, P.y * fh, dt);
+    S.coinHud = !!(this.useBot && !this.isOnline()); // PvP: coins animate, no PT shown anywhere
     for (const f of S.fx) f.life -= dt;
 
     // Collisions player bullets -> enemies
@@ -1909,7 +1911,8 @@ export class Game {
           e._chainKill = true; S.fx.push(spawnChainBoom(e));
           if (e._chainSrc) e._chainSrc._chainDone = (e._chainSrc._chainDone || 0) + 1;
         }
-        if (!e._chainKill) S.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss')); // chain pops use the 2× chain boom
+        if (!e._chainKill) S.fx.push(spawnKillBoom(e.x, e.y, resolveEnemyTier(e.kind) === 'boss')); // chain pops use the 2× chain boom
+        S.fx.push(spawnCoin(e.x, e.y, this.coinGold(e)));
         sfx.explode();
         P.score += e.score;
         if (e._coreBreak) {
@@ -2030,7 +2033,7 @@ export class Game {
     // Cleanup — keep bullets past top/bottom so edge overhang is not a safe zone
     S.bullets = S.bullets.filter((b) => b.life > 0 && b.x > -30 && b.x < fw + 80 && b.y > -90 && b.y < fh + 90);
     S.fx = S.fx.filter((f) => f.life > 0);
-    if (S.fx.length > 96) S.fx.splice(0, S.fx.length - 96);
+    trimFx(S.fx, 140); // keeps coins
 
     // Show next item hint on bar when idle
     if (P.activeTimer <= 0 && P.items.length && S.statusText === HINT) {
@@ -2466,9 +2469,8 @@ export class Game {
         for (const e of B.enemies) {
           if (warping(e)) continue;
           if (e.x > shipX && Math.abs(e.y - by) < (e.h * 0.55 + 8)) {
-            if (hasCore(e)) { const bh = applyCoreAwareBeam(e, 1.05, by, B.fx).hit; if (bh === 'core') this.onCoreBreak(e, B.fx, false, B.enemies); else if (bh === 'corehit') this.fieldFlash(B, 'hit'); continue; }
-            e.hp -= 1.05; // match player laser tick
-            B.fx.push(spawnHitSpark(e.x - e.w * 0.35, by));
+            const bh = applyLaserTick(e, by, B.fx, shipX); // same rule as the player
+            if (bh === 'core') this.onCoreBreak(e, B.fx, false, B.enemies); else if (bh === 'corehit') this.fieldFlash(B, 'hit');
           }
         }
       }
@@ -2580,7 +2582,8 @@ export class Game {
       if (hasCore(e) && !e._coreBreak && e.hp < 1) e.hp = 1;
       if (e.hp <= 0) {
         if (e._chainT != null && !e._chainKill) { e._chainKill = true; B.fx.push(spawnChainBoom(e)); }
-        if (!e._chainKill) B.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
+        if (!e._chainKill) B.fx.push(spawnKillBoom(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
+        B.fx.push(spawnCoin(e.x, e.y, this.coinGold(e)));
         // Same as the player: drops are orbs that the COM ship must fly into (8s life)
         if (e._coreBreak) {
           B.orbs.push(spawnItemWithId(e.x, e.y, bigCoreKind(e.kind) ? 'heal_big' : 'heal'));
@@ -2680,7 +2683,8 @@ export class Game {
     B.bullets = B.bullets.filter((b) => b.life > 0 && b.x > -40 && b.x < fw + 80 && b.y > -40 && b.y < fh + 40);
     if (B.enemies.length > 36) B.enemies.length = 36;
     if (B.bullets.length > 100) B.bullets.length = 100;
-    if (B.fx.length > 80) B.fx.splice(0, B.fx.length - 80); // keep newest (hit sparks)
+    trimFx(B.fx, 120); // keep newest (hit sparks), never coins
+    B.coinPt = (B.coinPt || 0) + tickCoins(B.fx, shipX, B.y * fh, dt);
     for (const f of B.fx) f.life -= dt;
     B.fx = B.fx.filter((f) => f.life > 0);
 
@@ -2924,9 +2928,12 @@ export class Game {
       try {
         const prof = this.comProfile();
         const result = grantComVictoryPt(loadMeta(), hp, { mult: prof.ptMult });
+        // 10-04b: coins collected this match (silver 1 / gold 3), win only, never level-scaled
+        const coin = grantCoinPt(result.meta, this.state.coinPt || 0);
         this._ptReward = {
-          gain: result.gain,
-          total: result.total,
+          gain: result.gain + coin.gain,
+          coin: coin.gain,
+          total: coin.total,
           remainingHp: hp,
           mult: result.mult || prof.ptMult,
           label: prof.label,
@@ -3141,6 +3148,13 @@ export class Game {
    * Victory: big 勝利 banner, particles, flash.
    * COM win also animates 「残りライフ N → +N PT」 count-up then total PT.
    */
+  /** Gold coin (3 PT) for big enemies / cores / bosses; silver (1 PT) otherwise. Level never scales it. */
+  coinGold(e) {
+    if (e._coreBreak || hasCore(e)) return true;
+    if (e._chainOf || e._lead || e._chainT != null) return false; // attached units: silver
+    return isLargeEnemy(e) || resolveEnemyTier(e.kind) === 'boss';
+  }
+
   showEndCelebration(won) {
     const ov = this.ui.endOverlay;
     const msgEl = this.ui.endMessage;
@@ -3220,7 +3234,8 @@ export class Game {
           <div class="pt-line pt-diff">${diffLabel}（PT×${mult}）</div>
           <div class="pt-line pt-hp">残りライフ <strong class="pt-hp-n">0</strong></div>
           <div class="pt-line pt-arrow">↓</div>
-          <div class="pt-line pt-gain">+<strong class="pt-gain-n">0</strong> PT${mult > 1 ? ` <span class="pt-mult-tag">×${mult}</span>` : ''}</div>
+          <div class="pt-line pt-coin">コイン +${this._ptReward.coin || 0} PT</div>
+          <div class="pt-line pt-gain">合計 +<strong class="pt-gain-n">0</strong> PT${mult > 1 ? ` <span class="pt-mult-tag">（ライフ分×${mult}）</span>` : ''}</div>
           <div class="pt-line pt-total">所持 PT <strong class="pt-total-n">0</strong></div>
         `;
         // Insert before the menu button

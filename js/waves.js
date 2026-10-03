@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004080322';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004082348';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -34,7 +34,7 @@ const rnd = (a, b) => a + Math.random() * (b - a);
 
 // User 10-04: regular scripted enemies had become too soft (2–9 HP vs. 4–18 for the tier enemies).
 // Non-core, non-attached units get ×1.8 (≈ the v1.5.72 toughness the tier table still has).
-export const WAVE_HP_MUL = 1.8;
+export const WAVE_HP_MUL = 2.2; // 10-04b: ×1.8→×2.2 with laser multi-hit
 function mk(kind, fw, fh, x, y, o = {}) {
   const e = spawnEnemy(fw, fh, kind);
   e.x = x; e.y = y;

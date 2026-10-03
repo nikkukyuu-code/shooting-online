@@ -1,12 +1,12 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261004080322';
-import { Net } from './net.js?v=20261004080322';
-import { Game } from './game.js?v=20261004080322';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261004080322';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX } from './meta.js?v=20261004080322';
-import { loadBattleCount } from './stats.js?v=20261004080322';
-import { registerEnemyKinds } from './render.js?v=20261004080322';
-import { ALL_KIND_IDS } from './catalog.js?v=20261004080322';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261004080322';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261004082348';
+import { Net } from './net.js?v=20261004082348';
+import { Game } from './game.js?v=20261004082348';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261004082348';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261004082348';
+import { loadBattleCount } from './stats.js?v=20261004082348';
+import { registerEnemyKinds } from './render.js?v=20261004082348';
+import { ALL_KIND_IDS } from './catalog.js?v=20261004082348';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261004082348';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -146,7 +146,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261004080322`;
+  return `assets/enemies/${id}/0.png?v=20261004082348`;
 }
 
 function unitName(id) {
@@ -185,7 +185,7 @@ function renderUnitDetail(container, unitId, opts = {}) {
   }
   const intro = unitIntro(unitId);
   const price = opts.showPrice && CATALOG_BY_ID[unitId]
-    ? `<span class="detail-price">${CATALOG_BY_ID[unitId].price <= 0 ? '無料' : `${CATALOG_BY_ID[unitId].price} PT`}</span>`
+    ? `<span class="detail-price">${CATALOG_BY_ID[unitId].price <= 0 ? '無料' : `${shopPrice(CATALOG_BY_ID[unitId])} PT`}</span>`
     : '';
   container.innerHTML = `
     <div class="detail-sprite">
@@ -352,7 +352,7 @@ function updateShopBuyButton(meta) {
     return;
   }
   btn.disabled = false;
-  btn.textContent = u.price <= 0 ? '入手（無料）' : `購入（${u.price} PT）`;
+  btn.textContent = u.price <= 0 ? '入手（無料）' : `購入（${shopPrice(u)} PT）`;
 }
 
 function buySelectedShopUnit() {
@@ -360,8 +360,8 @@ function buySelectedShopUnit() {
   if (!u) return;
   const cur = loadMeta();
   if (cur.owned.includes(u.id)) return;
-  if (cur.pt < u.price) {
-    showShopMsg(`ポイントが足りません（あと ${u.price - cur.pt} PT）`);
+  if (cur.pt < shopPrice(u)) {
+    showShopMsg(`ポイントが足りません（あと ${shopPrice(u) - cur.pt} PT）`);
     return;
   }
   const res = buyUnit(cur, u.id);
@@ -404,7 +404,7 @@ function renderShopScreen() {
     btn.type = 'button';
     btn.className = 'unit-card' + (owned ? ' owned' : '') + (isNew ? ' is-new' : '') + (selectedShopId === u.id ? ' selected-card' : '');
     if (u.rarity) btn.dataset.rarity = u.rarity;
-    const priceLabel = owned ? '所持済' : (u.price <= 0 ? '無料' : `${u.price} PT`);
+    const priceLabel = owned ? '所持済' : (u.price <= 0 ? '無料' : `${shopPrice(u)} PT`);
     btn.innerHTML = `
       ${owned ? '<span class="unit-badge">所持</span>' : ''}
       ${isNew ? NEW_BADGE : ''}
