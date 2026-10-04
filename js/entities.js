@@ -818,7 +818,7 @@ export function trimFx(fx, n) {
 
 /** Coin drop (user 10-04b): spins (scale-x flip) and is sucked into the destroyer's ship. */
 export function spawnCoin(x, y, gold) {
-  const a = Math.random() * Math.PI * 2, sp = 25 + Math.random() * 30; // 10-04h: pop-out half speed
+  const a = Math.random() * Math.PI * 2, sp = 50 + Math.random() * 60; // 10-04i: pop-out speed restored
   return { kind: 'coin', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 6, max: 6, r: gold ? 37 : 22, g: gold ? 1 : 0, ph: Math.random() * 6, age: 0 }; // 10-04d: video ratio (small ≈18 px, big ≈30 px of a 135 px field, ×2.5)
 }
 export const COIN_SILVER_PT = 1;
@@ -830,10 +830,10 @@ export function tickCoins(fxList, sx, sy, dt) {
     if (c.kind !== 'coin' || c.life <= 0) continue;
     c.age += dt; c.ph += dt * 9;
     const dx = sx - c.x, dy = sy - c.y, d = Math.hypot(dx, dy) || 1;
-    const pull = (c.age < 0.23 && d > 90) ? 0 : Math.min(1140, 82 + c.age * 1300 + (d < 90 ? 450 : 0)); // 10-04h: slow start, stronger acceleration // 10-04d: within 90 px it is caught at once
+    const pull = (c.age < 0.23 && d > 90) ? 0 : Math.min(1140, 165 + c.age * 1300 + (d < 90 ? 450 : 0)); // 10-04i: base restored, 10-04h acceleration kept // 10-04d: within 90 px it is caught at once
     c.vx = c.vx * Math.exp(-4 * dt) + (dx / d) * pull * dt * 6;
     c.vy = c.vy * Math.exp(-4 * dt) + (dy / d) * pull * dt * 6;
-    const v = Math.hypot(c.vx, c.vy), vmax = 82 + c.age * 1100;
+    const v = Math.hypot(c.vx, c.vy), vmax = 165 + c.age * 1100;
     if (v > vmax) { c.vx *= vmax / v; c.vy *= vmax / v; }
     c.x += c.vx * dt; c.y += c.vy * dt;
     c.life = Math.max(c.life, 1); // never expire before it reaches the ship
