@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004163653';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004164833';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -217,12 +217,14 @@ function gridCore(fw, fh, fy, fromTop = null) {
   // the bands above and below the core row (the lane to the core stays open); the back column
   // runs the full height.
   const pts = [], v = fh * 0.19;
+  // 10-04: no guard behind the core — the old back column is now a second front column; every column
+  // keeps to the bands above / below the core row (lane to the core stays open), same unit count.
   for (let k = 0; k < 10; k++) for (const c of [-1, 0, 1]) {
     const dy = (k - 4.5) * rdy;
     if (c <= 0 && Math.abs(dy) < rdy) continue; // core ship takes the middle column's centre slots; the front column leaves the core row open (units are tough now)
-    const lo = c <= 0 ? (dy < 0 ? -4.5 * rdy : 1.5 * rdy) : -4.5 * rdy, hi = c <= 0 ? (dy < 0 ? -1.5 * rdy : 4.5 * rdy) : 4.5 * rdy;
-    const L = hi - lo, u = dy - lo;
-    pts.push([c * cdx, lo, hi, k % 2 ? u : 2 * L - u]); // alternate units start moving the other way
+    const lo = dy < 0 ? -4.5 * rdy : 1.5 * rdy, hi = dy < 0 ? -1.5 * rdy : 4.5 * rdy;
+    const L = hi - lo, u = Math.max(0, Math.min(L, dy - lo));
+    pts.push([c === 1 ? -2 * cdx : c * cdx, lo, hi, k % 2 ? u : 2 * L - u]); // alternate units start moving the other way
   }
   const G = { lead, sp: 40, wob: 0, shapes: [{ t: 0, s: 'bounce', pts, v }] };
   let _gi = 0;
@@ -439,9 +441,12 @@ function coreBossPack(fw, fh, fy) {
   // the nose stays clear.
   e.x = fw + e.w * 0.5 + 30; e._entryX = null;
   const pts = [];
-  for (let c = 0; c < 3; c++) for (let r = -1; r <= 1; r++) pts.push([e.w * 0.5 + 22 + c * 30, r * 24]); // spaced so the patrol never stacks them
-  for (const sg of [-1, 1]) for (let c = 0; c < 2; c++) pts.push([e.w * 0.18 + c * 30, sg * (e.h * 0.5 + 17)]); // riders clear of the hull
-  e._bandH = e.h * 0.5 + 17 + 9; // keep the docked riders on screen at the ends of the sweep
+  // 10-04: guards SURROUND the arrowhead (none behind its rear): two ranks above, two below, plus a
+  // front pair framing the open lane to the core at the nose. Same 13 units.
+  for (const sg of [-1, 1]) for (let r = 0; r < 2; r++) for (let c = 0; c < 3; c++) pts.push([-30 + c * 30, sg * (e.h * 0.5 + 17 + r * 24)]);
+  for (const sg of [-1, 1]) pts.push([-e.w * 0.5 - 34, sg * 30]);
+  pts.length = 13;
+  e._bandH = e.h * 0.5 + 41 + 9; // keep the docked riders on screen at the ends of the sweep
   const G = { lead: e, sp: 40, wob: 2.5, shapes: [{ t: 0, s: 'slots', pts }] };
   let gi = 0;
   const esc = form(fw, fh, 'wave_escort', pts.length, () => {
@@ -594,7 +599,7 @@ function tickPodGuards(e, dt, px, py, bullets, fw) {
       d.ang += Math.sin(e._rgT * 1.1) * 0.17 + Math.sin(e._rgT * 2.3 + k * 2.3) * 0.03 + d._cv; // patrol along the back of the loop in step (pods keep their spacing)
     }
     const ox = Math.cos(d.ang) * d.dist, oy = Math.sin(d.ang) * d.dist * (d.ky || 1);
-    if (!live || ox <= 6) { d.w = 0; if (d._tele > 0) d._tele = 0; continue; }
+    if (!live) { d.w = 0; if (d._tele > 0) d._tele = 0; continue; } // every surrounding pod may fire (same caps)
     if (d._cd == null) d._cd = REAR_FIRE_CD[0] + Math.random() * (REAR_FIRE_CD[1] - REAR_FIRE_CD[0]);
     if (d._tele > 0) {
       d._tele -= dt; d.w = 1;
@@ -616,29 +621,28 @@ function tickPodGuards(e, dt, px, py, bullets, fw) {
 export function tickRearGuard(e, dt, px, py, bullets, fw, fh) {
   if (e.drones && e.core && (e.kind === 'wave_ring_core' || e.kind === 'wave_swarm_core' || e.kind === 'wave_eye_boss')) { tickPodGuards(e, dt, px, py, bullets, fw); return; }
   const L = e._chainOf || e._lead;
-  if (!L || e.hp <= 0 || e._chainT != null || e.mv === 'armseg' || e.passShots) { e._gOx = 0; e._gOy = 0; return; }
+  if (!L) return; // free enemies (e.g. bubble wall) are never touched
+  if (e.hp <= 0 || e._chainT != null || e.mv === 'armseg' || e.passShots) { e._gOx = 0; e._gOy = 0; return; }
   if (L.hp <= 0) return;
+  // 10-04: guards surround / shield the core (no 'rear' slot any more). Every guard patrols a little,
+  // never past the core's back edge, never into the lane in front of the core; all fire telegraphed shots.
   const cx = L.x + (L.core ? L.core.ox : 0), cy = L.y + (L.core ? L.core.oy : 0);
-  const rear = e.x > cx + 6;
   e._rgT = (e._rgT || 0) + dt;
-  let tx = 0, ty = 0;
-  if (rear) {
-    const ph = (e._uid || 1) * 1.7;
-    tx = Math.sin(e._rgT * 1.3 + ph) * 7;                    // patrol shuffle behind the core
-    ty = Math.sin(e._rgT * 0.9 + ph * 0.6) * 9;
-    const by = e.y - (e._gOy || 0), bx = e.x - (e._gOx || 0), dy0 = by - cy;
-    const hw = (L.w || 40) / 2, hh = (L.h || 30) / 2, beside = Math.abs(bx - L.x) < hw + (e.w || 20) * 0.5;
-    if (Math.abs(py - cy) < 46) ty -= Math.sign(dy0) * Math.min(26, Math.max(0, Math.abs(dy0) - 18) * 0.45); // close up toward the core row, never stacking on it
-    if (beside) { // riders above / below the hull: never slide over it
-      const clr = hh + (e.h || 16) / 2 + 3, ny = by + ty - L.y;
-      if (Math.abs(ny) < clr) ty = Math.sign(by - L.y || 1) * clr - (by - L.y);
-    }
-    if (Math.abs(bx + tx - L.x) < hw + (e.w || 20) * 0.3 && Math.abs(by + ty - L.y) < hh) tx += L.x + hw + (e.w || 20) * 0.5 + 4 - bx; // never parked inside the core sprite: step out to the back
+  const ph = (e._uid || 1) * 1.7;
+  let tx = Math.sin(e._rgT * 1.3 + ph) * 7, ty = Math.sin(e._rgT * 0.9 + ph * 0.6) * 6;
+  const bx = e.x - (e._gOx || 0), by = e.y - (e._gOy || 0);
+  const hw = (L.w || 40) / 2, hh = (L.h || 30) / 2, ew = (e.w || 20) / 2, eh = (e.h || 16) / 2;
+  const back = L.x + hw - ew; // guard's centre may not pass the core's back edge
+  if (bx + tx > back) tx = Math.min(tx, back - bx);
+  if (Math.abs(bx - L.x) < hw + ew) { // beside the hull: never slide over it
+    const clr = hh + eh + 3, ny = by + ty - L.y;
+    if (Math.abs(ny) < clr) ty = Math.sign(by - L.y || 1) * clr - (by - L.y);
   }
+  if (bx + tx < cx && Math.abs(by + ty - cy) < eh + 12) ty = Math.sign(by - cy || 1) * (eh + 12) - (by - cy); // lane to the core stays open
   const k = Math.min(1, dt * 3);
   e._gOx = (e._gOx || 0) + (tx - (e._gOx || 0)) * k;
   e._gOy = (e._gOy || 0) + (ty - (e._gOy || 0)) * k;
-  if (!rear || e.x > fw - 10 || e.x < 0 || (e.fire && !e.noFire)) { if (!(e.fire && !e.noFire)) e._warn = 0; return; } // own gun: keep its pattern only
+  if (e.x > fw - 10 || e.x < 0 || (e.fire && !e.noFire)) { if (!(e.fire && !e.noFire)) e._warn = 0; return; } // own gun: keep its pattern only
   if (e._rgCd == null) e._rgCd = REAR_FIRE_CD[0] + Math.random() * (REAR_FIRE_CD[1] - REAR_FIRE_CD[0]);
   if (e._rgTele > 0) {
     e._rgTele -= dt; e._warn = 1;

@@ -442,7 +442,7 @@ export function spawnCoreEscorts(lead, fw, fh) {
     // The row in front of the core always stays open, and nobody sits over the player's side.
     const bandRows = lead.h > 100 ? 1 : 2;
     const gx = 44, gy = 34, cols = bandRows === 1 ? 6 : 5;
-    const cx0 = -(lead.w || 110) * 0.15;
+    const cx0 = Math.min(-(lead.w || 110) * 0.15, (lead.w || 110) * 0.5 - 19 - ((bandRows === 1 ? 6 : 5) - 1) / 2 * 44); // 10-04: no escort past the boss's back edge
     lead.x = Math.max(lead.x, fw + (lead.w || 110) * 0.5 + 30);
     lead._entryX = fw * 0.8;
     for (const sg of [-1, 1]) {
