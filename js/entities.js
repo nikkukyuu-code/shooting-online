@@ -816,7 +816,9 @@ export function spawnCoin(x, y, gold) {
   const a = Math.random() * Math.PI * 2, sp = 50 + Math.random() * 60;
   return { kind: 'coin', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 6, max: 6, r: gold ? 9 : 6, g: gold ? 1 : 0, ph: Math.random() * 6, age: 0 };
 }
-/** Move coins toward (sx,sy); returns PT collected this frame (silver 1, gold 3). */
+export const COIN_SILVER_PT = 1;
+export const COIN_GOLD_PT = 30; // user 10-04c: gold 3→30
+/** Move coins toward (sx,sy); returns PT collected this frame (silver 1, gold 30). */
 export function tickCoins(fxList, sx, sy, dt) {
   let pt = 0;
   for (const c of fxList) {
@@ -830,7 +832,7 @@ export function tickCoins(fxList, sx, sy, dt) {
     if (v > vmax) { c.vx *= vmax / v; c.vy *= vmax / v; }
     c.x += c.vx * dt; c.y += c.vy * dt;
     c.life = Math.max(c.life, 1); // never expire before it reaches the ship
-    if (Math.hypot(sx - c.x, sy - c.y) < 14 || c.age > 5) { c.life = 0; pt += c.g ? 3 : 1; }
+    if (Math.hypot(sx - c.x, sy - c.y) < 14 || c.age > 5) { c.life = 0; pt += c.g ? COIN_GOLD_PT : COIN_SILVER_PT; }
   }
   return pt;
 }

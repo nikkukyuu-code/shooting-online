@@ -2,7 +2,7 @@
  * localStorage key: shootingOnline_meta (NEVER rename — would wipe player PT).
  * Backup key: shootingOnline_meta_bak. On every update, preserve pt; never clear storage.
  */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20261004082348';
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20261004090247';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;
@@ -487,12 +487,12 @@ export function grantComVictoryPt(meta, remainingHp, opts = {}) {
   return { meta: saveMeta(next), gain, total: next.pt, base, mult };
 }
 
-/** Coin PT (silver 1 / gold 3) collected in a COM match — added on WIN through saveMeta (never decreases). */
+/** Coin PT (silver 1 / gold 30) collected in a COM match — added on WIN through saveMeta (never decreases). */
 /**
  * Shop price scale (user 10-04b): coins raise PT per COM win ≈3× (normal ≈4×, strong ≈2×),
  * so shop prices are ×3. Catalog base price (used for ATK/DEF / deck strength) is untouched.
  */
-export const SHOP_PRICE_SCALE = 3;
+export const SHOP_PRICE_SCALE = 4; // 10-04c: gold 30 PT → ≈×4 PT per win
 export function shopPrice(u) {
   return u && u.price > 0 ? Math.round(u.price * SHOP_PRICE_SCALE) : 0;
 }
