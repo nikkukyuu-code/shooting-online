@@ -844,13 +844,13 @@ export function tickCoins(fxList, sx, sy, dt) {
   return pt;
 }
 
-export function spawnHitSpark(x, y, r = 48) {
+export function spawnHitSpark(x, y, r = 24) {
   return {
     kind: 'hit',
     x, y,
     life: 0.18,
     max: 0.18,
-    r, // 10-04: shot-hit-on-enemy back to 48 (144 reverted)
+    r, // 10-04: shot-hit-on-enemy halved 48 → 24
   };
 }
 

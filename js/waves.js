@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004210752';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004211841';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -374,6 +374,10 @@ function mines(fw, fh, rowsF) {
 
 // 10-04: translucent bubble wall — 5×5 grid, no vertical movement, slow leftward crawl (mid-match)
 export const BUBBLE_HP = 12, BUBBLE_VX = 45;
+// TEMPORARY: bubble wall right at match start for the user's movement check. Restore BUBBLE_T to
+// BUBBLE_T_ORIGINAL (mid-match, 127 s) later; 4.5 s was the previous test slot.
+export const BUBBLE_T_ORIGINAL = 127;
+export const BUBBLE_T = 0.5;
 function bubbleWall(fw, fh) {
   // 10-04: edge to edge — top row touches the top edge, bottom row the bottom edge, gaps spread between
   // rows (computed per field height). Edge rows also block the ship's off-edge overhang (game.js e._edge).
@@ -481,9 +485,9 @@ function jetBoss(fw, fh) {
 /** [time s, builder(fw, fh) → enemies, optional tag] — waves overlap a little on purpose. */
 export const WAVE_SCRIPT = [
   // W1
+  [BUBBLE_T, bubbleWall], // TEMPORARY (user movement check): see BUBBLE_T / BUBBLE_T_ORIGINAL
   [2, (w, h) => mechArc(w, h, true, 4, false)],
   [4.2, (w, h) => mechArc(w, h, false, 4, true)],
-  [4.5, bubbleWall], // TEMPORARY (10-04 test): early bubble wall, before the first core; mid-match slot (127 s) removed for now. Waits if a core is on the field.
   [6.8, (w, h) => stopShoot(w, h, [0.3, 0.7])],
   [7.8, (w, h) => zig(w, h, 0.22, 5)], // fodder (kills → drops → sends)
   [9.2, (w, h) => zig(w, h, 0.5, 6)],
