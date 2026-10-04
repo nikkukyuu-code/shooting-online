@@ -755,8 +755,8 @@ export function spawnMeteor(x, y, tx, ty) {
 /** Kill explosion (user 10-04b): 2× the old size, 3× the old duration. */
 // 10-04d: pixel-art kill blast measured on the video (0:42.9–0:43.7): one blast ≈1.6× the ship
 // field there (≈40 px of a 135 px field); game field 341 px (×2.5) → ≈100 px visible (sprite r 70).
-export function spawnEclipse(e) { // 10-05: invisible-formation death (black disk + flame corona, ~0.6 s)
-  return { kind: 'eclipse', x: e.x, y: e.y, r: Math.max(e.w || 60, e.h || 60) / 2, life: 0.6, max: 0.6, sd: Math.random() * 9 };
+export function spawnEclipse(e) { // 10-05 video: black body disk + flame corona over the unit, about 1.1 s
+  return { kind: 'eclipse', x: e.x, y: e.y, r: Math.max(e.w || 60, e.h || 60) / 2, life: 1.1, max: 1.1, sd: Math.random() * 9, vx: e.vx || 0 };
 }
 export function spawnKillBoom(x, y, big = false) {
   return { kind: 'kboom', x, y, life: big ? 1.24 : 0.79, max: big ? 1.24 : 0.79, // 10-04j: −50% (was 2.48 / 1.58)
@@ -919,7 +919,7 @@ export function serializeField(state) {
     items: state.player.items.slice(0, 4),
     ap: state.player.activePower,
     at: state.player.activeTimer,
-    enemies: state.enemies.slice(0, 40).map(e => ({
+    enemies: state.enemies.filter(e => e.kind !== 'wave_bubble' || e.x - (e.w || 0) / 2 < (state._fw || 1e9)).slice(0, 40).map(e => ({
       x: e.x, y: e.y, w: e.w, h: e.h, kind: e.kind, hp: e.hp, c: e.color, s: !!e.sent,
       at2: (e._chainOf || e._lead) ? 1 : undefined, ch: e.core ? e.core.hp : undefined, cm: e.core ? e.core.maxHp : undefined, cs: e._sh ? e._sh.st : undefined, sk: e._shake > 0 ? 1 : undefined,
       dr: e.drones ? e.drones.map(d => d.hp) : undefined,

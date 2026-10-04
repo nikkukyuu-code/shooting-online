@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261005010539';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261005012716';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -373,21 +373,25 @@ function mines(fw, fh, rowsF) {
 }
 
 // 10-04: translucent bubble wall — 5×5 grid, no vertical movement, slow leftward crawl (mid-match)
-export const BUBBLE_HP = 12;
-// 10-05 reference videos: about 0.043 field widths per second (10 px/s on 240, 16 px/s on 360)
+// 10-05 rebuilt from the clearer reference video (a6faf877, ROUND 2 ゴールドラッシュゾーン, 2:59-4:07):
+// 1-3 hits per unit there → 2 normal shots (dmg 2) here.
+export const BUBBLE_HP = 4;
+// about 0.043 field widths per second (10-11 px/s on the 246 px video field), straight to the left
 export const bubbleVx = (fw) => fw * 0.043;
 // TEMPORARY: bubble wall right at match start for the user's movement check. Restore BUBBLE_T to
 // BUBBLE_T_ORIGINAL (mid-match, 127 s) later; 4.5 s was the previous test slot.
 export const BUBBLE_T_ORIGINAL = 127;
 export const BUBBLE_T = 0.5;
+export const BUBBLE_ROWS = 5, BUBBLE_COLS = 24;
 function bubbleWall(fw, fh) {
-  // 10-05 rebuilt from the reference video: 4 rows edge to edge (top row touches the top edge, bottom row
-  // the bottom edge), ring height ≈ 0.71 of the row pitch, column pitch ≈ 1.5 × ring width, 5 columns,
-  // straight leftward drift, no vertical motion, no shots. Edge rows block the ship's off-edge overhang.
-  const R = 4, C = 5, D = Math.max(24, Math.floor(fh / R * 0.71)), out = [];
-  const dy = (fh - D) / (R - 1), px = Math.round(D * 1.5), v = bubbleVx(fw);
+  // Video: 5 rows edge to edge (top row touches the top edge, bottom row the bottom edge), ring 19 px on a
+  // 21 px row pitch (D ≈ 0.9 × pitch), column pitch 28 px of a 246 px field (0.114 × fw), one long block
+  // that keeps streaming in from the right for about 68 s (24 columns), no vertical motion, no shots.
+  // Edge rows block the ship's off-edge overhang.
+  const R = BUBBLE_ROWS, C = BUBBLE_COLS, D = Math.max(24, Math.round(fh * 0.9 / (R - 1 + 0.9))), out = [];
+  const dy = (fh - D) / (R - 1), px = Math.max(D + 2, Math.round(fw * 28 / 246)), v = bubbleVx(fw);
   for (let c = 0; c < C; c++) for (let r = 0; r < R; r++) {
-    out.push(mk('wave_bubble', fw, fh, fw + D / 2 + 10 + c * px, D / 2 + r * dy, {
+    out.push(mk('wave_bubble', fw, fh, fw + D / 2 + 4 + c * px, D / 2 + r * dy, {
       w: D, h: D, hp: BUBBLE_HP, score: 12, mv: 'drift', vx: v, bob: 0, bf: 0, ph: (c * R + r) * 0.7, noFire: true, _edge: r === 0 ? -1 : r === R - 1 ? 1 : 0,
     }));
   }

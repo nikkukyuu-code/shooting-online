@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261005010539';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261005012716';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnKillBoom, spawnEclipse, applyLaserTick, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261005010539';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261005010539';
-import { sfx } from './audio.js?v=20261005010539';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261005010539';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261005010539';
-import { hitBattleCounter } from './stats.js?v=20261005010539';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261005010539';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261005010539';
+} from './entities.js?v=20261005012716';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261005012716';
+import { sfx } from './audio.js?v=20261005012716';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261005012716';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261005012716';
+import { hitBattleCounter } from './stats.js?v=20261005012716';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261005012716';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261005012716';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1779,6 +1779,7 @@ export class Game {
     // Spawn enemies — scripted STO-recreation waves (js/waves.js), same script on the COM field
     {
       const n0 = S.enemies.length;
+      S._fw = fw; // serializeField: skip bubbles still queued off the right edge
       const tags = runWaveScript(S, S.time, S.enemies, fw, fh);
       if (S.enemies.slice(n0).some((e) => hasCore(e))) this.coreTip();
       if (tags.includes('round2')) {
@@ -1911,6 +1912,7 @@ export class Game {
           if (!b.pierce) b.life = 0;
           // Every successful hit (incl. pierce/laser) = one small boom at contact (bubbles: ring only, as in the video)
           if (e.kind !== 'wave_bubble') S.fx.push(spawnHitSpark(b.x, b.y));
+          else { S.fx.push(spawnEclipse(e)); e._eclT = S.time; } // user 10-05: every hit = explosion over the body
           break;
         }
       }
@@ -1935,7 +1937,7 @@ export class Game {
           e._chainKill = true; S.fx.push(spawnChainBoom(e));
           if (e._chainSrc) e._chainSrc._chainDone = (e._chainSrc._chainDone || 0) + 1;
         }
-        if (e.kind === 'wave_bubble') S.fx.push(spawnEclipse(e)); else if (!e._chainKill) S.fx.push(spawnKillBoom(e.x, e.y, resolveEnemyTier(e.kind) === 'boss')); // chain pops use the 2× chain boom
+        if (e.kind === 'wave_bubble') { if (e._eclT !== S.time) S.fx.push(spawnEclipse(e)); } else if (!e._chainKill) S.fx.push(spawnKillBoom(e.x, e.y, resolveEnemyTier(e.kind) === 'boss')); // chain pops use the 2× chain boom
         S.fx.push(spawnCoin(e.x, e.y, this.coinGold(e)));
         sfx.explode();
         P.score += e.score;
@@ -2602,6 +2604,7 @@ export class Game {
           e.hp -= b.dmg;
           if (!b.pierce) b.life = 0;
           if (e.kind !== 'wave_bubble') B.fx.push(spawnHitSpark(b.x, b.y));
+          else { B.fx.push(spawnEclipse(e)); e._eclT = B.time; }
         }
       }
     }
@@ -2611,7 +2614,7 @@ export class Game {
       if (hasCore(e) && !e._coreBreak && e.hp < 1) e.hp = 1;
       if (e.hp <= 0) {
         if (e._chainT != null && !e._chainKill) { e._chainKill = true; B.fx.push(spawnChainBoom(e)); }
-        if (e.kind === 'wave_bubble') B.fx.push(spawnEclipse(e)); else if (!e._chainKill) B.fx.push(spawnKillBoom(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
+        if (e.kind === 'wave_bubble') { if (e._eclT !== B.time) B.fx.push(spawnEclipse(e)); } else if (!e._chainKill) B.fx.push(spawnKillBoom(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
         B.fx.push(spawnCoin(e.x, e.y, this.coinGold(e)));
         // Same as the player: drops are orbs that the COM ship must fly into (8s life)
         if (e._coreBreak) {
@@ -2710,7 +2713,10 @@ export class Game {
     }
 
     B.bullets = B.bullets.filter((b) => b.life > 0 && b.x > -40 && b.x < fw + 80 && b.y > -40 && b.y < fh + 40);
-    if (B.enemies.length > 36) B.enemies.length = 36;
+    if (B.enemies.length > 36) { // cap normal units only; the bubble stream (same as the player's) is never cut
+      const bub = B.enemies.filter((e) => e.kind === 'wave_bubble');
+      B.enemies = B.enemies.filter((e) => e.kind !== 'wave_bubble').slice(0, 36).concat(bub);
+    }
     if (B.bullets.length > 100) B.bullets.length = 100;
     trimFx(B.fx, 120); // keep newest (hit sparks), never coins
     B.coinPt = (B.coinPt || 0) + tickCoins(B.fx, shipX, B.y * fh, dt);

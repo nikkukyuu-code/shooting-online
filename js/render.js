@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261005010539';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261005012716';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261005010539`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261005012716`;
 }
 
 function loadKindSprite(kind) {
@@ -1173,7 +1173,7 @@ function drawMine(ctx, w, h, t) {
 }
 
 /** Invisible bubble: seen only for a moment when hit (hp drop) → fades back to alpha 0 in 0.3 s. */
-const BUBBLE_REVEAL_S = 0.12;  // 10-05 video: hit ring shows 2-4 frames (0.07-0.15 s) at full strength, then gone
+const BUBBLE_REVEAL_S = 0.13;  // 10-05 videos: hit ring shows 2-3 frames (0.07-0.2 s) at full strength, then gone
 const BUBBLE_ENTRY_S = 0.6;   // one shimmer when a bubble has fully entered the pane
 let _paneFw = 1e9;            // width of the pane being drawn (set per pane in the snapshot renderer)
 const _bubbleSeen = new Map(); // _uid → { hp, rv, inAt, t } (opponent view draws per-frame copies)
@@ -1201,7 +1201,7 @@ function drawEnemy(ctx, e) {
     ctx.save();
     const r = Math.max(e.w || 60, e.h || 60) / 2;
     ctx.globalAlpha = ba; // thin round frame only, no fill
-    ctx.strokeStyle = '#ececec'; ctx.lineWidth = 2;
+    ctx.strokeStyle = '#ececec'; ctx.lineWidth = Math.max(1.5, _paneFw < 1e8 ? _paneFw / 246 : 2.5);
     ctx.beginPath(); ctx.arc(e.x, e.y, r - 1, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
     return;
@@ -2512,29 +2512,58 @@ function drawBubble(ctx, w, h, t) {
 
 /** Debug/contact-sheet access to the pre-rendered blast frames. */
 export function pxBoomFrames() { startPxBoomBuild(); return _pxBoom; }
-/** 10-05 video: invisible-formation death = the unit shows as a black disk with an orange/yellow flame corona
- *  that starts as a crescent on the hit side and grows around the disk (~0.6 s), then vanishes. */
+/** 10-05 video (a6faf877 3:01-3:12, frame by frame at 15 fps): the unit's body shows as a black disk while
+ *  flames burst out behind it. Frame 1-2: thin flame crescent on the right rim; by ~0.25 s a full yellow rim
+ *  with orange flame tongues reaching ~0.5 r past the rim (strongest on the right); disk holds to ~0.65 s,
+ *  then the disk goes and the flames thin to brown smoke drifting left, gone by ~1.1 s. Drifts with the unit. */
 function drawEclipse(ctx, f) {
-  const u = Math.max(0, Math.min(1, 1 - f.life / f.max));
+  const el = f.max - f.life;
+  const u = Math.max(0, Math.min(1, el / f.max));
   const r = f.r || 30;
-  ctx.save();
-  ctx.translate(f.x, f.y);
-  const a = u > 0.8 ? (1 - u) / 0.2 : 1;
-  ctx.globalAlpha = a;
-  const span = Math.min(Math.PI * 2, Math.PI * (0.7 + 3.2 * u));
   const sd = f.sd || 0;
-  for (let i = 0; i < 26; i++) {
-    const ang = -span / 2 + span * (i / 25);
-    const n = Math.sin(i * 12.9898 + sd) * 43758.5453;
-    const j = n - Math.floor(n);
-    const L = r * (0.12 + 0.55 * Math.min(1, u * 2.2) * (0.4 + 0.6 * j));
-    ctx.fillStyle = j > 0.5 ? '#ffd23a' : '#f08a1c';
-    ctx.beginPath(); ctx.arc(Math.cos(ang) * (r + L * 0.35), Math.sin(ang) * (r + L * 0.35), L * 0.55, 0, Math.PI * 2); ctx.fill();
+  const rnd = (i) => { const n = Math.sin(i * 12.9898 + sd * 7.13) * 43758.5453; return n - Math.floor(n); };
+  ctx.save();
+  ctx.translate(f.x - (f.vx || 0) * el, f.y);
+  const grow = Math.min(1, u / 0.2);
+  const span = Math.PI * (0.45 + 0.75 * grow); // flame rim opens from the right side
+  if (u < 0.62) {
+    for (let layer = 0; layer < 2; layer++) { // outer orange tongues, then shorter yellow ones on top
+      const N = 14;
+      for (let i = 0; i < N; i++) {
+        const q = i + layer * 50;
+        const ang = -span / 2 + span * (i + 0.2 + rnd(q + 40) * 0.6) / N;
+        const side = Math.pow(Math.max(0, Math.cos(ang * 0.9)), 1.3);
+        const L = r * (0.1 + 0.7 * grow * side * (0.35 + 0.65 * rnd(q))) * (layer ? 0.55 : 1);
+        const w = 0.2 + 0.16 * rnd(q + 9);
+        const c = Math.cos(ang), sn = Math.sin(ang), bend = (rnd(q + 5) - 0.5) * 0.5;
+        ctx.fillStyle = layer ? '#ffd84a' : (rnd(q + 3) > 0.4 ? '#f08a1e' : '#f6b030');
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(ang - w) * r * 0.92, Math.sin(ang - w) * r * 0.92);
+        ctx.quadraticCurveTo(Math.cos(ang - w * 0.7 + bend) * (r + L * 1.15), Math.sin(ang - w * 0.7 + bend) * (r + L * 1.15), c * (r + L) - sn * L * bend, sn * (r + L) + c * L * bend);
+        ctx.quadraticCurveTo(Math.cos(ang + w * 0.7 + bend) * (r + L * 1.15), Math.sin(ang + w * 0.7 + bend) * (r + L * 1.15), Math.cos(ang + w) * r * 0.92, Math.sin(ang + w) * r * 0.92);
+        ctx.closePath(); ctx.fill();
+      }
+    }
+    ctx.strokeStyle = '#fff0a0'; ctx.lineWidth = Math.max(1.5, r * 0.09);
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.97, -span / 2, span / 2); ctx.stroke();
   }
-  ctx.strokeStyle = '#ffe680'; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.arc(0, 0, r, -span / 2, span / 2); ctx.stroke();
-  ctx.fillStyle = '#000';
-  ctx.beginPath(); ctx.arc(0, 0, r - 1, 0, Math.PI * 2); ctx.fill();
+  if (u >= 0.55) { // the body is gone: a ragged orange cloud on the right half, thinning out
+    const k = Math.max(0, 1 - (u - 0.55) / 0.45);
+    ctx.globalAlpha = k;
+    for (let i = 0; i < 9; i++) {
+      const ang = (rnd(i + 20) - 0.5) * Math.PI * 1.1;
+      const d = r * (0.35 + 0.5 * rnd(i + 30)) * (0.6 + 0.4 * k);
+      ctx.fillStyle = rnd(i + 11) > 0.5 ? '#d9781c' : '#f0a030';
+      ctx.beginPath(); ctx.arc(Math.cos(ang) * d - (1 - k) * r * 0.3, Math.sin(ang) * d, r * (0.18 + 0.2 * rnd(i + 2)) * (0.5 + 0.5 * k), 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+  const da = u < 0.6 ? 1 : Math.max(0, 1 - (u - 0.6) / 0.08);
+  if (da > 0) {
+    ctx.globalAlpha = da;
+    ctx.fillStyle = '#000';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.93, 0, Math.PI * 2); ctx.fill();
+  }
   ctx.restore();
 }
 function drawPxBoom(ctx, f, sizeMul = 1) {
@@ -3460,6 +3489,7 @@ export function drawField(ctx, area, snap, opts = {}) {
   const bonds = coreBondGroups(enemies);
   if (bonds.length) drawCoreBonds(ctx, bonds, sx, sy, 0);
   for (const e of enemies) {
+    if (e.kind === 'wave_bubble') continue; // drawn after the FX: the hit ring sits on top of the explosion (video)
     drawEnemy(ctx, {
       x: e.x * sx, y: e.y * sy, w: (e.w || 20) * sx, h: (e.h || 16) * sy,
       kind: e.kind, hp: e.hp, maxHp: e.maxHp || e.hp || 1, att: (e._chainOf || e._lead || e.at2) ? 1 : 0, color: e.c || e.color || '#c44', sent: e.s || e.sent,
@@ -3524,8 +3554,12 @@ export function drawField(ctx, area, snap, opts = {}) {
       x: f.x * sx, y: f.y * sy, life: f.l ?? f.life, max: f.m ?? f.max, r: (f.r || 14) * sx,
       kind: f.k ?? f.kind, sc: sx, g: f.g, ph: f.ph, n: f.n,
       t: tg ? tg.map(([tx, ty]) => [tx * sx, ty * sy]) : undefined,
-      a: f.a,
+      a: f.a, sd: f.sd, vx: f.vx != null ? f.vx * sx : undefined,
     });
+  }
+  for (const e of enemies) {
+    if (e.kind !== 'wave_bubble') continue;
+    drawEnemy(ctx, { x: e.x * sx, y: e.y * sy, w: (e.w || 20) * sx, h: (e.h || 16) * sy, kind: e.kind, hp: e.hp, _uid: e._uid ?? e.u });
   }
 
   // player
