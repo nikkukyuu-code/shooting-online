@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004114300';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004150038';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261004114300`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261004150038`;
 }
 
 function loadKindSprite(kind) {
@@ -404,6 +404,7 @@ function drawCoreSpriteBody(ctx, e, kind, w, h, t, flash) {
       if (d.hp <= 0) continue;
       ctx.save();
       ctx.translate(Math.cos(d.ang) * d.dist, Math.sin(d.ang) * d.dist * (d.ky || 1));
+      if (d.w) { ctx.strokeStyle = `rgba(255,60,40,${Math.sin(t * 24) > 0 ? 0.9 : 0.3})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, d.r * 1.7, 0, Math.PI * 2); ctx.stroke(); }
       if (pod) drawFit(ctx, pod, d.r * 2.9, d.r * 2.2, false);
       else { ctx.fillStyle = '#d8283a'; ctx.beginPath(); ctx.arc(0, 0, d.r, 0, Math.PI * 2); ctx.fill(); }
       ctx.restore();
@@ -491,6 +492,7 @@ function drawCoreSpriteBody(ctx, e, kind, w, h, t, flash) {
     if (d.hp <= 0) continue;
     const dx = Math.cos(d.ang) * d.dist, dy = Math.sin(d.ang) * d.dist * (d.ky || 1);
     ctx.save(); ctx.translate(dx, dy);
+    if (d.w) { ctx.strokeStyle = `rgba(255,60,40,${Math.sin(t * 24) > 0 ? 0.9 : 0.3})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, d.r * 1.5, 0, Math.PI * 2); ctx.stroke(); }
     if (esc) drawFit(ctx, esc, d.r * 2.6, d.r * 2.2, false);
     else { ctx.fillStyle = '#b8bec8'; ctx.beginPath(); ctx.arc(0, 0, d.r, 0, Math.PI * 2); ctx.fill(); }
     ctx.restore();
@@ -3368,7 +3370,7 @@ export function drawField(ctx, area, snap, opts = {}) {
       spr: e.spr ?? e.sp, rot: e.rot ?? e.ro, tone: e.tone ?? e.tn, cm: e.cm, cs: e.cs ?? (e._sh ? e._sh.st : undefined), sk: e.sk ?? (e._shake > 0 ? 1 : 0), _coreFlash: e._coreFlash, _warn: e._warn, _dashWarn: e._dashWarn, claw: e.claw, podR: e.podR != null ? e.podR * Math.min(sx, sy) : undefined,
       core: e.core ? { ox: e.core.ox * sx, oy: e.core.oy * sy, r: e.core.r * Math.min(sx, sy), hp: e.core.hp, maxHp: e.core.maxHp }
         : (e.ch != null ? { ox: e.kind === 'wave_core_boss' ? -(e.w || 66) * 0.3 * sx : e.kind === 'wave_grid_core' ? -(e.w || 62) * 0.3 * sx : 0, oy: 0, r: 9 * Math.min(sx, sy), hp: e.ch, maxHp: e.cm } : undefined),
-      drones: e.drones ? e.drones.map((d) => ({ ang: d.ang, dist: d.dist * Math.min(sx, sy), ky: (d.ky || 1) * sy / Math.min(sx, sy), r: d.r * Math.min(sx, sy), hp: d.hp }))
+      drones: e.drones ? e.drones.map((d) => ({ ang: d.ang, dist: d.dist * Math.min(sx, sy), ky: (d.ky || 1) * sy / Math.min(sx, sy), r: d.r * Math.min(sx, sy), hp: d.hp, w: d.w }))
         : (Array.isArray(e.dr) ? e.dr.map((hp, i, a) => ({ ang: (Math.PI * 2 * i) / a.length + performance.now() / 1000 * 1.6, dist: (e.kind === 'wave_eye_boss' ? 72 : e.kind === 'wave_ring_core' ? Math.max(20, ((e.w || 92) - 20) / 2) : 36 + (i % 2) * 8) * Math.min(sx, sy), ky: e.kind === 'wave_ring_core' ? Math.max(1, ((e.h || 92) - 16) / Math.max(1, (e.w || 92) - 20)) : 1, r: (e.kind === 'wave_eye_boss' ? 15 : e.kind === 'wave_ring_core' ? 7.5 : 12) * Math.min(sx, sy), hp })) : undefined),
       bodyFlash: e._bodyFlash || 0,
     });

@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-04 11:43:00';
+export const VERSION_LABEL = '2026-10-04 15:00:38';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
 export const BUILD_TIME = 1791080287735;
-export const BUILD_NOTE = '透明な敵は当たった瞬間に丸い形が光るだけに';
+export const BUILD_NOTE = 'リング・スウォームのコア裏の敵も動いて攻撃・コア裏で重ならない';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

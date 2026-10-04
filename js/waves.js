@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004114300';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004150038';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -574,7 +574,44 @@ export const WAVE_SCRIPT = [
 export const REAR_FIRE_CD = [3.0, 4.5]; // s per unit
 export const REAR_PACK_GAP = 0.7;       // s between shots of one pack (no floods)
 export const REAR_TELE = 0.4;           // s red-ring warning before each shot
+/** Ring / swarm cores: their guards are drawn pods (drones). Rear-side pods patrol along the loop,
+ *  lean toward the core row when the player lines up, and fire the same telegraphed aimed shots. */
+function tickPodGuards(e, dt, px, py, bullets, fw) {
+  const ring = e.kind === 'wave_ring_core';
+  e._rgT = (e._rgT || 0) + dt;
+  const cy = e.y + (e.core.oy || 0);
+  const cover = Math.abs(py - cy) < 46;
+  const live = e.hp > 0 && e.core.hp > 0 && e.x < fw - 10 && e.x > 0;
+  let k = 0;
+  for (const d of e.drones) {
+    k++;
+    if (d.hp <= 0) { d.w = 0; continue; }
+    if (ring && d.a0 != null && Math.cos(d.a0) > 0.2) {
+      d._cv = (d._cv || 0) + ((cover ? -Math.sign(Math.sin(d.a0)) * 0.22 : 0) - (d._cv || 0)) * Math.min(1, dt * 3);
+      d.ang += Math.sin(e._rgT * 1.1 + k * 2.3) * 0.26 + d._cv; // patrol along the back of the loop
+    }
+    const ox = Math.cos(d.ang) * d.dist, oy = Math.sin(d.ang) * d.dist * (d.ky || 1);
+    if (!live || ox <= 6) { d.w = 0; if (d._tele > 0) d._tele = 0; continue; }
+    if (d._cd == null) d._cd = REAR_FIRE_CD[0] + Math.random() * (REAR_FIRE_CD[1] - REAR_FIRE_CD[0]);
+    if (d._tele > 0) {
+      d._tele -= dt; d.w = 1;
+      if (d._tele <= 0) {
+        d.w = 0;
+        const sx = e.x + ox, sy = e.y + oy, a = Math.atan2(py - sy, px - sx), spd = 150;
+        const rb = spawnBullet(sx - d.r, sy, Math.cos(a) * spd, Math.sin(a) * spd, 'enemy', false, 2, { life: 5 }); rb.rg = 1; bullets.push(rb);
+        d._cd = REAR_FIRE_CD[0] + Math.random() * (REAR_FIRE_CD[1] - REAR_FIRE_CD[0]);
+      }
+      continue;
+    }
+    d._cd -= dt;
+    if (d._cd <= 0 && (e._rgNext == null || performance.now() / 1000 >= e._rgNext)) {
+      e._rgNext = performance.now() / 1000 + REAR_PACK_GAP;
+      d._tele = REAR_TELE;
+    }
+  }
+}
 export function tickRearGuard(e, dt, px, py, bullets, fw, fh) {
+  if (e.drones && e.core && (e.kind === 'wave_ring_core' || e.kind === 'wave_swarm_core')) { tickPodGuards(e, dt, px, py, bullets, fw); return; }
   const L = e._chainOf || e._lead;
   if (!L || e.hp <= 0 || e._chainT != null || e.mv === 'armseg' || e.passShots) { e._gOx = 0; e._gOy = 0; return; }
   if (L.hp <= 0) return;
@@ -586,7 +623,10 @@ export function tickRearGuard(e, dt, px, py, bullets, fw, fh) {
     const ph = (e._uid || 1) * 1.7;
     tx = Math.sin(e._rgT * 1.3 + ph) * 7;                    // patrol shuffle behind the core
     ty = Math.sin(e._rgT * 0.9 + ph * 0.6) * 9;
-    if (Math.abs(py - cy) < 46) ty += Math.max(-26, Math.min(26, (cy - (e.y - (e._gOy || 0))) * 0.45)); // close up behind the core
+    const by = e.y - (e._gOy || 0), bx = e.x - (e._gOx || 0), dy0 = by - cy;
+    if (Math.abs(py - cy) < 46) ty -= Math.sign(dy0) * Math.min(26, Math.max(0, Math.abs(dy0) - 18) * 0.45); // close up toward the core row, never stacking on it
+    const hw = (L.w || 40) / 2, hh = (L.h || 30) / 2;
+    if (Math.abs(bx - L.x) < hw + (e.w || 20) * 0.3 && Math.abs(by + ty - L.y) < hh) tx += L.x + hw + (e.w || 20) * 0.5 + 4 - bx; // never parked inside the core sprite: step out to the back
   }
   const k = Math.min(1, dt * 3);
   e._gOx = (e._gOx || 0) + (tx - (e._gOx || 0)) * k;
