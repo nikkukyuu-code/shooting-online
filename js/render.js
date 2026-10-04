@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004165454';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004191332';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261004165454`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261004191332`;
 }
 
 function loadKindSprite(kind) {
@@ -2657,6 +2657,47 @@ function drawFx(ctx, f) {
   ctx.restore();
 }
 
+/** 10-04: crisp life-loss tracker per bar (own + opponent): lost chunk holds 0.5 s then drains,
+ *  big -N, short shake. Render-side so the opponent bar gets the same treatment. */
+const _lifeFx = {};
+function lifeFx(key, hp, now) {
+  let m = _lifeFx[key];
+  if (!m || hp > m.hp + 0.01 && m.ghost <= m.hp + 0.01) { m = _lifeFx[key] = { hp, ghost: hp, hold: 0, t: now, n: 0, nT: -9, sh: -9 }; }
+  const dt = Math.min(0.1, Math.max(0, (now - m.t) / 1000)); m.t = now;
+  if (hp < m.hp - 0.01) {
+    const d = m.hp - hp;
+    m.ghost = Math.max(m.ghost, m.hp);
+    m.hold = 0.5;
+    m.n = now - m.nT < 600 ? m.n + d : d; m.nT = now; m.sh = now;
+  } else if (hp > m.hp) { m.ghost = Math.max(m.ghost, hp); }
+  m.hp = hp;
+  if (m.hold > 0) m.hold -= dt;
+  else if (m.ghost > hp) m.ghost = Math.max(hp, m.ghost - Math.max(40, (m.ghost - hp) * 3) * dt);
+  const sa = (now - m.sh) / 250;
+  return { ghost: m.ghost, hold: m.hold, shake: sa < 1 ? 1 - sa : 0, n: m.n, numA: (now - m.nT) < 900 ? 1 - Math.max(0, (now - m.nT) - 600) / 300 : 0, numAge: (now - m.nT) / 1000 };
+}
+function drawLifeChunk(ctx, x, y, barW, barH, hp, maxHp, f, now) {
+  if (f.ghost <= hp + 0.01) return;
+  const x1 = Math.round(x + barW * Math.max(0, hp / maxHp)), x2 = Math.round(x + barW * Math.max(0, f.ghost / maxHp));
+  const blink = f.hold > 0 && Math.floor(now / 70) % 2 === 0;
+  ctx.fillStyle = blink ? '#ffffff' : '#ff2a2a';
+  ctx.fillRect(x1, Math.round(y), Math.max(1, x2 - x1), Math.round(barH));
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
+  ctx.strokeRect(x1 + 0.5, Math.round(y) + 0.5, Math.max(1, x2 - x1) - 1, Math.round(barH) - 1);
+}
+function drawLifeNum(ctx, xEnd, y, barH, f) {
+  if (f.numA <= 0 || f.n < 0.5) return;
+  const sz = Math.round(Math.max(18, barH * 2.6) * (f.numAge < 0.1 ? 1.35 - f.numAge * 3.5 : 1));
+  ctx.save();
+  ctx.globalAlpha = f.numA;
+  ctx.font = `900 ${sz}px sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = Math.max(3, sz * 0.16); ctx.strokeStyle = '#000';
+  const t = `-${Math.round(f.n)}`;
+  ctx.strokeText(t, Math.round(xEnd), Math.round(y - f.numAge * 6));
+  ctx.fillStyle = '#ff3b3b'; ctx.fillText(t, Math.round(xEnd), Math.round(y - f.numAge * 6));
+  ctx.restore();
+}
+
 /** HP bars at the bottom edge of the opponent pane — drain ghost + shake + low-HP pulse. */
 function drawHpBarsAtBoundary(ctx, L, selfHp, oppHp, maxHp, fx = {}) {
   const ghost = fx.hpGhost != null ? fx.hpGhost : selfHp;
@@ -2672,11 +2713,13 @@ function drawHpBarsAtBoundary(ctx, L, selfHp, oppHp, maxHp, fx = {}) {
   const padBot = Math.max(4, Math.min(10, L.oppH * 0.035));
   // Sit at the bottom of the opponent frame (above the opp/own divider)
   const y0 = L.oppH - padBot - totalH;
-  const jx = shake > 0 ? (Math.random() - 0.5) * 10 * shake : 0;
-  const jy = shake > 0 ? (Math.random() - 0.5) * 6 * shake : 0;
-  const x = x0 + jx;
-  const y = y0 + jy;
   const now = performance.now();
+  const lfS = lifeFx('self', selfHp, now), lfO = lifeFx('opp', oppHp, now);
+  const shk = Math.max(shake, lfS.shake, lfO.shake);
+  const jx = shk > 0 ? Math.round((Math.random() - 0.5) * 10 * shk) : 0;
+  const jy = shk > 0 ? Math.round((Math.random() - 0.5) * 6 * shk) : 0;
+  const x = Math.round(x0 + jx);
+  const y = Math.round(y0 + jy);
   const selfRatio = Math.max(0, display / maxHp);
   const oppRatio = Math.max(0, oppHp / maxHp);
   const selfLow = selfRatio < 0.3;
@@ -2707,6 +2750,7 @@ function drawHpBarsAtBoundary(ctx, L, selfHp, oppHp, maxHp, fx = {}) {
     ctx.fillStyle = oppFill;
     ctx.fillRect(x, y, barW * oppRatio, barH);
   }
+  drawLifeChunk(ctx, x, y, barW, barH, oppHp, maxHp, lfO, now);
   ctx.strokeStyle = oppLow ? `rgba(255,120,120,${0.5 + 0.5 * pulse})` : 'rgba(255,255,255,0.35)';
   ctx.lineWidth = oppLow ? 1.5 : 1;
   ctx.strokeRect(x, y, barW, barH);
@@ -2723,8 +2767,7 @@ function drawHpBarsAtBoundary(ctx, L, selfHp, oppHp, maxHp, fx = {}) {
   const ySelf = y + barH + gap;
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.fillRect(x, ySelf, barW, barH);
-  ctx.fillStyle = flash > 0 ? '#ff5533' : '#ff8844';
-  ctx.fillRect(x, ySelf, barW * Math.max(0, ghost / maxHp), barH);
+  void ghost;
   if (selfLow) {
     ctx.save();
     ctx.shadowColor = `rgba(255,20,20,${0.7 * pulse})`;
@@ -2737,6 +2780,7 @@ function drawHpBarsAtBoundary(ctx, L, selfHp, oppHp, maxHp, fx = {}) {
     ctx.fillStyle = selfRatio < 0.55 ? '#ffcc33' : '#33ee66';
     ctx.fillRect(x, ySelf, barW * selfRatio, barH);
   }
+  drawLifeChunk(ctx, x, ySelf, barW, barH, display, maxHp, lfS, now);
   if (flash > 0) {
     ctx.fillStyle = `rgba(255,255,255,${0.35 * Math.min(1, flash / 0.35)})`;
     ctx.fillRect(x, ySelf, barW * selfRatio, barH);
@@ -2769,6 +2813,8 @@ function drawHpBarsAtBoundary(ctx, L, selfHp, oppHp, maxHp, fx = {}) {
     ctx.font = `800 ${Math.max(8, barH - 1)}px sans-serif`;
     ctx.fillText('危険', x + barW - 4, ySelf + barH * 0.5);
   }
+  drawLifeNum(ctx, x + barW + 30, y + barH * 0.5 - barH * 0.8, barH, lfO);
+  drawLifeNum(ctx, x + barW + 30, ySelf + barH * 0.5 + barH * 0.8, barH, lfS);
   // Finish sequence: the losing side's bar flashes while it drains to 0
   if (fx.koFlashSelf || fx.koFlashOpp) {
     const blink = 0.5 + 0.5 * Math.sin(now / 45);

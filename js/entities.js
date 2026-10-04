@@ -39,7 +39,7 @@ export const DIRECT_DURATION = 3.6;
  * bottom overhang are still swept by the rising shot (no safe zone).
  */
 export const DIRECT_SHOT_SPEED = 420;
-export const DIRECT_SHOT_DMG = 2;
+export const DIRECT_SHOT_DMG = 10; // 10-04: ship-to-ship direct shot 2 → 10 per hit
 /** Spawn y offset below the target field's bottom edge (px). */
 export const DIRECT_SHOT_SPAWN_BELOW = 36;
 
@@ -778,7 +778,7 @@ export function spawnExplosion(x, y, big = false) {
  * scaled by its hull width (≈1 hit per 18 px). Every hit spawns a small explosion at its
  * point along the hull. Same function for player and COM.
  */
-export const LASER_HIT_DMG = 0.5;
+export const LASER_HIT_DMG = 0.5 / 3; // 10-04: laser power 1/3 (was 0.5)
 export const LASER_MAX_HITS = 10;
 export const FX_SOFT_CAP = 90; // phone guard: past this, laser booms reuse a cheaper life
 // User 10-04d: the widest enemy hull (boss tier, 184 px) is the 10-hit reference; others scale by width.
@@ -788,12 +788,12 @@ export function laserHitCount(e) {
 }
 export function spawnLaserBoom(x, y, cheap = false) {
   const l = cheap ? 0.12 : 0.24;
-  return { x, y, life: l, max: l, r: 9 + Math.random() * 4 };
+  return { x, y, life: l, max: l, r: 27 + Math.random() * 12 }; // 10-04: ×3 (was 9–13)
 }
 /** Returns 'core' / 'corehit' / 'body' like applyCoreAwareBeam. */
 export function applyLaserTick(e, ly, fxList, shipX) {
   if (hasCore(e)) {
-    const h = applyCoreAwareBeam(e, 1.05, ly, fxList).hit; // core: one strike per tick (core HP is shared)
+    const h = applyCoreAwareBeam(e, 1.05 / 3, ly, fxList).hit; // core: one strike per tick (core HP is shared); 10-04: 1/3 (was 1.05)
     if (fxList) fxList.push(spawnLaserBoom(Math.max(shipX, e.x - e.w * 0.35), ly));
     return h;
   }
@@ -844,13 +844,13 @@ export function tickCoins(fxList, sx, sy, dt) {
   return pt;
 }
 
-export function spawnHitSpark(x, y) {
+export function spawnHitSpark(x, y, r = 144) {
   return {
     kind: 'hit',
     x, y,
     life: 0.18,
     max: 0.18,
-    r: 48, // 10-04j: ×3 (was 16)
+    r, // 10-04: shot-hit-on-enemy ×3 again (48 → 144); ship hits pass 48
   };
 }
 

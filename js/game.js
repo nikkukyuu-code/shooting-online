@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261004165454';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261004191332';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnKillBoom, applyLaserTick, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261004165454';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261004165454';
-import { sfx } from './audio.js?v=20261004165454';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261004165454';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261004165454';
-import { hitBattleCounter } from './stats.js?v=20261004165454';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261004165454';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261004165454';
+} from './entities.js?v=20261004191332';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261004191332';
+import { sfx } from './audio.js?v=20261004191332';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261004191332';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261004191332';
+import { hitBattleCounter } from './stats.js?v=20261004191332';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261004191332';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261004191332';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -993,7 +993,7 @@ export class Game {
     B.hp = Math.max(0, B.hp - (b.dmg || DIRECT_SHOT_DMG));
     this.state.botHp = B.hp;
     B.fx.push(spawnExplosion(b.x, b.y, false));
-    B.fx.push(spawnHitSpark(b.x, b.y));
+    B.fx.push(spawnHitSpark(b.x, b.y, 48));
   }
 
   /** An incoming direct shot collided with our ship: normal shot damage + spark + small explosion. */
@@ -1003,7 +1003,7 @@ export class Game {
     this.applyPlayerDamage(b.dmg || DIRECT_SHOT_DMG, 'direct');
     // Explosion at the front of fx so the 12-entry net snapshot keeps it (opponent sees it too)
     S.fx.unshift(spawnExplosion(b.x, b.y, false));
-    S.fx.push(spawnHitSpark(b.x, b.y));
+    S.fx.push(spawnHitSpark(b.x, b.y, 48));
     sfx.hit();
   }
 
@@ -1985,7 +1985,7 @@ export class Game {
           this.applyPlayerDamage(hitDmg, 'bullet');
           P.invuln = 0.75;
           b.life = 0;
-          S.fx.push(spawnHitSpark(P.x, py));
+          S.fx.push(spawnHitSpark(P.x, py, 48));
           sfx.hit();
         }
       }
@@ -2686,7 +2686,7 @@ export class Game {
           B.hp = Math.max(0, B.hp - scaledHitDmg(b.homing ? 3 : 5, b));
           B.invuln = 0.75;
           b.life = 0;
-          B.fx.push(spawnHitSpark(shipX, B.y * fh));
+          B.fx.push(spawnHitSpark(shipX, B.y * fh, 48));
         }
       }
     }
