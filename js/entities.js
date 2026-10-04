@@ -416,7 +416,7 @@ export function tickChain(o, dt) {
 }
 export function spawnChainBoom(o) {
   // User 09-29: each chained unit blows up at about TWICE its own size (fireball diameter ≈ 2 × unit)
-  return { kind: 'chainboom', x: o.x, y: o.y, r: Math.max(o.w || 30, o.h || 24) * 2, life: 1.8, max: 1.8, sd: (o._uid || 1) % 7 };
+  return { kind: 'chainboom', x: o.x, y: o.y, r: Math.max(o.w || 30, o.h || 24) * 2, life: 0.9, max: 0.9, sd: (o._uid || 1) % 7 };
 }
 
 /**
@@ -755,7 +755,8 @@ export function spawnMeteor(x, y, tx, ty) {
 // 10-04d: pixel-art kill blast measured on the video (0:42.9–0:43.7): one blast ≈1.6× the ship
 // field there (≈40 px of a 135 px field); game field 341 px (×2.5) → ≈100 px visible (sprite r 70).
 export function spawnKillBoom(x, y, big = false) {
-  return { kind: 'kboom', x, y, life: big ? 1.65 : 1.05, max: big ? 1.65 : 1.05, r: big ? 140 : 70 };
+  return { kind: 'kboom', x, y, life: big ? 0.83 : 0.53, max: big ? 0.83 : 0.53, // 10-04e: half time
+    r: big ? 140 : 70 };
 }
 
 export function spawnExplosion(x, y, big = false) {
@@ -829,10 +830,10 @@ export function tickCoins(fxList, sx, sy, dt) {
     if (c.kind !== 'coin' || c.life <= 0) continue;
     c.age += dt; c.ph += dt * 9;
     const dx = sx - c.x, dy = sy - c.y, d = Math.hypot(dx, dy) || 1;
-    const pull = (c.age < 0.35 && d > 90) ? 0 : Math.min(760, 110 + c.age * 650 + (d < 90 ? 300 : 0)); // 10-04d: within 90 px it is caught at once
+    const pull = (c.age < 0.23 && d > 90) ? 0 : Math.min(1140, 165 + c.age * 975 + (d < 90 ? 450 : 0)); // 10-04e: ×1.5 // 10-04d: within 90 px it is caught at once
     c.vx = c.vx * Math.exp(-4 * dt) + (dx / d) * pull * dt * 6;
     c.vy = c.vy * Math.exp(-4 * dt) + (dy / d) * pull * dt * 6;
-    const v = Math.hypot(c.vx, c.vy), vmax = 110 + c.age * 520;
+    const v = Math.hypot(c.vx, c.vy), vmax = 165 + c.age * 780;
     if (v > vmax) { c.vx *= vmax / v; c.vy *= vmax / v; }
     c.x += c.vx * dt; c.y += c.vy * dt;
     c.life = Math.max(c.life, 1); // never expire before it reaches the ship
@@ -848,7 +849,7 @@ export function spawnHitSpark(x, y) {
     x, y,
     life: 0.18,
     max: 0.18,
-    r: 8,
+    r: 16, // 10-04e: ×2 (was 8)
   };
 }
 

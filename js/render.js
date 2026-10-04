@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004094019';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004095255';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261004094019`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261004095255`;
 }
 
 function loadKindSprite(kind) {
@@ -2364,21 +2364,21 @@ function buildPxBoom() {
   for (let v = 0; v < PX_VAR; v++) {
     const rnd = pxRand(977 + v * 131);
     const bumps = []; for (let i = 0; i < 9; i++) bumps.push({ a: rnd() * 6.283, w: 0.5 + rnd() * 0.6, h: 0.15 + rnd() * 0.25 });
-    const lobes = []; for (let i = 0; i < 3; i++) { const a = rnd() * 6.283; lobes.push({ x: Math.cos(a) * 3.5, y: Math.sin(a) * 3.5, k: 0.55 + rnd() * 0.25 }); }
+    const lobes = []; for (let i = 0; i < 3; i++) { const a = rnd() * 6.283; lobes.push({ x: Math.cos(a) * 1.2, y: Math.sin(a) * 1.2, k: 0.85 + rnd() * 0.1 }); }
     const holes = []; for (let i = 0; i < 6; i++) holes.push({ x: (rnd() - 0.5) * 16, y: (rnd() - 0.5) * 16, r: 1.5 + rnd() * 2.5 });
     const frames = [];
     for (let f = 0; f < PX_N; f++) {
       const t = f / (PX_N - 1);
       const c = document.createElement('canvas'); c.width = c.height = PX_S;
       const g = c.getContext('2d'); const img = g.createImageData(PX_S, PX_S);
-      const R = (PX_S / 2) * 0.6 * (0.45 + 0.55 * Math.min(1, t / 0.3)); // leaves room for the jagged bumps
+      const R = (PX_S / 2) * 0.72 * (0.45 + 0.55 * Math.min(1, t / 0.3)); // leaves room for the jagged bumps
       const heat = Math.max(0.3, 1 - t * 1.1); // core cools down (video: stays orange-brown while fading)
       for (let y = 0; y < PX_S; y++) for (let x = 0; x < PX_S; x++) {
         const dx = x - PX_S / 2 + 0.5, dy = y - PX_S / 2 + 0.5;
         const a = Math.atan2(dy, dx);
-        let rr = R * (1 + 0.2 * Math.sin(3 * a + bumps[0].a + f * 0.3) + 0.14 * Math.sin(5 * a + bumps[1].a) + 0.1 * Math.sin(9 * a + bumps[2].a - f * 0.5));
-        for (const b of bumps) rr += R * b.h * 0.6 * Math.max(0, Math.cos((a - b.a) / b.w * 2.2));
-        rr *= 0.92 + 0.16 * (((x * 31 + y * 17 + v * 7 + f * 3) % 7) / 6); // ragged pixel edge (video look)
+        let rr = R * (1 + 0.06 * Math.sin(3 * a + bumps[0].a + f * 0.3) + 0.04 * Math.sin(5 * a + bumps[1].a) + 0.025 * Math.sin(9 * a + bumps[2].a - f * 0.5)); // 10-04e: rounder
+        for (const b of bumps) rr += R * b.h * 0.15 * Math.max(0, Math.cos((a - b.a) / b.w * 2.2));
+        rr *= 0.97 + 0.05 * (((x * 31 + y * 17 + v * 7 + f * 3) % 7) / 6); // light pixel jaggies only
         let d = Math.hypot(dx, dy) / rr;
         for (const l of lobes) d = Math.min(d, Math.hypot(dx - l.x * (R / 10), dy - l.y * (R / 10)) / (rr * l.k));
         if (d > 1) continue;
