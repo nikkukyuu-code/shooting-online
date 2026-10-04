@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-04 11:06:22';
+export const VERSION_LABEL = '2026-10-04 11:11:46';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1791079582214;
-export const BUILD_NOTE = '対戦開始・最初の撃破で固まる問題を修正（爆発画像を事前に少しずつ作成・文字計測を軽く）';
+export const BUILD_TIME = 1791079906596;
+export const BUILD_NOTE = '対戦開始の準備中にローディング画面（ゲージとコイン）を表示';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

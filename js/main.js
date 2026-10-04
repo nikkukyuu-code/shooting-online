@@ -1,12 +1,12 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261004110622';
-import { Net } from './net.js?v=20261004110622';
-import { Game } from './game.js?v=20261004110622';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261004110622';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261004110622';
-import { loadBattleCount } from './stats.js?v=20261004110622';
-import { registerEnemyKinds } from './render.js?v=20261004110622';
-import { ALL_KIND_IDS } from './catalog.js?v=20261004110622';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261004110622';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261004111146';
+import { Net } from './net.js?v=20261004111146';
+import { Game } from './game.js?v=20261004111146';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261004111146';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261004111146';
+import { loadBattleCount } from './stats.js?v=20261004111146';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261004111146';
+import { ALL_KIND_IDS } from './catalog.js?v=20261004111146';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261004111146';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -146,7 +146,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261004110622`;
+  return `assets/enemies/${id}/0.png?v=20261004111146`;
 }
 
 function unitName(id) {
@@ -489,7 +489,65 @@ function startGameSession({ bot = false, comDifficulty = 'strong' } = {}) {
   game.start({ net, bot, comDifficulty });
 }
 
+/**
+ * 10-04k: loading screen while match assets are prepared. Shown only if prep takes > 150 ms.
+ * 「準備中… N%」 + gauge + spinning pixel coin; work is split across frames so it never looks frozen.
+ */
+let _prepOv = null;
+function prepOverlay() {
+  if (_prepOv) return _prepOv;
+  const ov = document.createElement('div');
+  ov.id = 'prep-overlay';
+  ov.setAttribute('role', 'status');
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(6,6,16,0.92);color:#ffe27a;font:bold 18px sans-serif;';
+  ov.innerHTML = `<canvas width="12" height="12" style="width:48px;height:48px;image-rendering:pixelated;animation:prepSpin 0.8s linear infinite"></canvas>
+    <div class="prep-txt">準備中… 0%</div>
+    <div style="width:min(70vw,320px);height:12px;border:2px solid #ffe27a;border-radius:3px;background:#221a08;overflow:hidden"><div class="prep-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#f8b42c,#fff4a8)"></div></div>`;
+  const st = document.createElement('style');
+  st.textContent = '@keyframes prepSpin{0%{transform:scaleX(1)}50%{transform:scaleX(0.08)}100%{transform:scaleX(1)}}';
+  document.head.appendChild(st);
+  const g = ov.querySelector('canvas').getContext('2d');
+  for (let y = 0; y < 12; y++) for (let x = 0; x < 12; x++) {
+    const d = Math.hypot(x - 5.5, y - 5.5) / 6; if (d > 1) continue;
+    g.fillStyle = d > 0.8 ? '#8a5a00' : (d > 0.58 && d < 0.72) ? '#c89000' : (x < 5 && y < 5 && d < 0.5) ? '#fff8b0' : '#f8d828';
+    g.fillRect(x, y, 1, 1);
+  }
+  document.body.appendChild(ov);
+  _prepOv = ov;
+  return ov;
+}
+let _lastStartMs = 0; // how long the previous match start blocked (decides whether to show the screen)
+async function withMatchPrep(run) {
+  const ov = prepOverlay();
+  const txt = ov.querySelector('.prep-txt'), bar = ov.querySelector('.prep-bar');
+  const t0 = performance.now();
+  let shown = false;
+  const show = () => { if (!shown) { shown = true; ov.style.display = 'flex'; } };
+  const showT = setTimeout(show, 150);
+  if (!isMatchPrepDone()) {
+    try {
+      await prepareMatchAssets((u) => { const n = Math.round(u * 100); txt.textContent = `準備中… ${n}%`; bar.style.width = `${n}%`; });
+    } catch (e) { console.warn('prep failed', e); }
+  }
+  clearTimeout(showT);
+  // The match start itself (canvas set-up + first frames) can block ~0.1–0.5 s on phones:
+  // keep the loading screen (the coin spin runs on the compositor) up through it when it is slow.
+  if (shown || _lastStartMs > 150 || performance.now() - t0 > 150) {
+    show(); txt.textContent = '準備中… 100%'; bar.style.width = '100%';
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  }
+  const s0 = performance.now();
+  run();
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  _lastStartMs = performance.now() - s0;
+  ov.style.display = 'none';
+}
+
 function startCpuMatch(comDifficulty) {
+  if (busy) return;
+  withMatchPrep(() => startCpuMatchNow(comDifficulty));
+}
+function startCpuMatchNow(comDifficulty) {
   if (busy) return;
   setBusy(true);
   cleanupGame();
@@ -839,3 +897,6 @@ async function loadVisits() {
 }
 loadVisits();
 loadBattleCount(document.getElementById('app-battles'));
+
+// 10-04k: warm up match assets in the background on the title screen
+setTimeout(() => { prepareMatchAssets().catch(() => {}); }, 300);

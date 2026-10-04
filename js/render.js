@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004110622';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004111146';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261004110622`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261004111146`;
 }
 
 function loadKindSprite(kind) {
@@ -2415,6 +2415,38 @@ function startPxBoomBuild() {
   setTimeout(step, 0);
 }
 if (typeof document !== 'undefined') startPxBoomBuild();
+/**
+ * 10-04k: match-start preparation (sprite decode + GPU warm-up + blast frames), split across frames.
+ * onProgress(0..1). Resolves once everything is ready; instant after the first time.
+ */
+let _prepDone = false;
+export function isMatchPrepDone() { return _prepDone && _pxBoom && _pxBoom.ready; }
+export async function prepareMatchAssets(onProgress) {
+  startPxBoomBuild();
+  for (const id of SCRIPT_SPRITES) if (!enemySprites[id]) loadKindSprite(id);
+  const imgs = [];
+  for (const k of Object.keys(enemySprites)) { const im = enemySprites[k] && enemySprites[k][ENEMY_STATIC_FRAME]; if (im) imgs.push(im); }
+  for (const k of Object.keys(waveSprites)) imgs.push(waveSprites[k]);
+  const warm = document.createElement('canvas'); warm.width = warm.height = 48; const wg = warm.getContext('2d');
+  const blastTotal = PX_VAR * PX_N;
+  const blastDone = () => (_pxBoom ? _pxBoom.reduce((n, v) => n + v.length, 0) : 0);
+  const total = imgs.length + blastTotal;
+  let done = 0, t0 = performance.now();
+  const report = () => { if (onProgress) onProgress(Math.min(1, (done + blastDone()) / total)); };
+  const breathe = async () => { if (performance.now() - t0 > 8) { report(); await new Promise((r) => setTimeout(r, 0)); t0 = performance.now(); } };
+  if (!_prepDone) {
+    for (const im of imgs) {
+      try { if (!im.complete || !im.naturalWidth) await Promise.race([im.decode(), new Promise((r) => setTimeout(r, 1500))]); else await im.decode(); } catch (_) {}
+      try { if (im.naturalWidth) { wg.drawImage(im, 0, 0, 48, 48); wg.filter = 'brightness(1.6)'; wg.drawImage(im, 0, 0, 8, 8); wg.filter = 'none'; } } catch (_) {}
+      done++; await breathe();
+    }
+    _prepDone = true;
+  }
+  done = imgs.length;
+  while (!(_pxBoom && _pxBoom.ready)) { report(); await new Promise((r) => setTimeout(r, 16)); }
+  if (onProgress) onProgress(1);
+}
+
 /** Debug/contact-sheet access to the pre-rendered blast frames. */
 export function pxBoomFrames() { startPxBoomBuild(); return _pxBoom; }
 function drawPxBoom(ctx, f, sizeMul = 1) {
