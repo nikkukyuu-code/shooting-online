@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004113731';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004114300';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261004113731`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261004114300`;
 }
 
 function loadKindSprite(kind) {
@@ -1191,9 +1191,15 @@ function drawEnemy(ctx, e) {
     const ba = bubbleAlpha(e);
     if (ba <= 0.01) return;
     ctx.save();
+    const r = Math.max(e.w || 60, e.h || 60) / 2;
+    const gr = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, r);
+    gr.addColorStop(0, 'rgba(255,255,255,0.95)');
+    gr.addColorStop(0.55, 'rgba(200,235,255,0.7)');
+    gr.addColorStop(1, 'rgba(150,210,255,0)');
+    ctx.globalCompositeOperation = 'lighter';
     ctx.globalAlpha = ba;
-    ctx.translate(e.x, e.y);
-    drawBubble(ctx, e.w || 60, e.h || 60, performance.now() / 1000);
+    ctx.fillStyle = gr;
+    ctx.beginPath(); ctx.arc(e.x, e.y, r, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
     return;
   }
