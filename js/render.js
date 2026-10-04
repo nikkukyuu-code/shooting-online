@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004211841';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261005004508';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261004211841`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261005004508`;
 }
 
 function loadKindSprite(kind) {
@@ -1173,7 +1173,7 @@ function drawMine(ctx, w, h, t) {
 }
 
 /** Invisible bubble: seen only for a moment when hit (hp drop) → fades back to alpha 0 in 0.3 s. */
-const BUBBLE_REVEAL_S = 0.45;  // hit glow (10-04: 0.3 → 0.45 s, was too short to notice)
+const BUBBLE_REVEAL_S = 0.25;  // hit: thin ring flashes and fades fast (user 10-05)
 const BUBBLE_ENTRY_S = 0.6;   // one shimmer when a bubble has fully entered the pane
 let _paneFw = 1e9;            // width of the pane being drawn (set per pane in the snapshot renderer)
 const _bubbleSeen = new Map(); // _uid → { hp, rv, inAt, t } (opponent view draws per-frame copies)
@@ -1191,25 +1191,18 @@ function bubbleAlpha(e) {
   m.hp = e.hp; m.t = now;
   const kh = 1 - (now - m.rv) / BUBBLE_REVEAL_S;
   const ki = m.inAt != null ? 1 - (now - m.inAt) / BUBBLE_ENTRY_S : 0;
-  return Math.max(kh > 0 ? kh : 0, ki > 0 ? 0.7 * ki : 0);
+  void ki; // 10-05: no entry shimmer — unhit bubbles stay fully invisible
+  return kh > 0 ? kh * kh : 0;
 }
 function drawEnemy(ctx, e) {
   if (e.kind === 'wave_bubble') {
     const ba = bubbleAlpha(e);
     if (ba <= 0.01) return;
     ctx.save();
-    const r = Math.max(e.w || 60, e.h || 60) / 2 * 1.1;
-    const gr = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, r);
-    gr.addColorStop(0, 'rgba(255,255,255,0.95)');
-    gr.addColorStop(0.55, 'rgba(200,235,255,0.7)');
-    gr.addColorStop(1, 'rgba(150,210,255,0)');
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = ba;
-    ctx.fillStyle = gr;
-    ctx.beginPath(); ctx.arc(e.x, e.y, r, 0, Math.PI * 2); ctx.fill();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.strokeStyle = 'rgba(220,245,255,0.95)'; ctx.lineWidth = 2.5; // crisp round edge so it reads as a round enemy
-    ctx.beginPath(); ctx.arc(e.x, e.y, r * 0.9, 0, Math.PI * 2); ctx.stroke();
+    const r = Math.max(e.w || 60, e.h || 60) / 2;
+    ctx.globalAlpha = ba; // thin round frame only, no fill
+    ctx.strokeStyle = '#e6f6ff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(e.x, e.y, r - 1, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
     return;
   }
