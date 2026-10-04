@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004101142';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004101927';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261004101142`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261004101927`;
 }
 
 function loadKindSprite(kind) {
@@ -912,7 +912,7 @@ function drawCoreBreak(ctx, f) {
 
 /** Core chain reaction: one yellow fireball per chained unit (cascades outward from the core). */
 function drawChainBoom(ctx, f) {
-  drawPxBoom(ctx, f, 0.75); // 10-04f: ×1.5 of the 10-04e size
+  drawPxBoom(ctx, f, 0.6); // 10-04g: −20% (was 0.75)
   return;
   // fireball grows fast to radius R (= unit size → diameter ≈ 2× the unit), holds, then fades;
   // a white flash at the start, a shock ring and flying sparks. ~3 gradient-free fills per frame.
@@ -2355,7 +2355,8 @@ function drawHitSpark(ctx, f) {
 
 // ---------- 10-04d pixel-art kill blast + coin (pre-rendered frames, drawn nearest-neighbour) ----------
 // Palette sampled from the reference video blasts (0:42.9): dark brown rim, rust, orange, yellow, pale core.
-const PX_PAL = ['#3c1c08', '#6a3010', '#b05814', '#e8901c', '#f8c830', '#fff4a8'];
+// 10-04f: no near-black entries (they read as black holes); fading is done with alpha only.
+const PX_PAL = ['#c8461a', '#dc6418', '#ee8a1c', '#f8b42c', '#fcd848', '#fff4a8'];
 const PX_N = 10, PX_S = 32, PX_VAR = 3;
 let _pxBoom = null, _pxCoin = null;
 function pxRand(seed) { let x = seed | 0 || 1; return () => { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; return ((x >>> 0) % 10000) / 10000; }; }
@@ -2372,7 +2373,7 @@ function buildPxBoom() {
       const c = document.createElement('canvas'); c.width = c.height = PX_S;
       const g = c.getContext('2d'); const img = g.createImageData(PX_S, PX_S);
       const R = (PX_S / 2) * 0.72 * (0.45 + 0.55 * Math.min(1, t / 0.3)); // leaves room for the jagged bumps
-      const heat = Math.max(0.3, 1 - t * 1.1); // core cools down (video: stays orange-brown while fading)
+      const heat = Math.max(0.45, 1 - t * 0.9); // core cools down to orange
       for (let y = 0; y < PX_S; y++) for (let x = 0; x < PX_S; x++) {
         const dx = x - PX_S / 2 + 0.5, dy = y - PX_S / 2 + 0.5;
         const a = Math.atan2(dy, dx);
@@ -2382,14 +2383,17 @@ function buildPxBoom() {
         let d = Math.hypot(dx, dy) / rr;
         for (const l of lobes) d = Math.min(d, Math.hypot(dx - l.x * (R / 10), dy - l.y * (R / 10)) / (rr * l.k));
         if (d > 1) continue;
-        if (t > 0.45) { let hole = false; for (const h of holes) if (Math.hypot(dx - h.x, dy - h.y) < h.r * (t - 0.4) * 3) hole = true; if (hole) continue; }
-        // rim → centre ramp, shifted toward the dark end as the blast cools
-        let k = (1 - d) * 5.2 * (0.35 + heat) + (((x * 7 + y * 13 + f) % 5) - 2) * 0.12;
+        // brightness ramp: rim → centre, cools toward orange (never toward black)
+        let k = (1 - d) * 5.2 * heat + 1 + (((x * 7 + y * 13 + f) % 5) - 2) * 0.12;
         k = Math.max(0, Math.min(5, Math.round(k)));
         if (d > 0.86) k = 0;
         const hex = PX_PAL[k]; const i = (y * PX_S + x) * 4;
         img.data[i] = parseInt(hex.slice(1, 3), 16); img.data[i + 1] = parseInt(hex.slice(3, 5), 16); img.data[i + 2] = parseInt(hex.slice(5, 7), 16);
-        img.data[i + 3] = t > 0.75 ? Math.round(255 * Math.max(0, 1 - (t - 0.75) / 0.25)) : 255;
+        // alpha: rim semi-transparent; whole blast fades out by alpha (late frames thin out from the centre)
+        const fade = t < 0.4 ? 1 : Math.max(0, 1 - (t - 0.4) / 0.6);
+        const thin = t > 0.55 ? Math.max(0, 1 - (1 - d) * (t - 0.55) * 3.2) : 1; // centre clears first (transparent, not black)
+        const edge = d > 0.86 ? 0.55 : 1;
+        img.data[i + 3] = Math.round(255 * fade * thin * edge);
       }
       g.putImageData(img, 0, 0); frames.push(c);
     }
@@ -2397,6 +2401,8 @@ function buildPxBoom() {
   }
   return out;
 }
+/** Debug/contact-sheet access to the pre-rendered blast frames. */
+export function pxBoomFrames() { return _pxBoom || (_pxBoom = buildPxBoom()); }
 function drawPxBoom(ctx, f, sizeMul = 1) {
   if (!_pxBoom) _pxBoom = buildPxBoom();
   const t = Math.max(0, Math.min(0.999, 1 - f.life / f.max));

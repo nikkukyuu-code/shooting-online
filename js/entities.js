@@ -756,7 +756,7 @@ export function spawnMeteor(x, y, tx, ty) {
 // field there (≈40 px of a 135 px field); game field 341 px (×2.5) → ≈100 px visible (sprite r 70).
 export function spawnKillBoom(x, y, big = false) {
   return { kind: 'kboom', x, y, life: big ? 1.24 : 0.79, max: big ? 1.24 : 0.79, // 10-04f: ×1.5 (was 0.83 / 0.53)
-    r: big ? 105 : 52.5 }; // 10-04f: ×1.5 (was 70 / 35)
+    r: big ? 84 : 42 }; // 10-04g: −20% (was 105 / 52.5)
 }
 
 export function spawnExplosion(x, y, big = false) {
