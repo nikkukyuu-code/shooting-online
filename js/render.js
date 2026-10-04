@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004110220';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004110622';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261004110220`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261004110622`;
 }
 
 function loadKindSprite(kind) {
@@ -2357,17 +2357,17 @@ function drawHitSpark(ctx, f) {
 // Palette sampled from the reference video blasts (0:42.9): dark brown rim, rust, orange, yellow, pale core.
 // 10-04f: no near-black entries (they read as black holes); fading is done with alpha only.
 const PX_PAL = ['#c8461a', '#dc6418', '#ee8a1c', '#f8b42c', '#fcd848', '#fff4a8'];
+const PX_RGB = PX_PAL.map((h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
 const PX_N = 20, PX_S = 64, PX_VAR = 3; // 10-04g: 2× frames, 2× finer pixels
 let _pxBoom = null, _pxCoin = null;
 function pxRand(seed) { let x = seed | 0 || 1; return () => { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; return ((x >>> 0) % 10000) / 10000; }; }
-function buildPxBoom() {
-  const out = [];
+function* buildPxBoomGen(out) {
   for (let v = 0; v < PX_VAR; v++) {
     const rnd = pxRand(977 + v * 131);
     const bumps = []; for (let i = 0; i < 9; i++) bumps.push({ a: rnd() * 6.283, w: 0.5 + rnd() * 0.6, h: 0.15 + rnd() * 0.25 });
     const lobes = []; for (let i = 0; i < 3; i++) { const a = rnd() * 6.283; lobes.push({ x: Math.cos(a) * 1.2, y: Math.sin(a) * 1.2, k: 0.85 + rnd() * 0.1 }); }
     const holes = []; for (let i = 0; i < 6; i++) holes.push({ x: (rnd() - 0.5) * 16, y: (rnd() - 0.5) * 16, r: 1.5 + rnd() * 2.5 });
-    const frames = [];
+    const frames = []; out.push(frames);
     for (let f = 0; f < PX_N; f++) {
       const t = f / (PX_N - 1);
       const c = document.createElement('canvas'); c.width = c.height = PX_S;
@@ -2387,8 +2387,8 @@ function buildPxBoom() {
         let k = (1 - d) * 5.2 * heat + 1 + (((x * 7 + y * 13 + f) % 5) - 2) * 0.12;
         k = Math.max(0, Math.min(5, Math.round(k)));
         if (d > 0.86) k = 0;
-        const hex = PX_PAL[k]; const i = (y * PX_S + x) * 4;
-        img.data[i] = parseInt(hex.slice(1, 3), 16); img.data[i + 1] = parseInt(hex.slice(3, 5), 16); img.data[i + 2] = parseInt(hex.slice(5, 7), 16);
+        const rgb = PX_RGB[k]; const i = (y * PX_S + x) * 4;
+        img.data[i] = rgb[0]; img.data[i + 1] = rgb[1]; img.data[i + 2] = rgb[2];
         // alpha: rim semi-transparent; whole blast fades out by alpha (late frames thin out from the centre)
         const fade = t < 0.4 ? 1 : Math.max(0, 1 - (t - 0.4) / 0.6);
         const thin = t > 0.55 ? Math.max(0, 1 - (1 - d) * (t - 0.55) * 3.2) : 1; // centre clears first (transparent, not black)
@@ -2396,18 +2396,37 @@ function buildPxBoom() {
         img.data[i + 3] = Math.round(255 * fade * thin * edge);
       }
       g.putImageData(img, 0, 0); frames.push(c);
+      yield; // 10-04j: one frame per slice — the 60 frames are built in the background, never in one long task
     }
-    out.push(frames);
   }
-  return out;
 }
+// Build the blast frames in small slices right after load (title screen), so a match start / first kill
+// never blocks the main thread (the one-shot build took ≈270 ms on desktop, ≈1 s+ on phones).
+function startPxBoomBuild() {
+  if (_pxBoom) return;
+  _pxBoom = [];
+  const gen = buildPxBoomGen(_pxBoom);
+  const step = () => {
+    const t0 = performance.now();
+    let r;
+    do { r = gen.next(); } while (!r.done && performance.now() - t0 < 6);
+    if (r.done) _pxBoom.ready = true; else setTimeout(step, 0);
+  };
+  setTimeout(step, 0);
+}
+if (typeof document !== 'undefined') startPxBoomBuild();
 /** Debug/contact-sheet access to the pre-rendered blast frames. */
-export function pxBoomFrames() { return _pxBoom || (_pxBoom = buildPxBoom()); }
+export function pxBoomFrames() { startPxBoomBuild(); return _pxBoom; }
 function drawPxBoom(ctx, f, sizeMul = 1) {
-  if (!_pxBoom) _pxBoom = buildPxBoom();
+  startPxBoomBuild();
   const t = Math.max(0, Math.min(0.999, 1 - f.life / f.max));
-  const v = _pxBoom[Math.abs(Math.round((f.sd != null ? f.sd : f.x * 7 + f.y * 3))) % PX_VAR];
-  const fr = v[Math.floor(t * PX_N)];
+  const v = _pxBoom[Math.abs(Math.round((f.sd != null ? f.sd : f.x * 7 + f.y * 3))) % PX_VAR] || _pxBoom[0];
+  const fr = v && v[Math.floor(t * PX_N)];
+  if (!fr) { // frames still being built (first second after load): cheap plain fireball
+    ctx.save(); ctx.globalAlpha = Math.max(0, 1 - t); ctx.fillStyle = '#f8b42c';
+    ctx.beginPath(); ctx.arc(f.x, f.y, (f.r || 42) * sizeMul * (0.5 + 0.5 * t), 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    return;
+  }
   const D = (f.r || 42) * 2 * sizeMul;
   ctx.save(); ctx.imageSmoothingEnabled = false;
   ctx.drawImage(fr, Math.round(f.x - D / 2), Math.round(f.y - D / 2), Math.round(D), Math.round(D));
@@ -2811,7 +2830,15 @@ function ellipsize(ctx, text, maxW) {
 }
 
 /** Largest font (step down from maxFs to minFs) where every line fits maxW on one line. */
+const _fitMemo = new Map();
 function fitFontSize(ctx, texts, maxW, maxFs, minFs, fontStack, weight) {
+  const key = `${texts.join('\u0001')}|${Math.round(maxW)}|${maxFs}|${minFs}|${fontStack}|${weight}`;
+  let fs = _fitMemo.get(key);
+  if (fs == null) { fs = fitFontSizeRaw(ctx, texts, maxW, maxFs, minFs, fontStack, weight); if (_fitMemo.size > 300) _fitMemo.clear(); _fitMemo.set(key, fs); }
+  ctx.font = `${weight} ${fs}px ${fontStack}`;
+  return fs;
+}
+function fitFontSizeRaw(ctx, texts, maxW, maxFs, minFs, fontStack, weight) {
   let fs = maxFs;
   for (; fs > minFs; fs -= 1) {
     ctx.font = `${weight} ${fs}px ${fontStack}`;
@@ -2849,7 +2876,19 @@ function splitTwo(ctx, text, maxW) {
  * Fit text into maxW: one line at up to oneLineFs, else two lines at up to twoLineFs,
  * shrinking down to minFs; truncates with … if still too long.
  */
+const _wrapMemo = new Map();
 function wrapToFit(ctx, text, maxW, oneLineFs, minFs, fontStack, weight, twoLineFs = oneLineFs) {
+  // 10-04j: memoized — this ran dozens of measureText calls every frame (≈12 % of main-thread time)
+  const key = `${text}|${Math.round(maxW)}|${oneLineFs}|${minFs}|${fontStack}|${weight}|${twoLineFs}`;
+  const hit = _wrapMemo.get(key);
+  if (hit) { ctx.font = `${weight} ${hit.fs}px ${fontStack}`; return hit; }
+  const res = wrapToFitRaw(ctx, text, maxW, oneLineFs, minFs, fontStack, weight, twoLineFs);
+  if (_wrapMemo.size > 300) _wrapMemo.clear();
+  _wrapMemo.set(key, res);
+  ctx.font = `${weight} ${res.fs}px ${fontStack}`;
+  return res;
+}
+function wrapToFitRaw(ctx, text, maxW, oneLineFs, minFs, fontStack, weight, twoLineFs = oneLineFs) {
   for (let fs = oneLineFs; fs >= Math.max(minFs, oneLineFs * 0.8); fs -= 1) {
     ctx.font = `${weight} ${fs}px ${fontStack}`;
     if (ctx.measureText(text).width <= maxW) return { lines: [text], fs };
