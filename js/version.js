@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-04 15:54:42';
+export const VERSION_LABEL = '2026-10-04 16:36:53';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
 export const BUILD_TIME = 1791080287735;
-export const BUILD_NOTE = '透明な敵の群れはコアと別に出現・PT表示を分かりやすく';
+export const BUILD_NOTE = '透明戦隊を上下の端まで隙間なく配置・コイン取得の演出をカウント表示で';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

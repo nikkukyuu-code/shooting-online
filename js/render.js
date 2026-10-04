@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004155442';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004163653';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261004155442`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261004163653`;
 }
 
 function loadKindSprite(kind) {
@@ -2580,20 +2580,43 @@ function drawPtPop(ctx, f) {
   ctx.restore();
 }
 
-/** Running coin PT in the own field (COM only): big number + plain notes. */
-function drawCoinHud(ctx, L, pt, lastGold) {
+/** Running coin PT in the own field (COM only): big number + plain notes; pickups animate here. */
+let _coinShown = 0;
+function drawCoinHud(ctx, L, pt, lastGold, pop) {
   const x1 = L.own.x + L.own.w - 6, y0 = L.own.y + 6, bw = 150, bh = 62, x0 = x1 - bw;
+  const now = performance.now() / 1000;
+  if (pt < _coinShown) _coinShown = pt; // new match
+  _coinShown += Math.max(pt - _coinShown > 0 ? 0.5 : 0, (pt - _coinShown) * 0.25); // quick roll-up
+  if (_coinShown > pt) _coinShown = pt;
+  const age = pop ? now - pop.t : 9, gold = pop && pop.gold;
+  const bump = age < 0.35 ? Math.sin(age / 0.35 * Math.PI) * (gold ? 0.45 : 0.22) : 0;
+  const glow = age < 0.6 ? 1 - age / 0.6 : 0;
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,0.66)'; ctx.fillRect(x0, y0, bw, bh);
-  ctx.strokeStyle = 'rgba(255,210,30,0.85)'; ctx.lineWidth = 2; ctx.strokeRect(x0, y0, bw, bh);
+  if (glow > 0) { ctx.shadowColor = gold ? '#ffd21e' : '#ffffff'; ctx.shadowBlur = (gold ? 22 : 12) * glow; }
+  ctx.strokeStyle = gold && glow > 0 ? '#ffe566' : 'rgba(255,210,30,0.85)'; ctx.lineWidth = 2 + (gold ? 2 : 1) * glow; ctx.strokeRect(x0, y0, bw, bh);
+  ctx.shadowBlur = 0;
   ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
   ctx.font = 'bold 13px sans-serif'; ctx.fillStyle = '#f2f2f2';
   ctx.fillText('今回のコイン', x0 + 8, y0 + 12);
-  drawCoin(ctx, { x: x0 + 20, y: y0 + 34, r: 11, g: lastGold ? 1 : 0, ph: 0 });
+  drawCoin(ctx, { x: x0 + 20, y: y0 + 34, r: 11 * (1 + bump * 0.6), g: lastGold ? 1 : 0, ph: 0 });
+  ctx.save();
+  ctx.translate(x1 - 8, y0 + 34); ctx.scale(1 + bump, 1 + bump);
+  if (glow > 0) { ctx.shadowColor = gold ? '#ffd21e' : '#ffffff'; ctx.shadowBlur = (gold ? 18 : 10) * glow; }
   ctx.font = '900 24px sans-serif'; ctx.fillStyle = '#ffe27a'; ctx.textAlign = 'right';
-  ctx.fillText(`${pt} PT`, x1 - 8, y0 + 34);
+  ctx.fillText(`${Math.round(_coinShown)} PT`, 0, 0);
+  ctx.restore();
   ctx.font = 'bold 11px sans-serif'; ctx.fillStyle = '#cfe3ff'; ctx.textAlign = 'right';
   ctx.fillText('勝つともらえます', x1 - 8, y0 + 53);
+  if (pop && age < 1.1) { // +1PT / +30PT pops out under the counter
+    const u = age / 1.1;
+    ctx.globalAlpha = u < 0.7 ? 1 : 1 - (u - 0.7) / 0.3;
+    ctx.font = `900 ${gold ? 24 : 18}px sans-serif`; ctx.textAlign = 'right';
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    const ty = y0 + bh + 14 + u * 10;
+    ctx.strokeText(`+${pop.n}PT`, x1 - 8, ty);
+    ctx.fillStyle = gold ? '#ffd21e' : '#eef2f8'; ctx.fillText(`+${pop.n}PT`, x1 - 8, ty);
+  }
   ctx.restore();
 }
 
@@ -3537,7 +3560,7 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
 
   // Direct-attack remaining-seconds HUD (own or incoming)
   drawDirectTimerHud(ctx, L, localState);
-  if (localState.coinHud) drawCoinHud(ctx, L, localState.coinPt || 0, localState.coinLastGold);
+  if (localState.coinHud) drawCoinHud(ctx, L, localState.coinPt || 0, localState.coinLastGold, localState.coinPop);
 
 
   drawDamageFlash(ctx, L, localState.damageFlash);

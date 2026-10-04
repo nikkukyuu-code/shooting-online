@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004155442';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004163653';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -373,10 +373,13 @@ function mines(fw, fh, rowsF) {
 // 10-04: translucent bubble wall — 5×5 grid, no vertical movement, slow leftward crawl (mid-match)
 export const BUBBLE_HP = 12, BUBBLE_VX = 45;
 function bubbleWall(fw, fh) {
+  // 10-04: edge to edge — top row touches the top edge, bottom row the bottom edge, gaps spread between
+  // rows (computed per field height). Edge rows also block the ship's off-edge overhang (game.js e._edge).
   const D = Math.max(24, Math.floor(fh / 5) - 6), gap = 6, out = [];
+  const dy = (fh - D) / 4;
   for (let c = 0; c < 5; c++) for (let r = 0; r < 5; r++) {
-    out.push(mk('wave_bubble', fw, fh, fw + D / 2 + 10 + c * (D + gap), fh * (r + 0.5) / 5, {
-      w: D, h: D, hp: BUBBLE_HP, score: 12, mv: 'drift', vx: BUBBLE_VX, bob: 0, bf: 0, ph: (c * 5 + r) * 0.7, noFire: true,
+    out.push(mk('wave_bubble', fw, fh, fw + D / 2 + 10 + c * (D + gap), D / 2 + r * dy, {
+      w: D, h: D, hp: BUBBLE_HP, score: 12, mv: 'drift', vx: BUBBLE_VX, bob: 0, bf: 0, ph: (c * 5 + r) * 0.7, noFire: true, _edge: r === 0 ? -1 : r === 4 ? 1 : 0,
     }));
   }
   return out;

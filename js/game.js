@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261004155442';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261004163653';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnKillBoom, applyLaserTick, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261004155442';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261004155442';
-import { sfx } from './audio.js?v=20261004155442';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261004155442';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261004155442';
-import { hitBattleCounter } from './stats.js?v=20261004155442';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261004155442';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261004155442';
+} from './entities.js?v=20261004163653';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261004163653';
+import { sfx } from './audio.js?v=20261004163653';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261004163653';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261004163653';
+import { hitBattleCounter } from './stats.js?v=20261004163653';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261004163653';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261004163653';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1886,7 +1886,7 @@ export class Game {
       const got = tickCoins(S.fx, P.x, P.y * fh, dt);
       if (got > 0) {
         S.coinPt = (S.coinPt || 0) + got;
-        if (S.coinHud) { S.fx.push({ kind: 'ptpop', x: P.x + 4, y: P.y * fh - 26, life: 1.6, max: 1.6, r: 0, n: got }); S.coinLastGold = got >= 30; }
+        if (S.coinHud) { S.coinLastGold = got >= 30; S.coinPop = { n: got, t: performance.now() / 1000, gold: got >= 30 }; } // animated at the HUD counter (render.js drawCoinHud)
       }
     }
     for (const f of S.fx) f.life -= dt;
@@ -1995,7 +1995,7 @@ export class Game {
     for (const e of S.enemies) {
       if (warping(e)) continue;
       const py = P.y * fh;
-      if (Math.abs(e.x - P.x) < e.w * 0.4 + 12 && Math.abs(e.y - py) < e.h * 0.4 + 12) {
+      if (Math.abs(e.x - P.x) < e.w * 0.4 + 12 && (Math.abs(e.y - py) < e.h * 0.4 + 12 || (e._edge && (py - e.y) * e._edge > 0))) { // bubble wall edge rows also cover the off-edge overhang
         if (playerBarrier) {
           const bar = S.fx.find((f) => f.kind === 'barrier' && f.life > 0);
           if (bar) bar._hit = 0.14;
@@ -2693,7 +2693,7 @@ export class Game {
     // Enemy body -> COM ship: same rule as the player (box +12, 8 dmg, 0.9s invuln, scrape 1)
     for (const e of B.enemies) {
       if (warping(e)) continue;
-      if (Math.abs(e.x - shipX) < e.w * 0.4 + 12 && Math.abs(e.y - B.y * fh) < e.h * 0.4 + 12) {
+      if (Math.abs(e.x - shipX) < e.w * 0.4 + 12 && (Math.abs(e.y - B.y * fh) < e.h * 0.4 + 12 || (e._edge && (B.y * fh - e.y) * e._edge > 0))) { // same edge rule as the player
         if (botBarrier) {
           const bar = B.fx.find((f) => f.kind === 'barrier' && f.life > 0);
           if (bar) bar._hit = 0.14;
