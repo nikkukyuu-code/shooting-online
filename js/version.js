@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-04 10:50:38';
+export const VERSION_LABEL = '2026-10-04 11:02:20';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1791078638495;
-export const BUILD_NOTE = 'コインの初速を元に戻す（加速はそのまま）';
+export const BUILD_TIME = 1791079340866;
+export const BUILD_NOTE = '撃破の爆発時間を半分に・弾の着弾爆発を3倍に';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
