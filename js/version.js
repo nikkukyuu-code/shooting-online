@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-05 01:27:16';
+export const VERSION_LABEL = '2026-10-05 02:03:56';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
 export const BUILD_TIME = 1791080287735;
-export const BUILD_NOTE = '透明戦隊を2本目の動画どおりに作り直し（5段×24列の長い隊列・上下端いっぱい・2発で撃破・当たるたびに機体を覆う爆発と白い輪）';
+export const BUILD_NOTE = '透明戦隊の爆発と白い輪を参考動画の実際のコマから作り直し（全17コマ・15fps）・硬さを通常弾10発に・同時表示数を制限して軽量化';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

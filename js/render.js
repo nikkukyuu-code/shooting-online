@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261005012716';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261005020356';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261005012716`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261005020356`;
 }
 
 function loadKindSprite(kind) {
@@ -379,6 +379,16 @@ for (const k of WAVE_SPRITE_KINDS) {
 function waveSprite(kind) {
   const img = waveSprites[kind];
   return img && img.complete && img.naturalWidth ? img : null;
+}
+/** 10-05: 透明戦隊 hit/death explosion = the real frames of the reference video (a6faf877 181.07-182.20 s,
+ *  17 source frames at 15 fps), background matted out (black body disk kept), nearest-neighbour ×6. One frame = 40×36 video px
+ *  (240×216 in the sheet); the unit's centre sits at (16, 18) video px; the unit radius is 9.75 video px. */
+const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40, vh: 36, vr: 9.75, fps: 15 };
+/** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
+const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
+if (typeof Image !== 'undefined') {
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261005020356'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261005020356'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -1173,7 +1183,7 @@ function drawMine(ctx, w, h, t) {
 }
 
 /** Invisible bubble: seen only for a moment when hit (hp drop) → fades back to alpha 0 in 0.3 s. */
-const BUBBLE_REVEAL_S = 0.13;  // 10-05 videos: hit ring shows 2-3 frames (0.07-0.2 s) at full strength, then gone
+const BUBBLE_REVEAL_S = 2 / 15;  // 10-05 video: hit ring = 2 source frames at 15 fps, full strength, then gone
 const BUBBLE_ENTRY_S = 0.6;   // one shimmer when a bubble has fully entered the pane
 let _paneFw = 1e9;            // width of the pane being drawn (set per pane in the snapshot renderer)
 const _bubbleSeen = new Map(); // _uid → { hp, rv, inAt, t } (opponent view draws per-frame copies)
@@ -1200,9 +1210,15 @@ function drawEnemy(ctx, e) {
     if (ba <= 0.01) return;
     ctx.save();
     const r = Math.max(e.w || 60, e.h || 60) / 2;
-    ctx.globalAlpha = ba; // thin round frame only, no fill
-    ctx.strokeStyle = '#ececec'; ctx.lineWidth = Math.max(1.5, _paneFw < 1e8 ? _paneFw / 246 : 2.5);
-    ctx.beginPath(); ctx.arc(e.x, e.y, r - 1, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = ba;
+    const ri = BUBBLE_RING.img, k = r / 9.75;
+    if (ri && ri.complete && ri.naturalWidth) {
+      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'low';
+      ctx.drawImage(ri, e.x - BUBBLE_RING.c * k, e.y - BUBBLE_RING.c * k, BUBBLE_RING.n * k, BUBBLE_RING.n * k);
+    } else {
+      ctx.strokeStyle = '#f2f2f2'; ctx.lineWidth = 0.85 * k;
+      ctx.beginPath(); ctx.arc(e.x, e.y, 9.25 * k, 0, Math.PI * 2); ctx.stroke();
+    }
     ctx.restore();
     return;
   }
@@ -2464,6 +2480,8 @@ export async function prepareMatchAssets(onProgress) {
   const imgs = [];
   for (const k of Object.keys(enemySprites)) { const im = enemySprites[k] && enemySprites[k][ENEMY_STATIC_FRAME]; if (im) imgs.push(im); }
   for (const k of Object.keys(waveSprites)) imgs.push(waveSprites[k]);
+  if (BUBBLE_BOOM.img) imgs.push(BUBBLE_BOOM.img);
+  if (BUBBLE_RING.img) imgs.push(BUBBLE_RING.img);
   const warm = document.createElement('canvas'); warm.width = warm.height = 48; const wg = warm.getContext('2d');
   const blastTotal = PX_VAR * PX_N;
   const blastDone = () => (_pxBoom ? _pxBoom.reduce((n, v) => n + v.length, 0) : 0);
@@ -2512,59 +2530,20 @@ function drawBubble(ctx, w, h, t) {
 
 /** Debug/contact-sheet access to the pre-rendered blast frames. */
 export function pxBoomFrames() { startPxBoomBuild(); return _pxBoom; }
-/** 10-05 video (a6faf877 3:01-3:12, frame by frame at 15 fps): the unit's body shows as a black disk while
- *  flames burst out behind it. Frame 1-2: thin flame crescent on the right rim; by ~0.25 s a full yellow rim
- *  with orange flame tongues reaching ~0.5 r past the rim (strongest on the right); disk holds to ~0.65 s,
- *  then the disk goes and the flames thin to brown smoke drifting left, gone by ~1.1 s. Drifts with the unit. */
+/** 10-05: 透明戦隊 explosion — plays the video frames (BUBBLE_BOOM) at the video's 15 fps, scaled so the
+ *  video unit radius (9.75 px) matches the unit's radius, drifting with the unit. */
 function drawEclipse(ctx, f) {
+  const B = BUBBLE_BOOM, im = B.img;
+  if (!im || !im.complete || !im.naturalWidth) return;
   const el = f.max - f.life;
-  const u = Math.max(0, Math.min(1, el / f.max));
-  const r = f.r || 30;
-  const sd = f.sd || 0;
-  const rnd = (i) => { const n = Math.sin(i * 12.9898 + sd * 7.13) * 43758.5453; return n - Math.floor(n); };
-  ctx.save();
-  ctx.translate(f.x - (f.vx || 0) * el, f.y);
-  const grow = Math.min(1, u / 0.2);
-  const span = Math.PI * (0.45 + 0.75 * grow); // flame rim opens from the right side
-  if (u < 0.62) {
-    for (let layer = 0; layer < 2; layer++) { // outer orange tongues, then shorter yellow ones on top
-      const N = 14;
-      for (let i = 0; i < N; i++) {
-        const q = i + layer * 50;
-        const ang = -span / 2 + span * (i + 0.2 + rnd(q + 40) * 0.6) / N;
-        const side = Math.pow(Math.max(0, Math.cos(ang * 0.9)), 1.3);
-        const L = r * (0.1 + 0.7 * grow * side * (0.35 + 0.65 * rnd(q))) * (layer ? 0.55 : 1);
-        const w = 0.2 + 0.16 * rnd(q + 9);
-        const c = Math.cos(ang), sn = Math.sin(ang), bend = (rnd(q + 5) - 0.5) * 0.5;
-        ctx.fillStyle = layer ? '#ffd84a' : (rnd(q + 3) > 0.4 ? '#f08a1e' : '#f6b030');
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(ang - w) * r * 0.92, Math.sin(ang - w) * r * 0.92);
-        ctx.quadraticCurveTo(Math.cos(ang - w * 0.7 + bend) * (r + L * 1.15), Math.sin(ang - w * 0.7 + bend) * (r + L * 1.15), c * (r + L) - sn * L * bend, sn * (r + L) + c * L * bend);
-        ctx.quadraticCurveTo(Math.cos(ang + w * 0.7 + bend) * (r + L * 1.15), Math.sin(ang + w * 0.7 + bend) * (r + L * 1.15), Math.cos(ang + w) * r * 0.92, Math.sin(ang + w) * r * 0.92);
-        ctx.closePath(); ctx.fill();
-      }
-    }
-    ctx.strokeStyle = '#fff0a0'; ctx.lineWidth = Math.max(1.5, r * 0.09);
-    ctx.beginPath(); ctx.arc(0, 0, r * 0.97, -span / 2, span / 2); ctx.stroke();
-  }
-  if (u >= 0.55) { // the body is gone: a ragged orange cloud on the right half, thinning out
-    const k = Math.max(0, 1 - (u - 0.55) / 0.45);
-    ctx.globalAlpha = k;
-    for (let i = 0; i < 9; i++) {
-      const ang = (rnd(i + 20) - 0.5) * Math.PI * 1.1;
-      const d = r * (0.35 + 0.5 * rnd(i + 30)) * (0.6 + 0.4 * k);
-      ctx.fillStyle = rnd(i + 11) > 0.5 ? '#d9781c' : '#f0a030';
-      ctx.beginPath(); ctx.arc(Math.cos(ang) * d - (1 - k) * r * 0.3, Math.sin(ang) * d, r * (0.18 + 0.2 * rnd(i + 2)) * (0.5 + 0.5 * k), 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-  }
-  const da = u < 0.6 ? 1 : Math.max(0, 1 - (u - 0.6) / 0.08);
-  if (da > 0) {
-    ctx.globalAlpha = da;
-    ctx.fillStyle = '#000';
-    ctx.beginPath(); ctx.arc(0, 0, r * 0.93, 0, Math.PI * 2); ctx.fill();
-  }
-  ctx.restore();
+  const i = Math.floor(el * B.fps);
+  if (i < 0 || i >= B.n) return;
+  const k = (f.r || 30) / B.vr;
+  const x = f.x - (f.vx || 0) * el, y = f.y;
+  // plain bilinear from the ×6 sheet (cheap on phone GPUs); no per-size caches → no first-use hitch
+  const q = ctx.imageSmoothingQuality; ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'low';
+  ctx.drawImage(im, i * B.fw, 0, B.fw, B.fh, x - B.cx * k, y - B.cy * k, B.vw * k, B.vh * k);
+  ctx.imageSmoothingQuality = q;
 }
 function drawPxBoom(ctx, f, sizeMul = 1) {
   startPxBoomBuild();

@@ -755,8 +755,19 @@ export function spawnMeteor(x, y, tx, ty) {
 /** Kill explosion (user 10-04b): 2× the old size, 3× the old duration. */
 // 10-04d: pixel-art kill blast measured on the video (0:42.9–0:43.7): one blast ≈1.6× the ship
 // field there (≈40 px of a 135 px field); game field 341 px (×2.5) → ≈100 px visible (sprite r 70).
-export function spawnEclipse(e) { // 10-05 video: black body disk + flame corona over the unit, about 1.1 s
-  return { kind: 'eclipse', x: e.x, y: e.y, r: Math.max(e.w || 60, e.h || 60) / 2, life: 1.1, max: 1.1, sd: Math.random() * 9, vx: e.vx || 0 };
+export const ECLIPSE_CAP = 24; // concurrent 透明戦隊 explosions per field; the oldest (fading) one makes room
+export function spawnEclipse(e) { // 10-05: video explosion frames over the unit, 17 frames at 15 fps = 1.13 s
+  return { kind: 'eclipse', x: e.x, y: e.y, r: Math.max(e.w || 60, e.h || 60) / 2, life: 17 / 15, max: 17 / 15, vx: e.vx || 0 };
+}
+/** Every hit gets its explosion; per unit at most one new one per 0.15 s (rapid volleys), per field ECLIPSE_CAP. */
+export function pushEclipse(fx, e, now) {
+  if (e._eclAt != null && now - e._eclAt < 0.15 && now >= e._eclAt) return false;
+  e._eclAt = now;
+  let n = 0, oldest = -1, minLife = 1e9;
+  for (let i = 0; i < fx.length; i++) if (fx[i].kind === 'eclipse') { n++; if (fx[i].life < minLife) { minLife = fx[i].life; oldest = i; } }
+  if (n >= ECLIPSE_CAP && oldest >= 0) fx.splice(oldest, 1);
+  fx.push(spawnEclipse(e));
+  return true;
 }
 export function spawnKillBoom(x, y, big = false) {
   return { kind: 'kboom', x, y, life: big ? 1.24 : 0.79, max: big ? 1.24 : 0.79, // 10-04j: −50% (was 2.48 / 1.58)
