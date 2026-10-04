@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20261004102139';
+import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20261004103619';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
@@ -6,16 +6,16 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnKillBoom, applyLaserTick, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261004102139';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261004102139';
-import { sfx } from './audio.js?v=20261004102139';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261004102139';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261004102139';
-import { hitBattleCounter } from './stats.js?v=20261004102139';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261004102139';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261004102139';
+} from './entities.js?v=20261004103619';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261004103619';
+import { sfx } from './audio.js?v=20261004103619';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261004103619';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261004103619';
+import { hitBattleCounter } from './stats.js?v=20261004103619';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261004103619';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261004103619';
 
-const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
+const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
 const TUTORIAL_STEPS = [
   { title: '操作', text: '下の操作画面で自機をドラッグ（←→↑↓／WASDでも移動）' },
@@ -65,6 +65,9 @@ function tickWarp(e, dt) {
   e.fireCd = Math.min(e.fireCd || 1, 0.25 + Math.random() * 0.35);
   return false;
 }
+
+/** 10-04h: core-break / big-enemy heal is no longer guaranteed — 50 % (player and COM alike). */
+const HEAL_GUARANTEE_P = 0.5;
 
 /** Match time limit (seconds). Hidden test override: globalThis.__shootingMatchSec (not exposed in UI). */
 const MATCH_TIME_SEC = 300;
@@ -1924,12 +1927,12 @@ export class Game {
         P.score += e.score;
         if (e._coreBreak) {
           // コア撃破: 大回復確定 + アイテム確定 (swarm: 回復 + アイテム)
-          S.items.push(spawnItemWithId(e.x, e.y, bigCoreKind(e.kind) ? 'heal_big' : 'heal'));
+          if (Math.random() < HEAL_GUARANTEE_P) S.items.push(spawnItemWithId(e.x, e.y, bigCoreKind(e.kind) ? 'heal_big' : 'heal'));
           S.items.push(spawnItem(e.x + 26, e.y));
         } else if (isLargeEnemy(e) && !(e._chainOf || e._lead || e._chainT != null)) { // core-attached units: no guaranteed heal
           // デカギャラ撃破: 回復確定（ボス級は大回復）
           const healId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';
-          S.items.push(spawnItemWithId(e.x, e.y, healId));
+          if (Math.random() < HEAL_GUARANTEE_P) S.items.push(spawnItemWithId(e.x, e.y, healId));
         } else if (!e.noDrop && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : ITEM_DROP_CHANCE * (e.dropMul ?? 1))) {
           S.items.push(spawnItem(e.x, e.y));
         }
@@ -2594,11 +2597,11 @@ export class Game {
         B.fx.push(spawnCoin(e.x, e.y, this.coinGold(e)));
         // Same as the player: drops are orbs that the COM ship must fly into (8s life)
         if (e._coreBreak) {
-          B.orbs.push(spawnItemWithId(e.x, e.y, bigCoreKind(e.kind) ? 'heal_big' : 'heal'));
+          if (Math.random() < HEAL_GUARANTEE_P) B.orbs.push(spawnItemWithId(e.x, e.y, bigCoreKind(e.kind) ? 'heal_big' : 'heal'));
           B.orbs.push(spawnItem(e.x + 26, e.y));
         } else if (isLargeEnemy(e) && !(e._chainOf || e._lead || e._chainT != null)) { // core-attached units: no guaranteed heal
           const healId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';
-          B.orbs.push(spawnItemWithId(e.x, e.y, healId));
+          if (Math.random() < HEAL_GUARANTEE_P) B.orbs.push(spawnItemWithId(e.x, e.y, healId));
         } else if (!e.noDrop && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : ITEM_DROP_CHANCE * (e.dropMul ?? 1))) {
           B.orbs.push(spawnItem(e.x, e.y));
         }

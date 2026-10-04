@@ -66,8 +66,8 @@ export function pickPowerupId() {
   const weighted = [
     ['homing', 2], ['laser', 2], ['spread', 3], ['bomb', 2], ['shock', 3], ['rapid', 3],
     ['meteor', 2], ['send', 2.4], ['direct', 2.5],
-    // Heal a bit less common again (was 4.1 / 1.95)
-    ['heal', 3.2], ['heal_big', 1.5],
+    // 10-04h: heal drops halved (was 3.2 / 1.5)
+    ['heal', 1.6], ['heal_big', 0.75],
     ['send_mech', 2.3], ['send_golem', 2.3], ['send_tank', 2.3], ['send_drone', 2.3],
     // v1.5.67 extra attack items + v1.5.70 barrier
     ['pbeam', 1.5], ['option', 1.5], ['cluster', 1.5], ['blackhole', 1.5], ['freeze', 1.5], ['reflect', 1.5],
@@ -416,7 +416,7 @@ export function tickChain(o, dt) {
 }
 export function spawnChainBoom(o) {
   // User 09-29: each chained unit blows up at about TWICE its own size (fireball diameter ≈ 2 × unit)
-  return { kind: 'chainboom', x: o.x, y: o.y, r: Math.max(o.w || 30, o.h || 24) * 2, life: 1.35, max: 1.35, sd: (o._uid || 1) % 7 };
+  return { kind: 'chainboom', x: o.x, y: o.y, r: Math.max(o.w || 30, o.h || 24) * 2, life: 2.7, max: 2.7, sd: (o._uid || 1) % 7 };
 }
 
 /**
@@ -755,7 +755,7 @@ export function spawnMeteor(x, y, tx, ty) {
 // 10-04d: pixel-art kill blast measured on the video (0:42.9–0:43.7): one blast ≈1.6× the ship
 // field there (≈40 px of a 135 px field); game field 341 px (×2.5) → ≈100 px visible (sprite r 70).
 export function spawnKillBoom(x, y, big = false) {
-  return { kind: 'kboom', x, y, life: big ? 1.24 : 0.79, max: big ? 1.24 : 0.79, // 10-04f: ×1.5 (was 0.83 / 0.53)
+  return { kind: 'kboom', x, y, life: big ? 2.48 : 1.58, max: big ? 2.48 : 1.58, // 10-04h: ×2 (was 1.24 / 0.79)
     r: big ? 84 : 42 }; // 10-04g: −20% (was 105 / 52.5)
 }
 
@@ -818,7 +818,7 @@ export function trimFx(fx, n) {
 
 /** Coin drop (user 10-04b): spins (scale-x flip) and is sucked into the destroyer's ship. */
 export function spawnCoin(x, y, gold) {
-  const a = Math.random() * Math.PI * 2, sp = 50 + Math.random() * 60;
+  const a = Math.random() * Math.PI * 2, sp = 25 + Math.random() * 30; // 10-04h: pop-out half speed
   return { kind: 'coin', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 6, max: 6, r: gold ? 37 : 22, g: gold ? 1 : 0, ph: Math.random() * 6, age: 0 }; // 10-04d: video ratio (small ≈18 px, big ≈30 px of a 135 px field, ×2.5)
 }
 export const COIN_SILVER_PT = 1;
@@ -830,10 +830,10 @@ export function tickCoins(fxList, sx, sy, dt) {
     if (c.kind !== 'coin' || c.life <= 0) continue;
     c.age += dt; c.ph += dt * 9;
     const dx = sx - c.x, dy = sy - c.y, d = Math.hypot(dx, dy) || 1;
-    const pull = (c.age < 0.23 && d > 90) ? 0 : Math.min(1140, 165 + c.age * 975 + (d < 90 ? 450 : 0)); // 10-04e: ×1.5 // 10-04d: within 90 px it is caught at once
+    const pull = (c.age < 0.23 && d > 90) ? 0 : Math.min(1140, 82 + c.age * 1300 + (d < 90 ? 450 : 0)); // 10-04h: slow start, stronger acceleration // 10-04d: within 90 px it is caught at once
     c.vx = c.vx * Math.exp(-4 * dt) + (dx / d) * pull * dt * 6;
     c.vy = c.vy * Math.exp(-4 * dt) + (dy / d) * pull * dt * 6;
-    const v = Math.hypot(c.vx, c.vy), vmax = 165 + c.age * 780;
+    const v = Math.hypot(c.vx, c.vy), vmax = 82 + c.age * 1100;
     if (v > vmax) { c.vx *= vmax / v; c.vy *= vmax / v; }
     c.x += c.vx * dt; c.y += c.vy * dt;
     c.life = Math.max(c.life, 1); // never expire before it reaches the ship
