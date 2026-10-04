@@ -66,8 +66,8 @@ export function pickPowerupId() {
   const weighted = [
     ['homing', 2], ['laser', 2], ['spread', 3], ['bomb', 2], ['shock', 3], ['rapid', 3],
     ['meteor', 2], ['send', 2.4], ['direct', 2.5],
-    // 10-04h: heal drops halved (was 3.2 / 1.5)
-    ['heal', 1.6], ['heal_big', 0.75],
+    // 10-04: heal drops between (was 3.2 / 1.5, then 1.6 / 0.75)
+    ['heal', 2.4], ['heal_big', 1.1],
     ['send_mech', 2.3], ['send_golem', 2.3], ['send_tank', 2.3], ['send_drone', 2.3],
     // v1.5.67 extra attack items + v1.5.70 barrier
     ['pbeam', 1.5], ['option', 1.5], ['cluster', 1.5], ['blackhole', 1.5], ['freeze', 1.5], ['reflect', 1.5],
@@ -268,7 +268,7 @@ export function attachCore(e) {
     e.core = { ox: 0, oy: 0, r: CORE_R, hp: CORE_HP.wave_eye_boss, maxHp: CORE_HP.wave_eye_boss, orbit: 9, ang: Math.random() * Math.PI * 2 };
     e.drones = [];
     for (let i = 0; i < 8; i++) {
-      e.drones.push({ ang: (Math.PI * 2 * i) / 8, dist: 72, r: 15, hp: GUARD_HP.claw, maxHp: GUARD_HP.claw, claw: true });
+      e.drones.push({ ang: (Math.PI * 2 * i) / 8, dist: 80, r: 15, hp: GUARD_HP.claw, maxHp: GUARD_HP.claw, claw: true });
     }
   } else if (e.kind === 'wave_grid_core') {
     // ~1.5× player core ship in the middle of a wedge grid: core at its nose, armored hull

@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004150038';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004152825';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -436,9 +436,9 @@ function coreBossPack(fw, fh, fy) {
   // the nose stays clear.
   e.x = fw + e.w * 0.5 + 30; e._entryX = null;
   const pts = [];
-  for (let c = 0; c < 3; c++) for (let r = -1; r <= 1; r++) pts.push([e.w * 0.5 + 12 + c * 22, r * 16]);
-  for (const sg of [-1, 1]) for (let c = 0; c < 2; c++) pts.push([e.w * 0.18 + c * 22, sg * (e.h * 0.5 + 8)]);
-  e._bandH = e.h * 0.5 + 8 + 9; // keep the docked riders on screen at the ends of the sweep
+  for (let c = 0; c < 3; c++) for (let r = -1; r <= 1; r++) pts.push([e.w * 0.5 + 22 + c * 30, r * 24]); // spaced so the patrol never stacks them
+  for (const sg of [-1, 1]) for (let c = 0; c < 2; c++) pts.push([e.w * 0.18 + c * 30, sg * (e.h * 0.5 + 17)]); // riders clear of the hull
+  e._bandH = e.h * 0.5 + 17 + 9; // keep the docked riders on screen at the ends of the sweep
   const G = { lead: e, sp: 40, wob: 2.5, shapes: [{ t: 0, s: 'slots', pts }] };
   let gi = 0;
   const esc = form(fw, fh, 'wave_escort', pts.length, () => {
@@ -587,8 +587,8 @@ function tickPodGuards(e, dt, px, py, bullets, fw) {
     k++;
     if (d.hp <= 0) { d.w = 0; continue; }
     if (ring && d.a0 != null && Math.cos(d.a0) > 0.2) {
-      d._cv = (d._cv || 0) + ((cover ? -Math.sign(Math.sin(d.a0)) * 0.22 : 0) - (d._cv || 0)) * Math.min(1, dt * 3);
-      d.ang += Math.sin(e._rgT * 1.1 + k * 2.3) * 0.26 + d._cv; // patrol along the back of the loop
+      d._cv = (d._cv || 0) + ((cover ? -Math.sin(d.a0) * 0.22 : 0) - (d._cv || 0)) * Math.min(1, dt * 3);
+      d.ang += Math.sin(e._rgT * 1.1) * 0.17 + Math.sin(e._rgT * 2.3 + k * 2.3) * 0.03 + d._cv; // patrol along the back of the loop in step (pods keep their spacing)
     }
     const ox = Math.cos(d.ang) * d.dist, oy = Math.sin(d.ang) * d.dist * (d.ky || 1);
     if (!live || ox <= 6) { d.w = 0; if (d._tele > 0) d._tele = 0; continue; }
@@ -611,7 +611,7 @@ function tickPodGuards(e, dt, px, py, bullets, fw) {
   }
 }
 export function tickRearGuard(e, dt, px, py, bullets, fw, fh) {
-  if (e.drones && e.core && (e.kind === 'wave_ring_core' || e.kind === 'wave_swarm_core')) { tickPodGuards(e, dt, px, py, bullets, fw); return; }
+  if (e.drones && e.core && (e.kind === 'wave_ring_core' || e.kind === 'wave_swarm_core' || e.kind === 'wave_eye_boss')) { tickPodGuards(e, dt, px, py, bullets, fw); return; }
   const L = e._chainOf || e._lead;
   if (!L || e.hp <= 0 || e._chainT != null || e.mv === 'armseg' || e.passShots) { e._gOx = 0; e._gOy = 0; return; }
   if (L.hp <= 0) return;
@@ -624,9 +624,13 @@ export function tickRearGuard(e, dt, px, py, bullets, fw, fh) {
     tx = Math.sin(e._rgT * 1.3 + ph) * 7;                    // patrol shuffle behind the core
     ty = Math.sin(e._rgT * 0.9 + ph * 0.6) * 9;
     const by = e.y - (e._gOy || 0), bx = e.x - (e._gOx || 0), dy0 = by - cy;
+    const hw = (L.w || 40) / 2, hh = (L.h || 30) / 2, beside = Math.abs(bx - L.x) < hw + (e.w || 20) * 0.5;
     if (Math.abs(py - cy) < 46) ty -= Math.sign(dy0) * Math.min(26, Math.max(0, Math.abs(dy0) - 18) * 0.45); // close up toward the core row, never stacking on it
-    const hw = (L.w || 40) / 2, hh = (L.h || 30) / 2;
-    if (Math.abs(bx - L.x) < hw + (e.w || 20) * 0.3 && Math.abs(by + ty - L.y) < hh) tx += L.x + hw + (e.w || 20) * 0.5 + 4 - bx; // never parked inside the core sprite: step out to the back
+    if (beside) { // riders above / below the hull: never slide over it
+      const clr = hh + (e.h || 16) / 2 + 3, ny = by + ty - L.y;
+      if (Math.abs(ny) < clr) ty = Math.sign(by - L.y || 1) * clr - (by - L.y);
+    }
+    if (Math.abs(bx + tx - L.x) < hw + (e.w || 20) * 0.3 && Math.abs(by + ty - L.y) < hh) tx += L.x + hw + (e.w || 20) * 0.5 + 4 - bx; // never parked inside the core sprite: step out to the back
   }
   const k = Math.min(1, dt * 3);
   e._gOx = (e._gOx || 0) + (tx - (e._gOx || 0)) * k;
