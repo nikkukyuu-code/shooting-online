@@ -111,15 +111,15 @@ let _enemyUidSeq = 1;
 export const ENEMY_TIER_STATS = {
   // Visual + hitbox sizes ×2 (drawEnemy uses e.w/e.h; player ship unchanged)
   // v1.5.72: HP ≈1.75× for slower TTK (じっくり倒す) — restored; COM nerf is separate
-  // 10-04b: laser now multi-hits by hull width → small ×1.25, large ×1.6
-  basic:  { w: 68,  h: 56,  hp: 9,  speedBase: 100, speedRand: 50, score: 10,  color: '#9aa0a8' },
-  elite:  { w: 92,  h: 76,  hp: 23, speedBase: 75,  speedRand: 35, score: 30,  color: '#f2f2f6' },
-  swarm:  { w: 52,  h: 40,  hp: 5,  speedBase: 150, speedRand: 55, score: 5,   color: '#ff2a3a' },
+  // 10-04b: laser now multi-hits by hull width → large ×1.6; 10-04c: normal tiers a bit below pre-10-04
+  basic:  { w: 68,  h: 56,  hp: 6,  speedBase: 100, speedRand: 50, score: 10,  color: '#9aa0a8' },
+  elite:  { w: 92,  h: 76,  hp: 15, speedBase: 75,  speedRand: 35, score: 30,  color: '#f2f2f6' },
+  swarm:  { w: 52,  h: 40,  hp: 3,  speedBase: 150, speedRand: 55, score: 5,   color: '#ff2a3a' },
   boss:   { w: 184, h: 116, hp: 200, speedBase: 34,  speedRand: 0,  score: 200, color: '#b0b4bc' },
   mech:   { w: 176, h: 96,  hp: 80, speedBase: 42,  speedRand: 0,  score: 80,  color: '#f4f4f8' },
   golem:  { w: 168, h: 140, hp: 100, speedBase: 28,  speedRand: 0,  score: 100, color: '#3cbc48' },
   tank:   { w: 180, h: 88,  hp: 110, speedBase: 32,  speedRand: 0,  score: 110, color: '#e02028' },
-  drone:  { w: 56,  h: 44,  hp: 11, speedBase: 130, speedRand: 40, score: 20,  color: '#ffd428' },
+  drone:  { w: 56,  h: 44,  hp: 8,  speedBase: 130, speedRand: 40, score: 20,  color: '#ffd428' },
 };
 
 /**
@@ -814,7 +814,7 @@ export function trimFx(fx, n) {
 /** Coin drop (user 10-04b): spins (scale-x flip) and is sucked into the destroyer's ship. */
 export function spawnCoin(x, y, gold) {
   const a = Math.random() * Math.PI * 2, sp = 50 + Math.random() * 60;
-  return { kind: 'coin', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 6, max: 6, r: gold ? 9 : 6, g: gold ? 1 : 0, ph: Math.random() * 6, age: 0 };
+  return { kind: 'coin', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 6, max: 6, r: gold ? 27 : 18, g: gold ? 1 : 0, ph: Math.random() * 6, age: 0 }; // 10-04c: size ×3 (was 9 / 6)
 }
 export const COIN_SILVER_PT = 1;
 export const COIN_GOLD_PT = 30; // user 10-04c: gold 3→30
@@ -825,14 +825,14 @@ export function tickCoins(fxList, sx, sy, dt) {
     if (c.kind !== 'coin' || c.life <= 0) continue;
     c.age += dt; c.ph += dt * 9;
     const dx = sx - c.x, dy = sy - c.y, d = Math.hypot(dx, dy) || 1;
-    const pull = c.age < 0.25 ? 0 : Math.min(900, 120 + c.age * 900);
+    const pull = c.age < 0.35 ? 0 : Math.min(700, 90 + c.age * 600);
     c.vx = c.vx * Math.exp(-4 * dt) + (dx / d) * pull * dt * 6;
     c.vy = c.vy * Math.exp(-4 * dt) + (dy / d) * pull * dt * 6;
-    const v = Math.hypot(c.vx, c.vy), vmax = 140 + c.age * 700;
+    const v = Math.hypot(c.vx, c.vy), vmax = 110 + c.age * 520;
     if (v > vmax) { c.vx *= vmax / v; c.vy *= vmax / v; }
     c.x += c.vx * dt; c.y += c.vy * dt;
     c.life = Math.max(c.life, 1); // never expire before it reaches the ship
-    if (Math.hypot(sx - c.x, sy - c.y) < 14 || c.age > 5) { c.life = 0; pt += c.g ? COIN_GOLD_PT : COIN_SILVER_PT; }
+    if (Math.hypot(sx - c.x, sy - c.y) < 10 + c.r * 0.6 || c.age > 5) { c.life = 0; pt += c.g ? COIN_GOLD_PT : COIN_SILVER_PT; }
   }
   return pt;
 }
@@ -930,7 +930,7 @@ export function serializeField(state) {
       k: b.k || undefined,
       r: b.r > 3.5 ? b.r : undefined,
     })),
-    fx: state.fx.slice(0, 12).map(f => ({ x: f.x, y: f.y, l: f.life, m: f.max, r: f.r, k: f.kind, t: f.t, a: f.a, g: f.g, ph: f.ph })),
+    fx: state.fx.filter((f) => f.kind !== 'coin').slice(0, 12).concat(state.fx.filter((f) => f.kind === 'coin').slice(0, 10)).map(f => ({ x: f.x, y: f.y, l: f.life, m: f.max, r: f.r, k: f.kind, t: f.t, a: f.a, g: f.g, ph: f.ph })),
     ff: state.ff ? { n: state.ff.n, k: state.ff.k } : undefined,
     scroll: state.scroll,
     status: state.statusText,

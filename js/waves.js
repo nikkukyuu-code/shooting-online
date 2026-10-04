@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004090247';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004091301';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -34,7 +34,7 @@ const rnd = (a, b) => a + Math.random() * (b - a);
 
 // User 10-04: regular scripted enemies had become too soft (2–9 HP vs. 4–18 for the tier enemies).
 // Non-core, non-attached units get ×1.8 (≈ the v1.5.72 toughness the tier table still has).
-export const WAVE_HP_MUL = 2.2; // 10-04b: ×1.8→×2.2 with laser multi-hit
+export const WAVE_HP_MUL = 1.0; // 10-04c: user asked normal enemies softer again (back to the pre-10-04 values)
 function mk(kind, fw, fh, x, y, o = {}) {
   const e = spawnEnemy(fw, fh, kind);
   e.x = x; e.y = y;
@@ -669,7 +669,7 @@ function bossMove(e, dt, fw, fh, py) {
 
 /** Tethered striker tip (core): entry → rest → strike (curl / lunge / hold / swing back) or saw → leave. */
 export function armReach(fw) { return fw * 0.56; }
-const ARM = { rest: 1.1, coil: 0.75, strike: 260, retract: 170, hold: 0.6, swingW: 1.5, sawWind: 0.5, sawCycle: 4.3, enter: 1.0 };
+const ARM = { rest: 1.1, coil: 0.75, strike: 260, retract: 170, hold: 0.6, swingW: 1.5, sawWind: 0.5, sawCycle: 4.3, enter: 1.0, chaseW: 1.1, chaseMax: 1.6 };
 function armMove(e, dt, fw, fh, px, py) {
   const n = e.segs || 7, Lrest = 64; // video: sphere centre → tip ≈ 64 px at rest (links bunched up)
   const pivX = fw * 0.70; // video 2:30–2:43: sphere parked at ≈70 % across
@@ -718,13 +718,22 @@ function armMove(e, dt, fw, fh, px, py) {
       }
       break;
     }
-    case 'strike':
+    case 'strike': {
+      // User 10-04c: the head chases the ship during the lunge (limited turn rate → still dodgeable)
+      const cy = Math.max(12, Math.min(fh - 12, py));
+      const dA = wrap(angTo(px, cy) - e._A), turn = ARM.chaseW * dt;
+      e._A += Math.max(-turn, Math.min(turn, dA)); e._aimA = e._A;
+      e._Lgoal = Math.min(reach, Math.max(e._L, Math.hypot(px - e._tx, cy - e._ty)));
       e._L = Math.min(e._Lgoal, e._L + ARM.strike * dt);
-      if (e._L >= e._Lgoal - 0.5) { e._ph = 'hold'; e._pt = 0; }
+      if (e._L >= e._Lgoal - 0.5 || e._pt > ARM.chaseMax) { e._ph = 'hold'; e._pt = 0; }
       break;
-    case 'hold':
+    }
+    case 'hold': { // keeps nosing after the ship a little at full stretch
+      const dA = wrap(angTo(px, Math.max(12, Math.min(fh - 12, py))) - e._A), turn = ARM.chaseW * 0.5 * dt;
+      e._A += Math.max(-turn, Math.min(turn, dA));
       if (e._pt >= ARM.hold) { e._ph = 'retract'; e._pt = 0; }
       break;
+    }
     case 'retract': // chain reels back in along the same line (gaps close up), then swings home
       e._L = Math.max(Lrest, e._L - ARM.retract * dt);
       if (e._L <= Lrest + 0.5) { e._ph = 'swing'; e._pt = 0; e._swDir = Math.sin(e._A) >= 0 ? -1 : 1; }

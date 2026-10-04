@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-04 09:02:47';
+export const VERSION_LABEL = '2026-10-04 09:13:01';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1791072167837;
-export const BUILD_NOTE = 'ゴールドコインを30PTに・ショップ価格を元の4倍に調整';
+export const BUILD_TIME = 1791072781376;
+export const BUILD_NOTE = '普通の敵を柔らかく・コイン3倍の大きさ・ヘビの突進が自機を追いかける';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

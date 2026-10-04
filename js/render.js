@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004090247';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004091301';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261004090247`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261004091301`;
 }
 
 function loadKindSprite(kind) {
@@ -2358,7 +2358,7 @@ function drawCoin(ctx, f) {
   ctx.save();
   ctx.fillStyle = gold ? (sxk > 0 ? '#ffd21e' : '#e0a800') : (sxk > 0 ? '#e8ecf2' : '#a9b0bc');
   ctx.beginPath(); ctx.ellipse(f.x, f.y, w, r, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = gold ? '#9a6a00' : '#6c7380'; ctx.lineWidth = 1.2;
+  ctx.strokeStyle = gold ? '#9a6a00' : '#6c7380'; ctx.lineWidth = Math.max(1.2, r * 0.12);
   ctx.beginPath(); ctx.ellipse(f.x, f.y, w * 0.62, r * 0.62, 0, 0, Math.PI * 2); ctx.stroke();
   if (w > r * 0.5) { ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(f.x - w * 0.35, f.y - r * 0.55, Math.max(1, w * 0.22), r * 0.5); }
   ctx.restore();
