@@ -481,7 +481,7 @@ export function tickEscort(e, dt, fh) {
   }
   // Hold the slot (no wall closing over the core row — the core must stay shootable)
   // docked: rides with the core unit, each fighter bobbing a little out of step (never into the core row)
-  const tx = L.x + e.fdx + Math.cos((e.phase || 0) * 0.7) * 2, ty = L.y + e.fdy + Math.sin((e.phase += dt * 2.2)) * 4;
+  const tx = L.x + e.fdx + Math.cos((e.phase || 0) * 0.7) * 2 + (e._gOx || 0), ty = L.y + e.fdy + Math.sin((e.phase += dt * 2.2)) * 4 + (e._gOy || 0); // + rear-guard offset
   const dx = tx - e.x, dy = ty - e.y;
   const d = Math.hypot(dx, dy);
   const vmax = (L._escV || 190) * dt;

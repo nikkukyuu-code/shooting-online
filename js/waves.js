@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004111146';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004111807';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -552,6 +552,51 @@ export const WAVE_SCRIPT = [
  * Spawn every script entry whose time has come on this field. `st` holds the per-field cursor.
  * Returns the tags of fired entries (e.g. 'round2') for UI.
  */
+/**
+ * User 10-04: attached units on the core's BACK side (farther from the player than the core) guard it:
+ * they patrol around the back, slide toward the core's row while the player is lined up with it
+ * (covering it from behind — the front lane stays open), and fire telegraphed aimed shots.
+ * Shared by both fields (call before the formation / escort step). Returns nothing.
+ */
+export const REAR_FIRE_CD = [3.0, 4.5]; // s per unit
+export const REAR_PACK_GAP = 0.7;       // s between shots of one pack (no floods)
+export const REAR_TELE = 0.4;           // s red-ring warning before each shot
+export function tickRearGuard(e, dt, px, py, bullets, fw, fh) {
+  const L = e._chainOf || e._lead;
+  if (!L || e.hp <= 0 || e._chainT != null || e.mv === 'armseg' || e.passShots) { e._gOx = 0; e._gOy = 0; return; }
+  if (L.hp <= 0) return;
+  const cx = L.x + (L.core ? L.core.ox : 0), cy = L.y + (L.core ? L.core.oy : 0);
+  const rear = e.x > cx + 6;
+  e._rgT = (e._rgT || 0) + dt;
+  let tx = 0, ty = 0;
+  if (rear) {
+    const ph = (e._uid || 1) * 1.7;
+    tx = Math.sin(e._rgT * 1.3 + ph) * 7;                    // patrol shuffle behind the core
+    ty = Math.sin(e._rgT * 0.9 + ph * 0.6) * 9;
+    if (Math.abs(py - cy) < 46) ty += Math.max(-26, Math.min(26, (cy - (e.y - (e._gOy || 0))) * 0.45)); // close up behind the core
+  }
+  const k = Math.min(1, dt * 3);
+  e._gOx = (e._gOx || 0) + (tx - (e._gOx || 0)) * k;
+  e._gOy = (e._gOy || 0) + (ty - (e._gOy || 0)) * k;
+  if (!rear || e.x > fw - 10 || e.x < 0 || (e.fire && !e.noFire)) { if (!(e.fire && !e.noFire)) e._warn = 0; return; } // own gun: keep its pattern only
+  if (e._rgCd == null) e._rgCd = REAR_FIRE_CD[0] + Math.random() * (REAR_FIRE_CD[1] - REAR_FIRE_CD[0]);
+  if (e._rgTele > 0) {
+    e._rgTele -= dt; e._warn = 1;
+    if (e._rgTele <= 0) {
+      e._warn = 0;
+      const a = Math.atan2(py - e.y, px - e.x), spd = 150;
+      const rb = spawnBullet(e.x - (e.w || 20) * 0.4, e.y, Math.cos(a) * spd, Math.sin(a) * spd, 'enemy', false, 2, { life: 5 }); rb.rg = 1; bullets.push(rb);
+      e._rgCd = REAR_FIRE_CD[0] + Math.random() * (REAR_FIRE_CD[1] - REAR_FIRE_CD[0]);
+    }
+    return;
+  }
+  e._rgCd -= dt;
+  if (e._rgCd <= 0 && (L._rgNext == null || performance.now() / 1000 >= L._rgNext)) { // pack gate
+    L._rgNext = performance.now() / 1000 + REAR_PACK_GAP;
+    e._rgTele = REAR_TELE;
+  }
+}
+
 const LOOP_FROM = Math.max(0, WAVE_SCRIPT.findIndex((w) => w[0] >= 14.5));
 export function runWaveScript(st, time, list, fw, fh) {
   const tags = [];
@@ -793,6 +838,7 @@ export function moveScripted(e, dt, fw, fh, py = fh * 0.5, px = 40) {
     stepPlan(e, dt, fw, fh, py);
   } else if (e.mv === 'form') {
     const p = formPos(e, t);
+    p[0] += e._gOx || 0; p[1] += e._gOy || 0; // rear-guard patrol / cover offset (tickRearGuard)
     if (e.face || e.G.face) { e._vx = (p[0] - e.x) / Math.max(dt, 1e-3); e._vy = (p[1] - e.y) / Math.max(dt, 1e-3); }
     e.x = p[0]; e.y = p[1];
     if (e.G.lead && (e.G.lead.hp <= 0 || e.G.lead.x < -100)) { // leader gone: scatter left
