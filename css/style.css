@@ -2054,3 +2054,9 @@ html, body {
 @media (max-height: 760px), (max-width: 420px) { .menu-footer .ver-note { display: none; } }
 @media (min-height: 761px) and (max-height: 860px) { .transfer-note.dl-note { line-height: 1.25; } }
 @media (max-width: 360px) { .menu-footer .app-meta { font-size: 0.58rem; letter-spacing: 0; white-space: normal; padding: 2px 6px; } .menu-footer .app-meta .meta-sep { margin: 0 0.25em; } }
+
+/* 10-04: plain PT lines */
+.pt-hp-sub { display: block; font-size: 0.78rem; color: #bcd; font-weight: 600; }
+.pt-gain { font-size: 1.35rem; }
+.pt-total { font-size: 1.1rem; color: #fff; }
+.pt-lose .pt-line { color: #ddd; }

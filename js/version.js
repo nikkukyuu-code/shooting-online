@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-04 15:28:25';
+export const VERSION_LABEL = '2026-10-04 15:54:42';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
 export const BUILD_TIME = 1791080287735;
-export const BUILD_NOTE = '回復を出やすく・目玉のアームを手前に・三角とリングの護衛が重ならない';
+export const BUILD_NOTE = '透明な敵の群れはコアと別に出現・PT表示を分かりやすく';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

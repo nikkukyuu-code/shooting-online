@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004152825';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004155442';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -516,7 +516,7 @@ export const WAVE_SCRIPT = [
   [112, (w, h) => zig(w, h, 0.2, 4)],
   [118, (w, h) => swoopers(w, h, true, 2)],
   [124, (w, h) => zig(w, h, 0.8, 4)],
-  [127, (w, h) => bubbleWall(w, h)], // 10-04: mid-match bubble wall
+  [127, bubbleWall], // 10-04: mid-match bubble wall (waits until no core is on the field)
   [130, (w, h) => swoopers(w, h, false, 2)],
   // boss snake (slow crossing)
   [137, (w, h) => zig(w, h, 0.4, 5)], // fodder (kills → drops → sends)
@@ -654,6 +654,7 @@ export function tickRearGuard(e, dt, px, py, bullets, fw, fh) {
   }
 }
 
+const bubblesAlive = (list) => list.some((e) => e.kind === 'wave_bubble' && e.hp > 0 && e.x > -40);
 const LOOP_FROM = Math.max(0, WAVE_SCRIPT.findIndex((w) => w[0] >= 14.5));
 export function runWaveScript(st, time, list, fw, fh) {
   const tags = [];
@@ -661,9 +662,19 @@ export function runWaveScript(st, time, list, fw, fh) {
   const off = st._waveOff || 0;
   while (st._waveI < WAVE_SCRIPT.length && WAVE_SCRIPT[st._waveI][0] + off <= time) {
     const [, build, tag] = WAVE_SCRIPT[st._waveI++];
-    for (const e of build(fw, fh)) list.push(e);
+    if (build === bubbleWall) { st._bubPend = time; continue; } // spawned below, away from cores
+    const es = build(fw, fh);
+    if (es.some((e) => e.core) && bubblesAlive(list)) (st._coreHeld = st._coreHeld || []).push(...es); // no core joins a bubble wall
+    else for (const e of es) list.push(e);
     if (tag && !off) tags.push(tag);
   }
+  // 10-04: the bubble wall is a plain group of normal enemies — never next to a core (looks like its escort).
+  // It waits until no core is on the field (max 30 s); cores due meanwhile wait until the wall is gone.
+  if (st._bubPend != null && (!list.some((e) => e.core && e.hp > 0) || time - st._bubPend > 30)) {
+    st._bubPend = null;
+    for (const e of bubbleWall(fw, fh)) list.push(e);
+  }
+  if (st._coreHeld && st._coreHeld.length && !bubblesAlive(list)) { for (const e of st._coreHeld) list.push(e); st._coreHeld = null; }
   // User 10-04d: enemies ran out late in the match / in 延長戦 (script ended at 294 s).
   // Once used up, replay it from W2 (cores + guards included), same on both fields.
   if (st._waveI >= WAVE_SCRIPT.length) {

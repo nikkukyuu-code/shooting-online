@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004152825';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004155442';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261004152825`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261004155442`;
 }
 
 function loadKindSprite(kind) {
@@ -2568,27 +2568,32 @@ function drawCoreLifeBar(ctx, x, y, w, u, k = 1) {
 /** Floating "+N" when a coin reaches the ship (own field, COM / solo only). */
 function drawPtPop(ctx, f) {
   const t = 1 - f.life / f.max;
+  const gold = f.n >= 30;
   ctx.save();
-  ctx.globalAlpha = Math.max(0, 1 - t * t);
-  ctx.font = `bold ${f.n >= 30 ? 17 : 14}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.8)';
-  const y = f.y - t * 26;
-  ctx.strokeText(`+${f.n}`, f.x, y);
-  ctx.fillStyle = f.n >= 30 ? '#ffd21e' : '#eef2f8'; ctx.fillText(`+${f.n}`, f.x, y);
+  ctx.globalAlpha = t < 0.7 ? 1 : Math.max(0, 1 - (t - 0.7) / 0.3);
+  const sz = (gold ? 30 : 22) * (t < 0.12 ? 0.7 + 2.5 * t : 1);
+  ctx.font = `900 ${sz}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+  const y = f.y - t * 40, txt = `+${f.n}PT`;
+  ctx.strokeText(txt, f.x, y);
+  ctx.fillStyle = gold ? '#ffd21e' : '#eef2f8'; ctx.fillText(txt, f.x, y);
   ctx.restore();
 }
 
-/** Running coin PT in the own field (COM / solo only). */
-function drawCoinHud(ctx, L, pt) {
-  const x = L.own.x + L.own.w - 8, y = L.own.y + 18;
+/** Running coin PT in the own field (COM only): big number + plain notes. */
+function drawCoinHud(ctx, L, pt, lastGold) {
+  const x1 = L.own.x + L.own.w - 6, y0 = L.own.y + 6, bw = 150, bh = 62, x0 = x1 - bw;
   ctx.save();
-  ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-  const txt = `獲得 ${pt} PT`;
-  const tw = ctx.measureText(txt).width;
-  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - tw - 34, y - 13, tw + 40, 26);
-  ctx.strokeStyle = 'rgba(255,210,30,0.8)'; ctx.lineWidth = 1.5; ctx.strokeRect(x - tw - 34, y - 13, tw + 40, 26);
-  drawCoin(ctx, { x: x - tw - 18, y, r: 9, g: 1, ph: 0 });
-  ctx.fillStyle = '#ffe27a'; ctx.fillText(txt, x, y + 1);
+  ctx.fillStyle = 'rgba(0,0,0,0.66)'; ctx.fillRect(x0, y0, bw, bh);
+  ctx.strokeStyle = 'rgba(255,210,30,0.85)'; ctx.lineWidth = 2; ctx.strokeRect(x0, y0, bw, bh);
+  ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  ctx.font = 'bold 13px sans-serif'; ctx.fillStyle = '#f2f2f2';
+  ctx.fillText('今回のコイン', x0 + 8, y0 + 12);
+  drawCoin(ctx, { x: x0 + 20, y: y0 + 34, r: 11, g: lastGold ? 1 : 0, ph: 0 });
+  ctx.font = '900 24px sans-serif'; ctx.fillStyle = '#ffe27a'; ctx.textAlign = 'right';
+  ctx.fillText(`${pt} PT`, x1 - 8, y0 + 34);
+  ctx.font = 'bold 11px sans-serif'; ctx.fillStyle = '#cfe3ff'; ctx.textAlign = 'right';
+  ctx.fillText('勝つともらえます', x1 - 8, y0 + 53);
   ctx.restore();
 }
 
@@ -3532,7 +3537,7 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
 
   // Direct-attack remaining-seconds HUD (own or incoming)
   drawDirectTimerHud(ctx, L, localState);
-  if (localState.coinHud) drawCoinHud(ctx, L, localState.coinPt || 0);
+  if (localState.coinHud) drawCoinHud(ctx, L, localState.coinPt || 0, localState.coinLastGold);
 
 
   drawDamageFlash(ctx, L, localState.damageFlash);

@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261004152825';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261004155442';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnKillBoom, applyLaserTick, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261004152825';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261004152825';
-import { sfx } from './audio.js?v=20261004152825';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261004152825';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261004152825';
-import { hitBattleCounter } from './stats.js?v=20261004152825';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261004152825';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261004152825';
+} from './entities.js?v=20261004155442';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261004155442';
+import { sfx } from './audio.js?v=20261004155442';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261004155442';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261004155442';
+import { hitBattleCounter } from './stats.js?v=20261004155442';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261004155442';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261004155442';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1886,7 +1886,7 @@ export class Game {
       const got = tickCoins(S.fx, P.x, P.y * fh, dt);
       if (got > 0) {
         S.coinPt = (S.coinPt || 0) + got;
-        if (S.coinHud) S.fx.push({ kind: 'ptpop', x: P.x + 4, y: P.y * fh - 22, life: 0.9, max: 0.9, r: 0, n: got });
+        if (S.coinHud) { S.fx.push({ kind: 'ptpop', x: P.x + 4, y: P.y * fh - 26, life: 1.6, max: 1.6, r: 0, n: got }); S.coinLastGold = got >= 30; }
       }
     }
     for (const f of S.fx) f.life -= dt;
@@ -3260,11 +3260,11 @@ export class Game {
         const mult = this._ptReward.mult || 1;
         const diffLabel = this._ptReward.label || '';
         box.innerHTML = `
-          <div class="pt-line pt-diff">${diffLabel}（ライフ分PT×${mult}）</div>
-          <div class="pt-line pt-coin">コイン　+${this._ptReward.coin || 0} PT</div>
-          <div class="pt-line pt-hp">残りライフ <strong class="pt-hp-n">0</strong>　→　+${Math.max(0, gain - (this._ptReward.coin || 0))} PT</div>
-          <div class="pt-line pt-gain">合計　+<strong class="pt-gain-n">0</strong> PT</div>
-          <div class="pt-line pt-total">所持PT　<strong class="pt-total-n">0</strong></div>
+          <div class="pt-line pt-diff">${diffLabel}（ライフのPT ×${mult}）</div>
+          <div class="pt-line pt-coin">コインで　+${this._ptReward.coin || 0} PT</div>
+          <div class="pt-line pt-hp">残りライフで　+${Math.max(0, gain - (this._ptReward.coin || 0))} PT<span class="pt-hp-sub">（ライフ <strong class="pt-hp-n">0</strong>）</span></div>
+          <div class="pt-line pt-gain">もらえるPT 合計　+<strong class="pt-gain-n">0</strong></div>
+          <div class="pt-line pt-total">いまの持ちPT　<strong class="pt-total-n">0</strong></div>
         `;
         // Insert before the menu button
         const btn = ov.querySelector('#btn-again') || ov.querySelector('.menu-btn');
@@ -3305,6 +3305,13 @@ export class Game {
       }
     } else {
       msgEl.textContent = 'あなたの負けです';
+      if (this.useBot && !this.isOnline() && !ov.querySelector('.pt-lose')) {
+        const box = document.createElement('div');
+        box.className = 'pt-reward pt-lose';
+        box.innerHTML = '<div class="pt-line">負けたのでPTは入りません</div>';
+        const btn = ov.querySelector('#btn-again') || ov.querySelector('.menu-btn');
+        if (btn) ov.insertBefore(box, btn); else ov.appendChild(box);
+      }
     }
   }
 }
