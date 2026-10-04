@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004101927';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004102139';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261004101927`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261004102139`;
 }
 
 function loadKindSprite(kind) {
@@ -2357,7 +2357,7 @@ function drawHitSpark(ctx, f) {
 // Palette sampled from the reference video blasts (0:42.9): dark brown rim, rust, orange, yellow, pale core.
 // 10-04f: no near-black entries (they read as black holes); fading is done with alpha only.
 const PX_PAL = ['#c8461a', '#dc6418', '#ee8a1c', '#f8b42c', '#fcd848', '#fff4a8'];
-const PX_N = 10, PX_S = 32, PX_VAR = 3;
+const PX_N = 20, PX_S = 64, PX_VAR = 3; // 10-04g: 2× frames, 2× finer pixels
 let _pxBoom = null, _pxCoin = null;
 function pxRand(seed) { let x = seed | 0 || 1; return () => { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; return ((x >>> 0) % 10000) / 10000; }; }
 function buildPxBoom() {
