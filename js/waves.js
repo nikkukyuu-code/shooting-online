@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004091301';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004094019';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -552,13 +552,21 @@ export const WAVE_SCRIPT = [
  * Spawn every script entry whose time has come on this field. `st` holds the per-field cursor.
  * Returns the tags of fired entries (e.g. 'round2') for UI.
  */
+const LOOP_FROM = Math.max(0, WAVE_SCRIPT.findIndex((w) => w[0] >= 14.5));
 export function runWaveScript(st, time, list, fw, fh) {
   const tags = [];
   st._waveI = st._waveI || 0;
-  while (st._waveI < WAVE_SCRIPT.length && WAVE_SCRIPT[st._waveI][0] <= time) {
+  const off = st._waveOff || 0;
+  while (st._waveI < WAVE_SCRIPT.length && WAVE_SCRIPT[st._waveI][0] + off <= time) {
     const [, build, tag] = WAVE_SCRIPT[st._waveI++];
     for (const e of build(fw, fh)) list.push(e);
-    if (tag) tags.push(tag);
+    if (tag && !off) tags.push(tag);
+  }
+  // User 10-04d: enemies ran out late in the match / in 延長戦 (script ended at 294 s).
+  // Once used up, replay it from W2 (cores + guards included), same on both fields.
+  if (st._waveI >= WAVE_SCRIPT.length) {
+    const last = WAVE_SCRIPT[WAVE_SCRIPT.length - 1][0] + off;
+    if (time >= last + 3) { st._waveI = LOOP_FROM; st._waveOff = time - WAVE_SCRIPT[LOOP_FROM][0]; }
   }
   return tags;
 }

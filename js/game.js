@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20261004091301';
+import { runWaveScript, moveScripted, fireScripted } from './waves.js?v=20261004094019';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnKillBoom, applyLaserTick, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261004091301';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261004091301';
-import { sfx } from './audio.js?v=20261004091301';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261004091301';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261004091301';
-import { hitBattleCounter } from './stats.js?v=20261004091301';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261004091301';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261004091301';
+} from './entities.js?v=20261004094019';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261004094019';
+import { sfx } from './audio.js?v=20261004094019';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261004094019';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261004094019';
+import { hitBattleCounter } from './stats.js?v=20261004094019';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261004094019';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261004094019';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復確定・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1771,7 +1771,8 @@ export class Game {
       }
       // light filler so a quiet stretch never goes empty (same on both fields)
       this._spawnAcc += dt;
-      if (this._spawnAcc >= 3 && S.enemies.filter((e) => !e.sent).length < 4) {
+      const late = S.time > 240; // 10-04d: denser filler in the last minute / 延長戦 (same rule on the COM field)
+      if (this._spawnAcc >= (late ? 2 : 3) && S.enemies.filter((e) => !e.sent && !e._chainOf).length < (late ? 6 : 4)) {
         this._spawnAcc = 0;
         S.enemies.push(spawnEnemy(fw, fh, Math.random() < 0.5 ? 'wave_basic' : 'wave_swarm'));
       }
@@ -1863,8 +1864,14 @@ export class Game {
     }
 
     // FX
-    S.coinPt = (S.coinPt || 0) + tickCoins(S.fx, P.x, P.y * fh, dt);
     S.coinHud = !!(this.useBot && !this.isOnline()); // PvP: coins animate, no PT shown anywhere
+    {
+      const got = tickCoins(S.fx, P.x, P.y * fh, dt);
+      if (got > 0) {
+        S.coinPt = (S.coinPt || 0) + got;
+        if (S.coinHud) S.fx.push({ kind: 'ptpop', x: P.x + 4, y: P.y * fh - 22, life: 0.9, max: 0.9, r: 0, n: got });
+      }
+    }
     for (const f of S.fx) f.life -= dt;
 
     // Collisions player bullets -> enemies
@@ -2490,7 +2497,8 @@ export class Game {
     // so COM gets the same number of kill → item-drop chances.
     runWaveScript(B, B.time || 0, B.enemies, fw, fh); // same script / clock rules as the player field
     B.spawnAcc = (B.spawnAcc || 0) + dt;
-    if (B.spawnAcc >= 3 && B.enemies.filter((e) => !e.sent).length < 4) {
+    const lateB = (B.time || 0) > 240;
+    if (B.spawnAcc >= (lateB ? 2 : 3) && B.enemies.filter((e) => !e.sent && !e._chainOf).length < (lateB ? 6 : 4)) {
       B.spawnAcc = 0;
       B.enemies.push(spawnEnemy(fw, fh, Math.random() < 0.5 ? 'wave_basic' : 'wave_swarm'));
     }
@@ -3231,12 +3239,11 @@ export class Game {
         const mult = this._ptReward.mult || 1;
         const diffLabel = this._ptReward.label || '';
         box.innerHTML = `
-          <div class="pt-line pt-diff">${diffLabel}（PT×${mult}）</div>
-          <div class="pt-line pt-hp">残りライフ <strong class="pt-hp-n">0</strong></div>
-          <div class="pt-line pt-arrow">↓</div>
-          <div class="pt-line pt-coin">コイン +${this._ptReward.coin || 0} PT</div>
-          <div class="pt-line pt-gain">合計 +<strong class="pt-gain-n">0</strong> PT${mult > 1 ? ` <span class="pt-mult-tag">（ライフ分×${mult}）</span>` : ''}</div>
-          <div class="pt-line pt-total">所持 PT <strong class="pt-total-n">0</strong></div>
+          <div class="pt-line pt-diff">${diffLabel}（ライフ分PT×${mult}）</div>
+          <div class="pt-line pt-coin">コイン　+${this._ptReward.coin || 0} PT</div>
+          <div class="pt-line pt-hp">残りライフ <strong class="pt-hp-n">0</strong>　→　+${Math.max(0, gain - (this._ptReward.coin || 0))} PT</div>
+          <div class="pt-line pt-gain">合計　+<strong class="pt-gain-n">0</strong> PT</div>
+          <div class="pt-line pt-total">所持PT　<strong class="pt-total-n">0</strong></div>
         `;
         // Insert before the menu button
         const btn = ov.querySelector('#btn-again') || ov.querySelector('.menu-btn');

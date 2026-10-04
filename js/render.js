@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004091301';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004094019';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261004091301`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261004094019`;
 }
 
 function loadKindSprite(kind) {
@@ -912,6 +912,8 @@ function drawCoreBreak(ctx, f) {
 
 /** Core chain reaction: one yellow fireball per chained unit (cascades outward from the core). */
 function drawChainBoom(ctx, f) {
+  drawPxBoom(ctx, f, 1); // 10-04d: pixel-art blast (video look), size as before
+  return;
   // fireball grows fast to radius R (= unit size → diameter ≈ 2× the unit), holds, then fades;
   // a white flash at the start, a shock ring and flying sparks. ~3 gradient-free fills per frame.
   const t = 1 - f.life / f.max;
@@ -2350,29 +2352,122 @@ function drawHitSpark(ctx, f) {
   ctx.restore();
 }
 
+
+// ---------- 10-04d pixel-art kill blast + coin (pre-rendered frames, drawn nearest-neighbour) ----------
+// Palette sampled from the reference video blasts (0:42.9): dark brown rim, rust, orange, yellow, pale core.
+const PX_PAL = ['#3c1c08', '#6a3010', '#b05814', '#e8901c', '#f8c830', '#fff4a8'];
+const PX_N = 10, PX_S = 32, PX_VAR = 3;
+let _pxBoom = null, _pxCoin = null;
+function pxRand(seed) { let x = seed | 0 || 1; return () => { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; return ((x >>> 0) % 10000) / 10000; }; }
+function buildPxBoom() {
+  const out = [];
+  for (let v = 0; v < PX_VAR; v++) {
+    const rnd = pxRand(977 + v * 131);
+    const bumps = []; for (let i = 0; i < 9; i++) bumps.push({ a: rnd() * 6.283, w: 0.5 + rnd() * 0.6, h: 0.15 + rnd() * 0.25 });
+    const lobes = []; for (let i = 0; i < 3; i++) { const a = rnd() * 6.283; lobes.push({ x: Math.cos(a) * 3.5, y: Math.sin(a) * 3.5, k: 0.55 + rnd() * 0.25 }); }
+    const holes = []; for (let i = 0; i < 6; i++) holes.push({ x: (rnd() - 0.5) * 16, y: (rnd() - 0.5) * 16, r: 1.5 + rnd() * 2.5 });
+    const frames = [];
+    for (let f = 0; f < PX_N; f++) {
+      const t = f / (PX_N - 1);
+      const c = document.createElement('canvas'); c.width = c.height = PX_S;
+      const g = c.getContext('2d'); const img = g.createImageData(PX_S, PX_S);
+      const R = (PX_S / 2) * 0.6 * (0.45 + 0.55 * Math.min(1, t / 0.3)); // leaves room for the jagged bumps
+      const heat = Math.max(0.3, 1 - t * 1.1); // core cools down (video: stays orange-brown while fading)
+      for (let y = 0; y < PX_S; y++) for (let x = 0; x < PX_S; x++) {
+        const dx = x - PX_S / 2 + 0.5, dy = y - PX_S / 2 + 0.5;
+        const a = Math.atan2(dy, dx);
+        let rr = R * (1 + 0.2 * Math.sin(3 * a + bumps[0].a + f * 0.3) + 0.14 * Math.sin(5 * a + bumps[1].a) + 0.1 * Math.sin(9 * a + bumps[2].a - f * 0.5));
+        for (const b of bumps) rr += R * b.h * 0.6 * Math.max(0, Math.cos((a - b.a) / b.w * 2.2));
+        rr *= 0.92 + 0.16 * (((x * 31 + y * 17 + v * 7 + f * 3) % 7) / 6); // ragged pixel edge (video look)
+        let d = Math.hypot(dx, dy) / rr;
+        for (const l of lobes) d = Math.min(d, Math.hypot(dx - l.x * (R / 10), dy - l.y * (R / 10)) / (rr * l.k));
+        if (d > 1) continue;
+        if (t > 0.45) { let hole = false; for (const h of holes) if (Math.hypot(dx - h.x, dy - h.y) < h.r * (t - 0.4) * 3) hole = true; if (hole) continue; }
+        // rim → centre ramp, shifted toward the dark end as the blast cools
+        let k = (1 - d) * 5.2 * (0.35 + heat) + (((x * 7 + y * 13 + f) % 5) - 2) * 0.12;
+        k = Math.max(0, Math.min(5, Math.round(k)));
+        if (d > 0.86) k = 0;
+        const hex = PX_PAL[k]; const i = (y * PX_S + x) * 4;
+        img.data[i] = parseInt(hex.slice(1, 3), 16); img.data[i + 1] = parseInt(hex.slice(3, 5), 16); img.data[i + 2] = parseInt(hex.slice(5, 7), 16);
+        img.data[i + 3] = t > 0.75 ? Math.round(255 * Math.max(0, 1 - (t - 0.75) / 0.25)) : 255;
+      }
+      g.putImageData(img, 0, 0); frames.push(c);
+    }
+    out.push(frames);
+  }
+  return out;
+}
+function drawPxBoom(ctx, f, sizeMul = 1) {
+  if (!_pxBoom) _pxBoom = buildPxBoom();
+  const t = Math.max(0, Math.min(0.999, 1 - f.life / f.max));
+  const v = _pxBoom[Math.abs(Math.round((f.sd != null ? f.sd : f.x * 7 + f.y * 3))) % PX_VAR];
+  const fr = v[Math.floor(t * PX_N)];
+  const D = (f.r || 42) * 2 * sizeMul;
+  ctx.save(); ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(fr, Math.round(f.x - D / 2), Math.round(f.y - D / 2), Math.round(D), Math.round(D));
+  ctx.restore();
+}
+function buildPxCoin() {
+  const mk = (cols) => {
+    const S = 12, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const d = Math.hypot(x - S / 2 + 0.5, y - S / 2 + 0.5) / (S / 2);
+      if (d > 1) continue;
+      g.fillStyle = d > 0.8 ? cols[0] : (d > 0.58 && d < 0.72) ? cols[1] : (x < S / 2 - 1 && y < S / 2 - 1 && d < 0.5) ? cols[3] : cols[2];
+      g.fillRect(x, y, 1, 1);
+    }
+    return c;
+  };
+  return { gold: mk(['#8a5a00', '#c89000', '#f8d828', '#fff8b0']), silver: mk(['#5c6470', '#8f98a6', '#dde3ec', '#ffffff']) };
+}
+
 /** Spinning coin (video: flat yellow disc whose width flips; gold bigger than silver). */
 function drawCoin(ctx, f) {
-  const r = f.r || 6, sxk = Math.cos(f.ph || 0);
-  const w = Math.max(0.8, Math.abs(sxk) * r);
-  const gold = !!f.g;
+  if (!_pxCoin) _pxCoin = buildPxCoin();
+  const r = f.r || 6, k = Math.cos(f.ph || 0);
+  const w = Math.max(2, Math.abs(k) * r * 2);
+  ctx.save(); ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(f.g ? _pxCoin.gold : _pxCoin.silver, Math.round(f.x - w / 2), Math.round(f.y - r), Math.round(w), Math.round(r * 2));
+  if (Math.abs(k) < 0.3) { ctx.fillStyle = f.g ? '#c89000' : '#8f98a6'; ctx.fillRect(Math.round(f.x - 1), Math.round(f.y - r), 2, Math.round(r * 2)); } // edge-on rim
+  ctx.restore();
+}
+
+function drawCoreLifeBar(ctx, x, y, w, u, k = 1) {
+  const h = Math.max(5, 9 * k);
+  y = Math.max(h + 2, y);
   ctx.save();
-  ctx.fillStyle = gold ? (sxk > 0 ? '#ffd21e' : '#e0a800') : (sxk > 0 ? '#e8ecf2' : '#a9b0bc');
-  ctx.beginPath(); ctx.ellipse(f.x, f.y, w, r, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = gold ? '#9a6a00' : '#6c7380'; ctx.lineWidth = Math.max(1.2, r * 0.12);
-  ctx.beginPath(); ctx.ellipse(f.x, f.y, w * 0.62, r * 0.62, 0, 0, Math.PI * 2); ctx.stroke();
-  if (w > r * 0.5) { ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(f.x - w * 0.35, f.y - r * 0.55, Math.max(1, w * 0.22), r * 0.5); }
+  ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(x - w / 2 - 2, y - 2, w + 4, h + 4);
+  ctx.fillStyle = '#3a1418'; ctx.fillRect(x - w / 2, y, w, h);
+  ctx.fillStyle = u > 0.5 ? '#ff4a5a' : u > 0.25 ? '#ff9a2a' : '#ffe14a';
+  ctx.fillRect(x - w / 2, y, w * Math.max(0, Math.min(1, u)), h);
+  ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(x - w / 2, y, w * Math.max(0, Math.min(1, u)), Math.max(1, h * 0.3));
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, 1.5 * k); ctx.strokeRect(x - w / 2 - 0.5, y - 0.5, w + 1, h + 1);
+  ctx.restore();
+}
+
+/** Floating "+N" when a coin reaches the ship (own field, COM / solo only). */
+function drawPtPop(ctx, f) {
+  const t = 1 - f.life / f.max;
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, 1 - t * t);
+  ctx.font = `bold ${f.n >= 30 ? 17 : 14}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+  const y = f.y - t * 26;
+  ctx.strokeText(`+${f.n}`, f.x, y);
+  ctx.fillStyle = f.n >= 30 ? '#ffd21e' : '#eef2f8'; ctx.fillText(`+${f.n}`, f.x, y);
   ctx.restore();
 }
 
 /** Running coin PT in the own field (COM / solo only). */
 function drawCoinHud(ctx, L, pt) {
-  const x = L.own.x + L.own.w - 10, y = L.own.y + 16;
+  const x = L.own.x + L.own.w - 8, y = L.own.y + 18;
   ctx.save();
-  ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-  const txt = `${pt} PT`;
+  ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  const txt = `獲得 ${pt} PT`;
   const tw = ctx.measureText(txt).width;
-  ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(x - tw - 24, y - 9, tw + 30, 18);
-  drawCoin(ctx, { x: x - tw - 12, y, r: 6, g: 1, ph: 0 });
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x - tw - 34, y - 13, tw + 40, 26);
+  ctx.strokeStyle = 'rgba(255,210,30,0.8)'; ctx.lineWidth = 1.5; ctx.strokeRect(x - tw - 34, y - 13, tw + 40, 26);
+  drawCoin(ctx, { x: x - tw - 18, y, r: 9, g: 1, ph: 0 });
   ctx.fillStyle = '#ffe27a'; ctx.fillText(txt, x, y + 1);
   ctx.restore();
 }
@@ -2383,6 +2478,8 @@ function drawFx(ctx, f) {
   if (f.kind === 'bomb') { drawBombFx(ctx, f); return; }
   if (f.kind === 'heal') { drawHealFx(ctx, f); return; }
   if (f.kind === 'coin') { drawCoin(ctx, f); return; }
+  if (f.kind === 'kboom') { drawPxBoom(ctx, f); return; }
+  if (f.kind === 'ptpop') { drawPtPop(ctx, f); return; }
   if (f.kind === 'hit') { drawHitSpark(ctx, f); return; }
   if (f.kind === 'deflect') { drawDeflectSpark(ctx, f); return; }
   if (f.kind === 'corebreak') { drawCoreBreak(ctx, f); return; }
@@ -3140,6 +3237,12 @@ export function drawField(ctx, area, snap, opts = {}) {
     });
   }
   if (bonds.length) drawCoreBonds(ctx, bonds, sx, sy, 1);
+  // User 10-04d: core life gauge above every core unit (attached guard units stay bar-less)
+  for (const e of enemies) {
+    const hp = e.core ? e.core.hp : e.ch, mx = e.core ? e.core.maxHp : e.cm;
+    if (hp == null || !mx || hp <= 0 || (e.hp ?? 1) <= 0) continue;
+    drawCoreLifeBar(ctx, e.x * sx, (e.y - (e.h || 30) / 2) * sy - 14 * Math.min(1, sy), Math.max(56, Math.min(96, (e.w || 40) * 0.9)) * Math.min(1, Math.max(sx, 0.6)), hp / mx, Math.min(1, Math.max(sx, 0.6)));
+  }
 
   const bullets = snap.bullets || [];
   for (const b of bullets) {
@@ -3178,7 +3281,7 @@ export function drawField(ctx, area, snap, opts = {}) {
     const tg = f.t || null;
     drawFx(ctx, {
       x: f.x * sx, y: f.y * sy, life: f.l ?? f.life, max: f.m ?? f.max, r: (f.r || 14) * sx,
-      kind: f.k ?? f.kind, sc: sx, g: f.g, ph: f.ph,
+      kind: f.k ?? f.kind, sc: sx, g: f.g, ph: f.ph, n: f.n,
       t: tg ? tg.map(([tx, ty]) => [tx * sx, ty * sy]) : undefined,
       a: f.a,
     });

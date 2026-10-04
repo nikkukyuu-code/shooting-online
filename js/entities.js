@@ -752,8 +752,10 @@ export function spawnMeteor(x, y, tx, ty) {
 }
 
 /** Kill explosion (user 10-04b): 2× the old size, 3× the old duration. */
+// 10-04d: pixel-art kill blast measured on the video (0:42.9–0:43.7): one blast ≈1.6× the ship
+// field there (≈40 px of a 135 px field); game field 341 px (×2.5) → ≈100 px visible (sprite r 70).
 export function spawnKillBoom(x, y, big = false) {
-  return { x, y, life: big ? 1.65 : 1.05, max: big ? 1.65 : 1.05, r: big ? 56 : 28 };
+  return { kind: 'kboom', x, y, life: big ? 1.65 : 1.05, max: big ? 1.65 : 1.05, r: big ? 140 : 70 };
 }
 
 export function spawnExplosion(x, y, big = false) {
@@ -777,8 +779,10 @@ export function spawnExplosion(x, y, big = false) {
 export const LASER_HIT_DMG = 0.5;
 export const LASER_MAX_HITS = 10;
 export const FX_SOFT_CAP = 90; // phone guard: past this, laser booms reuse a cheaper life
+// User 10-04d: the widest enemy hull (boss tier, 184 px) is the 10-hit reference; others scale by width.
+export const LASER_W_MAX = Math.max(...Object.values(ENEMY_TIER_STATS).map((t) => t.w));
 export function laserHitCount(e) {
-  return Math.max(1, Math.min(LASER_MAX_HITS, Math.round((e.w || 20) / 18)));
+  return Math.max(1, Math.min(LASER_MAX_HITS, Math.floor((LASER_MAX_HITS * (e.w || 20)) / LASER_W_MAX + 1e-6)));
 }
 export function spawnLaserBoom(x, y, cheap = false) {
   const l = cheap ? 0.12 : 0.24;
@@ -814,7 +818,7 @@ export function trimFx(fx, n) {
 /** Coin drop (user 10-04b): spins (scale-x flip) and is sucked into the destroyer's ship. */
 export function spawnCoin(x, y, gold) {
   const a = Math.random() * Math.PI * 2, sp = 50 + Math.random() * 60;
-  return { kind: 'coin', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 6, max: 6, r: gold ? 27 : 18, g: gold ? 1 : 0, ph: Math.random() * 6, age: 0 }; // 10-04c: size ×3 (was 9 / 6)
+  return { kind: 'coin', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 6, max: 6, r: gold ? 37 : 22, g: gold ? 1 : 0, ph: Math.random() * 6, age: 0 }; // 10-04d: video ratio (small ≈18 px, big ≈30 px of a 135 px field, ×2.5)
 }
 export const COIN_SILVER_PT = 1;
 export const COIN_GOLD_PT = 30; // user 10-04c: gold 3→30
@@ -825,14 +829,15 @@ export function tickCoins(fxList, sx, sy, dt) {
     if (c.kind !== 'coin' || c.life <= 0) continue;
     c.age += dt; c.ph += dt * 9;
     const dx = sx - c.x, dy = sy - c.y, d = Math.hypot(dx, dy) || 1;
-    const pull = c.age < 0.35 ? 0 : Math.min(700, 90 + c.age * 600);
+    const pull = (c.age < 0.35 && d > 90) ? 0 : Math.min(760, 110 + c.age * 650 + (d < 90 ? 300 : 0)); // 10-04d: within 90 px it is caught at once
     c.vx = c.vx * Math.exp(-4 * dt) + (dx / d) * pull * dt * 6;
     c.vy = c.vy * Math.exp(-4 * dt) + (dy / d) * pull * dt * 6;
     const v = Math.hypot(c.vx, c.vy), vmax = 110 + c.age * 520;
     if (v > vmax) { c.vx *= vmax / v; c.vy *= vmax / v; }
     c.x += c.vx * dt; c.y += c.vy * dt;
     c.life = Math.max(c.life, 1); // never expire before it reaches the ship
-    if (Math.hypot(sx - c.x, sy - c.y) < 10 + c.r * 0.6 || c.age > 5) { c.life = 0; pt += c.g ? COIN_GOLD_PT : COIN_SILVER_PT; }
+    // 10-04d: pickup radius 10+0.6r → 18+0.9r
+    if (Math.hypot(sx - c.x, sy - c.y) < 18 + c.r * 0.9 || c.age > 5) { c.life = 0; pt += c.g ? COIN_GOLD_PT : COIN_SILVER_PT; }
   }
   return pt;
 }
