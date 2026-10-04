@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261004111807';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261004112729';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnKillBoom, applyLaserTick, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261004111807';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261004111807';
-import { sfx } from './audio.js?v=20261004111807';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261004111807';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261004111807';
-import { hitBattleCounter } from './stats.js?v=20261004111807';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261004111807';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261004111807';
+} from './entities.js?v=20261004112729';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261004112729';
+import { sfx } from './audio.js?v=20261004112729';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261004112729';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261004112729';
+import { hitBattleCounter } from './stats.js?v=20261004112729';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261004112729';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261004112729';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1073,8 +1073,11 @@ export class Game {
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
     const strong = kind === 'break' || now - (F._ffAt ?? -1e9) >= 333;
     if (strong) F._ffAt = now;
+    // 10-04: flashes now fade out over ~0.5 s; a weak (≤3/s capped) hit only re-boosts a softer glow
+    const prev = F.ff;
+    if (kind !== 'break' && !strong && prev && prev.t0 != null) { F.ff = { ...prev, n: (prev.n || 0) + 1, b0: now }; return; }
     const k = kind === 'break' ? 'b' : strong ? 'h' : 'w';
-    F.ff = { n: ((F.ff && F.ff.n) || 0) + 1, k, t0: now };
+    F.ff = { n: ((prev && prev.n) || 0) + 1, k, t0: now };
   }
 
   /** Core destroyed: big chain explosion + score burst (the decisive shot). */

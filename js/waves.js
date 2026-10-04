@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004111807';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261004112729';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -370,6 +370,18 @@ function mines(fw, fh, rowsF) {
   }));
 }
 
+// 10-04: translucent bubble wall — 5×5 grid, no vertical movement, slow leftward crawl (mid-match)
+export const BUBBLE_HP = 12, BUBBLE_VX = 45;
+function bubbleWall(fw, fh) {
+  const D = Math.max(24, Math.floor(fh / 5) - 6), gap = 6, out = [];
+  for (let c = 0; c < 5; c++) for (let r = 0; r < 5; r++) {
+    out.push(mk('wave_bubble', fw, fh, fw + D / 2 + 10 + c * (D + gap), fh * (r + 0.5) / 5, {
+      w: D, h: D, hp: BUBBLE_HP, score: 12, mv: 'drift', vx: BUBBLE_VX, bob: 0, bf: 0, ph: (c * 5 + r) * 0.7, noFire: true,
+    }));
+  }
+  return out;
+}
+
 // ---------- round 2 ----------
 function loopers(fw, fh, fy, n = 4) {
   const out = [];
@@ -504,6 +516,7 @@ export const WAVE_SCRIPT = [
   [112, (w, h) => zig(w, h, 0.2, 4)],
   [118, (w, h) => swoopers(w, h, true, 2)],
   [124, (w, h) => zig(w, h, 0.8, 4)],
+  [127, (w, h) => bubbleWall(w, h)], // 10-04: mid-match bubble wall
   [130, (w, h) => swoopers(w, h, false, 2)],
   // boss snake (slow crossing)
   [137, (w, h) => zig(w, h, 0.4, 5)], // fodder (kills → drops → sends)
@@ -853,7 +866,7 @@ export function moveScripted(e, dt, fw, fh, py = fh * 0.5, px = 40) {
     e.y = ny;
   } else if (e.mv === 'drift') {
     e.x -= (e.vx || SCROLL) * dt;
-    e.y = e.y0 + (e.bob || 10) * Math.sin((e.bf || 1.2) * t + (e.ph || 0));
+    e.y = e.y0 + (e.bob ?? 10) * Math.sin((e.bf || 1.2) * t + (e.ph || 0)); // bob 0 = no vertical motion (bubble wall)
     e.rot = Math.sin(t * 0.7 + (e.ph || 0)) * 0.25;
   } else if (e.mv === 'arm') {
     armMove(e, dt, fw, fh, px, py);

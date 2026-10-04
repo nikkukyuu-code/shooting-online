@@ -151,6 +151,7 @@ export const WAVE_KIND_TIERS = {
   wave_spider: 'basic',      // green spider ship (user art)
   wave_looper: 'swarm',      // red winged looper (user art)
   wave_saucer: 'swarm',      // small saucer (user art)
+  wave_bubble: 'elite',      // 10-04: translucent round bubble (5×5 wall)
 };
 export const WAVE_KIND_IDS = Object.keys(WAVE_KIND_TIERS);
 export function isWaveKind(kind) {

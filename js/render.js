@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004111807';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004112729';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261004111807`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261004112729`;
 }
 
 function loadKindSprite(kind) {
@@ -1254,6 +1254,7 @@ function drawEnemy(ctx, e) {
     }
     else if (kind === 'wave_snake_seg' || kind === 'wave_cater') drawSegBall(ctx, e, w, h, t);
     else if (kind === 'wave_mine') drawMine(ctx, w, h, t);
+    else if (kind === 'wave_bubble') drawBubble(ctx, w, h, t);
     else if (kind === 'wave_pod') drawPod(ctx, e, t);
     else if ((kind === 'wave_escort' || kind === 'wave_mech') && waveSprite(kind)) drawFit(ctx, waveSprite(kind), w * 1.15, h * 1.15, false);
     else if (kind === 'wave_escort') drawEscort(ctx, w, h, t, e);
@@ -2422,7 +2423,7 @@ if (typeof document !== 'undefined') startPxBoomBuild();
 let _prepDone = false;
 export function isMatchPrepDone() { return _prepDone && _pxBoom && _pxBoom.ready; }
 export async function prepareMatchAssets(onProgress) {
-  startPxBoomBuild();
+  startPxBoomBuild(); bubbleSprite();
   for (const id of SCRIPT_SPRITES) if (!enemySprites[id]) loadKindSprite(id);
   const imgs = [];
   for (const k of Object.keys(enemySprites)) { const im = enemySprites[k] && enemySprites[k][ENEMY_STATIC_FRAME]; if (im) imgs.push(im); }
@@ -2445,6 +2446,32 @@ export async function prepareMatchAssets(onProgress) {
   done = imgs.length;
   while (!(_pxBoom && _pxBoom.ready)) { report(); await new Promise((r) => setTimeout(r, 16)); }
   if (onProgress) onProgress(1);
+}
+
+// 10-04: translucent pixel bubble (pre-rendered once, 24×24, drawn nearest-neighbour)
+let _bubbleSpr = null;
+function bubbleSprite() {
+  if (_bubbleSpr) return _bubbleSpr;
+  const S = 24, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const dx = x - S / 2 + 0.5, dy = y - S / 2 + 0.5, d = Math.hypot(dx, dy) / (S / 2);
+    if (d > 1) continue;
+    let col, a;
+    if (d > 0.86) { col = '170,230,255'; a = 0.85; }                 // bright rim
+    else if (d > 0.72) { col = '110,190,255'; a = 0.45; }
+    else { col = '90,160,240'; a = 0.12 + 0.18 * d; }                // see-through body
+    if (dx < -2 && dy < -2 && Math.hypot(dx + 4.5, dy + 4.5) < 2.6) { col = '255,255,255'; a = 0.95; } // highlight
+    if (dx > 2 && dy > 3 && d > 0.6 && d < 0.8) { col = '200,240,255'; a = 0.55; }                  // lower reflection
+    g.fillStyle = `rgba(${col},${a})`; g.fillRect(x, y, 1, 1);
+  }
+  return (_bubbleSpr = c);
+}
+function drawBubble(ctx, w, h, t) {
+  const spr = bubbleSprite();
+  const k = 1 + Math.sin(t * 2.4) * 0.03; // gentle wobble of the skin (no movement)
+  ctx.save(); ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(spr, -w * k / 2, -h / (k * 2), w * k, h / k);
+  ctx.restore();
 }
 
 /** Debug/contact-sheet access to the pre-rendered blast frames. */
@@ -3410,13 +3437,18 @@ export function drawField(ctx, area, snap, opts = {}) {
   ctx.restore();
 }
 
-/** h: full hit 0.7 (~90 ms), w: weak 0.28 (~50 ms), b: break 0.7 (~350 ms). */
+/** 10-04: core-hit flash fades out by alpha over ≈0.5 s (h 0.6, w 0.3, break 0.7 held 0.1 s then 0.5 s fade). */
 function coreFlashAlpha(ff) {
   if (!ff || ff.t0 == null) return 0;
-  const age = Math.max(0, performance.now() - ff.t0);
-  if (ff.k === 'b') return age >= 350 ? 0 : age < 105 ? 0.7 : 0.7 * (1 - (age - 105) / 245);
-  if (ff.k === 'w') return age >= 50 ? 0 : 0.28 * (1 - age / 50);
-  return age >= 90 ? 0 : age < 36 ? 0.7 - 0.1 * age / 36 : 0.6 * (1 - (age - 36) / 54);
+  const now = performance.now();
+  const fade = (age, peak, dur) => (age >= dur ? 0 : peak * Math.pow(1 - age / dur, 1.6));
+  const age = Math.max(0, now - ff.t0);
+  let a;
+  if (ff.k === 'b') a = age < 100 ? 0.7 : fade(age - 100, 0.7, 500);
+  else if (ff.k === 'w') a = fade(age, 0.3, 500);
+  else a = fade(age, 0.6, 500);
+  if (ff.b0 != null) a = Math.max(a, fade(Math.max(0, now - ff.b0), 0.3, 500)); // weak re-boost
+  return a;
 }
 
 export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
