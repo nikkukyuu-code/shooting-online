@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004095359';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004101142';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261004095359`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261004101142`;
 }
 
 function loadKindSprite(kind) {
@@ -912,7 +912,7 @@ function drawCoreBreak(ctx, f) {
 
 /** Core chain reaction: one yellow fireball per chained unit (cascades outward from the core). */
 function drawChainBoom(ctx, f) {
-  drawPxBoom(ctx, f, 0.5); // 10-04e: pixel-art blast at half the previous size
+  drawPxBoom(ctx, f, 0.75); // 10-04f: ×1.5 of the 10-04e size
   return;
   // fireball grows fast to radius R (= unit size → diameter ≈ 2× the unit), holds, then fades;
   // a white flash at the start, a shock ring and flying sparks. ~3 gradient-free fills per frame.

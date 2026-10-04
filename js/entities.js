@@ -416,7 +416,7 @@ export function tickChain(o, dt) {
 }
 export function spawnChainBoom(o) {
   // User 09-29: each chained unit blows up at about TWICE its own size (fireball diameter ≈ 2 × unit)
-  return { kind: 'chainboom', x: o.x, y: o.y, r: Math.max(o.w || 30, o.h || 24) * 2, life: 0.9, max: 0.9, sd: (o._uid || 1) % 7 };
+  return { kind: 'chainboom', x: o.x, y: o.y, r: Math.max(o.w || 30, o.h || 24) * 2, life: 1.35, max: 1.35, sd: (o._uid || 1) % 7 };
 }
 
 /**
@@ -755,8 +755,8 @@ export function spawnMeteor(x, y, tx, ty) {
 // 10-04d: pixel-art kill blast measured on the video (0:42.9–0:43.7): one blast ≈1.6× the ship
 // field there (≈40 px of a 135 px field); game field 341 px (×2.5) → ≈100 px visible (sprite r 70).
 export function spawnKillBoom(x, y, big = false) {
-  return { kind: 'kboom', x, y, life: big ? 0.83 : 0.53, max: big ? 0.83 : 0.53, // 10-04e: half time
-    r: big ? 70 : 35 }; // 10-04e: half size (was 140 / 70)
+  return { kind: 'kboom', x, y, life: big ? 1.24 : 0.79, max: big ? 1.24 : 0.79, // 10-04f: ×1.5 (was 0.83 / 0.53)
+    r: big ? 105 : 52.5 }; // 10-04f: ×1.5 (was 70 / 35)
 }
 
 export function spawnExplosion(x, y, big = false) {
