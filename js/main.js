@@ -1,12 +1,12 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261004112729';
-import { Net } from './net.js?v=20261004112729';
-import { Game } from './game.js?v=20261004112729';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261004112729';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261004112729';
-import { loadBattleCount } from './stats.js?v=20261004112729';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261004112729';
-import { ALL_KIND_IDS } from './catalog.js?v=20261004112729';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261004112729';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261004113731';
+import { Net } from './net.js?v=20261004113731';
+import { Game } from './game.js?v=20261004113731';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261004113731';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261004113731';
+import { loadBattleCount } from './stats.js?v=20261004113731';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261004113731';
+import { ALL_KIND_IDS } from './catalog.js?v=20261004113731';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261004113731';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -75,6 +75,8 @@ let selectedZukanId = null;
 function show(screen) {
   Object.values(screens).forEach((s) => s && s.classList.remove('active'));
   if (screens[screen]) screens[screen].classList.add('active');
+  window.__stbScreen = screen;
+  if (screen === 'menu' && window.__stbCheckUpdate) setTimeout(() => { if (window.__stbScreen === 'menu') window.__stbCheckUpdate(); }, 1500);
 }
 
 function isHostingWaiting() {
@@ -146,7 +148,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261004112729`;
+  return `assets/enemies/${id}/0.png?v=20261004113731`;
 }
 
 function unitName(id) {

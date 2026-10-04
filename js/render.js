@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004112729';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261004113731';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261004112729`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261004113731`;
 }
 
 function loadKindSprite(kind) {
@@ -1169,7 +1169,34 @@ function drawMine(ctx, w, h, t) {
   ctx.restore();
 }
 
+/** Invisible bubble: seen only for a moment when hit (hp drop) → fades back to alpha 0 in 0.3 s. */
+const BUBBLE_REVEAL_S = 0.3;
+const _bubbleSeen = new Map(); // _uid → { hp, rv, t } (opponent view draws per-frame copies)
+function bubbleAlpha(e) {
+  const now = performance.now() / 1000;
+  const key = e._uid != null ? e._uid : e;
+  let m = _bubbleSeen.get(key);
+  if (!m) {
+    if (_bubbleSeen.size > 400) for (const [k, v] of _bubbleSeen) if (now - v.t > 3) _bubbleSeen.delete(k);
+    m = { hp: e.hp, rv: -9, t: now };
+    _bubbleSeen.set(key, m);
+  }
+  if (e.hp < m.hp) m.rv = now;
+  m.hp = e.hp; m.t = now;
+  const k = 1 - (now - m.rv) / BUBBLE_REVEAL_S;
+  return k > 0 ? 0.9 * k : 0;
+}
 function drawEnemy(ctx, e) {
+  if (e.kind === 'wave_bubble') {
+    const ba = bubbleAlpha(e);
+    if (ba <= 0.01) return;
+    ctx.save();
+    ctx.globalAlpha = ba;
+    ctx.translate(e.x, e.y);
+    drawBubble(ctx, e.w || 60, e.h || 60, performance.now() / 1000);
+    ctx.restore();
+    return;
+  }
   ctx.save();
   // Edge telegraph: unit about to enter from the top / bottom edge → blinking chevron on the edge
   if (e._edgeWarn) {
@@ -3326,7 +3353,7 @@ export function drawField(ctx, area, snap, opts = {}) {
     drawEnemy(ctx, {
       x: e.x * sx, y: e.y * sy, w: (e.w || 20) * sx, h: (e.h || 16) * sy,
       kind: e.kind, hp: e.hp, maxHp: e.maxHp || e.hp || 1, att: (e._chainOf || e._lead || e.at2) ? 1 : 0, color: e.c || e.color || '#c44', sent: e.s || e.sent,
-      appearT: e.appearT ?? e.at, appearMax: e.appearMax || 0.9, _uid: e._uid,
+      appearT: e.appearT ?? e.at, appearMax: e.appearMax || 0.9, _uid: e._uid ?? e.u,
       warpT: e.warpT ?? e.wt, warpPop: e.warpPop ?? e.wp,
       laserTeleT: e.laserTeleT ?? e.lt, laserTeleMax: e.laserTeleMax ?? e.lm ?? 0.55,
       laserAimX: (e.laserAimX ?? e.ax) != null ? (e.laserAimX ?? e.ax) * sx : undefined,

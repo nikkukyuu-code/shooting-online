@@ -921,6 +921,7 @@ export function serializeField(state) {
       at2: (e._chainOf || e._lead) ? 1 : undefined, ch: e.core ? e.core.hp : undefined, cm: e.core ? e.core.maxHp : undefined, cs: e._sh ? e._sh.st : undefined, sk: e._shake > 0 ? 1 : undefined,
       dr: e.drones ? e.drones.map(d => d.hp) : undefined,
       sp: e.spr || undefined, ro: e.rot || undefined, tn: e.tone || undefined,
+      u: e.kind === 'wave_bubble' ? e._uid : undefined,
       at: e.appearT > 0 ? +e.appearT.toFixed(3) : undefined,
       wt: e.warpT > 0 ? +e.warpT.toFixed(2) : undefined,
       wp: e.warpPop > 0 ? +e.warpPop.toFixed(2) : undefined,

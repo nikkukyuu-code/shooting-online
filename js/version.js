@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-04 11:27:29';
+export const VERSION_LABEL = '2026-10-04 11:37:31';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
 export const BUILD_TIME = 1791080287735;
-export const BUILD_NOTE = 'コアのフラッシュを0.5秒で透過して消す・透明で丸い敵の5×5隊列を中盤に追加';
+export const BUILD_NOTE = '透明な丸い敵を完全に透明に（当たった瞬間だけ見える）・新バージョン自動更新';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

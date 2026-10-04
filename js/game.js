@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261004112729';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261004113731';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnKillBoom, applyLaserTick, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261004112729';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261004112729';
-import { sfx } from './audio.js?v=20261004112729';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261004112729';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261004112729';
-import { hitBattleCounter } from './stats.js?v=20261004112729';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261004112729';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261004112729';
+} from './entities.js?v=20261004113731';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261004113731';
+import { sfx } from './audio.js?v=20261004113731';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261004113731';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261004113731';
+import { hitBattleCounter } from './stats.js?v=20261004113731';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261004113731';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261004113731';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -308,6 +308,16 @@ function scaledHitDmg(base, b) {
 function directShotHits(b, sx, sy, hx, hy) {
   const hb = b.hb || 0;
   return Math.abs(b.x - sx) < hx + hb && Math.abs(b.y - sy) < hy + hb;
+}
+
+/** COM perception of an invisible bubble: hp drop = hit flash seen; usable from react … react + 0.6 s. */
+function comSeesBubble(e, now, react) {
+  if (e._hpC == null) e._hpC = e.hp;
+  if (e.hp < e._hpC) e._rvC = now;
+  e._hpC = e.hp;
+  if (e._rvC == null) return false;
+  const dt = now - e._rvC;
+  return dt >= react && dt <= react + 0.6;
 }
 
 export class Game {
@@ -2117,12 +2127,15 @@ export class Game {
       threats.sort((p, q) => Math.hypot(p.x - shipX, p.y - B.y * fh) - Math.hypot(q.x - shipX, q.y - B.y * fh));
       threats.length = AI.attn;
     }
-    const enemyPressure = B.enemies.filter((e) => e.x < fw * 0.7).length;
+    // COM sees only what a human sees: invisible bubbles count only shortly after a hit revealed them
+    // (noticed after the reaction delay, remembered ~0.6 s), never while fully invisible.
+    const VE = B.enemies.filter((e) => e.kind !== 'wave_bubble' || comSeesBubble(e, B.time, react));
+    const enemyPressure = VE.filter((e) => e.x < fw * 0.7).length;
 
     // Target to aim at (heavier / closer / aligned first)
     let focus = null;
     let focusVal = -1e9;
-    for (const e of B.enemies) {
+    for (const e of VE) {
       if (e.x < shipX - 10 || warping(e)) continue; // don't aim at invulnerable warp-ins
       const kindW = ({ boss: 5, mech: 4, golem: 4, tank: 4, elite: 3, drone: 2, basic: 1.5, swarm: 1 })[resolveEnemyTier(e.kind)] || 1;
       const dist = Math.max(20, e.x - shipX);
@@ -2138,10 +2151,10 @@ export class Game {
     // Human distraction (level-scaled): now and then the eye jumps to another visible enemy for ~1 s
     if (B._distT > 0) B._distT -= dt;
     else if (Math.random() < (AI.distract ?? 0) * dt) {
-      const others = B.enemies.filter((e) => e !== focus && !hasCore(e) && e.x > shipX + 20 && e.x < fw && e.y > 0 && e.y < fh);
+      const others = VE.filter((e) => e !== focus && !hasCore(e) && e.x > shipX + 20 && e.x < fw && e.y > 0 && e.y < fh);
       if (others.length) { B._distE = others[Math.floor(Math.random() * others.length)]; B._distT = 0.7 + Math.random() * 0.7; }
     }
-    if (B._distT > 0 && B._distE && B.enemies.includes(B._distE)) focus = B._distE;
+    if (B._distT > 0 && B._distE && VE.includes(B._distE)) focus = B._distE;
     // Aim point: a core is tracked with a human hand/eye lag (no lead) + slowly drifting aim error
     let aimY = focus ? focus.y : null;
     let coreAim = false;
@@ -2166,7 +2179,7 @@ export class Game {
           B._snipeT = 0.3;
           B._snipeOff = null;
           if (Math.random() < AI.coreSnipe) {
-            const blocked = (y) => B.enemies.some((o) => o !== focus && !warping(o) && o.hp > 0 && o.x > shipX && o.x < cw.x - cw.r
+            const blocked = (y) => VE.some((o) => o !== focus && !warping(o) && o.hp > 0 && o.x > shipX && o.x < cw.x - cw.r
               && Math.abs(o.y - y) < (o.h || 30) * 0.45 + 4);
             const guardBlk = (y) => (focus.drones || []).some((d) => d.hp > 0 && Math.abs(focus.y + Math.sin(d.ang) * d.dist * (d.ky || 1) - y) < d.r + 4
               && focus.x + Math.cos(d.ang) * d.dist < cw.x);
@@ -2233,7 +2246,7 @@ export class Game {
           if (ax < 26 + hb && ay < 22 + hb) d += 0.6 / (0.25 + t);
         }
       }
-      if (!shotsOnly) for (const e of B.enemies) {
+      if (!shotsOnly) for (const e of VE) {
         if (warping(e)) continue;
         const parkedE = e.sent && e.lingerT > 0;
         // formation escorts visibly move with their leader (not at their own top speed)
@@ -2345,7 +2358,7 @@ export class Game {
         } else c += Math.abs(cy - fh * 0.5) / fh * 0.8;
         // Beginner nerves: low levels shy away from the row of a big core unit (fear of its shots)
         if (AI.coreFear) {
-          for (const e of B.enemies) {
+          for (const e of VE) {
             if (!hasCore(e) || !e.core || e.core.hp <= 0 || e.x < cx + 20 || warping(e)) continue;
             if (Math.abs(coreWorld(e).y - cy) < 34) { c += AI.coreFear; break; }
           }
@@ -2356,7 +2369,7 @@ export class Game {
         // Line of fire: prefer rows with (visible, hittable) enemies ahead of the ship
         if (AI.lofW) {
           let lof = 0;
-          for (const e of B.enemies) {
+          for (const e of VE) {
             if (warping(e) || e.x < cx + 10) continue;
             if (Math.abs(e.y - cy) < (e.h || 30) * 0.45 + 6) lof += isLargeEnemy(e) ? 1.5 : 1;
           }
@@ -2399,10 +2412,10 @@ export class Game {
       const sx = Math.min(B._tx, B.x);
       const shotsHere = dangerOf(B.x, shipY0, false, true);
       const shotsRow = dangerOf(sx, aimY, false, true);
-      const bodyNear = B.enemies.some((e) => !warping(e) && Math.abs(e.x - sx) < (e.w || 30) * 0.5 + 34 && Math.abs(e.y - aimY) < (e.h || 30) * 0.5 + 22);
+      const bodyNear = VE.some((e) => !warping(e) && Math.abs(e.x - sx) < (e.w || 30) * 0.5 + 34 && Math.abs(e.y - aimY) < (e.h || 30) * 0.5 + 22);
       coreWin = !bodyNear && shotsRow < (AI.coreTol ?? 1.2) && shotsHere < (AI.coreTol ?? 1.2) + 1.5;
       // a tethered striker winding up / thrusting (visible): its tip is the core, so its row IS the lunge lane
-      const armBusy = B.enemies.some((e) => e.mv === 'arm' && (e._ph === 'coil' || e._ph === 'strike' || e._ph === 'hold') && (e._ph !== 'coil' || e._pt >= react));
+      const armBusy = VE.some((e) => e.mv === 'arm' && (e._ph === 'coil' || e._ph === 'strike' || e._ph === 'hold') && (e._ph !== 'coil' || e._pt >= react));
       if (armBusy) coreWin = false;
       if (globalThis.__comDbg) globalThis.__comDbg.push([+shotsHere.toFixed(2), +shotsRow.toFixed(2), bodyNear ? 1 : 0, coreWin ? 1 : 0]);
     }
