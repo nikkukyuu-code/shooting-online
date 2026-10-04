@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261005004508';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261005010539';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261005004508`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261005010539`;
 }
 
 function loadKindSprite(kind) {
@@ -1173,7 +1173,7 @@ function drawMine(ctx, w, h, t) {
 }
 
 /** Invisible bubble: seen only for a moment when hit (hp drop) → fades back to alpha 0 in 0.3 s. */
-const BUBBLE_REVEAL_S = 0.25;  // hit: thin ring flashes and fades fast (user 10-05)
+const BUBBLE_REVEAL_S = 0.12;  // 10-05 video: hit ring shows 2-4 frames (0.07-0.15 s) at full strength, then gone
 const BUBBLE_ENTRY_S = 0.6;   // one shimmer when a bubble has fully entered the pane
 let _paneFw = 1e9;            // width of the pane being drawn (set per pane in the snapshot renderer)
 const _bubbleSeen = new Map(); // _uid → { hp, rv, inAt, t } (opponent view draws per-frame copies)
@@ -1192,7 +1192,7 @@ function bubbleAlpha(e) {
   const kh = 1 - (now - m.rv) / BUBBLE_REVEAL_S;
   const ki = m.inAt != null ? 1 - (now - m.inAt) / BUBBLE_ENTRY_S : 0;
   void ki; // 10-05: no entry shimmer — unhit bubbles stay fully invisible
-  return kh > 0 ? kh * kh : 0;
+  return kh > 0 ? 1 : 0;
 }
 function drawEnemy(ctx, e) {
   if (e.kind === 'wave_bubble') {
@@ -1201,7 +1201,7 @@ function drawEnemy(ctx, e) {
     ctx.save();
     const r = Math.max(e.w || 60, e.h || 60) / 2;
     ctx.globalAlpha = ba; // thin round frame only, no fill
-    ctx.strokeStyle = '#e6f6ff'; ctx.lineWidth = 2;
+    ctx.strokeStyle = '#ececec'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(e.x, e.y, r - 1, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
     return;
@@ -2512,6 +2512,31 @@ function drawBubble(ctx, w, h, t) {
 
 /** Debug/contact-sheet access to the pre-rendered blast frames. */
 export function pxBoomFrames() { startPxBoomBuild(); return _pxBoom; }
+/** 10-05 video: invisible-formation death = the unit shows as a black disk with an orange/yellow flame corona
+ *  that starts as a crescent on the hit side and grows around the disk (~0.6 s), then vanishes. */
+function drawEclipse(ctx, f) {
+  const u = Math.max(0, Math.min(1, 1 - f.life / f.max));
+  const r = f.r || 30;
+  ctx.save();
+  ctx.translate(f.x, f.y);
+  const a = u > 0.8 ? (1 - u) / 0.2 : 1;
+  ctx.globalAlpha = a;
+  const span = Math.min(Math.PI * 2, Math.PI * (0.7 + 3.2 * u));
+  const sd = f.sd || 0;
+  for (let i = 0; i < 26; i++) {
+    const ang = -span / 2 + span * (i / 25);
+    const n = Math.sin(i * 12.9898 + sd) * 43758.5453;
+    const j = n - Math.floor(n);
+    const L = r * (0.12 + 0.55 * Math.min(1, u * 2.2) * (0.4 + 0.6 * j));
+    ctx.fillStyle = j > 0.5 ? '#ffd23a' : '#f08a1c';
+    ctx.beginPath(); ctx.arc(Math.cos(ang) * (r + L * 0.35), Math.sin(ang) * (r + L * 0.35), L * 0.55, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.strokeStyle = '#ffe680'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(0, 0, r, -span / 2, span / 2); ctx.stroke();
+  ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.arc(0, 0, r - 1, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
 function drawPxBoom(ctx, f, sizeMul = 1) {
   startPxBoomBuild();
   const t = Math.max(0, Math.min(0.999, 1 - f.life / f.max));
@@ -2627,6 +2652,7 @@ function drawFx(ctx, f) {
   if (f.kind === 'heal') { drawHealFx(ctx, f); return; }
   if (f.kind === 'coin') { drawCoin(ctx, f); return; }
   if (f.kind === 'kboom') { drawPxBoom(ctx, f); return; }
+  if (f.kind === 'eclipse') { drawEclipse(ctx, f); return; }
   if (f.kind === 'ptpop') { drawPtPop(ctx, f); return; }
   if (f.kind === 'hit') { drawHitSpark(ctx, f); return; }
   if (f.kind === 'deflect') { drawDeflectSpark(ctx, f); return; }

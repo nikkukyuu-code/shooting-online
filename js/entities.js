@@ -755,6 +755,9 @@ export function spawnMeteor(x, y, tx, ty) {
 /** Kill explosion (user 10-04b): 2× the old size, 3× the old duration. */
 // 10-04d: pixel-art kill blast measured on the video (0:42.9–0:43.7): one blast ≈1.6× the ship
 // field there (≈40 px of a 135 px field); game field 341 px (×2.5) → ≈100 px visible (sprite r 70).
+export function spawnEclipse(e) { // 10-05: invisible-formation death (black disk + flame corona, ~0.6 s)
+  return { kind: 'eclipse', x: e.x, y: e.y, r: Math.max(e.w || 60, e.h || 60) / 2, life: 0.6, max: 0.6, sd: Math.random() * 9 };
+}
 export function spawnKillBoom(x, y, big = false) {
   return { kind: 'kboom', x, y, life: big ? 1.24 : 0.79, max: big ? 1.24 : 0.79, // 10-04j: −50% (was 2.48 / 1.58)
     r: big ? 84 : 42 }; // 10-04g: −20% (was 105 / 52.5)

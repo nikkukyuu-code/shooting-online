@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261005004508';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261005010539';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -373,19 +373,22 @@ function mines(fw, fh, rowsF) {
 }
 
 // 10-04: translucent bubble wall — 5×5 grid, no vertical movement, slow leftward crawl (mid-match)
-export const BUBBLE_HP = 12, BUBBLE_VX = 45;
+export const BUBBLE_HP = 12;
+// 10-05 reference videos: about 0.043 field widths per second (10 px/s on 240, 16 px/s on 360)
+export const bubbleVx = (fw) => fw * 0.043;
 // TEMPORARY: bubble wall right at match start for the user's movement check. Restore BUBBLE_T to
 // BUBBLE_T_ORIGINAL (mid-match, 127 s) later; 4.5 s was the previous test slot.
 export const BUBBLE_T_ORIGINAL = 127;
 export const BUBBLE_T = 0.5;
 function bubbleWall(fw, fh) {
-  // 10-04: edge to edge — top row touches the top edge, bottom row the bottom edge, gaps spread between
-  // rows (computed per field height). Edge rows also block the ship's off-edge overhang (game.js e._edge).
-  const D = Math.max(24, Math.floor(fh / 5) - 6), gap = 6, out = [];
-  const dy = (fh - D) / 4;
-  for (let c = 0; c < 5; c++) for (let r = 0; r < 5; r++) {
-    out.push(mk('wave_bubble', fw, fh, fw + D / 2 + 10 + c * (D + gap), D / 2 + r * dy, {
-      w: D, h: D, hp: BUBBLE_HP, score: 12, mv: 'drift', vx: BUBBLE_VX, bob: 0, bf: 0, ph: (c * 5 + r) * 0.7, noFire: true, _edge: r === 0 ? -1 : r === 4 ? 1 : 0,
+  // 10-05 rebuilt from the reference video: 4 rows edge to edge (top row touches the top edge, bottom row
+  // the bottom edge), ring height ≈ 0.71 of the row pitch, column pitch ≈ 1.5 × ring width, 5 columns,
+  // straight leftward drift, no vertical motion, no shots. Edge rows block the ship's off-edge overhang.
+  const R = 4, C = 5, D = Math.max(24, Math.floor(fh / R * 0.71)), out = [];
+  const dy = (fh - D) / (R - 1), px = Math.round(D * 1.5), v = bubbleVx(fw);
+  for (let c = 0; c < C; c++) for (let r = 0; r < R; r++) {
+    out.push(mk('wave_bubble', fw, fh, fw + D / 2 + 10 + c * px, D / 2 + r * dy, {
+      w: D, h: D, hp: BUBBLE_HP, score: 12, mv: 'drift', vx: v, bob: 0, bf: 0, ph: (c * R + r) * 0.7, noFire: true, _edge: r === 0 ? -1 : r === R - 1 ? 1 : 0,
     }));
   }
   return out;
