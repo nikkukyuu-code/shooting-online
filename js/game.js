@@ -1,19 +1,19 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261005172401';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261005191401';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
-  PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
+  PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261005172401';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261005172401';
-import { sfx } from './audio.js?v=20261005172401';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261005172401';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261005172401';
-import { hitBattleCounter } from './stats.js?v=20261005172401';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261005172401';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261005172401';
+} from './entities.js?v=20261005191401';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261005191401';
+import { sfx } from './audio.js?v=20261005191401';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261005191401';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261005191401';
+import { hitBattleCounter } from './stats.js?v=20261005191401';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261005191401';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261005191401';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -814,8 +814,13 @@ export class Game {
   }
 
 
+  isRamInvincible(ship) {
+    return !!(ship && ship.activePower === 'ram' && ship.activeTimer > 0);
+  }
+
   applyPlayerDamage(amount, cause = 'hit') {
     const P = this.state.player;
+    if (this.isRamInvincible(P)) return 0;
     const before = P.hp;
     const dmg = Math.max(0, Math.min(amount, before));
     if (dmg <= 0) return 0;
@@ -990,6 +995,7 @@ export class Game {
   onDirectHitBot(b) {
     const B = this._bot;
     if (!B || this.ended) return;
+    if (this.isRamInvincible(B)) return;
     B.hp = Math.max(0, B.hp - (b.dmg || DIRECT_SHOT_DMG));
     this.state.botHp = B.hp;
     B.fx.push(spawnExplosion(b.x, b.y, false));
@@ -1000,6 +1006,7 @@ export class Game {
   onDirectHitPlayer(b) {
     if (this.ended) return;
     const S = this.state;
+    if (this.isRamInvincible(S.player)) return;
     this.applyPlayerDamage(b.dmg || DIRECT_SHOT_DMG, 'direct');
     // Explosion at the front of fx so the 12-entry net snapshot keeps it (opponent sees it too)
     S.fx.unshift(spawnExplosion(b.x, b.y, false));
@@ -1325,75 +1332,86 @@ export class Game {
   }
 
 
-  /** 体当たり変身: player/COM steer into enemies (no auto-charge). Soft die on contact; hard stops in place. */
+  /** 体当たり変身: free steer; soft die on contact; hard = chip + bounce (no stop-in-place). Invincible while active. */
   tickRamForm(F, ship, dt, fw, fh, isBot) {
     if (ship.activePower !== 'ram' || !(ship.activeTimer > 0)) return;
-    const sy = (typeof ship.y === 'number' && ship.y <= 1 ? ship.y * fh : ship.y);
+    const sy0 = () => (typeof ship.y === 'number' && ship.y <= 1 ? ship.y * fh : ship.y);
+    let sy = sy0();
     const RAM_DMG = 22;
+    const CHIP = 6;
+    const KNOCK_PX = 36;
+    const KNOCK_DUR = 0.18;
+    const HIT_CD = 0.22;
     if (ship._ramSurge == null) ship._ramSurge = 1;
-    // collide with enemies the ship is steered into
+    if (ship._ramHitCd == null) ship._ramHitCd = 0;
+    // ease-out knockback away from last hard contact
+    if (ship._ramKnockT > 0) {
+      const dur = ship._ramKnockDur || KNOCK_DUR;
+      const u0 = 1 - ship._ramKnockT / dur;
+      ship._ramKnockT = Math.max(0, ship._ramKnockT - dt);
+      const u1 = 1 - ship._ramKnockT / dur;
+      const ease = (u) => 1 - Math.pow(1 - Math.max(0, Math.min(1, u)), 3);
+      const de = ease(u1) - ease(u0);
+      ship.x += (ship._ramKnockDx || 0) * de;
+      if (typeof ship.y === 'number' && ship.y <= 1) ship.y += ((ship._ramKnockDy || 0) / fh) * de;
+      else ship.y += (ship._ramKnockDy || 0) * de;
+      ship.x = Math.max(18, Math.min(fw - 18, ship.x));
+      if (typeof ship.y === 'number' && ship.y <= 1) ship.y = Math.max(0.06, Math.min(0.94, ship.y));
+      sy = sy0();
+    }
+    if (ship._ramHitCd > 0) ship._ramHitCd -= dt;
+    ship._ramStop = false;
+    ship._ramBlockX = null;
+
     for (const e of F.enemies) {
       if (!e || e.hp <= 0 || warping(e)) continue;
       if (e.kind === 'wave_bubble') continue;
+      if (ship._ramHitCd > 0) continue;
+      if (ship._ramKnockT > 0) continue;
       const hw = (e.w || 20) * 0.45 + 18, hh = (e.h || 16) * 0.45 + 14;
       if (Math.abs(e.x - ship.x) > hw || Math.abs(e.y - sy) > hh) continue;
-      if (e._ramHit === ship._ramSurge) {
-        // keep hard block while still overlapping the same hard body
-        const hardKeep = !!(e.core || e.ch != null || isCoreBossKind(e.kind) || isLargeEnemy(e)
-          || (e.maxHp || 0) >= 40 || (e.w || 0) >= 100 || (e.h || 0) >= 70);
-        if (hardKeep) {
-          ship._ramStop = true;
-          ship._ramBlockX = Math.min(ship._ramBlockX ?? 1e9, e.x - hw + 4);
-          if (ship.x > ship._ramBlockX) ship.x = ship._ramBlockX;
-        }
-        continue;
-      }
+      if (e._ramHit === ship._ramSurge) continue;
       e._ramHit = ship._ramSurge;
-      const hard = !!(e.core || e.ch != null || isCoreBossKind(e.kind) || isLargeEnemy(e)
+      const typeHard = !!(e.core || e.ch != null || isCoreBossKind(e.kind) || isLargeEnemy(e)
         || (e.maxHp || 0) >= 40 || (e.w || 0) >= 100 || (e.h || 0) >= 70);
+      const hard = typeHard || e.hp > RAM_DMG;
       if (hard) {
-        if (hasCore(e)) applyCoreAwareArea(e, 6, null, null, null);
-        else e.hp -= 6;
-        ship._ramStop = true;
-        ship._ramBlockX = e.x - hw + 4;
-        ship.x = Math.min(ship.x, ship._ramBlockX);
-        F.fx.push(spawnHitSpark(ship.x + 14, sy, 52));
-        F.fx.push(spawnExplosion(ship.x + 12, sy, true));
+        if (hasCore(e)) applyCoreAwareArea(e, CHIP, null, null, null);
+        else e.hp -= CHIP;
+        let kx = ship.x - e.x, ky = sy - e.y;
+        const kd = Math.hypot(kx, ky) || 1;
+        kx = (kx / kd) * KNOCK_PX; ky = (ky / kd) * KNOCK_PX;
+        if (Math.abs(kx) < 8 && e.x >= ship.x) kx = -KNOCK_PX;
+        ship._ramKnockDx = kx; ship._ramKnockDy = ky;
+        ship._ramKnockDur = KNOCK_DUR; ship._ramKnockT = KNOCK_DUR;
+        ship._ramHitCd = HIT_CD;
+        ship._ramSurge = (ship._ramSurge || 1) + 1;
+        F.fx.push(spawnHitSpark(ship.x + 10, sy, 56));
+        F.fx.push(spawnExplosion(ship.x + 8, sy, true));
         sfx.hit();
+        this.triggerRamShake();
       } else {
         if (hasCore(e)) applyCoreAwareArea(e, RAM_DMG, null, null, null);
         else e.hp -= RAM_DMG;
         F.fx.push(spawnHitSpark(e.x, e.y, 40));
         sfx.explode();
-        if (e.hp > 0) {
-          // soft leftover: brief bump, not a hard wall
-          ship.x = Math.min(ship.x, e.x - hw + 4);
-          F.fx.push(spawnExplosion(ship.x + 12, sy, false));
-        }
+        ship._ramHitCd = 0.05;
+        ship._ramSurge = (ship._ramSurge || 1) + 1;
       }
     }
-    // clear stop once no longer overlapping a blocking body (player can steer away)
-    if (ship._ramStop) {
-      let blocked = false;
-      let blockX = null;
-      for (const e of F.enemies) {
-        if (!e || e.hp <= 0 || warping(e)) continue;
-        const hard = !!(e.core || e.ch != null || isCoreBossKind(e.kind) || isLargeEnemy(e)
-          || (e.maxHp || 0) >= 40 || (e.w || 0) >= 100 || (e.h || 0) >= 70);
-        if (!hard) continue;
-        const hw = (e.w || 20) * 0.45 + 16, hh = (e.h || 16) * 0.45 + 12;
-        if (Math.abs(e.x - ship.x) < hw && Math.abs(e.y - sy) < hh) {
-          blocked = true;
-          blockX = e.x - hw + 4;
-          break;
-        }
-      }
-      if (!blocked) { ship._ramStop = false; ship._ramBlockX = null; ship._ramSurge = (ship._ramSurge || 1) + 1; }
-      else {
-        ship._ramBlockX = blockX;
-        if (ship.x > blockX) ship.x = blockX;
-      }
-    } else ship._ramBlockX = null;
+  }
+
+  /** Brief playfield shake on hard ram bounce. */
+  triggerRamShake() {
+    try {
+      const cv = this.canvas || document.getElementById('game') || document.querySelector('canvas');
+      if (!cv) return;
+      cv.classList.remove('ram-shake');
+      void cv.offsetWidth;
+      cv.classList.add('ram-shake');
+      clearTimeout(this._ramShakeT);
+      this._ramShakeT = setTimeout(() => { try { cv.classList.remove('ram-shake'); } catch (_) {} }, 220);
+    } catch (_) {}
   }
 
   activatePower(id) {
@@ -1537,9 +1555,11 @@ export class Game {
       p.activeTimer = 5.5;
       p._ramStop = false;
       p._ramBlockX = null;
+      p._ramKnockT = 0;
+      p._ramHitCd = 0;
       p._ramVx = 0;
       p._ramSurge = (p._ramSurge || 0) + 1;
-      this.setStatus('体当たり変身！ 敵にぶつかれ（硬い敵では止まる）');
+      this.setStatus('体当たり変身！ 無敵で体当たり（硬い敵は弾かれる）');
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
     } else if (isExAttackItem(id)) {
       // v1.5.67+ extra items (貫通 / ビット / クラスター / 黒穴 / 凍結 / 反射 / バリア)
@@ -1743,15 +1763,15 @@ export class Game {
       };
     }
     // Move player toward pointer (free 2D within own field).
-    // 体当たり変身: same drag controls (X+Y); player steers into enemies (no auto-charge).
-    // Hard contact sets _ramBlockX so the ship cannot push through; steering away is allowed.
-    const ramFollow = (P.activePower === 'ram' && P.activeTimer > 0) ? Math.min(1, 14 * dt) : Math.min(1, 12 * dt);
-    P.y += (this.pointerY - P.y) * ramFollow;
-    {
-      const targetX = this.pointerX * fw;
-      let nx = P.x + (targetX - P.x) * ramFollow;
-      if (P.activePower === 'ram' && P._ramStop && P._ramBlockX != null && nx > P._ramBlockX) nx = P._ramBlockX;
-      P.x = Math.max(20, Math.min(fw * 0.88, nx));
+    // 体当たり変身: same drag (X+Y); during hard-bounce knockback, skip follow so the bounce reads.
+    if (!(P.activePower === 'ram' && P._ramKnockT > 0)) {
+      const ramFollow = (P.activePower === 'ram' && P.activeTimer > 0) ? Math.min(1, 14 * dt) : Math.min(1, 12 * dt);
+      P.y += (this.pointerY - P.y) * ramFollow;
+      {
+        const targetX = this.pointerX * fw;
+        let nx = P.x + (targetX - P.x) * ramFollow;
+        P.x = Math.max(20, Math.min(fw * 0.88, nx));
+      }
     }
     if (P.invuln > 0) P.invuln -= dt;
 
@@ -2039,7 +2059,7 @@ export class Game {
           // デカギャラ撃破: 回復確定（ボス級は大回復）
           const healId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';
           if (Math.random() < HEAL_GUARANTEE_P) S.items.push(spawnItemWithId(e.x, e.y, healId));
-        } else if (!e.noDrop && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : ITEM_DROP_CHANCE * (e.dropMul ?? 1))) {
+        } else if (!e.noDrop && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : (ITEM_DROP_CHANCE * RAM_DROP_CHANCE_MUL) * (e.dropMul ?? 1))) {
           S.items.push(spawnItem(e.x, e.y));
         }
         // Damage bot passively a bit when scoring? No — only via powers / race.
@@ -2065,6 +2085,7 @@ export class Game {
           if (bar) bar._hit = 0.14;
           continue;
         }
+        if (this.isRamInvincible(P)) continue; // ram: bullets/lasers pass through
         if (b.dir) {
           // 直接攻撃 shot: every real collision = normal shot damage + explosion (no invuln gate)
           b.life = 0;
@@ -2532,10 +2553,9 @@ export class Game {
         const v = (hard ? 1.2 : 6.5) * 40 / Math.sqrt(dist) + (1 - Math.min(1, dy / 0.35)) * 4;
         if (v > bestV) { bestV = v; best = e; }
       }
-      if (B._ramStop && B._ramBlockX != null) {
-        // human-like: back off slightly, then try to slide past on Y
-        B._tx = Math.min(B._tx ?? shipX, B._ramBlockX - 18);
-        if (best) B._ty = best.y + ((best.y > shipY0) ? 28 : -28);
+      if (B._ramKnockT > 0) {
+        B._tx = Math.min(B._tx ?? shipX, shipX - 8); // hold back during bounce
+        if (best) B._ty = best.y;
       } else if (best) {
         B._tx = best.x - ((best.w || 24) * 0.35);
         B._ty = best.y;
@@ -2559,12 +2579,13 @@ export class Game {
       if (B.ptrX < fw * 0.06 || B.ptrX > fw * 0.88) { B.ptrX = Math.max(fw * 0.06, Math.min(fw * 0.88, B.ptrX)); B.pvx = 0; }
       if (B.ptrY < -0.08 || B.ptrY > 1.08) { B.ptrY = Math.max(-0.08, Math.min(1.08, B.ptrY)); B.pvy = 0; }
     }
-    const botRamFollow = (B.activePower === 'ram' && B.activeTimer > 0) ? Math.min(1, 14 * dt) : Math.min(1, 12 * dt);
-    B.y += (B.ptrY - B.y) * botRamFollow;
-    {
-      let nx = B.x + (B.ptrX - B.x) * botRamFollow;
-      if (B.activePower === 'ram' && B._ramStop && B._ramBlockX != null && nx > B._ramBlockX) nx = B._ramBlockX;
-      B.x = Math.max(20, Math.min(fw * 0.88, nx));
+    if (!(B.activePower === 'ram' && B._ramKnockT > 0)) {
+      const botRamFollow = (B.activePower === 'ram' && B.activeTimer > 0) ? Math.min(1, 14 * dt) : Math.min(1, 12 * dt);
+      B.y += (B.ptrY - B.y) * botRamFollow;
+      {
+        let nx = B.x + (B.ptrX - B.x) * botRamFollow;
+        B.x = Math.max(20, Math.min(fw * 0.88, nx));
+      }
     }
     B.preferredY = B.y;
     shipX = B.x;
@@ -2742,7 +2763,7 @@ export class Game {
         } else if (isLargeEnemy(e) && !(e._chainOf || e._lead || e._chainT != null)) { // core-attached units: no guaranteed heal
           const healId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';
           if (Math.random() < HEAL_GUARANTEE_P) B.orbs.push(spawnItemWithId(e.x, e.y, healId));
-        } else if (!e.noDrop && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : ITEM_DROP_CHANCE * (e.dropMul ?? 1))) {
+        } else if (!e.noDrop && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : (BOT_ITEM_DROP_CHANCE * RAM_DROP_CHANCE_MUL) * (e.dropMul ?? 1))) {
           B.orbs.push(spawnItem(e.x, e.y));
         }
       } else if (e.x > -40) {
@@ -2785,6 +2806,7 @@ export class Game {
       if (!b.dir || b.life <= 0) continue;
       if (!directShotHits(b, shipX, B.y * fh, 16, 16)) continue; // same hurtbox as the player ship
       b.life = 0;
+      if (this.isRamInvincible(B)) continue;
       if (botBarrier) {
         const bar = B.fx.find((f) => f.kind === 'barrier' && f.life > 0);
         if (bar) bar._hit = 0.14;
@@ -2797,6 +2819,7 @@ export class Game {
       const hb = b.hb || 0;
       const bx = b.k === 'bolt' ? Math.max(b.x, Math.min(b.x + 44, shipX)) : b.x;
       if (Math.abs(bx - shipX) < 16 + hb && Math.abs(b.y - B.y * fh) < 16 + hb) { // same hurtbox as the player
+        if (this.isRamInvincible(B)) continue; // ram: pass through
         if (botBarrier) {
           b.life = 0;
           const bar = B.fx.find((f) => f.kind === 'barrier' && f.life > 0);
@@ -2966,6 +2989,8 @@ export class Game {
         B.activeTimer = 5.5;
         B._ramStop = false;
         B._ramBlockX = null;
+        B._ramKnockT = 0;
+        B._ramHitCd = 0;
         B._ramVx = 0;
         B._ramSurge = (B._ramSurge || 0) + 1;
       } else if (isExAttackItem(id)) {

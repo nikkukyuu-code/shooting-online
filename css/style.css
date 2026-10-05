@@ -2060,3 +2060,15 @@ html, body {
 .pt-gain { font-size: 1.35rem; }
 .pt-total { font-size: 1.1rem; color: #fff; }
 .pt-lose .pt-line { color: #ddd; }
+
+/* 体当たり変身: brief bounce impact shake */
+#game.ram-shake, canvas.ram-shake {
+  animation: ramShake 0.2s ease-out 1;
+}
+@keyframes ramShake {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-3px, 2px); }
+  50% { transform: translate(3px, -2px); }
+  75% { transform: translate(-2px, -1px); }
+  100% { transform: translate(0, 0); }
+}

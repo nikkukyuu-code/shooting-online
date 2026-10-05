@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261005172401';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261005191401';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -324,6 +324,21 @@ function drawRamShip(ctx, x, y, w, h, t) {
     ctx.ellipse(-w * (0.7 + i * 0.38), Math.sin(t * 10 + i) * 2, w * 0.26, h * (0.32 - i * 0.05), 0, 0, Math.PI * 2);
     ctx.fill();
   }
+  // invincible shimmer (tasteful white/cyan pulse rim)
+  const sh = 0.35 + 0.25 * Math.sin(t * 10);
+  ctx.strokeStyle = `rgba(255,255,255,${0.35 + 0.35 * Math.sin(t * 14)})`;
+  ctx.lineWidth = 1.6;
+  ctx.setLineDash([5, 4]);
+  ctx.lineDashOffset = -t * 40;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, w * (0.72 + 0.04 * Math.sin(t * 8)), h * (0.82 + 0.04 * Math.cos(t * 7)), 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.strokeStyle = `rgba(180,230,255,${sh})`;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, w * 0.62, h * 0.72, 0, 0, Math.PI * 2);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -355,7 +370,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261005172401`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261005191401`;
 }
 
 function loadKindSprite(kind) {
@@ -441,8 +456,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261005172401'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261005172401'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261005191401'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261005191401'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
