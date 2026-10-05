@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261005165918';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261005170929';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -332,23 +332,24 @@ function ring(fw, fh, fy) {
  *    row of 5 white diamonds on each side; the ring flies out ~1.3 s and comes back to the sphere.
  *  Cycle ≈ 4.6 s, stays ~20 s. Core break → the chain blows up link by link back to the sphere.
  */
-export function snake(fw, fh, fy, segs = 7, tone = 'silver') {
-  const y0 = Math.max(44, Math.min(fh - 44, fh * fy));
+export function snake(fw, fh, fy, segs = 11, tone = 'silver') {
+  // video ~4:45: ~11 thick overlapping metallic segments + big silver pivot in dark-red portal
+  const y0 = Math.max(52, Math.min(fh - 52, fh * fy));
   const head = mk('wave_snake_head', fw, fh, fw + 200, y0, {
     mv: 'arm', dly: 0, stay: 20, segs, fire: { type: 'armhead' },
+    w: 48, h: 48, hp: GUARD_HP.seg, // tip size ≈ ship height (video)
   });
-  head._tx = fw * 0.7; head._ty = y0; // pivot (sphere) position — owned by the tip
+  head._tx = fw * 0.7; head._ty = y0;
   const out = [];
-  // pivot first (drawn underneath), then links from the pivot outward, the red tip last (on top)
+  // pivot first (under), then links pivot→tip, head last
   out.push(mk('wave_snake_seg', fw, fh, fw + 60, y0, {
-    w: 38, h: 38, hp: GUARD_HP.seg, score: 60, mv: 'armseg', _chainOf: head, chainIdx: segs + 1,
+    w: 78, h: 78, hp: GUARD_HP.seg, score: 60, mv: 'armseg', _chainOf: head, chainIdx: segs + 1,
     noFire: true, noDrop: true, passShots: true, tone: 'anchor',
   }));
   for (let i = segs; i >= 1; i--) {
-    const sz = 14 + (i / segs) * 6; // thicker silver beads (video mass)
-    // video: tip → red ball → silver beads → big silver pivot
+    // video: tip → red ball → dense silver accordion → big pivot; diameters keep overlap along chain
     const segTone = (i === 1) ? 'red' : tone;
-    const sw = (i === 1) ? Math.max(sz, 20) : sz;
+    const sw = (i === 1) ? 44 : (50 + (i / segs) * 10);
     out.push(mk('wave_snake_seg', fw, fh, fw + 60, y0, {
       w: sw, h: sw, hp: GUARD_HP.seg, score: 20, mv: 'armseg', _chainOf: head, chainIdx: i,
       noFire: true, noDrop: true, passShots: true, tone: segTone,
@@ -809,11 +810,13 @@ function bossMove(e, dt, fw, fh, py) {
 }
 
 /** Tethered striker tip (core): entry → rest → strike (curl / lunge / hold / swing back) or saw → leave. */
-export function armReach(fw) { return fw * 0.56; }
-const ARM = { rest: 1.1, coil: 0.75, strike: 260, retract: 170, hold: 0.6, swingW: 1.5, sawWind: 0.5, sawCycle: 4.3, enter: 1.0, chaseW: 1.1, chaseMax: 1.6 };
+export function armReach(fw) { return Math.min(fw * 0.52, 360); } // keep segments overlapping when extended (video density)
+const ARM = { rest: 1.1, coil: 0.75, strike: 260, retract: 170, hold: 0.6, swingW: 1.5, sawWind: 0.5, sawCycle: 4.3, enter: 1.15, chaseW: 1.1, chaseMax: 1.6 };
 function armMove(e, dt, fw, fh, px, py) {
   if (e._detached || e.mv === 'snakechase') return; // head already flying free
-  const n = e.segs || 7, Lrest = 64; // video: sphere centre → tip ≈ 64 px at rest (links bunched up)
+  const n = e.segs || 11;
+  // rest: tightly bunched accordion; extended: still nearly touching (video)
+  const Lrest = Math.max(100, n * 16); // tight accordion at rest (video)
   const pivX = fw * 0.70; // video 2:30–2:43: sphere parked at ≈70 % across
   // User 09-29: the lunge must reach the ship's normal area (x ≈ 14 % of the pane at the ship's row),
   // so the player has to back off (or step aside) to dodge. Links keep their size; only the gaps
@@ -830,7 +833,7 @@ function armMove(e, dt, fw, fh, px, py) {
       // video ~4:45 / 2:30: 異次元 portal (dark red void) then chain pays out from the sphere
       const u = Math.min(1, e._pt / ARM.enter), k = 1 - (1 - u) * (1 - u);
       e._tx = pivX; e._L = 16 + (Lrest - 16) * k; e._pivWind = 1 - u;
-      e._portal = Math.max(0, 1 - u * 1.15); // full portal at spawn, fades as chain extends
+      e._portal = Math.max(0, 1 - u * 0.85); // large 異次元 portal (video); fades as chain pays out
       if (u >= 1) { e._ph = 'rest'; e._pt = 0; e._portal = 0; }
       break;
     }
@@ -930,7 +933,7 @@ function armMove(e, dt, fw, fh, px, py) {
     e.x = e._tx + Math.cos(e._A) * e._L; e.y = Math.max(8, Math.min(fh - 8, e._ty + Math.sin(e._A) * e._L));
     e._vx = (e.x - ox) / Math.max(dt, 1e-3); e._vy = (e.y - oy) / Math.max(dt, 1e-3);
   }
-  e.rot = 0;
+  e.rot = e._A || 0; // tip faces along lunge
 }
 
 /** Scripted movement. Returns true when handled (skip the default drift). `py` = target ship row. */
@@ -971,26 +974,28 @@ export function moveScripted(e, dt, fw, fh, py = fh * 0.5, px = 40) {
   } else if (e.mv === 'arm') {
     armMove(e, dt, fw, fh, px, py);
   } else if (e.mv === 'armseg') {
-    // Link k of n: on the line pivot → tip, bowing a little the way the chain is swinging
+    // Link k of n: on the line pivot → tip; rotate with chain tangent (video accordion)
     const H = e._chainOf;
     if (!H || H.x < -500) { e.x = -999; return true; }
     if (H._detached) {
       // body collapses to the pivot then drifts off (head already chasing)
-      const n = (H.segs || 7) + 1;
-      if (e.chainIdx === n) { e.x = H._tx; e.y = H._ty; e.tone = 'anchor'; return true; }
+      const n = (H.segs || 11) + 1;
+      if (e.chainIdx === n) { e.x = H._tx; e.y = H._ty; e.tone = 'anchor'; e.rot = H._A || 0; return true; }
       const k = 1 - e.chainIdx / n;
-      const L = Math.max(20, (H._L || 64) * Math.max(0, 1 - (H._pt || 0) * 0.55));
+      const L = Math.max(20, (H._L || 200) * Math.max(0, 1 - (H._pt || 0) * 0.55));
       e.x = H._tx + Math.cos(H._A || 0) * L * k;
       e.y = H._ty + Math.sin(H._A || 0) * L * k;
+      e.rot = H._A || 0;
       if ((H._pt || 0) > 2.8) e.x = -999;
       return true;
     }
-    const n = (H.segs || 7) + 1, k = 1 - e.chainIdx / n; // pivot = 0 … tip = 1
-    if (e.chainIdx === n) { e.x = H._tx; e.y = H._ty; e.tone = H._pivWind ? 'anchorWind' : 'anchor'; return true; }
+    const n = (H.segs || 11) + 1, k = 1 - e.chainIdx / n; // pivot = 0 … tip = 1
+    if (e.chainIdx === n) { e.x = H._tx; e.y = H._ty; e.tone = H._pivWind ? 'anchorWind' : 'anchor'; e.rot = H._A || 0; return true; }
     const A = H._A || 0, L = H._L || 0, lag = (H._ph === 'swing' ? -H._swDir * 0.35 : 0) * Math.sin(Math.PI * k);
     const ox = e.x, oy = e.y;
     e.x = H._tx + Math.cos(A + lag) * L * k;
-    e.y = H._ty + Math.sin(A + lag) * L * k + Math.sin(t * 2 + k * 5 + (H._wob || 0)) * 1.5 * Math.sin(Math.PI * k);
+    e.y = H._ty + Math.sin(A + lag) * L * k + Math.sin(t * 2 + k * 5 + (H._wob || 0)) * 1.2 * Math.sin(Math.PI * k);
+    e.rot = A + lag; // segment faces along chain
     e._vx = (e.x - ox) / Math.max(dt, 1e-3); e._vy = (e.y - oy) / Math.max(dt, 1e-3);
     return true;
   } else if (e.mv === 'snake') {

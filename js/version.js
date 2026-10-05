@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-05 16:59:18';
+export const VERSION_LABEL = '2026-10-05 17:09:29';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1791187158536;
-export const BUILD_NOTE = '体当たり変身は操作で突進・硬い敵で停止・ヘビ見た目強化';
+export const BUILD_TIME = 1791187769114;
+export const BUILD_NOTE = 'ヘビを動画準拠の金属アコーディオンと異次元ポータルに';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
