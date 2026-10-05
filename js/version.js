@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-05 15:17:29';
+export const VERSION_LABEL = '2026-10-05 16:46:11';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1791181049000;
-export const BUILD_NOTE = '撃破時の爆発を敵の大きさの1.1倍にした';
+export const BUILD_TIME = 1791186371000;
+export const BUILD_NOTE = '体当たり変身アイテム追加・ヘビが異次元から出て外れた頭が追う';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

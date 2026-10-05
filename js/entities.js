@@ -25,6 +25,7 @@ export const POWERUPS = [
   { id: 'reflect',    label: 'リフレクター',  effect: '壁で跳ね返る円盤を発射',     desc: '画面の端で跳ね返る円盤を4枚発射。敵を貫通しながら何度も当たり、敵弾も弾く。', color: '#ffc34d', icon: '◇' },
   // v1.5.70 — defensive barrier (logic/visuals in attack_items.js)
   { id: 'barrier',    label: 'バリア',        effect: '一定時間ダメージを防ぐ',     desc: '約5.5秒、自機のまわりにエネルギーシールドを展開。敵弾と体当たりのダメージを防ぐ（攻撃はしない）。', color: '#6cf0ff', icon: '盾' },
+  { id: 'ram',        label: '体当たり変身',  effect: '変身して敵に体当たり',       desc: '約5.5秒、自機が硬質な突撃形態に変身。敵にぶつかると爆破。硬い敵（コア・ボス級）には突き破れずその場で止まり、硬さを演出する。', color: '#ffd0a0', icon: '突' },
 ];
 
 /** 直接攻撃 window (seconds) + HUD countdown. */
@@ -72,6 +73,7 @@ export function pickPowerupId() {
     // v1.5.67 extra attack items + v1.5.70 barrier
     ['pbeam', 1.5], ['option', 1.5], ['cluster', 1.5], ['blackhole', 1.5], ['freeze', 1.5], ['reflect', 1.5],
     ['barrier', 1.8],
+    ['ram', 1.7],
   ];
   let r = Math.random() * weighted.reduce((s, [, w]) => s + w, 0);
   for (const [id, w] of weighted) { r -= w; if (r <= 0) return id; }

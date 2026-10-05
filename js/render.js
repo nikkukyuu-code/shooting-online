@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261005151729';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261005164611';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -22,6 +22,7 @@ const ITEM_STYLE = {
   send_golem: { color: '#cc88ff', icon: '塞',  label: '要塞',   effect: '要塞級1体' },
   send_tank:  { color: '#66ddff', icon: '砲',  label: '砲艦',   effect: 'ガンシップ級1体' },
   send_drone: { color: '#33ffff', icon: '群',  label: '無人機', effect: '小型機4機' },
+  ram:        { color: '#ffd0a0', icon: '突',  label: '体当',   effect: '変身して体当たり' },
 };
 Object.assign(ITEM_STYLE, EX_ITEM_STYLE); // v1.5.67 extra attack items
 
@@ -275,6 +276,58 @@ function drawShip(ctx, x, y, w, h, color = '#e8f0ff', facing = 1, angle = 0) {
   ctx.restore();
 }
 
+/** 体当たり変身: bulkier armored drill (video ~4:45). */
+function drawRamShip(ctx, x, y, w, h, t) {
+  ctx.save();
+  ctx.translate(x, y);
+  // speed wake
+  for (let i = 0; i < 4; i++) {
+    const a = 0.35 - i * 0.07;
+    ctx.fillStyle = `rgba(180,230,255,${a})`;
+    ctx.beginPath();
+    ctx.ellipse(-w * (0.55 + i * 0.35), 0, w * (0.35 + i * 0.12), h * (0.22 - i * 0.03), 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const body = ctx.createLinearGradient(-w * 0.5, 0, w * 0.6, 0);
+  body.addColorStop(0, '#6a7a9a');
+  body.addColorStop(0.35, '#e8f0ff');
+  body.addColorStop(0.7, '#b8c8e0');
+  body.addColorStop(1, '#ffd8a8');
+  ctx.fillStyle = body;
+  ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(w * 0.72, 0);
+  ctx.lineTo(w * 0.15, -h * 0.72);
+  ctx.lineTo(-w * 0.35, -h * 0.38);
+  ctx.lineTo(-w * 0.55, 0);
+  ctx.lineTo(-w * 0.35, h * 0.38);
+  ctx.lineTo(w * 0.15, h * 0.72);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // cyan nose glow
+  const ng = ctx.createRadialGradient(w * 0.35, 0, 0, w * 0.35, 0, w * 0.4);
+  ng.addColorStop(0, 'rgba(200,255,255,0.95)');
+  ng.addColorStop(0.5, 'rgba(120,200,255,0.55)');
+  ng.addColorStop(1, 'rgba(80,160,255,0)');
+  ctx.fillStyle = ng;
+  ctx.beginPath();
+  ctx.arc(w * 0.28, 0, w * 0.28, 0, Math.PI * 2);
+  ctx.fill();
+  // engine
+  const plume = 0.8 + 0.4 * Math.sin(t * 22);
+  ctx.fillStyle = 'rgba(255,200,80,0.85)';
+  ctx.beginPath();
+  ctx.moveTo(-w * 0.4, -h * 0.2);
+  ctx.lineTo(-w * (0.7 + 0.4 * plume), 0);
+  ctx.lineTo(-w * 0.4, h * 0.2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+
 function drawHpPip(ctx, e) {
   const pct = Math.max(0, e.hp / (e.maxHp || e.hp || 1));
   // Prefer above the unit; if that would clip past the field top, pin just inside.
@@ -302,7 +355,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261005151729`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261005164611`;
 }
 
 function loadKindSprite(kind) {
@@ -387,8 +440,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261005151729'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261005151729'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261005164611'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261005164611'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -433,6 +486,17 @@ function drawCoreSpriteBody(ctx, e, kind, w, h, t, flash) {
   }
   if (kind === 'wave_snake_head') {
     // Tethered striker tip: the red ball from the original (video sprite); glows before a strike
+    // Detached chase head (video ~4:45): silver dome flying free
+    if (e.tone === 'chase' || e.mv === 'snakechase') {
+      const r = Math.min(w, h) * 0.62;
+      const g = ctx.createRadialGradient(-r * 0.2, -r * 0.25, r * 0.1, 0, 0, r);
+      g.addColorStop(0, '#ffffff'); g.addColorStop(0.4, '#c8d0dc'); g.addColorStop(1, '#4a5566');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,80,60,0.85)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.55, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#ff3a28'; ctx.beginPath(); ctx.arc(0, 0, r * 0.28, 0, Math.PI * 2); ctx.fill();
+      return;
+    }
     const r = Math.min(w, h) * 0.5;
     if (e.tone === 'wind' && e._reach && e._tx != null) {
       // wind-up telegraph: faint dashed aim line from the sphere to the full lunge reach
@@ -1136,11 +1200,24 @@ function drawSegBall(ctx, e, w, h, t) {
   const r = Math.min(w, h) * 0.5;
   if (e.tone === 'anchor' || e.tone === 'anchorWind' || e.tone === 'silver') {
     const anchor = e.tone !== 'silver';
-    if (anchor) { // big rock sphere sitting in a dark red glow (brighter while it winds up the saw)
+    if (anchor) { // big rock sphere in a dark red 異次元 portal (video entry) / saw wind-up glow
       const hot = e.tone === 'anchorWind';
-      const gr = ctx.createRadialGradient(0, 0, r * 0.6, 0, 0, r * 2.3);
-      gr.addColorStop(0, hot ? 'rgba(220,40,30,0.85)' : 'rgba(150,20,20,0.7)'); gr.addColorStop(0.6, 'rgba(110,14,14,0.4)'); gr.addColorStop(1, 'rgba(80,0,0,0)');
-      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(0, 0, r * 2.3, 0, Math.PI * 2); ctx.fill();
+      const portal = (e._chainOf && e._chainOf._portal) || 0;
+      const R = r * (2.3 + portal * 2.8);
+      const gr = ctx.createRadialGradient(0, 0, r * 0.4, 0, 0, R);
+      gr.addColorStop(0, hot || portal > 0.2 ? 'rgba(40,0,0,0.95)' : 'rgba(150,20,20,0.7)');
+      gr.addColorStop(0.35, portal > 0.15 ? 'rgba(180,20,30,0.75)' : (hot ? 'rgba(220,40,30,0.85)' : 'rgba(150,20,20,0.55)'));
+      gr.addColorStop(0.7, 'rgba(110,14,14,0.35)');
+      gr.addColorStop(1, 'rgba(80,0,0,0)');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fill();
+      if (portal > 0.05) {
+        ctx.strokeStyle = `rgba(255,60,40,${0.35 + 0.5 * portal})`;
+        ctx.lineWidth = 2 + portal * 3;
+        ctx.beginPath(); ctx.arc(0, 0, R * 0.72, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = `rgba(255,180,120,${0.25 * portal})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(0, 0, R * (0.5 + 0.2 * Math.sin(t * 8)), 0, Math.PI * 2); ctx.stroke();
+      }
     }
     const img = waveSprite(anchor ? 'wave_striker_pivot' : 'wave_striker_link');
     if (img) { drawFit(ctx, img, w * 1.08, h * 1.08, false); return; }
@@ -3559,7 +3636,12 @@ export function drawField(ctx, area, snap, opts = {}) {
     const ang = (facingUp || oppUp) ? -Math.PI / 2 : 0;
     let shipColor = darkened ? '#cde' : (snap.invuln > 0 ? '#ffaaaa' : '#e8f0ff');
     if (lowHp) shipColor = lowBlink ? '#ff6688' : '#ff3344';
-    if (!blink) drawShip(ctx, px, py, 28 * Math.min(sx, 1.2), 18 * Math.min(sy, 1.2), shipColor, 1, ang);
+        const ramOn = !darkened && snap.player && snap.player.activePower === 'ram' && snap.player.activeTimer > 0;
+    const oppRam = darkened && (snap.ap === 'ram');
+    if (!blink) {
+      if (ramOn || oppRam) drawRamShip(ctx, px, py, 36 * Math.min(sx, 1.2), 22 * Math.min(sy, 1.2), performance.now() / 1000);
+      else drawShip(ctx, px, py, 28 * Math.min(sx, 1.2), 18 * Math.min(sy, 1.2), shipColor, 1, ang);
+    }
     if (!darkened && snap.player) drawLaser(ctx, snap.player, fh);
   }
 

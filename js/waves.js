@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261005151729';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261005164611';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -332,7 +332,7 @@ function ring(fw, fh, fy) {
  *    row of 5 white diamonds on each side; the ring flies out ~1.3 s and comes back to the sphere.
  *  Cycle ≈ 4.6 s, stays ~20 s. Core break → the chain blows up link by link back to the sphere.
  */
-function snake(fw, fh, fy, segs = 7, tone = 'silver') {
+export function snake(fw, fh, fy, segs = 7, tone = 'silver') {
   const y0 = Math.max(44, Math.min(fh - 44, fh * fy));
   const head = mk('wave_snake_head', fw, fh, fw + 200, y0, {
     mv: 'arm', dly: 0, stay: 20, segs, fire: { type: 'armhead' },
@@ -809,6 +809,7 @@ function bossMove(e, dt, fw, fh, py) {
 export function armReach(fw) { return fw * 0.56; }
 const ARM = { rest: 1.1, coil: 0.75, strike: 260, retract: 170, hold: 0.6, swingW: 1.5, sawWind: 0.5, sawCycle: 4.3, enter: 1.0, chaseW: 1.1, chaseMax: 1.6 };
 function armMove(e, dt, fw, fh, px, py) {
+  if (e._detached || e.mv === 'snakechase') return; // head already flying free
   const n = e.segs || 7, Lrest = 64; // video: sphere centre → tip ≈ 64 px at rest (links bunched up)
   const pivX = fw * 0.70; // video 2:30–2:43: sphere parked at ≈70 % across
   // User 09-29: the lunge must reach the ship's normal area (x ≈ 14 % of the pane at the ship's row),
@@ -823,17 +824,21 @@ function armMove(e, dt, fw, fh, px, py) {
   const wrap = (a) => ((a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
   switch (e._ph) {
     case 'enter': {
-      // video: the sphere appears in place in a big red glow (no slide-in) and the chain pays out
+      // video ~4:45 / 2:30: 異次元 portal (dark red void) then chain pays out from the sphere
       const u = Math.min(1, e._pt / ARM.enter), k = 1 - (1 - u) * (1 - u);
       e._tx = pivX; e._L = 16 + (Lrest - 16) * k; e._pivWind = 1 - u;
-      if (u >= 1) { e._ph = 'rest'; e._pt = 0; }
+      e._portal = Math.max(0, 1 - u * 1.15); // full portal at spawn, fades as chain extends
+      if (u >= 1) { e._ph = 'rest'; e._pt = 0; e._portal = 0; }
       break;
     }
     case 'rest':
       e._A = Math.sin(e._bt * 1.1 + e._wob) * 0.05; e._L = Lrest;
       if (e._bt > (e.stay || 20)) { e._ph = 'leave'; e._pt = 0; }
       else if (e._pt > ARM.rest) {
-        const inReach = Math.hypot(px - e._tx, py - e._ty) < reach + 20;
+        // Prefer the lunge whenever the ship is on this row-band; otherwise saw.
+        // (video ~4:45: after portal entry it lunges, and on a miss the head detaches)
+        const inReach = Math.hypot(px - e._tx, py - e._ty) < reach + 40
+          || Math.abs(py - e._ty) < fh * 0.45;
         e._ph = inReach ? 'coil' : 'sawWind'; e._pt = 0;
         e._aimA = angTo(px, py);
       }
@@ -869,7 +874,26 @@ function armMove(e, dt, fw, fh, px, py) {
     case 'hold': { // keeps nosing after the ship a little at full stretch
       const dA = wrap(angTo(px, Math.max(12, Math.min(fh - 12, py))) - e._A), turn = ARM.chaseW * 0.5 * dt;
       e._A += Math.max(-turn, Math.min(turn, dA));
-      if (e._pt >= ARM.hold) { e._ph = 'retract'; e._pt = 0; }
+      if (e._pt >= ARM.hold) {
+        // video: if the lunge didn't reach the ship, the head detaches and chases
+        const dist = Math.hypot(px - e.x, py - e.y);
+        if (dist > 48 && !e._detached) { e._ph = 'detach'; e._pt = 0; }
+        else { e._ph = 'retract'; e._pt = 0; }
+      }
+      break;
+    }
+    case 'detach': {
+      // tip (this core) flies free; body retracts via segments noticing _detached
+      e._detached = true;
+      e._ph = 'chase'; e._pt = 0;
+      e._chaseLife = 9;
+      e.mv = 'snakechase'; // handled below / in moveScripted
+      e._vx = Math.cos(e._A) * 220; e._vy = Math.sin(e._A) * 220;
+      break;
+    }
+    case 'chase': {
+      // fallback if still on arm mv briefly
+      e.mv = 'snakechase';
       break;
     }
     case 'retract': // chain reels back in along the same line (gaps close up), then swings home
@@ -897,6 +921,7 @@ function armMove(e, dt, fw, fh, px, py) {
       if (e._tx > fw + Lrest + 60) e.x = -999;
       break;
   }
+  if (e._detached) { e.mv = 'snakechase'; return; }
   if (e._ph !== 'leave' || e._tx <= fw + Lrest + 60) {
     const ox = e.x, oy = e.y;
     e.x = e._tx + Math.cos(e._A) * e._L; e.y = Math.max(8, Math.min(fh - 8, e._ty + Math.sin(e._A) * e._L));
@@ -946,6 +971,17 @@ export function moveScripted(e, dt, fw, fh, py = fh * 0.5, px = 40) {
     // Link k of n: on the line pivot → tip, bowing a little the way the chain is swinging
     const H = e._chainOf;
     if (!H || H.x < -500) { e.x = -999; return true; }
+    if (H._detached) {
+      // body collapses to the pivot then drifts off (head already chasing)
+      const n = (H.segs || 7) + 1;
+      if (e.chainIdx === n) { e.x = H._tx; e.y = H._ty; e.tone = 'anchor'; return true; }
+      const k = 1 - e.chainIdx / n;
+      const L = Math.max(20, (H._L || 64) * Math.max(0, 1 - (H._pt || 0) * 0.55));
+      e.x = H._tx + Math.cos(H._A || 0) * L * k;
+      e.y = H._ty + Math.sin(H._A || 0) * L * k;
+      if ((H._pt || 0) > 2.8) e.x = -999;
+      return true;
+    }
     const n = (H.segs || 7) + 1, k = 1 - e.chainIdx / n; // pivot = 0 … tip = 1
     if (e.chainIdx === n) { e.x = H._tx; e.y = H._ty; e.tone = H._pivWind ? 'anchorWind' : 'anchor'; return true; }
     const A = H._A || 0, L = H._L || 0, lag = (H._ph === 'swing' ? -H._swDir * 0.35 : 0) * Math.sin(Math.PI * k);
@@ -983,6 +1019,24 @@ export function moveScripted(e, dt, fw, fh, py = fh * 0.5, px = 40) {
     }
   } else if (e.mv === 'boss') {
     bossMove(e, dt, fw, fh, py);
+  } else if (e.mv === 'snakechase') {
+    // Detached snake head: homes on the ship with limited turn (dodgeable), then leaves
+    e._chaseLife = (e._chaseLife ?? 6.5) - dt;
+    const dist = Math.hypot(px - e.x, py - e.y);
+    const spd = dist < 70 ? 140 : 240; // slow near the ship so it can be dodged / shot
+    const want = Math.atan2(py - e.y, px - e.x);
+    let ang = Math.atan2(e._vy || 0, e._vx || -1);
+    let d = ((want - ang + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    const turn = 2.1 * dt; // rad/s — human-dodgeable
+    ang += Math.max(-turn, Math.min(turn, d));
+    e._vx = Math.cos(ang) * spd; e._vy = Math.sin(ang) * spd;
+    e.x += e._vx * dt; e.y += e._vy * dt;
+    e.x = Math.max(24, Math.min(fw - 24, e.x)); // stay on-field while chasing (core must remain targetable)
+    e.y = Math.max(10, Math.min(fh - 10, e.y));
+    e.rot = ang;
+    e.tone = 'chase';
+    if (e._chaseLife <= 0) { e.x = -999; }
+    return true;
   } else return false;
   // Facing (sprites point left): nose along travel
   if (e.face && e.mv !== 'loop' && (Math.abs(e._vx || 0) + Math.abs(e._vy || 0)) > 5) {
