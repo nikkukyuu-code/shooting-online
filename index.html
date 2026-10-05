@@ -62,7 +62,7 @@
   }
   </script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=20261006034323" />
+  <link rel="stylesheet" href="css/style.css?v=20261006045901" />
 <link rel="apple-touch-icon" href="/shooting-online/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-title" content="スペトリ" />
 </head>
@@ -72,7 +72,7 @@
       <div class="sky sky-space" aria-hidden="true"></div>
       <div class="menu-pt" id="menu-pt" aria-live="polite">いまの持ちPT 0</div>
       <div class="menu-hero">
-        <img class="menu-hero-art" src="assets/title-hero.svg?v=20261006034323" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
+        <img class="menu-hero-art" src="assets/title-hero.svg?v=20261006045901" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
         <header class="menu-brand">
           <h1 class="game-title">スペーストリックバトル<span class="beta-badge">β版</span></h1>
           <p class="game-subtitle">オンライン対戦</p>
@@ -89,8 +89,8 @@
         <div class="cpu-diff-block">
           <p class="cpu-diff-title">CPU対戦</p>
           <div class="menu-row cpu-diff-row">
-            <button type="button" id="btn-cpu-normal" class="menu-btn menu-btn-sub">普通<span class="cpu-pt-tag">PT×1</span><span class="cpu-lv-tag" id="cpu-lv-normal">敵Lv1</span></button>
-            <button type="button" id="btn-cpu-strong" class="menu-btn primary">強い<span class="cpu-pt-tag">PT×3</span><span class="cpu-lv-tag" id="cpu-lv-strong">敵Lv30</span></button>
+            <button type="button" id="btn-cpu-normal" class="menu-btn menu-btn-sub">普通<span class="cpu-pt-tag">ライフPT×3</span><span class="cpu-lv-tag" id="cpu-lv-normal">敵Lv1</span></button>
+            <button type="button" id="btn-cpu-strong" class="menu-btn primary">強い<span class="cpu-pt-tag">ライフPT×10</span><span class="cpu-lv-tag" id="cpu-lv-strong">敵Lv30</span></button>
           </div>
         </div>
         <button type="button" id="btn-find" class="menu-btn">対戦相手を探す</button>
@@ -151,7 +151,7 @@
       <div class="sub-panel">
         <header class="sub-head">
           <h2>ショップ</h2>
-          <p class="sub-desc">PTで送信ユニットを解放（強いCOM勝利はPT×3・価格もそれに合わせて調整）</p>
+          <p class="sub-desc">PTで送信ユニットを解放（勝利時のライフPTは普通×3・強い×10・価格もそれに合わせて調整）</p>
           <div class="shop-pt-pill" id="shop-pt" aria-live="polite">いまの持ちPT 0</div>
         </header>
         <div id="shop-detail" class="unit-detail" aria-live="polite"></div>
@@ -203,6 +203,6 @@
   </div>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script type="module" src="js/main.js?v=20261006034323"></script>
+  <script type="module" src="js/main.js?v=20261006045901"></script>
 </body>
 </html>

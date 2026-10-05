@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-06 03:43:23';
+export const VERSION_LABEL = '2026-10-06 04:59:01';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1791225803318;
-export const BUILD_NOTE = 'ヘビの頭3秒追尾→元の位置に戻り1秒待ち 異次元ポータル登場を長く 画像を動画から切り直し';
+export const BUILD_TIME = 1791230341738;
+export const BUILD_NOTE = '勝利ライフPTを普通3倍・強い10倍 ショップ価格を×12に';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

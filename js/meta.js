@@ -2,7 +2,7 @@
  * localStorage key: shootingOnline_meta (NEVER rename — would wipe player PT).
  * Backup key: shootingOnline_meta_bak. On every update, preserve pt; never clear storage.
  */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20261006034323';
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20261006045901';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;
@@ -478,7 +478,7 @@ export function setDeckSlot(meta, slot, unitId) {
  * COM win PT: remaining player HP already scaled to 0–100 by caller, added as integer PT.
  * Formula: PT += Math.floor(scaledRemainingHP)
  */
-/** COM win PT. remainingHp is already 0–100. mult=1 for 普通, mult=3 for 強い. */
+/** COM win PT. remainingHp is already 0–100. mult=3 for 普通, mult=10 for 強い (ライフ由来). */
 export function grantComVictoryPt(meta, remainingHp, opts = {}) {
   const mult = Math.max(1, Number(opts.mult) || 1);
   const base = Math.max(0, Math.floor(Number(remainingHp) || 0));
@@ -489,10 +489,10 @@ export function grantComVictoryPt(meta, remainingHp, opts = {}) {
 
 /** Coin PT (silver 1 / gold 30) collected in a COM match — added on WIN through saveMeta (never decreases). */
 /**
- * Shop price scale (user 10-04b): coins raise PT per COM win ≈3× (normal ≈4×, strong ≈2×),
- * so shop prices are ×3. Catalog base price (used for ATK/DEF / deck strength) is untouched.
+ * Shop price scale: catalog base (ATK/DEF / deck strength) is untouched.
+ * 10-06: life PT ×3 (普通) / ×10 (強い) → shop ×12 so wins-to-buy stay roughly even on 普通.
  */
-export const SHOP_PRICE_SCALE = 4; // 10-04c: gold 30 PT → ≈×4 PT per win
+export const SHOP_PRICE_SCALE = 12;
 export function shopPrice(u) {
   return u && u.price > 0 ? Math.round(u.price * SHOP_PRICE_SCALE) : 0;
 }
@@ -507,14 +507,14 @@ export const COM_DIFFICULTY = {
   normal: {
     id: 'normal',
     label: '普通',
-    ptMult: 1,
-    note: 'やや弱いCOM・勝利PTはこれまで通り',
+    ptMult: 3,
+    note: 'やや弱いCOM・勝利時のライフPTは3倍',
   },
   strong: {
     id: 'strong',
     label: '強い',
-    ptMult: 3,
-    note: 'これまでの強さ・勝利PTは3倍',
+    ptMult: 10,
+    note: 'これまでの強さ・勝利時のライフPTは10倍',
   },
 };
 
