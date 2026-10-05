@@ -64,7 +64,7 @@ export function powerupMeta(id) {
 
 
 /** DEBUG TEMP: ram item drop weight — restore to 1.7 when debugging is done. */
-export const RAM_DROP_WEIGHT = 52; // DEBUG — original 1.7
+export const RAM_DROP_WEIGHT = 26; // DEBUG — original 1.7
 /** DEBUG TEMP: multiply non-boss item drop chance so ram appears early. Restore to 1. */
 export const RAM_DROP_CHANCE_MUL = 2.2; // DEBUG — original effective mul 1
 
