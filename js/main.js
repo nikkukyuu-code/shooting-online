@@ -1,12 +1,12 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261005211437';
-import { Net } from './net.js?v=20261005211437';
-import { Game } from './game.js?v=20261005211437';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261005211437';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261005211437';
-import { loadBattleCount } from './stats.js?v=20261005211437';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261005211437';
-import { ALL_KIND_IDS } from './catalog.js?v=20261005211437';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261005211437';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261005211735';
+import { Net } from './net.js?v=20261005211735';
+import { Game } from './game.js?v=20261005211735';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261005211735';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261005211735';
+import { loadBattleCount } from './stats.js?v=20261005211735';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261005211735';
+import { ALL_KIND_IDS } from './catalog.js?v=20261005211735';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261005211735';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -148,7 +148,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261005211437`;
+  return `assets/enemies/${id}/0.png?v=20261005211735`;
 }
 
 function unitName(id) {
