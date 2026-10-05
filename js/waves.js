@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261005170929';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261005172401';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -333,23 +333,31 @@ function ring(fw, fh, fy) {
  *  Cycle ≈ 4.6 s, stays ~20 s. Core break → the chain blows up link by link back to the sphere.
  */
 export function snake(fw, fh, fy, segs = 11, tone = 'silver') {
-  // video ~4:45: ~11 thick overlapping metallic segments + big silver pivot in dark-red portal
+  // Measured from user_ref.mp4 @4:48 own-pane vs ship: pivot≈2×shipH, seg≈0.57×shipH (≈1/3 pivot),
+  // spacing≈0.875×seg, glow≈2.2×pivot, arm lunge≈5.5×shipH. Game shipH≈28 → below.
   const y0 = Math.max(52, Math.min(fh - 52, fh * fy));
+  const SH = 28; // reference ship draw height
+  const SEG = Math.round(SH * 0.57);   // ~16
+  const PIV = Math.round(SH * 2.0);    // ~56
+  const HEAD = Math.round(SH * 1.14);  // ~32 (video head_d)
+  const BALL = Math.round(SH * 0.57);  // ~16 (red ball ≈ seg)
   const head = mk('wave_snake_head', fw, fh, fw + 200, y0, {
     mv: 'arm', dly: 0, stay: 20, segs, fire: { type: 'armhead' },
-    w: 48, h: 48, hp: GUARD_HP.seg, // tip size ≈ ship height (video)
+    w: HEAD, h: HEAD, hp: GUARD_HP.seg,
   });
   head._tx = fw * 0.7; head._ty = y0;
+  head._segSpace = Math.round(SH * 0.50); // ~14 (video spacing/ship)
+  head._armLen = Math.round(SH * 5.54);   // ~155 full lunge
   const out = [];
-  // pivot first (under), then links pivot→tip, head last
   out.push(mk('wave_snake_seg', fw, fh, fw + 60, y0, {
-    w: 78, h: 78, hp: GUARD_HP.seg, score: 60, mv: 'armseg', _chainOf: head, chainIdx: segs + 1,
+    w: PIV, h: PIV, hp: GUARD_HP.seg, score: 60, mv: 'armseg', _chainOf: head, chainIdx: segs + 1,
     noFire: true, noDrop: true, passShots: true, tone: 'anchor',
   }));
   for (let i = segs; i >= 1; i--) {
-    // video: tip → red ball → dense silver accordion → big pivot; diameters keep overlap along chain
     const segTone = (i === 1) ? 'red' : tone;
-    const sw = (i === 1) ? 44 : (50 + (i / segs) * 10);
+    // slight taper toward tip (video): base ~SEG, tip-adjacent ~0.85×SEG; i=1 is red ball
+    const taper = 0.85 + 0.15 * ((i - 1) / Math.max(1, segs - 1));
+    const sw = (i === 1) ? BALL : Math.max(12, Math.round(SEG * taper));
     out.push(mk('wave_snake_seg', fw, fh, fw + 60, y0, {
       w: sw, h: sw, hp: GUARD_HP.seg, score: 20, mv: 'armseg', _chainOf: head, chainIdx: i,
       noFire: true, noDrop: true, passShots: true, tone: segTone,
@@ -810,18 +818,19 @@ function bossMove(e, dt, fw, fh, py) {
 }
 
 /** Tethered striker tip (core): entry → rest → strike (curl / lunge / hold / swing back) or saw → leave. */
-export function armReach(fw) { return Math.min(fw * 0.52, 360); } // keep segments overlapping when extended (video density)
+export function armReach(fw) { return Math.min(fw * 0.42, 170); } // video lunge ≈5.5×shipH ≈155
 const ARM = { rest: 1.1, coil: 0.75, strike: 260, retract: 170, hold: 0.6, swingW: 1.5, sawWind: 0.5, sawCycle: 4.3, enter: 1.15, chaseW: 1.1, chaseMax: 1.6 };
 function armMove(e, dt, fw, fh, px, py) {
   if (e._detached || e.mv === 'snakechase') return; // head already flying free
   const n = e.segs || 11;
-  // rest: tightly bunched accordion; extended: still nearly touching (video)
-  const Lrest = Math.max(100, n * 16); // tight accordion at rest (video)
+  // rest: bunched (spacing ~0.4×seg); lunge uses e._armLen / armReach
+  const space = e._segSpace || 14;
+  const Lrest = Math.max(48, n * space * 0.45);
   const pivX = fw * 0.70; // video 2:30–2:43: sphere parked at ≈70 % across
   // User 09-29: the lunge must reach the ship's normal area (x ≈ 14 % of the pane at the ship's row),
   // so the player has to back off (or step aside) to dodge. Links keep their size; only the gaps
   // between them widen on the thrust and close up again on the retract.
-  const reach = armReach(fw); e._reach = reach;
+  const reach = e._armLen || armReach(fw); e._reach = reach;
   e._bt = (e._bt || 0) + dt; e._fw = fw;
   if (e._ph == null) { e._ph = 'enter'; e._pt = 0; e._A = 0; e._L = Lrest; e._wob = Math.random() * 6; }
   e._pt += dt;

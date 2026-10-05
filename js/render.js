@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261005170929';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261005172401';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -355,7 +355,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261005170929`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261005172401`;
 }
 
 function loadKindSprite(kind) {
@@ -441,8 +441,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261005170929'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261005170929'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261005172401'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261005172401'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -503,7 +503,7 @@ function drawCoreSpriteBody(ctx, e, kind, w, h, t, flash) {
     const tip = waveSprite('snake_head_art');
     if (tip) {
       if (e.rot) { ctx.rotate(e.rot); }
-      drawFit(ctx, tip, w * 1.15, h * 1.15, false);
+      ctx.imageSmoothingEnabled = false; drawFit(ctx, tip, w * 1.05, h * 1.05, false);
       return true;
     }
     // fallback procedural
@@ -717,6 +717,8 @@ function drawCoreEnemy(ctx, e, kind, w, h, t) {
   ctx.save();
   const flash = (e.bodyFlash || e._bodyFlash || 0) > 0;
   if (drawCoreSpriteBody(ctx, e, kind, w, h, t, flash)) {
+    // Snake tip = video-cut head art; skip CORE pulse/halo/text (would fatten & recolour it)
+    if (kind === 'wave_snake_head') { ctx.restore(); return; }
     // brushed-up sprite body + guards (drones / claws) drawn; core overlay below
   } else if (kind === 'wave_core_boss') {
     // Large grey triangular midboss (nose left), swept red-tipped wings, dark mechanical spine
@@ -1214,16 +1216,16 @@ function drawSegBall(ctx, e, w, h, t) {
       const portal = (e._chainOf && e._chainOf._portal) || 0;
       const H = e._chainOf;
       const armLive = H && !H._detached && H.mv === 'arm';
-      // video: large dark-red 異次元 portal disc behind pivot (strong on entry, residual while arm lives)
-      const R = r * (2.6 + portal * 3.6 + (armLive && portal < 0.05 ? 0.9 : 0));
+      // video: glow diameter ≈ 2.2 × pivot (measured); strong on entry, soft residual while arm lives
+      const R = r * (2.2 + portal * 0.15); // r = pivot radius
       const portImg = waveSprite('snake_portal');
       if (portImg && (portal > 0.02 || hot || armLive)) {
         ctx.save();
         ctx.imageSmoothingEnabled = false;
-        const a = portal > 0.02 ? Math.max(0.4, Math.min(1, 0.5 + portal * 0.65))
-          : (hot ? 0.85 : 0.62);
+        const a = portal > 0.02 ? Math.max(0.55, Math.min(1, 0.55 + portal * 0.5))
+          : (hot ? 0.80 : 0.55);
         ctx.globalAlpha = a;
-        drawFit(ctx, portImg, R * 2.2, R * 2.2, false);
+        drawFit(ctx, portImg, R * 2, R * 2, false);
         ctx.restore();
       } else {
         const gr = ctx.createRadialGradient(0, 0, r * 0.35, 0, 0, R);
@@ -1236,14 +1238,14 @@ function drawSegBall(ctx, e, w, h, t) {
       const piv = waveSprite('snake_pivot') || waveSprite('wave_striker_pivot');
       if (piv) {
         ctx.imageSmoothingEnabled = false;
-        drawFit(ctx, piv, w * 1.35, h * 1.35, false);
+        drawFit(ctx, piv, w * 1.02, h * 1.02, false);
         return;
       }
     } else {
       const seg = waveSprite('snake_seg');
       if (seg) {
         ctx.imageSmoothingEnabled = false;
-        drawFit(ctx, seg, w * 1.65, h * 1.45, false);
+        drawFit(ctx, seg, w * 1.35, h * 1.35, false); // video-cut; 1.35 fills spacing for bellows overlap
         return;
       }
     }
@@ -3522,7 +3524,8 @@ function drawCoreBonds(ctx, groups, sx, sy, pass) {
         for (const [x, y] of pts) { ctx.moveTo(cx, cy); ctx.lineTo(x, y); }
         ctx.stroke();
       }
-    } else {
+    } else if (!snake) {
+      // Snake arm = video-cut metallic chain; bond outlines made it a fat row of red rings — skip.
       ctx.strokeStyle = `rgba(${r},${g},${b},${0.55 + 0.4 * p})`;
       ctx.lineWidth = 2;
       ctx.beginPath();
