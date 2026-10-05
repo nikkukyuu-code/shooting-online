@@ -2547,6 +2547,7 @@ function drawEclipse(ctx, f) {
 }
 function drawPxBoom(ctx, f, sizeMul = 1) {
   startPxBoomBuild();
+  if (f.life > f.max) return; // staggered burst not started yet
   const t = Math.max(0, Math.min(0.999, 1 - f.life / f.max));
   const v = _pxBoom[Math.abs(Math.round((f.sd != null ? f.sd : f.x * 7 + f.y * 3))) % PX_VAR] || _pxBoom[0];
   const fr = v && v[Math.floor(t * PX_N)];

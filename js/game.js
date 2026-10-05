@@ -5,7 +5,7 @@ import {
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
-  markCoreChain, tickChain, spawnChainBoom, spawnKillBoom, spawnEclipse, pushEclipse, applyLaserTick, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
+  markCoreChain, tickChain, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
 } from './entities.js?v=20261005125701';
 import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261005125701';
 import { sfx } from './audio.js?v=20261005125701';
@@ -1937,7 +1937,7 @@ export class Game {
           e._chainKill = true; S.fx.push(spawnChainBoom(e));
           if (e._chainSrc) e._chainSrc._chainDone = (e._chainSrc._chainDone || 0) + 1;
         }
-        if (e.kind === 'wave_bubble') { if (e._eclT !== S.time) { e._eclAt = null; pushEclipse(S.fx, e, S.time); } } else if (!e._chainKill) S.fx.push(spawnKillBoom(e.x, e.y, resolveEnemyTier(e.kind) === 'boss')); // chain pops use the 2× chain boom
+        if (e.kind === 'wave_bubble') { if (e._eclT !== S.time) { e._eclAt = null; pushEclipse(S.fx, e, S.time); } } else if (!e._chainKill) pushKillBooms(S.fx, e, resolveEnemyTier(e.kind) === 'boss'); // chain pops use the 2× chain boom
         S.fx.push(spawnCoin(e.x, e.y, this.coinGold(e)));
         sfx.explode();
         P.score += e.score;
@@ -2614,7 +2614,7 @@ export class Game {
       if (hasCore(e) && !e._coreBreak && e.hp < 1) e.hp = 1;
       if (e.hp <= 0) {
         if (e._chainT != null && !e._chainKill) { e._chainKill = true; B.fx.push(spawnChainBoom(e)); }
-        if (e.kind === 'wave_bubble') { if (e._eclT !== B.time) { e._eclAt = null; pushEclipse(B.fx, e, B.time); } } else if (!e._chainKill) B.fx.push(spawnKillBoom(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
+        if (e.kind === 'wave_bubble') { if (e._eclT !== B.time) { e._eclAt = null; pushEclipse(B.fx, e, B.time); } } else if (!e._chainKill) pushKillBooms(B.fx, e, resolveEnemyTier(e.kind) === 'boss');
         B.fx.push(spawnCoin(e.x, e.y, this.coinGold(e)));
         // Same as the player: drops are orbs that the COM ship must fly into (8s life)
         if (e._coreBreak) {

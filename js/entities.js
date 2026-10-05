@@ -773,6 +773,21 @@ export function spawnKillBoom(x, y, big = false) {
   return { kind: 'kboom', x, y, life: big ? 1.24 : 0.79, max: big ? 1.24 : 0.79, // 10-04j: −50% (was 2.48 / 1.58)
     r: big ? 84 : 42 }; // 10-04g: −20% (was 105 / 52.5)
 }
+/** 10-05: kill boom sized by drawn size (sprite = 1.15 × hitbox). Visible fireball ≈0.8·2r ≈1.6r; with r=max(base, visualMaxDim) that is ≈1.5–2× the hull (ref3). Floor = old 42 / 84. Very wide hulls get staggered bursts along the hull. */
+export function pushKillBooms(list, e, big = false) {
+  const vw = (e.w || 0) * 1.15, vh = (e.h || 0) * 1.15, base = big ? 84 : 42;
+  const life = big ? 1.24 : 0.79;
+  const one = (x, y, r, dl, sd) => list.push({ kind: 'kboom', x, y, life: life * Math.min(1.6, Math.max(1, r / 70)) + dl, max: life * Math.min(1.6, Math.max(1, r / 70)), r, sd });
+  const asp = vw > vh ? vw / Math.max(1, vh) : vh / Math.max(1, vw);
+  if (asp < 1.8 || Math.max(vw, vh) < 90) { one(e.x, e.y, Math.max(base, Math.max(vw, vh)), 0, null); return; }
+  const n = Math.min(4, Math.round(asp)), wide = vw >= vh, L = wide ? vw : vh, s = Math.min(vw, vh);
+  const r = Math.max(base, s * 1.1, L / n * 0.75);
+  one(e.x, e.y, Math.max(base, L * 0.62), 0, 1);
+  for (let i = 0; i < n; i++) {
+    const o = (i + 0.5) / n - 0.5, dl = 0.07 * (1 + (i * 2 + 1) % n);
+    one(e.x + (wide ? o * L : 0), e.y + (wide ? 0 : o * L), r, dl, i + 2);
+  }
+}
 
 export function spawnExplosion(x, y, big = false) {
   return {

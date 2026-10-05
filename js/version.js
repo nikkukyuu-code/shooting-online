@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-05 12:57:01';
+export const VERSION_LABEL = '2026-10-05 13:41:28';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1791172621000;
-export const BUILD_NOTE = '透明戦隊のライフを1割下げた（HP18・通常弾9発）';
+export const BUILD_TIME = 1791175288000;
+export const BUILD_NOTE = '敵サイズに応じて撃破爆破を拡大（床は従来サイズ・巨大船体は複数バースト）';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
