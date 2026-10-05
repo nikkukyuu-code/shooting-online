@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261005141815';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261005142544';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -302,7 +302,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261005141815`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261005142544`;
 }
 
 function loadKindSprite(kind) {
@@ -387,8 +387,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261005141815'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261005141815'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261005142544'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261005142544'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -2538,17 +2538,12 @@ function drawEclipse(ctx, f) {
   const el = f.max - f.life;
   const i = Math.floor(el * B.fps);
   if (i < 0 || i >= B.n) return;
-  // 10-05b: video sheet keeps an opaque black body disk; on the dark field that disk
-  // vanishes and only a thin fire crescent remains — on phones it reads as "no explosion".
-  // Draw additive + slightly larger so the yellow/orange fire pops like the video (~181 s).
-  const k = ((f.r || 30) / B.vr) * 1.35;
+  const k = (f.r || 30) / B.vr;
   const x = f.x - (f.vx || 0) * el, y = f.y;
-  ctx.save();
-  ctx.imageSmoothingEnabled = false; // keep pixel fire crisp at phone DPR
-  // black disk adds 0; fire adds brightly
-  ctx.globalCompositeOperation = 'lighter';
+  // plain bilinear from the ×6 sheet (cheap on phone GPUs); no per-size caches → no first-use hitch
+  const q = ctx.imageSmoothingQuality; ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'low';
   ctx.drawImage(im, i * B.fw, 0, B.fw, B.fh, x - B.cx * k, y - B.cy * k, B.vw * k, B.vh * k);
-  ctx.restore();
+  ctx.imageSmoothingQuality = q;
 }
 function drawPxBoom(ctx, f, sizeMul = 1) {
   startPxBoomBuild();
@@ -3533,9 +3528,7 @@ export function drawField(ctx, area, snap, opts = {}) {
   }
 
   const fx = snap.fx || [];
-  // Non-eclipse FX first; 透明戦隊 eclipses drawn after the bubble ring so fire isn't buried
   for (const f of fx) {
-    if ((f.k ?? f.kind) === 'eclipse') continue;
     const tg = f.t || null;
     drawFx(ctx, {
       x: f.x * sx, y: f.y * sy, life: f.l ?? f.life, max: f.m ?? f.max, r: (f.r || 14) * sx,
@@ -3547,16 +3540,6 @@ export function drawField(ctx, area, snap, opts = {}) {
   for (const e of enemies) {
     if (e.kind !== 'wave_bubble') continue;
     drawEnemy(ctx, { x: e.x * sx, y: e.y * sy, w: (e.w || 20) * sx, h: (e.h || 16) * sy, kind: e.kind, hp: e.hp, _uid: e._uid ?? e.u });
-  }
-  for (const f of fx) {
-    if ((f.k ?? f.kind) !== 'eclipse') continue;
-    const tg = f.t || null;
-    drawFx(ctx, {
-      x: f.x * sx, y: f.y * sy, life: f.l ?? f.life, max: f.m ?? f.max, r: (f.r || 14) * sx,
-      kind: f.k ?? f.kind, sc: sx, g: f.g, ph: f.ph, n: f.n,
-      t: tg ? tg.map(([tx, ty]) => [tx * sx, ty * sy]) : undefined,
-      a: f.a, sd: f.sd, vx: f.vx != null ? f.vx * sx : undefined,
-    });
   }
 
   // player
