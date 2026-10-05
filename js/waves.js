@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261005142544';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261005145114';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -378,10 +378,9 @@ function mines(fw, fh, rowsF) {
 export const BUBBLE_HP = 18;
 // about 0.043 field widths per second (10-11 px/s on the 246 px video field), straight to the left
 export const bubbleVx = (fw) => fw * 0.043;
-// TEMPORARY: bubble wall right at match start for the user's movement check. Restore BUBBLE_T to
-// BUBBLE_T_ORIGINAL (mid-match, 127 s) later; 4.5 s was the previous test slot.
+// 10-05: user finished the movement check → 透明戦隊 back to its mid-match slot (127 s), once per match.
 export const BUBBLE_T_ORIGINAL = 127;
-export const BUBBLE_T = 0.5;
+export const BUBBLE_T = BUBBLE_T_ORIGINAL;
 export const BUBBLE_ROWS = 5, BUBBLE_COLS = 24;
 function bubbleWall(fw, fh) {
   // Video: 5 rows edge to edge (top row touches the top edge, bottom row the bottom edge), ring 19 px on a
@@ -492,7 +491,6 @@ function jetBoss(fw, fh) {
 /** [time s, builder(fw, fh) → enemies, optional tag] — waves overlap a little on purpose. */
 export const WAVE_SCRIPT = [
   // W1
-  [BUBBLE_T, bubbleWall], // TEMPORARY (user movement check): see BUBBLE_T / BUBBLE_T_ORIGINAL
   [2, (w, h) => mechArc(w, h, true, 4, false)],
   [4.2, (w, h) => mechArc(w, h, false, 4, true)],
   [6.8, (w, h) => stopShoot(w, h, [0.3, 0.7])],
@@ -536,6 +534,7 @@ export const WAVE_SCRIPT = [
   [112, (w, h) => zig(w, h, 0.2, 4)],
   [118, (w, h) => swoopers(w, h, true, 2)],
   [124, (w, h) => zig(w, h, 0.8, 4)],
+  [BUBBLE_T, bubbleWall], // 透明戦隊 (mid-match, once per match)
   [130, (w, h) => swoopers(w, h, false, 2)],
   // boss snake (slow crossing)
   [137, (w, h) => zig(w, h, 0.4, 5)], // fodder (kills → drops → sends)
@@ -680,7 +679,7 @@ export function runWaveScript(st, time, list, fw, fh) {
   const off = st._waveOff || 0;
   while (st._waveI < WAVE_SCRIPT.length && WAVE_SCRIPT[st._waveI][0] + off <= time) {
     const [, build, tag] = WAVE_SCRIPT[st._waveI++];
-    if (build === bubbleWall) { st._bubPend = time; continue; } // spawned below, away from cores
+    if (build === bubbleWall) { if (!st._bubDone) { st._bubDone = true; st._bubPend = time; } continue; } // once per match (not on replay), spawned below, away from cores
     const es = build(fw, fh);
     if (es.some((e) => e.core) && bubblesAlive(list)) (st._coreHeld = st._coreHeld || []).push(...es); // no core joins a bubble wall
     else for (const e of es) list.push(e);
