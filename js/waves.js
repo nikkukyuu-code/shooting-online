@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261005020356';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261005125701';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -375,7 +375,7 @@ function mines(fw, fh, rowsF) {
 // 10-04: translucent bubble wall — 5×5 grid, no vertical movement, slow leftward crawl (mid-match)
 // 10-05 rebuilt from the clearer reference video (a6faf877, ROUND 2 ゴールドラッシュゾーン, 2:59-4:07):
 // User 10-05: clearly tough — 10 normal shots (dmg 2) per unit.
-export const BUBBLE_HP = 20;
+export const BUBBLE_HP = 18;
 // about 0.043 field widths per second (10-11 px/s on the 246 px video field), straight to the left
 export const bubbleVx = (fw) => fw * 0.043;
 // TEMPORARY: bubble wall right at match start for the user's movement check. Restore BUBBLE_T to
