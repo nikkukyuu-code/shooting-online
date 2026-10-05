@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261005164611';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261005165918';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -22,7 +22,7 @@ const ITEM_STYLE = {
   send_golem: { color: '#cc88ff', icon: '塞',  label: '要塞',   effect: '要塞級1体' },
   send_tank:  { color: '#66ddff', icon: '砲',  label: '砲艦',   effect: 'ガンシップ級1体' },
   send_drone: { color: '#33ffff', icon: '群',  label: '無人機', effect: '小型機4機' },
-  ram:        { color: '#ffd0a0', icon: '突',  label: '体当',   effect: '変身して体当たり' },
+  ram:        { color: '#ff90b0', icon: '突',  label: '体当',   effect: '操作して体当たり' },
 };
 Object.assign(ITEM_STYLE, EX_ITEM_STYLE); // v1.5.67 extra attack items
 
@@ -277,53 +277,53 @@ function drawShip(ctx, x, y, w, h, color = '#e8f0ff', facing = 1, angle = 0) {
 }
 
 /** 体当たり変身: bulkier armored drill (video ~4:45). */
+/** 体当たり変身: reddish/pink distorted energy hull (user_ref / ref2 ~4:45). */
 function drawRamShip(ctx, x, y, w, h, t) {
+  // video ~4:45: reddish/pink distorted energy mass with jagged white/cyan fringe (not cyan hull)
   ctx.save();
   ctx.translate(x, y);
-  // speed wake
+  const wob = Math.sin(t * 22) * 0.12;
+  const wob2 = Math.cos(t * 17) * 0.1;
+  // outer jagged white-cyan distortion fringe (video aura)
+  ctx.fillStyle = 'rgba(200,230,255,0.28)';
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 + t * 3;
+    const rr = w * (0.72 + 0.18 * Math.sin(t * 15 + i * 1.7));
+    const px = Math.cos(a) * rr * 1.05, py = Math.sin(a) * h * 0.85 * (0.9 + 0.2 * Math.sin(i + t * 9));
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath(); ctx.fill();
+  // pink/red distorted body
+  ctx.fillStyle = '#ff4a78';
+  ctx.beginPath();
+  ctx.moveTo(w * 0.68, 0);
+  ctx.bezierCurveTo(w * 0.35, -h * (0.95 + wob), -w * 0.05, -h * (0.7 + wob2), -w * 0.55, -h * 0.25);
+  ctx.bezierCurveTo(-w * 0.85, 0, -w * 0.55, h * 0.25, -w * 0.05, h * (0.7 - wob2));
+  ctx.bezierCurveTo(w * 0.35, h * (0.95 - wob), w * 0.68, 0, w * 0.68, 0);
+  ctx.closePath(); ctx.fill();
+  // hotter magenta mid
+  ctx.fillStyle = '#ff78a0';
+  ctx.beginPath(); ctx.ellipse(w * 0.05, 0, w * 0.38, h * 0.42, wob * 0.4, 0, Math.PI * 2); ctx.fill();
+  // white-hot core
+  const cg = ctx.createRadialGradient(w * 0.08, -h * 0.05, 0, w * 0.05, 0, w * 0.4);
+  cg.addColorStop(0, 'rgba(255,255,255,0.98)');
+  cg.addColorStop(0.3, 'rgba(255,200,220,0.9)');
+  cg.addColorStop(0.65, 'rgba(255,70,110,0.55)');
+  cg.addColorStop(1, 'rgba(180,20,60,0)');
+  ctx.fillStyle = cg;
+  ctx.beginPath(); ctx.ellipse(w * 0.06, 0, w * 0.36, h * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+  // flicker outline
+  ctx.strokeStyle = `rgba(255,40,100,${0.65 + 0.35 * Math.sin(t * 24)})`;
+  ctx.lineWidth = 2.2;
+  ctx.beginPath(); ctx.ellipse(0, 0, w * (0.58 + wob * 0.08), h * (0.68 + wob2 * 0.08), 0, 0, Math.PI * 2); ctx.stroke();
+  // trailing pink wake (only when moving — drawn always as form signature)
   for (let i = 0; i < 4; i++) {
-    const a = 0.35 - i * 0.07;
-    ctx.fillStyle = `rgba(180,230,255,${a})`;
+    ctx.fillStyle = `rgba(255,90,140,${0.4 - i * 0.08})`;
     ctx.beginPath();
-    ctx.ellipse(-w * (0.55 + i * 0.35), 0, w * (0.35 + i * 0.12), h * (0.22 - i * 0.03), 0, 0, Math.PI * 2);
+    ctx.ellipse(-w * (0.7 + i * 0.38), Math.sin(t * 10 + i) * 2, w * 0.26, h * (0.32 - i * 0.05), 0, 0, Math.PI * 2);
     ctx.fill();
   }
-  const body = ctx.createLinearGradient(-w * 0.5, 0, w * 0.6, 0);
-  body.addColorStop(0, '#6a7a9a');
-  body.addColorStop(0.35, '#e8f0ff');
-  body.addColorStop(0.7, '#b8c8e0');
-  body.addColorStop(1, '#ffd8a8');
-  ctx.fillStyle = body;
-  ctx.strokeStyle = 'rgba(255,255,255,0.95)';
-  ctx.lineWidth = 1.6;
-  ctx.beginPath();
-  ctx.moveTo(w * 0.72, 0);
-  ctx.lineTo(w * 0.15, -h * 0.72);
-  ctx.lineTo(-w * 0.35, -h * 0.38);
-  ctx.lineTo(-w * 0.55, 0);
-  ctx.lineTo(-w * 0.35, h * 0.38);
-  ctx.lineTo(w * 0.15, h * 0.72);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  // cyan nose glow
-  const ng = ctx.createRadialGradient(w * 0.35, 0, 0, w * 0.35, 0, w * 0.4);
-  ng.addColorStop(0, 'rgba(200,255,255,0.95)');
-  ng.addColorStop(0.5, 'rgba(120,200,255,0.55)');
-  ng.addColorStop(1, 'rgba(80,160,255,0)');
-  ctx.fillStyle = ng;
-  ctx.beginPath();
-  ctx.arc(w * 0.28, 0, w * 0.28, 0, Math.PI * 2);
-  ctx.fill();
-  // engine
-  const plume = 0.8 + 0.4 * Math.sin(t * 22);
-  ctx.fillStyle = 'rgba(255,200,80,0.85)';
-  ctx.beginPath();
-  ctx.moveTo(-w * 0.4, -h * 0.2);
-  ctx.lineTo(-w * (0.7 + 0.4 * plume), 0);
-  ctx.lineTo(-w * 0.4, h * 0.2);
-  ctx.closePath();
-  ctx.fill();
   ctx.restore();
 }
 
@@ -355,7 +355,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261005164611`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261005165918`;
 }
 
 function loadKindSprite(kind) {
@@ -440,8 +440,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261005164611'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261005164611'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261005165918'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261005165918'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -485,21 +485,10 @@ function drawCoreSpriteBody(ctx, e, kind, w, h, t, flash) {
     return true;
   }
   if (kind === 'wave_snake_head') {
-    // Tethered striker tip: the red ball from the original (video sprite); glows before a strike
-    // Detached chase head (video ~4:45): silver dome flying free
-    if (e.tone === 'chase' || e.mv === 'snakechase') {
-      const r = Math.min(w, h) * 0.62;
-      const g = ctx.createRadialGradient(-r * 0.2, -r * 0.25, r * 0.1, 0, 0, r);
-      g.addColorStop(0, '#ffffff'); g.addColorStop(0.4, '#c8d0dc'); g.addColorStop(1, '#4a5566');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = 'rgba(255,80,60,0.85)'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(0, 0, r * 0.55, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillStyle = '#ff3a28'; ctx.beginPath(); ctx.arc(0, 0, r * 0.28, 0, Math.PI * 2); ctx.fill();
-      return;
-    }
-    const r = Math.min(w, h) * 0.5;
+    // Video ~4:45: red ring + bright yellow centre (tip / detached chase head)
+    const chase = e.tone === 'chase' || e.mv === 'snakechase';
+    const r = Math.min(w, h) * (chase ? 0.85 : 0.68);
     if (e.tone === 'wind' && e._reach && e._tx != null) {
-      // wind-up telegraph: faint dashed aim line from the sphere to the full lunge reach
       const px = e._tx - e.x, py = e._ty - e.y, a = e._aimA || Math.PI;
       ctx.save(); ctx.strokeStyle = 'rgba(255,90,60,0.55)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]);
       ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + Math.cos(a) * e._reach, py + Math.sin(a) * e._reach); ctx.stroke();
@@ -510,9 +499,15 @@ function drawCoreSpriteBody(ctx, e, kind, w, h, t, flash) {
       gg.addColorStop(0, 'rgba(255,230,120,0.7)'); gg.addColorStop(1, 'rgba(255,60,30,0)');
       ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(0, 0, r * 2.4, 0, Math.PI * 2); ctx.fill();
     }
-    const img = waveSprite('wave_striker_tip');
-    if (img) drawFit(ctx, img, w * 1.25, h * 1.25, flash);
-    else { ctx.fillStyle = '#e8283a'; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill(); }
+    // yellow core
+    const yg = ctx.createRadialGradient(-r * 0.15, -r * 0.15, 0, 0, 0, r * 0.55);
+    yg.addColorStop(0, '#fff8c0'); yg.addColorStop(0.5, '#ffd020'); yg.addColorStop(1, '#e8a010');
+    ctx.fillStyle = yg; ctx.beginPath(); ctx.arc(0, 0, r * 0.52, 0, Math.PI * 2); ctx.fill();
+    // thick red ring
+    ctx.strokeStyle = '#e02028'; ctx.lineWidth = Math.max(3, r * 0.38);
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.72, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,80,60,0.55)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.95, 0, Math.PI * 2); ctx.stroke();
     return true;
   }
   if (kind === 'wave_grid_core') {
@@ -1198,6 +1193,15 @@ function drawWarpRing(ctx, w, h, t, warpT, warpPop) {
 /** Snake body segment (silver / green caterpillar) — glossy sphere. */
 function drawSegBall(ctx, e, w, h, t) {
   const r = Math.min(w, h) * 0.5;
+  if (e.tone === 'red') {
+    // video: glowing red ball just behind the tip
+    const g = ctx.createRadialGradient(-r * 0.25, -r * 0.25, 0, 0, 0, r);
+    g.addColorStop(0, '#ffd0a0'); g.addColorStop(0.35, '#ff5030'); g.addColorStop(0.75, '#c01818'); g.addColorStop(1, '#501010');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,120,80,0.7)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,80,40,0.25)'; ctx.beginPath(); ctx.arc(0, 0, r * 1.35, 0, Math.PI * 2); ctx.fill();
+    return;
+  }
   if (e.tone === 'anchor' || e.tone === 'anchorWind' || e.tone === 'silver') {
     const anchor = e.tone !== 'silver';
     if (anchor) { // big rock sphere in a dark red 異次元 portal (video entry) / saw wind-up glow
@@ -1219,8 +1223,11 @@ function drawSegBall(ctx, e, w, h, t) {
         ctx.beginPath(); ctx.arc(0, 0, R * (0.5 + 0.2 * Math.sin(t * 8)), 0, Math.PI * 2); ctx.stroke();
       }
     }
-    const img = waveSprite(anchor ? 'wave_striker_pivot' : 'wave_striker_link');
-    if (img) { drawFit(ctx, img, w * 1.08, h * 1.08, false); return; }
+    // video: big silver pivot uses sprite; chain beads are glossy silver spheres (not rocky link art)
+    if (anchor) {
+      const img = waveSprite('wave_striker_pivot');
+      if (img) { drawFit(ctx, img, w * 1.08, h * 1.08, false); return; }
+    }
   }
   const green = e.tone === 'green' || e.kind === 'wave_cater';
   const g = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r);
@@ -3639,7 +3646,7 @@ export function drawField(ctx, area, snap, opts = {}) {
         const ramOn = !darkened && snap.player && snap.player.activePower === 'ram' && snap.player.activeTimer > 0;
     const oppRam = darkened && (snap.ap === 'ram');
     if (!blink) {
-      if (ramOn || oppRam) drawRamShip(ctx, px, py, 36 * Math.min(sx, 1.2), 22 * Math.min(sy, 1.2), performance.now() / 1000);
+      if (ramOn || oppRam) drawRamShip(ctx, px, py, 48 * Math.min(sx, 1.2), 28 * Math.min(sy, 1.2), performance.now() / 1000);
       else drawShip(ctx, px, py, 28 * Math.min(sx, 1.2), 18 * Math.min(sy, 1.2), shipColor, 1, ang);
     }
     if (!darkened && snap.player) drawLaser(ctx, snap.player, fh);

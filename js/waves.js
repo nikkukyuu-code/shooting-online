@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261005164611';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261005165918';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -341,14 +341,17 @@ export function snake(fw, fh, fy, segs = 7, tone = 'silver') {
   const out = [];
   // pivot first (drawn underneath), then links from the pivot outward, the red tip last (on top)
   out.push(mk('wave_snake_seg', fw, fh, fw + 60, y0, {
-    w: 26, h: 26, hp: GUARD_HP.seg, score: 60, mv: 'armseg', _chainOf: head, chainIdx: segs + 1,
+    w: 38, h: 38, hp: GUARD_HP.seg, score: 60, mv: 'armseg', _chainOf: head, chainIdx: segs + 1,
     noFire: true, noDrop: true, passShots: true, tone: 'anchor',
   }));
   for (let i = segs; i >= 1; i--) {
-    const sz = 9 + (i / segs) * 3; // video: ~8–11 px beads, tapering toward the tip
+    const sz = 14 + (i / segs) * 6; // thicker silver beads (video mass)
+    // video: tip → red ball → silver beads → big silver pivot
+    const segTone = (i === 1) ? 'red' : tone;
+    const sw = (i === 1) ? Math.max(sz, 20) : sz;
     out.push(mk('wave_snake_seg', fw, fh, fw + 60, y0, {
-      w: sz, h: sz, hp: GUARD_HP.seg, score: 20, mv: 'armseg', _chainOf: head, chainIdx: i,
-      noFire: true, noDrop: true, passShots: true, tone,
+      w: sw, h: sw, hp: GUARD_HP.seg, score: 20, mv: 'armseg', _chainOf: head, chainIdx: i,
+      noFire: true, noDrop: true, passShots: true, tone: segTone,
     }));
   }
   out.push(head);

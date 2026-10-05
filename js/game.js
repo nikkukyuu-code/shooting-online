@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261005164611';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261005165918';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261005164611';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261005164611';
-import { sfx } from './audio.js?v=20261005164611';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261005164611';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261005164611';
-import { hitBattleCounter } from './stats.js?v=20261005164611';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261005164611';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261005164611';
+} from './entities.js?v=20261005165918';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261005165918';
+import { sfx } from './audio.js?v=20261005165918';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261005165918';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261005165918';
+import { hitBattleCounter } from './stats.js?v=20261005165918';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261005165918';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261005165918';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1325,35 +1325,38 @@ export class Game {
   }
 
 
-  /** 体当たり変身: charge right, destroy soft enemies, stop on hard (video ~4:45). */
+  /** 体当たり変身: player/COM steer into enemies (no auto-charge). Soft die on contact; hard stops in place. */
   tickRamForm(F, ship, dt, fw, fh, isBot) {
     if (ship.activePower !== 'ram' || !(ship.activeTimer > 0)) return;
     const sy = (typeof ship.y === 'number' && ship.y <= 1 ? ship.y * fh : ship.y);
-    const sx0 = ship.x || 48;
-    const CHARGE = isBot ? 380 : 420;
     const RAM_DMG = 22;
     if (ship._ramSurge == null) ship._ramSurge = 1;
-    // X motion: player path uses pointer override; COM path charges here
-    if (isBot && !ship._ramStop) {
-      ship.x = Math.min(fw * 0.92, sx0 + CHARGE * dt);
-    }
-    // collide with enemies ahead
+    // collide with enemies the ship is steered into
     for (const e of F.enemies) {
       if (!e || e.hp <= 0 || warping(e)) continue;
-      if (e.kind === 'wave_bubble') continue; // invisible wall — skip or soft-hit later
+      if (e.kind === 'wave_bubble') continue;
       const hw = (e.w || 20) * 0.45 + 18, hh = (e.h || 16) * 0.45 + 14;
       if (Math.abs(e.x - ship.x) > hw || Math.abs(e.y - sy) > hh) continue;
-      // already rammed this enemy this surge?
-      if (e._ramHit === ship._ramSurge) continue;
+      if (e._ramHit === ship._ramSurge) {
+        // keep hard block while still overlapping the same hard body
+        const hardKeep = !!(e.core || e.ch != null || isCoreBossKind(e.kind) || isLargeEnemy(e)
+          || (e.maxHp || 0) >= 40 || (e.w || 0) >= 100 || (e.h || 0) >= 70);
+        if (hardKeep) {
+          ship._ramStop = true;
+          ship._ramBlockX = Math.min(ship._ramBlockX ?? 1e9, e.x - hw + 4);
+          if (ship.x > ship._ramBlockX) ship.x = ship._ramBlockX;
+        }
+        continue;
+      }
       e._ramHit = ship._ramSurge;
       const hard = !!(e.core || e.ch != null || isCoreBossKind(e.kind) || isLargeEnemy(e)
         || (e.maxHp || 0) >= 40 || (e.w || 0) >= 100 || (e.h || 0) >= 70);
       if (hard) {
-        // chip only; ship stops to convey hardness (video: cyan impact, no pass-through)
         if (hasCore(e)) applyCoreAwareArea(e, 6, null, null, null);
         else e.hp -= 6;
         ship._ramStop = true;
-        ship.x = Math.min(ship.x, e.x - hw + 4);
+        ship._ramBlockX = e.x - hw + 4;
+        ship.x = Math.min(ship.x, ship._ramBlockX);
         F.fx.push(spawnHitSpark(ship.x + 14, sy, 52));
         F.fx.push(spawnExplosion(ship.x + 12, sy, true));
         sfx.hit();
@@ -1362,31 +1365,35 @@ export class Game {
         else e.hp -= RAM_DMG;
         F.fx.push(spawnHitSpark(e.x, e.y, 40));
         sfx.explode();
-        // if still alive after soft hit, also stop
         if (e.hp > 0) {
-          ship._ramStop = true;
+          // soft leftover: brief bump, not a hard wall
           ship.x = Math.min(ship.x, e.x - hw + 4);
           F.fx.push(spawnExplosion(ship.x + 12, sy, false));
         }
       }
     }
-    // release stop after a beat if enemy moved away / died
+    // clear stop once no longer overlapping a blocking body (player can steer away)
     if (ship._ramStop) {
-      ship._ramHold = (ship._ramHold || 0) + dt;
-      if (ship._ramHold > 0.35) {
-        // if nothing still overlapping, resume charge
-        let blocked = false;
-        for (const e of F.enemies) {
-          if (!e || e.hp <= 0 || warping(e)) continue;
-          const hw = (e.w || 20) * 0.45 + 16, hh = (e.h || 16) * 0.45 + 12;
-          if (Math.abs(e.x - ship.x) < hw && Math.abs(e.y - sy) < hh) { blocked = true; break; }
+      let blocked = false;
+      let blockX = null;
+      for (const e of F.enemies) {
+        if (!e || e.hp <= 0 || warping(e)) continue;
+        const hard = !!(e.core || e.ch != null || isCoreBossKind(e.kind) || isLargeEnemy(e)
+          || (e.maxHp || 0) >= 40 || (e.w || 0) >= 100 || (e.h || 0) >= 70);
+        if (!hard) continue;
+        const hw = (e.w || 20) * 0.45 + 16, hh = (e.h || 16) * 0.45 + 12;
+        if (Math.abs(e.x - ship.x) < hw && Math.abs(e.y - sy) < hh) {
+          blocked = true;
+          blockX = e.x - hw + 4;
+          break;
         }
-        if (!blocked) { ship._ramStop = false; ship._ramHold = 0; ship._ramSurge = (ship._ramSurge || 1) + 1; }
-        else ship._ramHold = 0.2;
       }
-    } else ship._ramHold = 0;
-    // drift back toward left home when near right edge
-    if (!ship._ramStop && ship.x > fw * 0.85) ship.x -= 120 * dt;
+      if (!blocked) { ship._ramStop = false; ship._ramBlockX = null; ship._ramSurge = (ship._ramSurge || 1) + 1; }
+      else {
+        ship._ramBlockX = blockX;
+        if (ship.x > blockX) ship.x = blockX;
+      }
+    } else ship._ramBlockX = null;
   }
 
   activatePower(id) {
@@ -1529,6 +1536,7 @@ export class Game {
       p.activePower = 'ram';
       p.activeTimer = 5.5;
       p._ramStop = false;
+      p._ramBlockX = null;
       p._ramVx = 0;
       p._ramSurge = (p._ramSurge || 0) + 1;
       this.setStatus('体当たり変身！ 敵にぶつかれ（硬い敵では止まる）');
@@ -1734,16 +1742,16 @@ export class Game {
         y: this.pointerY,
       };
     }
-    // Move player toward pointer (free 2D within own field)
-    P.y += (this.pointerY - P.y) * Math.min(1, 12 * dt);
-    if (P.activePower === 'ram' && P.activeTimer > 0) {
-      // 体当たり変身: charge right (Y still follows pointer); stop locks X
-      if (!P._ramStop) P.x = Math.min(fw * 0.9, P.x + (420) * dt);
-      P.x = Math.max(20, Math.min(fw * 0.9, P.x));
-    } else {
+    // Move player toward pointer (free 2D within own field).
+    // 体当たり変身: same drag controls (X+Y); player steers into enemies (no auto-charge).
+    // Hard contact sets _ramBlockX so the ship cannot push through; steering away is allowed.
+    const ramFollow = (P.activePower === 'ram' && P.activeTimer > 0) ? Math.min(1, 14 * dt) : Math.min(1, 12 * dt);
+    P.y += (this.pointerY - P.y) * ramFollow;
+    {
       const targetX = this.pointerX * fw;
-      P.x += (targetX - P.x) * Math.min(1, 12 * dt);
-      P.x = Math.max(20, Math.min(fw * 0.88, P.x));
+      let nx = P.x + (targetX - P.x) * ramFollow;
+      if (P.activePower === 'ram' && P._ramStop && P._ramBlockX != null && nx > P._ramBlockX) nx = P._ramBlockX;
+      P.x = Math.max(20, Math.min(fw * 0.88, nx));
     }
     if (P.invuln > 0) P.invuln -= dt;
 
@@ -1790,6 +1798,7 @@ export class Game {
       if (P.activeTimer <= 0) {
         P.activePower = null;
         P._ramStop = false;
+        P._ramBlockX = null;
         if (!this.ended) {
           if (P.items.length) {
             const n = powerupMeta(P.items[0]);
@@ -2174,8 +2183,7 @@ export class Game {
     if (B.directBeam > 0) B.directBeam -= dt;
     if (B.activeTimer > 0) {
       B.activeTimer -= dt;
-      if (B.activePower === 'ram' && B.activeTimer > 0) this.tickRamForm(B, B, dt, this.L.own.w, this.L.own.h, true);
-      if (B.activeTimer <= 0) { B.activePower = null; B._ramStop = false; }
+      if (B.activeTimer <= 0) { B.activePower = null; B._ramStop = false; B._ramBlockX = null; }
     }
 
     // --- COM movement: threat-predicting planner (samples candidate positions, projects enemy
@@ -2511,6 +2519,28 @@ export class Game {
     // Bait a homing missile: keep still while it is still steering (if nothing else is coming)
     const jukeHold = threats.some((b) => b._juke && b.homeT > 0.04 && Math.hypot(b.x - shipX, b.y - shipY0) < 240)
       && dangerOf(B.x, shipY0, true) < 1.5;
+    // 体当たり変身: steer into enemies (same free X/Y as player); prefer soft kills, avoid pushing hard
+    if (B.activePower === 'ram' && B.activeTimer > 0) {
+      let best = null, bestV = -1e9;
+      for (const e of VE) {
+        if (!e || e.hp <= 0 || warping(e) || e.kind === 'wave_bubble') continue;
+        if (e.x < shipX - 20) continue;
+        const hard = !!(e.core || e.ch != null || isCoreBossKind(e.kind) || isLargeEnemy(e)
+          || (e.maxHp || 0) >= 40 || (e.w || 0) >= 100 || (e.h || 0) >= 70);
+        const dy = Math.abs(e.y / fh - B.y);
+        const dist = Math.max(24, e.x - shipX);
+        const v = (hard ? 1.2 : 6.5) * 40 / Math.sqrt(dist) + (1 - Math.min(1, dy / 0.35)) * 4;
+        if (v > bestV) { bestV = v; best = e; }
+      }
+      if (B._ramStop && B._ramBlockX != null) {
+        // human-like: back off slightly, then try to slide past on Y
+        B._tx = Math.min(B._tx ?? shipX, B._ramBlockX - 18);
+        if (best) B._ty = best.y + ((best.y > shipY0) ? 28 : -28);
+      } else if (best) {
+        B._tx = best.x - ((best.w || 24) * 0.35);
+        B._ty = best.y;
+      }
+    }
     // Hand moves the virtual pointer toward the planned spot; ship follows it like the player's ship
     if (!Number.isFinite(B.ptrX) || !Number.isFinite(B.ptrY) || !Number.isFinite(B.pvx) || !Number.isFinite(B.pvy)) { B.ptrX = B.x; B.ptrY = B.y; B.pvx = 0; B.pvy = 0; }
     {
@@ -2529,10 +2559,16 @@ export class Game {
       if (B.ptrX < fw * 0.06 || B.ptrX > fw * 0.88) { B.ptrX = Math.max(fw * 0.06, Math.min(fw * 0.88, B.ptrX)); B.pvx = 0; }
       if (B.ptrY < -0.08 || B.ptrY > 1.08) { B.ptrY = Math.max(-0.08, Math.min(1.08, B.ptrY)); B.pvy = 0; }
     }
-    B.y += (B.ptrY - B.y) * Math.min(1, 12 * dt);
-    B.x += (B.ptrX - B.x) * Math.min(1, 12 * dt);
-    B.x = Math.max(20, Math.min(fw * 0.88, B.x));
+    const botRamFollow = (B.activePower === 'ram' && B.activeTimer > 0) ? Math.min(1, 14 * dt) : Math.min(1, 12 * dt);
+    B.y += (B.ptrY - B.y) * botRamFollow;
+    {
+      let nx = B.x + (B.ptrX - B.x) * botRamFollow;
+      if (B.activePower === 'ram' && B._ramStop && B._ramBlockX != null && nx > B._ramBlockX) nx = B._ramBlockX;
+      B.x = Math.max(20, Math.min(fw * 0.88, nx));
+    }
     B.preferredY = B.y;
+    shipX = B.x;
+    if (B.activePower === 'ram' && B.activeTimer > 0) this.tickRamForm(B, B, dt, fw, fh, true);
     shipX = B.x;
 
     B.aimNoise += ((Math.random() - 0.5) * _cp.aimNoiseAmp - B.aimNoise) * Math.min(1, 1.4 * dt);
@@ -2929,6 +2965,7 @@ export class Game {
         B.activePower = 'ram';
         B.activeTimer = 5.5;
         B._ramStop = false;
+        B._ramBlockX = null;
         B._ramVx = 0;
         B._ramSurge = (B._ramSurge || 0) + 1;
       } else if (isExAttackItem(id)) {
