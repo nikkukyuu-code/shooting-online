@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261006165200';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261006192854';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -532,6 +532,7 @@ export const WAVE_SCRIPT = [
   [52, (w, h) => zig(w, h, 0.85, 4)],
   [55, (w, h) => stopShoot(w, h, [0.22, 0.78], null, 'wave_spider')],
   [60, (w, h) => swoopers(w, h, true, 2)],
+  [60, firstRunOnly((w, h) => snake(w, h, 0.31, 7))], // user 10-06 19:28: snake 1st time = 1:00, 1 snake
   [62, (w, h) => zig(w, h, 0.75, 4, 0.1)],
   // W4 rings
   [66, (w, h) => zig(w, h, 0.3, 5)], // fodder (kills → drops → sends)
@@ -555,8 +556,8 @@ export const WAVE_SCRIPT = [
   // boss snake (slow crossing)
   [137, (w, h) => zig(w, h, 0.4, 5)], // fodder (kills → drops → sends)
   [141, (w, h) => splitGroup(w, h, 0.6, 6, 'scout_drone')], // fodder (kills → drops → sends)
-  [146, firstRunOnly((w, h) => snake(w, h, 0.31, 7))], // snake 1st time
   [150, (w, h) => zig(w, h, 0.2, 4)],
+  [150, firstRunOnly((w, h) => [...snake(w, h, 0.27, 7), ...snake(w, h, 0.73, 7)])], // 2nd time = 2:30, 2 snakes (upper + lower)
   [154, (w, h) => behindArc(w, h, false, 4)],
   [160, (w, h) => zig(w, h, 0.3, 5)],
   // trap zone
@@ -582,10 +583,10 @@ export const WAVE_SCRIPT = [
   [230, (w, h) => swoopers(w, h, true, 3, 'plasma_bomber')],
   [234, (w, h) => zig(w, h, 0.5, 5)],
   [238, (w, h) => jetBoss(w, h)],
+  [240, firstRunOnly((w, h) => [...snake(w, h, 0.2, 7), ...snake(w, h, 0.5, 7), ...snake(w, h, 0.8, 7)])], // 3rd time = 4:00, 3 snakes
   [244, (w, h) => zig(w, h, 0.8, 4)], // fodder (kills → drops → sends)
   [248, (w, h) => zig(w, h, 0.25, 4)],
   [252, (w, h) => loopers(w, h, 0.5, 3)],
-  [254, firstRunOnly((w, h) => [...snake(w, h, 0.27, 7), ...snake(w, h, 0.73, 7)])], // user 10-06: snake appears twice; the 2nd time it is 2 snakes (upper + lower row)
   [258, (w, h) => stopShoot(w, h, [0.3, 0.7])],
   [264, (w, h) => saucerCircle(w, h, 0.35)],
   [269, (w, h) => splitGroup(w, h, 0.5, 6, 'drone')], // fodder (kills → drops → sends)
