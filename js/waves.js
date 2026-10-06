@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261006130641';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261006133815';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -321,47 +321,43 @@ function ring(fw, fh, fy) {
 
 // ---------- tethered striker ("snake") ----------
 /*
- * Rebuilt from the reference video (2:28–2:46, both fields). Not a travelling snake:
- *  - PIVOT: a big grey rock sphere in a dark red glow; slides in from the right, then stays put.
- *  - TAIL CHAIN: 7 grey links tapering to a RED BALL tip (= the core). At rest the chain trails
- *    straight out behind the sphere (to the right), so the core hides behind it.
- *  - STRIKE (ship within reach): the chain curls in, then the red tip shoots straight at where the
- *    ship was, the links stretching from the pivot; it holds, then swings back round the pivot to
- *    the rest position. The core is exposed (in front of the sphere) during the strike and swing.
- *  - SAW (ship out of reach): the sphere spits a red spiked ring (yellow centre) at the ship with a
- *    row of 5 white diamonds on each side; the ring flies out ~1.3 s and comes back to the sphere.
- *  Cycle ≈ 4.6 s, stays ~20 s. Core break → the chain blows up link by link back to the sphere.
+ * Rebuilt from the reference videos (user_ref 4:43–5:01, ref3 5:00–5:18, ref2 2:15–2:36). Not a travelling snake:
+ *  - 異次元 PORTAL (dark red void) alone ≈1.5 s, then a big grey rock SPHERE (pivot) comes out with the HEAD.
+ *  - BODY: 7 grey elements pivot → tip (red ball 3rd from the tip); the head (red ring + yellow centre = core) sits
+ *    just past the tip link. The body STRETCHES and CONTRACTS like an accordion (gaps open / close):
+ *      out (stretch to full) → head comes off → chase 3 s (body held stretched, slow drift) → head flies back to the
+ *      stretched tip → slides in, body contracts onto the sphere → passes over the sphere and back (wait 1 s)
+ *      → stretches out again … (numbers: SNAKE_BODY below armMove).
+ *  Stays 36 s (leaves only with the head home). Core break → the chain blows up link by link back to the sphere.
  */
-export function snake(fw, fh, fy, segs = 11, tone = 'silver') {
-  // Measured from user_ref.mp4 @4:48 own-pane vs ship: pivot≈2×shipH, seg≈0.57×shipH (≈1/3 pivot),
-  // spacing≈0.875×seg, glow≈2.2×pivot, arm lunge≈5.5×shipH. Game shipH≈28 → below.
+export function snake(fw, fh, fy, segs = 7, tone = 'silver') {
+  // Measured from user_ref.mp4 4:44–5:01 (ship 14 px ↔ game 28 px, ×2): sphere Ø ≈28 → 56, link ≈11 → 22 drawn,
+  // 7 elements pivot→tip with the RED BALL 3rd from the tip, pitch ≈12.5 → 25 at full stretch (SNAKE_BODY).
+  segs = SNAKE_BODY.LINKS; // 10-06b: the video chain always has 7 elements (was 12: links overlapped, no visible stretch)
   const y0 = Math.max(52, Math.min(fh - 52, fh * fy));
   const SH = 28; // reference ship draw height
-  const SEG = Math.round(SH * 0.57);   // ~16
+  const SEG = 18;                      // drawn ×1.35 ≈ 24 px box (video link ≈11–12 px, links nearly touch at full stretch)
   const PIV = Math.round(SH * 2.0);    // ~56
   const HEAD = Math.round(SH * 1.14);  // ~32 (video head_d)
-  const BALL = Math.round(SH * 0.57);  // ~16 (red ball ≈ seg)
+  const BALL = 16;                     // drawn ×1.5 ≈ 24 px (video red ball ≈12 px)
   const head = mk('wave_snake_head', fw, fh, fw + 200, y0, {
     mv: 'arm', dly: 0, stay: 36, segs, fire: { type: 'armhead' }, // 10-06: 20→36 s so the head chase loop repeats several times
     w: HEAD, h: HEAD, hp: GUARD_HP.seg,
   });
   head._tx = fw * 0.7; head._ty = y0;
-  head._portalOnly = 1; head._portalOpen = 0.3; // starts as the 異次元 portal alone (armMove 'portal')
-  head._segSpace = Math.round(SH * 0.50); // ~14 (video spacing/ship)
-  head._armLen = Math.round(SH * 5.54);   // ~155 full lunge
+  head._portalOnly = 1; head._portalOpen = 1; head._portalA = 0; // starts as the 異次元 portal alone (armMove 'portal'), fading in
   const out = [];
   out.push(mk('wave_snake_seg', fw, fh, fw + 60, y0, {
     w: PIV, h: PIV, hp: GUARD_HP.seg, score: 60, mv: 'armseg', _chainOf: head, chainIdx: segs + 1,
     noFire: true, noDrop: true, passShots: true, tone: 'anchor',
   }));
   for (let i = segs; i >= 1; i--) {
-    const segTone = (i === 1) ? 'red' : tone;
-    // slight taper toward tip (video): base ~SEG, tip-adjacent ~0.85×SEG; i=1 is red ball
-    const taper = 0.85 + 0.15 * ((i - 1) / Math.max(1, segs - 1));
-    const sw = (i === 1) ? BALL : Math.max(12, Math.round(SEG * taper));
+    const red = i === SNAKE_BODY.RED; // video: red ball = 3rd element from the tip
+    // links are uniform in the video; only the one against the sphere's bell neck is a little fuller
+    const sw = red ? BALL : (i === segs ? SEG + 3 : SEG);
     out.push(mk('wave_snake_seg', fw, fh, fw + 60, y0, {
-      w: sw, h: sw, hp: GUARD_HP.seg, score: 20, mv: 'armseg', _chainOf: head, chainIdx: i,
-      noFire: true, noDrop: true, passShots: true, tone: segTone,
+      w: sw, h: sw, hp: GUARD_HP.seg, score: red ? 30 : 20, mv: 'armseg', _chainOf: head, chainIdx: i,
+      noFire: true, noDrop: true, passShots: true, tone: red ? 'red' : tone,
     }));
   }
   out.push(head);
@@ -505,7 +501,7 @@ function jetBoss(fw, fh) {
 export const WAVE_SCRIPT = [
   // W1
   [2, (w, h) => mechArc(w, h, true, 4, false)],
-  [3, (w, h) => snake(w, h, 0.31, 12)], // DEBUG 10-06: snake at match start for checking — remove when done (original only at 146)
+  [3, (w, h) => snake(w, h, 0.31, 7)], // DEBUG 10-06: snake at match start for checking — remove when done (original only at 146)
   [4.2, (w, h) => mechArc(w, h, false, 4, true)],
   [6.8, (w, h) => stopShoot(w, h, [0.3, 0.7])],
   [7.8, (w, h) => zig(w, h, 0.22, 5)], // fodder (kills → drops → sends)
@@ -553,7 +549,7 @@ export const WAVE_SCRIPT = [
   // boss snake (slow crossing)
   [137, (w, h) => zig(w, h, 0.4, 5)], // fodder (kills → drops → sends)
   [141, (w, h) => splitGroup(w, h, 0.6, 6, 'scout_drone')], // fodder (kills → drops → sends)
-  [146, (w, h) => snake(w, h, 0.31, 12)],
+  [146, (w, h) => snake(w, h, 0.31, 7)],
   [150, (w, h) => zig(w, h, 0.2, 4)],
   [154, (w, h) => behindArc(w, h, false, 4)],
   [160, (w, h) => zig(w, h, 0.3, 5)],
@@ -819,38 +815,66 @@ function bossMove(e, dt, fw, fh, py) {
   }
 }
 
-/** Tethered striker tip (core): entry → rest → strike (curl / lunge / hold / swing back) or saw → leave. */
+/** Tethered striker tip (core): 異次元 portal → emerge → [stretch out → detach → chase → return → contract → wait] loop → leave. */
 export function armReach(fw) { return Math.min(fw * 0.42, 170); } // video lunge ≈5.5×shipH ≈155
-const ARM = { rest: 1.1, coil: 0.75, strike: 260, retract: 170, hold: 0.6, swingW: 1.5, sawWind: 0.5, sawCycle: 4.3, portal: 1.5, portalOpen: 0.07, enter: 1.2, chaseW: 1.1, chaseMax: 1.6 };
 // User 10-06: 異次元 entry was 1.15 s total (too short). user_ref.mp4 4:43.3–4:45.6: the dark-red portal sits alone
-// ≈1.5 s (it pops in at full size within 1–2 frames, no pulsing), then the sphere + chain come out (≈0.8 s).
-// → portal 1.5 s + payout 1.2 s (not rushed) = 2.7 s.
-// User 10-06: once the head has come off (missed lunge) it loops for as long as the snake lives:
-//   chase the ship for CHASE s → fly back to its own slot at the chain tip (reattach) → sit there WAIT s → off again.
-export const SNAKE_HEAD = { CHASE: 3, WAIT: 1, RET_SPD: 330, RET_NEAR: 60, CHASE_SPD: 240, CHASE_SLOW: 140, TURN: 2.1, BODY_K: 2.5 };
-const snakeRestL = (e) => Math.max(48, (e.segs || 11) * (e._segSpace || 14) * 0.45);
+// ≈1.5 s, then the sphere + chain come out. Portal: the video shows it at full size from its first frame
+// (user_ref 4:43.36, ref2 2:15.29 — no growth); per the user (10-06b) it now fades in with alpha over portalFade s.
+const ARM = { portal: 1.5, portalFade: 0.45, enter: 1.25 };
+// User 10-06: once the head has come off it loops for as long as the snake lives:
+//   chase the ship for CHASE s → fly back to its own slot (chain tip) → slide in → sit WAIT s → stretch out → off again.
+export const SNAKE_HEAD = { CHASE: 3, WAIT: 1, RET_SPD: 330, RET_NEAR: 60, CHASE_SPD: 240, CHASE_SLOW: 140, TURN: 2.1 };
+/*
+ * 10-06b body motion — measured frame by frame (user_ref.mp4 4:44.8–5:01, 27.96 fps; ref3 5:00–5:18; ref2 2:15–2:36).
+ * Video px ×2 = game px (video ship 14 px ↔ game 28 px). Body length is measured pivot centre → red ball
+ * (3rd link from the tip, robust to blur) and converted to the tip link (red ball sits at 5/7 of the tip distance).
+ *   emerge   : sphere + head appear with the head ≈19 px (game 38) from the pivot, chain pays out to full in ≈0.6 s
+ *              (ease-out: red ball 1.0 → 2.5 → 4.4 ships at +0 / +0.4 / +0.6 s), holds ≈0.4 s, head comes off.
+ *   away     : chain stays fully stretched (red ball 4.4–4.85 ships ⇒ tip link ≈ 88 video px = 176 game px),
+ *              length drifts only ±4 %, angle drifts ≤ 7°/s (162° → 177° over 2–3 s; 180° = straight at the ship side).
+ *   return   : head flies back to the stretched tip, then SLIDES IN along the chain at ≈112 px/s (game 224):
+ *              the chain contracts behind it (red ball 4.8 → 0.64 ships in ≈0.9 s), links bunch on the sphere.
+ *   turn     : head passes over the front of the sphere to +35..39 px on its far side, slightly below (game +74, +12..40)
+ *              and back in ≈0.55 s.
+ *   out      : (after the turn the head eases back out to ≈80 px within the 1 s wait, red ball ≈1.7 ships — video 1.5–3)
+ *              head goes back out at the same ≈224 px/s, chain stretching behind it (red ball 0.9 → 4.4 in ≈0.6 s), and comes
+ *              off at full stretch. Reattach → detach in the video ≈2.2 s (here slide 0.85 + WAIT 1 + out 0.65 s).
+ *   7 elements pivot→tip at full stretch: −13 −25 −37 −49 (links) −63 (RED BALL) −77 −88 (tip link), head centre ≈7 px past it.
+ *   Links are uniform (≈11 px thick, game 22); only the sphere's bell-shaped neck flares (thicker at the pivot).
+ */
+export const SNAKE_BODY = { LINKS: 7, RED: 3, LMAX: 176, LMIN: 30, HEAD_OFF: 14, OUT_SPD: 224, IN_SPD: 224, TURN_T: 0.55, TURN_X: 74, TURN_Y: 26, SLOT_S: 80, AWAY_WOB: 0.04, AWAY_WOB_T: 2.6, AIM_W: 0.9, DRIFT_W: 0.12, AIM_SPAN: 0.45, EMERGE_S: 38, IN_LAG: 0.25 };
+const B_ = SNAKE_BODY;
 const wrapA = (a) => ((a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-/** The head's own slot on the body: the chain tip (pivot + chain angle × length). */
-function snakeHomePos(e, fh) {
-  const A = e._A || 0, L = e._L || snakeRestL(e);
-  return [e._tx + Math.cos(A) * L, Math.max(8, Math.min(fh - 8, e._ty + Math.sin(A) * L))];
+const clampAim = (a) => Math.PI + Math.max(-B_.AIM_SPAN, Math.min(B_.AIM_SPAN, wrapA(a - Math.PI))); // chain points at the ship side (left)
+/** Video (user_ref 4:49.66): the portal behind the sphere vanishes as the head goes out for the 2nd time; it fades out here. */
+function snakePortalOut(e, dt) { if (e._portalGo) e._portalOut = Math.max(0, (e._portalOut ?? 1) - dt / 0.25); }
+/** Turn the chain angle toward `want` (clamped to the ship side) at most `w` rad/s. */
+function snakeAimA(e, want, w, dt) {
+  const d = wrapA(clampAim(want) - (e._A ?? Math.PI)), st = w * dt;
+  const a0 = e._A ?? Math.PI;
+  e._A = a0 + Math.max(-st, Math.min(st, d));
+  e._Aw = (e._A - a0) / Math.max(dt, 1e-3); // angular speed → slight rope bend in the links
+}
+/** The head's slot at the stretched chain tip (where it re-attaches after a chase). */
+function snakeTipPos(e, fh) {
+  const A = e._A ?? Math.PI, s = (e._Lc || B_.LMAX) + B_.HEAD_OFF;
+  return [e._tx + Math.cos(A) * s, Math.max(8, Math.min(fh - 8, e._ty + Math.sin(A) * s))];
 }
 /** Head comes off the chain: aims straight at the ship and starts the CHASE timer. */
 function snakeDetach(e, px, py) {
-  e._detached = true; e._hc = 'chase'; e._hcT = 0;
+  e._detached = true; e._hc = 'chase'; e._hcT = 0; e._awayT = 0;
   e._ph = 'away'; e._pt = 0;
   e.mv = 'snakechase';
   const a = Math.atan2(py - e.y, px - e.x);
   e._vx = Math.cos(a) * 220; e._vy = Math.sin(a) * 220;
 }
-/** Detached head (mv 'snakechase'): chase CHASE s → return to its slot → reattach (armMove 'headWait'). */
+/** Detached head (mv 'snakechase'): chase CHASE s → fly back to the stretched chain tip → (armMove 'retract'). */
 function snakeHeadAway(e, dt, fw, fh, px, py) {
-  e._bt = (e._bt || 0) + dt; e._pt = (e._pt || 0) + dt; e._hcT = (e._hcT || 0) + dt;
-  // body: the chain reels back to its rest pose (trailing behind the sphere) and waits for the head
-  const k = Math.min(1, dt * SNAKE_HEAD.BODY_K), Lrest = snakeRestL(e);
-  const restA = Math.sin(e._bt * 1.1 + (e._wob || 0)) * 0.05;
-  e._A = wrapA((e._A || 0) + wrapA(restA - (e._A || 0)) * k);
-  e._L = (e._L || Lrest) + (Lrest - (e._L || Lrest)) * k;
+  e._bt = (e._bt || 0) + dt; e._pt = (e._pt || 0) + dt; e._hcT = (e._hcT || 0) + dt; e._awayT = (e._awayT || 0) + dt;
+  snakePortalOut(e, dt);
+  // body (video): stays fully stretched while the head is away, length breathing only ±4 %, angle drifting slowly
+  e._Lc = B_.LMAX * (1 - B_.AWAY_WOB * 0.5 + B_.AWAY_WOB * 0.5 * Math.cos(2 * Math.PI * e._awayT / B_.AWAY_WOB_T));
+  snakeAimA(e, Math.atan2(e.y - e._ty, e.x - e._tx), B_.DRIFT_W, dt);
   e._pivWind = 0;
   if (e._hc === 'chase') {
     // homes on the ship with limited turn (dodgeable)
@@ -868,17 +892,18 @@ function snakeHeadAway(e, dt, fw, fh, px, py) {
     if (e._hcT >= SNAKE_HEAD.CHASE) { e._hc = 'ret'; e._hcT = 0; }
     return;
   }
-  // return: fly straight back to the head slot at the chain tip (eases in over the last RET_NEAR px)
-  const [hx, hy] = snakeHomePos(e, fh);
+  // return: fly straight back to the stretched chain tip (eases in over the last RET_NEAR px)
+  const [hx, hy] = snakeTipPos(e, fh);
   const dx = hx - e.x, dy = hy - e.y, dist = Math.hypot(dx, dy);
   const spd = SNAKE_HEAD.RET_SPD * Math.max(0.35, Math.min(1, dist / SNAKE_HEAD.RET_NEAR));
   const step = spd * dt;
   e.tone = 'ret';
   if (dist <= Math.max(2, step)) {
-    // home: reattach to the body, sit in the rest pose for WAIT s (armMove 'headWait')
+    // reattached at the tip: now slide in along the chain to the slot by the sphere (armMove 'retract')
     e.x = hx; e.y = hy; e._vx = 0; e._vy = 0;
-    e._detached = false; e._hc = null; e.mv = 'arm'; e._ph = 'headWait'; e._pt = 0; e.tone = undefined;
-    e.rot = e._A || 0;
+    e._detached = false; e._hc = null; e.mv = 'arm'; e._ph = 'retract'; e._pt = 0; e.tone = undefined;
+    e._s = (e._Lc || B_.LMAX) + B_.HEAD_OFF;
+    e.rot = (e._A ?? Math.PI) - Math.PI;
     return;
   }
   e._vx = dx / dist * spd; e._vy = dy / dist * spd;
@@ -888,135 +913,79 @@ function snakeHeadAway(e, dt, fw, fh, px, py) {
 }
 function armMove(e, dt, fw, fh, px, py) {
   if (e._detached || e.mv === 'snakechase') return; // head already flying free
-  const n = e.segs || 11;
-  // rest: bunched (spacing ~0.4×seg); lunge uses e._armLen / armReach
-  const space = e._segSpace || 14;
-  const Lrest = Math.max(48, n * space * 0.45);
   const pivX = fw * 0.70; // video 2:30–2:43: sphere parked at ≈70 % across
-  // User 09-29: the lunge must reach the ship's normal area (x ≈ 14 % of the pane at the ship's row),
-  // so the player has to back off (or step aside) to dodge. Links keep their size; only the gaps
-  // between them widen on the thrust and close up again on the retract.
-  const reach = e._armLen || armReach(fw); e._reach = reach;
+  const Smax = B_.LMAX + B_.HEAD_OFF;
+  e._reach = Smax; // COM: the head's reach along its own line
   e._bt = (e._bt || 0) + dt; e._fw = fw;
-  if (e._ph == null) { e._ph = 'portal'; e._pt = 0; e._A = 0; e._L = 16; e._wob = Math.random() * 6; e._tx = pivX; }
+  if (e._ph == null) { e._ph = 'portal'; e._pt = 0; e._A = Math.PI; e._s = B_.EMERGE_S; e._Lc = B_.LMIN; e._wob = Math.random() * 6; e._tx = pivX; }
   e._pt += dt;
-  e.tone = undefined; e._pivWind = 0;
-  const angTo = (x, y) => Math.atan2(y - e._ty, x - e._tx);
-  const wrap = (a) => ((a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+  snakePortalOut(e, dt);
+  e.tone = undefined; e._pivWind = 0; e._Aw = 0; e._hy = 0;
+  const shipA = Math.atan2(Math.max(12, Math.min(fh - 12, py)) - e._ty, px - e._tx);
   switch (e._ph) {
-    case 'portal': { // 異次元 portal opens on its own (sphere / chain / head not out yet: parked off-field)
-      const u = Math.min(1, e._pt / ARM.portalOpen);
-      e._tx = pivX; e._L = 16; e._A = 0;
-      e._portal = 1; e._portalOnly = 1;
-      e._portalOpen = 0.3 + 0.7 * u;
-      if (e._pt >= ARM.portal) { e._ph = 'enter'; e._pt = 0; e._portalOnly = 0; e._portalOpen = 1; }
+    case 'portal': { // 異次元 portal on its own (sphere / chain / head not out yet: parked off-field); fades in
+      const u = Math.min(1, e._pt / ARM.portalFade);
+      e._tx = pivX; e._s = B_.EMERGE_S; e._A = Math.PI;
+      e._portal = 1; e._portalOnly = 1; e._portalOpen = 1;
+      e._portalA = u * u * (3 - 2 * u); // smoothstep 0 → 1 (transparent → solid), no size change
+      if (e._pt >= ARM.portal) { e._ph = 'enter'; e._pt = 0; e._portalOnly = 0; e._portalA = 1; }
       break;
     }
     case 'enter': {
-      // video ~4:45 / 2:30: 異次元 portal (dark red void) then chain pays out from the sphere
-      const u = Math.min(1, e._pt / ARM.enter), k = 1 - (1 - u) * (1 - u);
-      e._tx = pivX; e._L = 16 + (Lrest - 16) * k; e._pivWind = 1 - u;
-      e._portal = Math.max(0, 1 - u * 0.85); // large 異次元 portal (video); fades as chain pays out
-      if (u >= 1) { e._ph = 'rest'; e._pt = 0; e._portal = 0; }
+      // video 4:44.8: sphere + head pop out of the portal (head ≈38 px out), hold 0.25 s, chain pays out to full
+      // stretch in ≈0.6 s (ease-out), holds ≈0.4 s aimed at the ship, then the head comes off
+      e._tx = pivX; e._portal = 1;
+      const t = e._pt;
+      e._pivWind = Math.max(0, 1 - t / 0.5);
+      if (t < 0.25) e._s = B_.EMERGE_S;
+      else { const u = Math.min(1, (t - 0.25) / 0.6), k = 1 - (1 - u) * (1 - u); e._s = B_.EMERGE_S + (Smax - B_.EMERGE_S) * k; }
+      if (t > 0.25) snakeAimA(e, shipA, B_.AIM_W * 0.6, dt);
+      if (t >= ARM.enter) { snakeDetach(e, px, py); break; }
       break;
     }
-    case 'rest':
-      e._A = Math.sin(e._bt * 1.1 + e._wob) * 0.05; e._L = Lrest;
-      if (e._bt > (e.stay || 20)) { e._ph = 'leave'; e._pt = 0; }
-      else if (e._pt > ARM.rest) {
-        // Prefer the lunge whenever the ship is on this row-band; otherwise saw.
-        // (video ~4:45: after portal entry it lunges, and on a miss the head detaches)
-        const inReach = Math.hypot(px - e._tx, py - e._ty) < reach + 40
-          || Math.abs(py - e._ty) < fh * 0.45;
-        e._ph = inReach ? 'coil' : 'sawWind'; e._pt = 0;
-        e._aimA = angTo(px, py);
-      }
-      break;
-    case 'coil': { // telegraph: chain curls in and turns toward the ship, tip glows
-      const u = Math.min(1, e._pt / ARM.coil);
-      e._aimA = angTo(px, py); // tracks the (visible) ship during the curl
-      const side = Math.sin(e._aimA) >= 0 ? 1 : -1;
-      const tgt = e._aimA;
-      // rotate via the ship's side (down-round if the ship is below the pivot, up-round if above)
-      let d = tgt - e._A; if (side > 0) { while (d < 0) d += Math.PI * 2; } else { while (d > 0) d -= Math.PI * 2; }
-      e._A += d * Math.min(1, dt * 7); e._L = Lrest + (30 - Lrest) * u;
-      e.tone = 'wind';
-      if (u >= 1) {
-        e._A = tgt;
-        e._aimX = px; e._aimY = Math.max(12, Math.min(fh - 12, py)); // ship position at strike start
-        e._aimA = angTo(e._aimX, e._aimY); e._A = e._aimA;
-        e._Lgoal = Math.min(reach, Math.hypot(e._aimX - e._tx, e._aimY - e._ty));
-        e._ph = 'strike'; e._pt = 0;
-      }
-      break;
-    }
-    case 'strike': {
-      // User 10-04c: the head chases the ship during the lunge (limited turn rate → still dodgeable)
-      const cy = Math.max(12, Math.min(fh - 12, py));
-      const dA = wrap(angTo(px, cy) - e._A), turn = ARM.chaseW * dt;
-      e._A += Math.max(-turn, Math.min(turn, dA)); e._aimA = e._A;
-      e._Lgoal = Math.min(reach, Math.max(e._L, Math.hypot(px - e._tx, cy - e._ty)));
-      e._L = Math.min(e._Lgoal, e._L + ARM.strike * dt);
-      if (e._L >= e._Lgoal - 0.5 || e._pt > ARM.chaseMax) { e._ph = 'hold'; e._pt = 0; }
-      break;
-    }
-    case 'hold': { // keeps nosing after the ship a little at full stretch
-      const dA = wrap(angTo(px, Math.max(12, Math.min(fh - 12, py))) - e._A), turn = ARM.chaseW * 0.5 * dt;
-      e._A += Math.max(-turn, Math.min(turn, dA));
-      if (e._pt >= ARM.hold) {
-        // video: if the lunge didn't reach the ship, the head detaches and chases
-        const dist = Math.hypot(px - e.x, py - e.y);
-        if (dist > 48 && !e._detached) { e._ph = 'detach'; e._pt = 0; }
-        else { e._ph = 'retract'; e._pt = 0; }
-      }
-      break;
-    }
-    case 'detach': // tip (this core) flies free (snakeHeadAway); the chain reels back to rest and waits
-      snakeDetach(e, px, py);
-      break;
     case 'away': // fallback if still on arm mv briefly
       e.mv = 'snakechase';
       break;
-    case 'headWait': // head is back in its slot at the chain tip: rest pose for SNAKE_HEAD.WAIT s, then off again
-      e._A = Math.sin(e._bt * 1.1 + e._wob) * 0.05; e._L = Lrest;
-      if (e._pt >= SNAKE_HEAD.WAIT) {
+    case 'retract': // head re-attached at the stretched tip slides in along the chain; the chain contracts behind it
+      e._s = Math.max(0, (e._s ?? Smax) - B_.IN_SPD * dt);
+      if (e._s <= 0) { e._ph = 'headWait'; e._pt = 0; }
+      break;
+    case 'headWait': { // the slot: head passes over the front of the sphere and back (video ≈0.55 s), sits by the sphere, WAIT s
+      const t = e._pt;
+      if (t < B_.TURN_T) { const v = Math.sin(Math.PI * t / B_.TURN_T); e._s = -B_.TURN_X * v; e._hy = B_.TURN_Y * v; }
+      else { const u = Math.min(1, (t - B_.TURN_T) / (SNAKE_HEAD.WAIT - B_.TURN_T)); e._s = B_.SLOT_S * u * u * (3 - 2 * u); }
+      snakeAimA(e, shipA, B_.AIM_W * 0.5, dt);
+      if (t >= SNAKE_HEAD.WAIT) {
         if (e._bt > (e.stay || 20)) { e._ph = 'leave'; e._pt = 0; } // timed exit only with the head home
-        else snakeDetach(e, px, py);
+        else { e._ph = 'strike'; e._pt = 0; e._portalGo = 1; } // first stretch-out after a return: portal goes (video)
       }
       break;
-    case 'retract': // chain reels back in along the same line (gaps close up), then swings home
-      e._L = Math.max(Lrest, e._L - ARM.retract * dt);
-      if (e._L <= Lrest + 0.5) { e._ph = 'swing'; e._pt = 0; e._swDir = Math.sin(e._A) >= 0 ? -1 : 1; }
-      break;
-    case 'swing': { // swings back round the pivot (through the ship's side) to trail behind again
-      const rem = Math.abs(wrap(0 - e._A));
-      const step = ARM.swingW * dt;
-      if (rem <= step) { e._A = 0; e._ph = 'rest'; e._pt = 0; }
-      else e._A = wrap(e._A + e._swDir * step);
-      e._L += (Lrest - e._L) * Math.min(1, dt * 1.6);
-      break;
     }
-    case 'sawWind': // sphere mouth glows, then spits the saw ring + diamond rows (fire step)
-      e._pivWind = 1;
-      if (e._pt >= ARM.sawWind) { e._sawAim = angTo(px, py); e._armFire = 'saw'; e._ph = 'sawOut'; e._pt = 0; }
-      break;
-    case 'sawOut':
-      e._A = Math.sin(e._bt * 1.1 + e._wob) * 0.05;
-      if (e._pt >= ARM.sawCycle) { e._ph = 'rest'; e._pt = 0; }
+    case 'strike': // head goes back out at ≈224 px/s aimed at the ship, the chain stretching behind it; off at full stretch
+      e._s = Math.min(Smax, (e._s ?? B_.SLOT_S) + B_.OUT_SPD * dt);
+      snakeAimA(e, shipA, B_.AIM_W, dt);
+      if (e._s >= Smax - 0.5) { e._s = Smax; snakeDetach(e, px, py); }
       break;
     case 'leave':
-      e._tx += 70 * dt; e._A = 0; e._L = Lrest;
-      if (e._tx > fw + Lrest + 60) e.x = -999;
+      e._tx += 70 * dt; e._s = B_.SLOT_S;
+      if (e._tx > fw + B_.LMAX + 60) e.x = -999;
       break;
   }
   if (e._detached) { e.mv = 'snakechase'; return; }
   if (e._ph === 'portal') { e.x = fw + 300; e.y = e._ty; e._vx = 0; e._vy = 0; e.rot = 0; return; } // hidden until it emerges
-  if (e._ph !== 'leave' || e._tx <= fw + Lrest + 60) {
-    const ox = e.x, oy = e.y;
-    e.x = e._tx + Math.cos(e._A) * e._L; e.y = Math.max(8, Math.min(fh - 8, e._ty + Math.sin(e._A) * e._L));
+  // attached: chain tip link sits HEAD_OFF behind the head, never shorter than LMIN (links bunch on the sphere).
+  // While the head slides in, the chain contracts with a lag (video 4:52.9–4:53.4: the red ball / tip links are still
+  // out past the head as it slides over them; red ball bottoms out ≈1.0 s after re-attaching, head at the pivot at 0.85 s).
+  const Lt = Math.max(B_.LMIN, e._s - B_.HEAD_OFF);
+  if ((e._ph === 'retract' || e._ph === 'headWait') && e._Lc > Lt) e._Lc += (Lt - e._Lc) * Math.min(1, dt / B_.IN_LAG);
+  else e._Lc = Lt;
+  if (e._ph !== 'leave' || e._tx <= fw + B_.LMAX + 60) {
+    const ox = e.x, oy = e.y, A = e._A ?? Math.PI;
+    e.x = e._tx + Math.cos(A) * e._s - Math.sin(A) * e._hy;
+    e.y = Math.max(8, Math.min(fh - 8, e._ty + Math.sin(A) * e._s + Math.cos(A) * e._hy * -1));
     e._vx = (e.x - ox) / Math.max(dt, 1e-3); e._vy = (e.y - oy) / Math.max(dt, 1e-3);
   }
-  e.rot = e._A || 0; // tip faces along lunge
+  e.rot = (e._A ?? Math.PI) - Math.PI; // attached head drawn as cut from the video (chain pointing left = no rotation)
 }
 
 /** Scripted movement. Returns true when handled (skip the default drift). `py` = target ship row. */
@@ -1057,19 +1026,30 @@ export function moveScripted(e, dt, fw, fh, py = fh * 0.5, px = 40) {
   } else if (e.mv === 'arm') {
     armMove(e, dt, fw, fh, px, py);
   } else if (e.mv === 'armseg') {
-    // Link k of n: on the line pivot → tip; rotate with chain tangent (video accordion)
+    // 10-06b: link j (1 = next to the pivot … LINKS = tip link) sits at j/LINKS of the chain length H._Lc along the
+    // chain angle (accordion: the gaps open on the stretch and close on the contract — measured in the video).
+    // When the head is close in / passing over the sphere, the tip links trail toward it like a rope.
     const H = e._chainOf;
     if (!H || H.x < -500) { e.x = -999; return true; }
-    // Head away (H._detached): the body stays — snakeHeadAway reels H._A / H._L back to the rest pose,
-    // so the links below simply follow it and keep the head's slot (chain tip) ready for its return.
-    const n = (H.segs || 11) + 1, k = 1 - e.chainIdx / n; // pivot = 0 … tip = 1
-    if (e.chainIdx === n) { e.x = H._tx; e.y = H._ty; e.tone = H._portalOnly ? 'portal' : H._pivWind ? 'anchorWind' : 'anchor'; e.rot = H._A || 0; return true; }
+    const n = (H.segs || B_.LINKS) + 1;
+    if (e.chainIdx === n) { e.x = H._tx; e.y = H._ty; e.tone = H._portalOnly ? 'portal' : H._pivWind ? 'anchorWind' : 'anchor'; e.rot = (H._A ?? Math.PI) - Math.PI; return true; }
     if (H._portalOnly) { e.x = H.x; e.y = H.y; e._vx = 0; e._vy = 0; return true; } // links still inside the portal (off-field with the head)
-    const A = H._A || 0, L = H._L || 0, lag = (H._ph === 'swing' ? -H._swDir * 0.35 : 0) * Math.sin(Math.PI * k);
+    const j = n - e.chainIdx, f = j / (n - 1); // pivot side 0 … tip 1
+    const A = H._A ?? Math.PI, Lc = H._Lc || B_.LMIN, ux = Math.cos(A), uy = Math.sin(A);
+    let x = H._tx + ux * Lc * f, y = H._ty + uy * Lc * f;
+    if (!H._detached) { // rope: pull the tip links toward where the head actually is (over / past the sphere)
+      // (only the part of the head offset that is past the pivot / off the chain line: at s ≥ 0 the links keep
+      //  their even accordion spacing; video: contracted red ball ≈0.6–0.9 ships from the pivot)
+      const qx = H.x - H._tx, qy = H.y - H._ty, sAl = qx * ux + qy * uy, sPerp = -qx * uy + qy * ux;
+      const ea = Math.min(0, sAl), w = f * f * f;
+      x += (ux * ea - uy * sPerp) * w; y += (uy * ea + ux * sPerp) * w;
+    }
+    // slight bend while the chain swings (links lag the angle), plus the small link wobble
+    const bend = Math.max(-0.35, Math.min(0.35, -(H._Aw || 0) * 0.3)) * Lc * Math.sin(Math.PI * f) * 0.5;
+    const wob = Math.sin(t * 2 + f * 5 + (H._wob || 0)) * 1.2 * Math.sin(Math.PI * f);
     const ox = e.x, oy = e.y;
-    e.x = H._tx + Math.cos(A + lag) * L * k;
-    e.y = H._ty + Math.sin(A + lag) * L * k + Math.sin(t * 2 + k * 5 + (H._wob || 0)) * 1.2 * Math.sin(Math.PI * k);
-    e.rot = A + lag; // segment faces along chain
+    e.x = x - uy * (bend + wob); e.y = y + ux * (bend + wob);
+    e.rot = A - Math.PI; // link faces along the chain
     e._vx = (e.x - ox) / Math.max(dt, 1e-3); e._vy = (e.y - oy) / Math.max(dt, 1e-3);
     return true;
   } else if (e.mv === 'snake') {

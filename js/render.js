@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261006130641';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261006133815';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -370,7 +370,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261006130641`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261006133815`;
 }
 
 function loadKindSprite(kind) {
@@ -456,8 +456,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261006130641'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261006130641'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261006133815'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261006133815'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -1228,10 +1228,12 @@ function drawSegBall(ctx, e, w, h, t) {
     const anchor = e.tone !== 'silver';
     if (e.tone === 'portal') { // 10-06: 異次元 portal alone (sphere not out yet), opening up
       const H = e._chainOf, open = H && H._portalOpen != null ? H._portalOpen : 1;
+      const fade = e._portalA != null ? e._portalA : 1; // 10-06b: fades in (transparent → solid), full size from the start
       const R = r * 2.46 * open; // video: portal Ø ≈ 2.46 × sphere Ø
       const portImg = waveSprite('snake_portal');
       ctx.save();
-      if (portImg) { ctx.imageSmoothingEnabled = false; ctx.globalAlpha = Math.min(1, 0.6 + 0.4 * open); drawFit(ctx, portImg, R * 2, R * 2, false); }
+      ctx.globalAlpha *= fade;
+      if (portImg) { ctx.imageSmoothingEnabled = false; drawFit(ctx, portImg, R * 2, R * 2, false); }
       else {
         const gr = ctx.createRadialGradient(0, 0, R * 0.15, 0, 0, R);
         gr.addColorStop(0, 'rgba(40,0,0,0.95)'); gr.addColorStop(0.35, 'rgba(180,20,30,0.8)'); gr.addColorStop(0.7, 'rgba(100,10,12,0.3)'); gr.addColorStop(1, 'rgba(60,0,0,0)');
@@ -1248,20 +1250,23 @@ function drawSegBall(ctx, e, w, h, t) {
       // video: glow diameter ≈ 2.2 × pivot (measured); strong on entry, soft residual while arm lives
       const R = r * 2.46; // r = pivot radius; video (user_ref 4:46–4:49 median cut): portal Ø ≈ 2.46 × sphere Ø
       const portImg = waveSprite('snake_portal');
-      if (portImg && (portal > 0.02 || hot || armLive)) {
+      const pOut = e._portalOut != null ? e._portalOut : 1; // 10-06b: video — portal vanishes on the 2nd stretch-out
+      if (portImg && pOut > 0.01 && (portal > 0.02 || hot || armLive)) {
         ctx.save();
         ctx.imageSmoothingEnabled = false;
-        const a = 1; // 10-06: video — the portal stays solid dark red behind the sphere (sprite carries its own soft edge)
+        const a = pOut; // solid dark red behind the sphere (sprite carries its own soft edge) until it fades out
         ctx.globalAlpha = a;
         drawFit(ctx, portImg, R * 2, R * 2, false);
         ctx.restore();
-      } else {
+      } else if (pOut > 0.01) {
+        ctx.save(); ctx.globalAlpha *= pOut;
         const gr = ctx.createRadialGradient(0, 0, r * 0.35, 0, 0, R);
         gr.addColorStop(0, hot || portal > 0.2 ? 'rgba(40,0,0,0.95)' : 'rgba(120,10,12,0.75)');
         gr.addColorStop(0.35, portal > 0.15 ? 'rgba(180,20,30,0.8)' : (hot ? 'rgba(220,40,30,0.85)' : 'rgba(140,15,18,0.55)'));
         gr.addColorStop(0.7, 'rgba(100,10,12,0.3)');
         gr.addColorStop(1, 'rgba(60,0,0,0)');
         ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
       }
       const piv = waveSprite('snake_pivot') || waveSprite('wave_striker_pivot');
       if (piv) {
@@ -3619,6 +3624,7 @@ export function drawField(ctx, area, snap, opts = {}) {
       drones: e.drones ? e.drones.map((d) => ({ ang: d.ang, dist: d.dist * Math.min(sx, sy), ky: (d.ky || 1) * sy / Math.min(sx, sy), r: d.r * Math.min(sx, sy), hp: d.hp, w: d.w }))
         : (Array.isArray(e.dr) ? e.dr.map((hp, i, a) => ({ ang: (Math.PI * 2 * i) / a.length + performance.now() / 1000 * 1.6, dist: (e.kind === 'wave_eye_boss' ? 80 : e.kind === 'wave_ring_core' ? Math.max(20, ((e.w || 92) - 20) / 2) : 36 + (i % 2) * 8) * Math.min(sx, sy), ky: e.kind === 'wave_ring_core' ? Math.max(1, ((e.h || 92) - 16) / Math.max(1, (e.w || 92) - 20)) : 1, r: (e.kind === 'wave_eye_boss' ? 15 : e.kind === 'wave_ring_core' ? 7.5 : 12) * Math.min(sx, sy), hp })) : undefined),
       bodyFlash: e._bodyFlash || 0,
+      _portalA: e._chainOf ? e._chainOf._portalA : e.pA, _portalOut: e._chainOf ? e._chainOf._portalOut : e.pO, // snake portal fade in / out
     });
   }
   if (bonds.length) drawCoreBonds(ctx, bonds, sx, sy, 1);
