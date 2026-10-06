@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261006134521';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261006134936';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -497,11 +497,12 @@ function jetBoss(fw, fh) {
   return [e, ...esc];
 }
 
+// User 10-06: the snake appears exactly twice per match — never again when the script replays (延長戦).
+const firstRunOnly = (f) => { f._firstRunOnly = true; return f; };
 /** [time s, builder(fw, fh) → enemies, optional tag] — waves overlap a little on purpose. */
 export const WAVE_SCRIPT = [
   // W1
   [2, (w, h) => mechArc(w, h, true, 4, false)],
-  [3, (w, h) => snake(w, h, 0.31, 7)], // DEBUG 10-06: snake at match start for checking — remove when done (original only at 146)
   [4.2, (w, h) => mechArc(w, h, false, 4, true)],
   [6.8, (w, h) => stopShoot(w, h, [0.3, 0.7])],
   [7.8, (w, h) => zig(w, h, 0.22, 5)], // fodder (kills → drops → sends)
@@ -549,7 +550,7 @@ export const WAVE_SCRIPT = [
   // boss snake (slow crossing)
   [137, (w, h) => zig(w, h, 0.4, 5)], // fodder (kills → drops → sends)
   [141, (w, h) => splitGroup(w, h, 0.6, 6, 'scout_drone')], // fodder (kills → drops → sends)
-  [146, (w, h) => snake(w, h, 0.31, 7)],
+  [146, firstRunOnly((w, h) => snake(w, h, 0.31, 7))], // snake 1st time
   [150, (w, h) => zig(w, h, 0.2, 4)],
   [154, (w, h) => behindArc(w, h, false, 4)],
   [160, (w, h) => zig(w, h, 0.3, 5)],
@@ -579,6 +580,7 @@ export const WAVE_SCRIPT = [
   [244, (w, h) => zig(w, h, 0.8, 4)], // fodder (kills → drops → sends)
   [248, (w, h) => zig(w, h, 0.25, 4)],
   [252, (w, h) => loopers(w, h, 0.5, 3)],
+  [254, firstRunOnly((w, h) => [...snake(w, h, 0.27, 7), ...snake(w, h, 0.73, 7)])], // user 10-06: snake appears twice; the 2nd time it is 2 snakes (upper + lower row)
   [258, (w, h) => stopShoot(w, h, [0.3, 0.7])],
   [264, (w, h) => saucerCircle(w, h, 0.35)],
   [269, (w, h) => splitGroup(w, h, 0.5, 6, 'drone')], // fodder (kills → drops → sends)
@@ -689,6 +691,7 @@ export function runWaveScript(st, time, list, fw, fh) {
   const off = st._waveOff || 0;
   while (st._waveI < WAVE_SCRIPT.length && WAVE_SCRIPT[st._waveI][0] + off <= time) {
     const [, build, tag] = WAVE_SCRIPT[st._waveI++];
+    if (off && build._firstRunOnly) continue; // snake: twice per match only
     if (build === bubbleWall) { if (!st._bubDone) { st._bubDone = true; st._bubPend = time; } continue; } // once per match (not on replay), spawned below, away from cores
     const es = build(fw, fh);
     if (es.some((e) => e.core) && bubblesAlive(list)) (st._coreHeld = st._coreHeld || []).push(...es); // no core joins a bubble wall
