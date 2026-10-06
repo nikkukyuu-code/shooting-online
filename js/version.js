@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-06 13:49:36';
+export const VERSION_LABEL = '2026-10-06 16:03:56';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1791262176726;
-export const BUILD_NOTE = 'ヘビは2分26秒と4分14秒の2回 2回目は2体';
+export const BUILD_TIME = 1791270236582;
+export const BUILD_NOTE = 'デカ敵の爆発を動画どおりの連続爆発に高画質化 爆発時間は3割短く';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

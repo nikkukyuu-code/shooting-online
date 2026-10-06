@@ -784,7 +784,8 @@ export function spawnKillBoom(x, y, big = false) {
  *  The pixel blast fills ≈0.8 of its 2r sprite at its widest (visible ≈1.6r) → r = 1.1·size / 1.6.
  *  Very wide hulls: a row of bursts whose combined spread ≈1.1× the hull length. */
 const KB_SIZE = 1.1, KB_FILL = 1.6;
-export function pushKillBooms(list, e, big = false) {
+export function pushKillBooms(list, e, big = false, large = false) {
+  if (large) { pushBigKillBooms(list, e, big); return; }
   const vw = (e.w || 0) * 1.15, vh = (e.h || 0) * 1.15;
   const life = big ? 1.24 : 0.79;
   const one = (x, y, r, dl, sd) => list.push({ kind: 'kboom', x, y, life: life * Math.min(1.6, Math.max(1, r / 70)) + dl, max: life * Math.min(1.6, Math.max(1, r / 70)), r, sd });
@@ -797,6 +798,36 @@ export function pushKillBooms(list, e, big = false) {
   for (let i = 0; i < n; i++) {
     const o = ((i + 0.5) / n - 0.5) * KB_SIZE * (L - seg) / Math.max(1, L - L / n), dl = 0.07 * (1 + (i * 2 + 1) % n);
     one(e.x + (wide ? o * L : 0), e.y + (wide ? 0 : o * L), rOf(seg), dl, i + 2);
+  }
+}
+
+/** Total on-screen time (s) of the pre-10-06 kill boom for e (max life incl. stagger delay). */
+export function killBoomTotal(e, big = false) {
+  const tmp = []; pushKillBooms(tmp, e, big, false);
+  return tmp.reduce((m, f) => Math.max(m, f.life), 0);
+}
+/** 10-06 (user: デカ敵の爆発のクオリティUP・時間3割短く): big-enemy death = a chain of pixel bursts run along
+ *  the hull from one end to the other, measured from the reference videos (user_ref 2:47.0–2:48.75 tall
+ *  enemy: 6 bursts top→bottom, ≈0.1 s apart, chain spread ≈35 % of the whole blast, each burst ≈65 %,
+ *  the last one the largest; ref2 0:54.7–0:56.3 wide hull: 5 bursts left→right). Each burst plays the
+ *  video's white-hot → yellow → gold → brown smoke frames (render.js PXB_*). Total time = 0.7 × the old
+ *  kill boom of the same enemy; the combined blast still spans ≈1.1× the drawn hull. */
+export const BIG_BOOM_TIME = 0.7, BIG_BOOM_SPAN = 0.35, BIG_BOOM_FILL = 1.6;
+export function pushBigKillBooms(list, e, big = false) {
+  const T = BIG_BOOM_TIME * killBoomTotal(e, big);
+  const vw = (e.w || 0) * 1.15, vh = (e.h || 0) * 1.15;
+  const wide = vw >= vh, L = Math.max(1, wide ? vw : vh), s = Math.max(1, wide ? vh : vw);
+  const n = Math.max(4, Math.min(7, Math.round(1 + 2 * L / s)));
+  const span = BIG_BOOM_SPAN * T, life = T - span;
+  const dv = KB_SIZE * s * 0.85, dvl = KB_SIZE * s; // visible burst diameters (last burst = full hull depth)
+  const a0 = -KB_SIZE * L / 2 + dv / 2, a1 = KB_SIZE * L / 2 - dvl / 2;
+  const seed = ((e.x * 7 + e.y * 13) | 0) & 1023;
+  for (let i = 0; i < n; i++) {
+    const last = i === n - 1, d = last ? dvl : dv;
+    const u = a0 + (a1 - a0) * (i / (n - 1));
+    const j = last ? 0 : (((seed + i * 5) % 7) / 6 - 0.5) * (KB_SIZE * s - d); // small zig-zag across the hull
+    const dl = span * (i / (n - 1));
+    list.push({ kind: 'kboom', big: 1, x: e.x + (wide ? u : j), y: e.y + (wide ? j : u), life: life + dl, max: life, r: d / BIG_BOOM_FILL, sd: seed + i });
   }
 }
 
@@ -981,7 +1012,7 @@ export function serializeField(state) {
       k: b.k || undefined,
       r: b.r > 3.5 ? b.r : undefined,
     })),
-    fx: state.fx.filter((f) => f.kind !== 'coin').slice(0, 12).concat(state.fx.filter((f) => f.kind === 'coin').slice(0, 10)).map(f => ({ x: f.x, y: f.y, l: f.life, m: f.max, r: f.r, k: f.kind, t: f.t, a: f.a, g: f.g, ph: f.ph })),
+    fx: state.fx.filter((f) => f.kind !== 'coin').slice(0, 12).concat(state.fx.filter((f) => f.kind === 'coin').slice(0, 10)).map(f => ({ x: f.x, y: f.y, l: f.life, m: f.max, r: f.r, k: f.kind, t: f.t, a: f.a, g: f.g, ph: f.ph, sd: f.sd, big: f.big })),
     ff: state.ff ? { n: state.ff.n, k: state.ff.k } : undefined,
     scroll: state.scroll,
     status: state.statusText,

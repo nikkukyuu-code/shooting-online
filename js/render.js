@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261006134936';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261006160356';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -370,7 +370,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261006134936`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261006160356`;
 }
 
 function loadKindSprite(kind) {
@@ -456,8 +456,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261006134936'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261006134936'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261006160356'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261006160356'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -2591,17 +2591,75 @@ function* buildPxBoomGen(out) {
     }
   }
 }
+// 10-06: big-enemy burst frames. Palette = k-means of the reference video's big blasts (user_ref 2:47.2–2:48.5):
+// dark brown → brown → amber → gold → yellow → pale core (+ white-hot flash). Phase timing per burst from
+// user_ref 5:45.75–5:46.85 / 2:47.0–2:48.75: white-hot ≈0–23 %, yellow → 41 %, gold/orange → 64 %,
+// brown smoke breaking up and fading → 100 %. Lumpy "cauliflower" lobes with brown creases like the video.
+const PXB_PAL = ['#4e2609', '#7a4210', '#b8701c', '#e8a230', '#fad24a', '#fff0a0', '#fffbe8']; // video k-means, re-saturated (the capture's blur greys them)
+const PXB_RGB = PXB_PAL.map((h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]);
+const PXB_N = 24, PXB_S = 96, PXB_VAR = 4;
+let _pxBig = null;
+function* buildPxBigGen(out) {
+  const TAU = Math.PI * 2;
+  const spiky = (rnd, n, amp) => { // jagged pixel-art outline: pointed lobes like the video's bursts
+    const sp = []; for (let i = 0; i < n; i++) sp.push({ a: (i + rnd() * 0.6) / n * TAU, h: amp * (0.4 + rnd() * 0.6), w: (0.6 + rnd() * 0.5) * TAU / n });
+    const lut = new Float32Array(512); // angle lookup table: keeps each frame build short on phones
+    for (let j = 0; j < 512; j++) { const a = (j / 512) * TAU; let r = 1 - amp; for (const p of sp) { let d = Math.abs(a - p.a) % TAU; if (d > Math.PI) d = TAU - d; r = Math.max(r, 1 - amp + p.h * Math.max(0, 1 - d / p.w)); } lut[j] = r; }
+    return (a) => lut[((a / TAU) * 512 + 512) & 511];
+  };
+  for (let v = 0; v < PXB_VAR; v++) {
+    const rnd = pxRand(4211 + v * 389);
+    const outer = spiky(rnd, 12 + (v % 3), 0.26);
+    const inner = []; for (let i = 0; i < 3; i++) { const a = rnd() * TAU, d = 0.25 + rnd() * 0.2; inner.push({ x: Math.cos(a) * d, y: Math.sin(a) * d, r: 0.42 + rnd() * 0.12, p: spiky(rnd, 7, 0.25), arc: rnd() * TAU }); }
+    const nz = new Float32Array(PXB_S * PXB_S); for (let i = 0; i < nz.length; i++) nz[i] = rnd();
+    const blur = new Float32Array(PXB_S * PXB_S); // soft blotches for the smoke break-up
+    for (let y = 0; y < PXB_S; y++) for (let x = 0; x < PXB_S; x++) { let a = 0, n = 0; for (let oy = -4; oy <= 4; oy += 2) for (let ox = -4; ox <= 4; ox += 2) { const xx = x + ox, yy = y + oy; if (xx >= 0 && yy >= 0 && xx < PXB_S && yy < PXB_S) { a += nz[yy * PXB_S + xx]; n++; } } blur[y * PXB_S + x] = a / n; }
+    const frames = []; out.push(frames);
+    for (let f = 0; f < PXB_N; f++) {
+      const t = (f + 0.5) / PXB_N;
+      const c = document.createElement('canvas'); c.width = c.height = PXB_S;
+      const g = c.getContext('2d'); const img = g.createImageData(PXB_S, PXB_S);
+      const R = (PXB_S / 2) * 0.9;                                      // lobes/spikes average ≈0.8 of the half size (fill ≈1.6 r)
+      const grow = t < 0.12 ? 0.6 + 0.4 * (t / 0.12) : 1 + 0.06 * (t - 0.12); // fast pop, then slow billow
+      const heat = t < 0.08 ? 1 : Math.max(0, 1 - (t - 0.08) / 0.8);    // white ≈23 %, yellow ≈41 %, gold ≈64 %, brown → end
+      const fade = t < 0.6 ? 1 : Math.max(0, 1 - (t - 0.6) / 0.4);
+      const rimW = 1.6 / (R * grow);                                    // ≈1.5 px dark-brown outline
+      for (let y = 0; y < PXB_S; y++) for (let x = 0; x < PXB_S; x++) {
+        const px = (x - PXB_S / 2 + 0.5) / (R * grow), py = (y - PXB_S / 2 + 0.5) / (R * grow);
+        const rr = px * px + py * py; if (rr > 1) continue;              // outside the largest spike
+        const ang = Math.atan2(py, px), d = Math.sqrt(rr) / (outer(ang) * (1 - 0.035 * (((Math.floor(ang * 9) * 7 + v) % 3 + 3) % 3)));
+        if (d > 1) continue;
+        const i = y * PXB_S + x;
+        let k = Math.round((1 - d * 0.75) * (1.9 + 4.9 * heat) + (nz[i] - 0.5) * 0.35 + (t < 0.1 ? 1 - t / 0.1 : 0));
+        k = Math.max(1, Math.min(6, k));
+        for (const l of inner) { // brown creases where inner lumps overlap (part of each lump's edge)
+          const qx = px - l.x * grow, qy = py - l.y * grow, qa = Math.atan2(qy, qx);
+          let da = Math.abs(qa - l.arc) % TAU; if (da > Math.PI) da = TAU - da;
+          const dq = Math.hypot(qx, qy) / (l.r * l.p(qa));
+          if (da < 1.25 && dq > 1 - rimW * (1.6 + nz[i]) && dq <= 1) k = Math.max(0, Math.min(k - 3, 2));
+        }
+        if (d > 1 - rimW) k = 0;
+        const rgb = PXB_RGB[k];
+        img.data[i * 4] = rgb[0]; img.data[i * 4 + 1] = rgb[1]; img.data[i * 4 + 2] = rgb[2];
+        const patch = fade >= 1 ? 1 : Math.max(0, Math.min(1, fade * 1.8 - (1 - blur[i]) * 1.0 + (1 - d) * 0.2)); // smoke breaks up in blotches
+        img.data[i * 4 + 3] = Math.round(255 * patch * (k === 0 ? 0.9 : 1));
+      }
+      g.putImageData(img, 0, 0); frames.push(c);
+      yield;
+    }
+  }
+}
 // Build the blast frames in small slices right after load (title screen), so a match start / first kill
 // never blocks the main thread (the one-shot build took ≈270 ms on desktop, ≈1 s+ on phones).
 function startPxBoomBuild() {
   if (_pxBoom) return;
-  _pxBoom = [];
-  const gen = buildPxBoomGen(_pxBoom);
+  _pxBoom = []; _pxBig = [];
+  const gen = (function* () { yield* buildPxBoomGen(_pxBoom); _pxBoom.ready = true; yield* buildPxBigGen(_pxBig); })();
   const step = () => {
     const t0 = performance.now();
     let r;
     do { r = gen.next(); } while (!r.done && performance.now() - t0 < 6);
-    if (r.done) _pxBoom.ready = true; else setTimeout(step, 0);
+    if (r.done) { _pxBoom.ready = true; _pxBig.ready = true; } else setTimeout(step, 0);
   };
   setTimeout(step, 0);
 }
@@ -2611,7 +2669,7 @@ if (typeof document !== 'undefined') startPxBoomBuild();
  * onProgress(0..1). Resolves once everything is ready; instant after the first time.
  */
 let _prepDone = false;
-export function isMatchPrepDone() { return _prepDone && _pxBoom && _pxBoom.ready; }
+export function isMatchPrepDone() { return _prepDone && _pxBoom && _pxBoom.ready && _pxBig && _pxBig.ready; }
 export async function prepareMatchAssets(onProgress) {
   startPxBoomBuild(); bubbleSprite();
   for (const id of SCRIPT_SPRITES) if (!enemySprites[id]) loadKindSprite(id);
@@ -2621,8 +2679,8 @@ export async function prepareMatchAssets(onProgress) {
   if (BUBBLE_BOOM.img) imgs.push(BUBBLE_BOOM.img);
   if (BUBBLE_RING.img) imgs.push(BUBBLE_RING.img);
   const warm = document.createElement('canvas'); warm.width = warm.height = 48; const wg = warm.getContext('2d');
-  const blastTotal = PX_VAR * PX_N;
-  const blastDone = () => (_pxBoom ? _pxBoom.reduce((n, v) => n + v.length, 0) : 0);
+  const blastTotal = PX_VAR * PX_N + PXB_VAR * PXB_N;
+  const blastDone = () => (_pxBoom ? _pxBoom.reduce((n, v) => n + v.length, 0) : 0) + (_pxBig ? _pxBig.reduce((n, v) => n + v.length, 0) : 0);
   const total = imgs.length + blastTotal;
   let done = 0, t0 = performance.now();
   const report = () => { if (onProgress) onProgress(Math.min(1, (done + blastDone()) / total)); };
@@ -2636,7 +2694,7 @@ export async function prepareMatchAssets(onProgress) {
     _prepDone = true;
   }
   done = imgs.length;
-  while (!(_pxBoom && _pxBoom.ready)) { report(); await new Promise((r) => setTimeout(r, 16)); }
+  while (!(_pxBoom && _pxBoom.ready && _pxBig && _pxBig.ready)) { report(); await new Promise((r) => setTimeout(r, 16)); }
   if (onProgress) onProgress(1);
 }
 
@@ -2668,6 +2726,7 @@ function drawBubble(ctx, w, h, t) {
 
 /** Debug/contact-sheet access to the pre-rendered blast frames. */
 export function pxBoomFrames() { startPxBoomBuild(); return _pxBoom; }
+export function pxBigFrames() { startPxBoomBuild(); return _pxBig; }
 /** 10-05: 透明戦隊 explosion — plays the video frames (BUBBLE_BOOM) at the video's 15 fps, scaled so the
  *  video unit radius (9.75 px) matches the unit's radius, drifting with the unit. */
 function drawEclipse(ctx, f) {
@@ -2687,8 +2746,11 @@ function drawPxBoom(ctx, f, sizeMul = 1) {
   startPxBoomBuild();
   if (f.life > f.max) return; // staggered burst not started yet
   const t = Math.max(0, Math.min(0.999, 1 - f.life / f.max));
-  const v = _pxBoom[Math.abs(Math.round((f.sd != null ? f.sd : f.x * 7 + f.y * 3))) % PX_VAR] || _pxBoom[0];
-  const fr = v && v[Math.floor(t * PX_N)];
+  const sd = Math.abs(Math.round((f.sd != null ? f.sd : f.x * 7 + f.y * 3)));
+  const bv = f.big && _pxBig && _pxBig[sd % PXB_VAR];
+  const bfr = bv && bv.length === PXB_N && bv[Math.floor(t * PXB_N)]; // 10-06 big-enemy burst frames
+  const v = _pxBoom[sd % PX_VAR] || _pxBoom[0];
+  const fr = bfr || (v && v[Math.floor(t * PX_N)]);
   if (!fr) { // frames still being built (first second after load): cheap plain fireball
     ctx.save(); ctx.globalAlpha = Math.max(0, 1 - t); ctx.fillStyle = '#f8b42c';
     ctx.beginPath(); ctx.arc(f.x, f.y, (f.r || 42) * sizeMul * (0.5 + 0.5 * t), 0, Math.PI * 2); ctx.fill(); ctx.restore();
@@ -3674,7 +3736,7 @@ export function drawField(ctx, area, snap, opts = {}) {
       x: f.x * sx, y: f.y * sy, life: f.l ?? f.life, max: f.m ?? f.max, r: (f.r || 14) * sx,
       kind: f.k ?? f.kind, sc: sx, g: f.g, ph: f.ph, n: f.n,
       t: tg ? tg.map(([tx, ty]) => [tx * sx, ty * sy]) : undefined,
-      a: f.a, sd: f.sd, vx: f.vx != null ? f.vx * sx : undefined,
+      a: f.a, sd: f.sd, big: f.big, vx: f.vx != null ? f.vx * sx : undefined,
     });
   }
   for (const e of enemies) {
