@@ -826,9 +826,10 @@ export const LASER_W_MAX = Math.max(...Object.values(ENEMY_TIER_STATS).map((t) =
 export function laserHitCount(e) {
   return Math.max(1, Math.min(LASER_MAX_HITS, Math.floor((LASER_MAX_HITS * (e.w || 20)) / LASER_W_MAX + 1e-6)));
 }
+export const LASER_BOOM_SCALE = 0.8; // user 10-06: laser pierce boom 20% smaller
 export function spawnLaserBoom(x, y, cheap = false) {
   const l = cheap ? 0.12 : 0.24;
-  return { x, y, life: l, max: l, r: 27 + Math.random() * 12 }; // 10-04: ×3 (was 9–13)
+  return { x, y, life: l, max: l, r: (27 + Math.random() * 12) * LASER_BOOM_SCALE }; // 10-04: ×3 (was 9–13); 10-06: 2割小さく
 }
 /** Returns 'core' / 'corehit' / 'body' like applyCoreAwareBeam. */
 export function applyLaserTick(e, ly, fxList, shipX) {

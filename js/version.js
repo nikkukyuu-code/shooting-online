@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-06 13:38:15';
+export const VERSION_LABEL = '2026-10-06 13:45:21';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1791261495948;
-export const BUILD_NOTE = 'ヘビの胴体を動画どおり伸び縮みさせる 戻ると縮み出るとき伸びる 異次元ポータルを透過でフェードイン';
+export const BUILD_TIME = 1791261921146;
+export const BUILD_NOTE = 'レーザー貫通の爆発を2割小さく';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
