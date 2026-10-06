@@ -20,12 +20,12 @@
  *  0:37 W3  spiders on arcs / sines, stop-and-shoot gunships
  *  0:53 W4  rotating rings (pods tighten + spin up)
  *  1:04     midboss: giant red eye (figure-8, claws speed up at low core HP)
- *  1:26     boss: segmented snake (sharp weave, speed surges; head = core → body chain)
+ *  1:26     boss: segmented snake (sharp weave, speed surges; cores = head + orange body ball, one shared HP → body chain)
  *  1:48     mixed reprise
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261006160356';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261006165200';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -323,12 +323,13 @@ function ring(fw, fh, fy) {
 /*
  * Rebuilt from the reference videos (user_ref 4:43–5:01, ref3 5:00–5:18, ref2 2:15–2:36). Not a travelling snake:
  *  - 異次元 PORTAL (dark red void) alone ≈1.5 s, then a big grey rock SPHERE (pivot) comes out with the HEAD.
- *  - BODY: 7 grey elements pivot → tip (red ball 3rd from the tip); the head (red ring + yellow centre = core) sits
+ *  - BODY: 7 grey elements pivot → tip (red ball 3rd from the tip); the head (red ring + yellow centre) sits
  *    just past the tip link. The body STRETCHES and CONTRACTS like an accordion (gaps open / close):
  *      out (stretch to full) → head comes off → chase 3 s (body held stretched, slow drift) → head flies back to the
  *      stretched tip → slides in, body contracts onto the sphere → passes over the sphere and back (wait 1 s)
  *      → stretches out again … (numbers: SNAKE_BODY below armMove).
- *  Stays 36 s (leaves only with the head home). Core break → the chain blows up link by link back to the sphere.
+ *  Stays 36 s (leaves only with the head home). CORE = the head AND the orange ball, one shared core HP (user 10-06):
+ *  core break → the chain blows up from the broken core outward, link by link, head and sphere included.
  */
 export function snake(fw, fh, fy, segs = 7, tone = 'silver') {
   // Measured from user_ref.mp4 4:44–5:01 (ship 14 px ↔ game 28 px, ×2): sphere Ø ≈28 → 56, link ≈11 → 22 drawn,
@@ -355,10 +356,14 @@ export function snake(fw, fh, fy, segs = 7, tone = 'silver') {
     const red = i === SNAKE_BODY.RED; // video: red ball = 3rd element from the tip
     // links are uniform in the video; only the one against the sphere's bell neck is a little fuller
     const sw = red ? BALL : (i === segs ? SEG + 3 : SEG);
-    out.push(mk('wave_snake_seg', fw, fh, fw + 60, y0, {
+    const o = mk('wave_snake_seg', fw, fh, fw + 60, y0, {
       w: sw, h: sw, hp: GUARD_HP.seg, score: red ? 30 : 20, mv: 'armseg', _chainOf: head, chainIdx: i,
-      noFire: true, noDrop: true, passShots: true, tone: red ? 'red' : tone,
-    }));
+      noFire: true, noDrop: true, passShots: !red, tone: red ? 'red' : tone,
+    });
+    // User 10-06: the orange ball (the one odd-coloured element) is a snake CORE (the head is the other one, same HP) — it takes the shots;
+    // the head owns the shared core HP (entities.js coreOwnerOf / coreWorld), the other links still let shots through.
+    if (red) { o._coreBall = true; head._coreSeg = o; }
+    out.push(o);
   }
   out.push(head);
   return out;

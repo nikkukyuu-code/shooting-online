@@ -150,7 +150,7 @@ export const WAVE_KIND_TIERS = {
   // Scripted STO-recreation kinds (js/waves.js) — wave-only
   wave_grid_core: 'elite',   // red-core ship in the centre of a wedge grid
   wave_ring_core: 'elite',   // red core with a rotating ring of fighter pods
-  wave_snake_head: 'boss',   // snake boss head = core
+  wave_snake_head: 'boss',   // snake head (controller; its core sits on the orange body ball — user 10-06)
   wave_snake_seg: 'drone',   // silver body segment
   wave_cater: 'drone',       // green caterpillar sphere
   wave_mine: 'drone',        // yellow square trap mine
@@ -291,7 +291,8 @@ export function attachCore(e) {
     e.drones = [];
     for (let i = 0; i < 14; i++) e.drones.push({ ang: (Math.PI * 2 * i) / 14, dist: RING_R, r: 7.5, hp: GUARD_HP.pod, maxHp: GUARD_HP.pod, pod: true });
   } else if (e.kind === 'wave_snake_head') {
-    // Tethered striker head: the red ring's yellow-red centre IS the core (head kill → chain blows back to the tail)
+    // Tethered striker head. User 10-06: the CORE is the one differently coloured (orange) ball of the body,
+    // not the head — the head object just owns the shared core HP; its position = the ball (e._coreSeg, coreWorld).
     e.w = 14; e.h = 14; e.hp = 60; e.maxHp = 60; e.score = Math.max(e.score || 0, 400); // video: ≈10–12 px red ball tip of the tethered striker
     e.core = { ox: 0, oy: 0, r: CORE_R, hp: CORE_HP.wave_snake_head, maxHp: CORE_HP.wave_snake_head, orbit: 0, ang: 0 };
     e.drones = null;
@@ -370,7 +371,7 @@ export function isChainable(o) {
   if (typeof o.kind !== 'string' || !o.kind.startsWith('wave_')) return false;
   return !LARGE_ENEMY_TIERS.has(resolveEnemyTier(o.kind));
 }
-export const CHAIN_STEP = 0.08; // s between consecutive chain pops (visible, steady ripple)
+export const CHAIN_STEP = 0.04; // s between consecutive chain pops; user 10-06: half (was 0.08) — every core type, both fields
 export function markCoreChain(e, list) {
   const c = coreWorld(e) || e;
   const seq = [];
@@ -394,10 +395,18 @@ export function markCoreChain(e, list) {
       seq.push(o);
     }
   }
-  // 2) Snake body: segment by segment from the head
-  const segs = (list || []).filter((o) => o !== e && o._chainOf === e && o.chainIdx != null && isChainable(o))
-    .sort((p, q) => p.chainIdx - q.chainIdx);
-  seq.push(...segs);
+  // 2) Snake body: segment by segment. User 10-06: cores = the orange ball AND the head → the chain ripples out
+  //    from the core that broke, both ways (tip side first on ties); the head (even detached and chasing) and the
+  //    ball blow in their turn.
+  const ball = e._coreSeg;
+  const segs = (list || []).filter((o) => o !== e && o._chainOf === e && o.chainIdx != null && isChainable(o));
+  if (ball) {
+    const k0 = e._coreAt === 'head' ? 0 : ball.chainIdx;
+    const pool = segs.map((o) => [o.chainIdx, o]);
+    if (list && list.includes(e)) { e.hp = Math.max(1, e.hp); pool.push([0, e]); } // head = element 0 (past the tip)
+    pool.sort((p, q) => (Math.abs(p[0] - k0) - Math.abs(q[0] - k0)) || (p[0] - q[0]));
+    seq.push(...pool.map((p) => p[1]));
+  } else seq.push(...segs.sort((p, q) => p.chainIdx - q.chainIdx));
   // 3) Everything else in range / in formation: nearest first, rippling outward (grids go ring by ring)
   const rest = [];
   for (const o of list || []) {
@@ -501,7 +510,31 @@ export function tickEscort(e, dt, fh) {
 /** World-space core centre. */
 export function coreWorld(e) {
   if (!e || !e.core) return null;
+  const b = e._coreSeg; // snake: core = its orange body ball
+  if (b) return { x: b.x, y: b.y, r: e.core.r };
   return { x: e.x + e.core.ox, y: e.y + e.core.oy, r: e.core.r };
+}
+/** Snake core ball → the head that owns the core HP (null when the core is gone / not out yet). */
+export function coreOwnerOf(e) {
+  if (!e || !e._coreBall) return null;
+  const H = e._chainOf;
+  if (!H || !H.core || H.core.hp <= 0 || H.hp <= 0 || H._portalOnly || e._chainT != null) return null;
+  return H;
+}
+/** True for units whose hits go through the core rules (core owners + the snake's core ball). */
+export function isCoreTarget(e) { return hasCore(e) || !!(e && e._coreBall); }
+/** User 10-06 16:49: the snake has TWO cores — the head and the orange body ball — sharing ONE life (the head's
+ *  e.core HP, one gauge). A hit on either lowers it and flashes both (H._coreFlash); 0 → the whole snake chains.
+ *  (video user_ref 4:45.6–4:45.8: a shot on the head stops there and the head flashes.) */
+function snakeCoreHit(H, px, py, bx, by, dmg, fxList, where) {
+  const c = H.core;
+  if (!c || c.hp <= 0 || H.hp <= 0 || H._portalOnly) return { hit: 'none', killed: false };
+  if (Math.hypot(bx - px, by - py) >= c.r + CORE_HIT_PAD) return { hit: 'none', killed: false };
+  c.hp -= dmg; H._coreFlash = 0.1; H._shake = 0.14; H._coreAt = where;
+  if (c.hp > 0) { if (fxList) fxList.push(spawnHitSpark(bx, by)); return { hit: 'corehit', killed: false }; }
+  c.hp = 0; H.hp = 0; H._coreBreak = true;
+  if (fxList) { fxList.push(spawnExplosion(px, py, true)); fxList.push(spawnHitSpark(px, py)); }
+  return { hit: 'core', killed: true };
 }
 
 /** Advance swarm-core drone orbits (call each tick). */
@@ -571,6 +604,12 @@ export function tickCoreExtras(e, dt) {
  */
 export function applyCoreAwareHit(e, dmg, bx, by, fxList) {
   if (!e || e.hp <= 0) return { hit: 'none', killed: false };
+  if (e._coreBall) { // snake core ball: hits land on the head's shared core HP
+    const H = coreOwnerOf(e);
+    if (!H) return { hit: 'none', killed: false };
+    return snakeCoreHit(H, e.x, e.y, bx, by, dmg, fxList, 'ball');
+  }
+  if (e._coreSeg) return snakeCoreHit(e, e.x, e.y, bx, by, dmg, fxList, 'head'); // snake head = core too (same HP)
   if (!hasCore(e) || !e.core) {
     e.hp -= dmg;
     if (fxList) fxList.push(spawnHitSpark(bx, by));
@@ -652,6 +691,14 @@ export function spawnDeflectSpark(x, y) {
  */
 export function applyCoreAwareArea(e, dmg, ox, oy, fxList) {
   if (!e || e.hp <= 0) return { hit: 'none', killed: false };
+  if (e._coreBall) { // snake core ball: only a blast centred on it reaches the core (same rule as other cores)
+    if (ox != null && coreOwnerOf(e) && Math.hypot(ox - e.x, oy - e.y) < CORE_R + 18) return applyCoreAwareHit(e, dmg, e.x, e.y, fxList);
+    return { hit: 'body', killed: false };
+  }
+  if (e._coreSeg) { // snake head: a blast centred on it reaches the shared core (same rule as other cores)
+    if (ox != null && Math.hypot(ox - e.x, oy - e.y) < CORE_R + 18) return applyCoreAwareHit(e, dmg, e.x, e.y, fxList);
+    e._bodyFlash = 0.1; return { hit: 'body', killed: false };
+  }
   if (!hasCore(e) || !e.core) {
     e.hp -= dmg;
     return { hit: 'body', killed: e.hp <= 0 };
@@ -684,6 +731,16 @@ export function applyCoreAwareArea(e, dmg, ox, oy, fxList) {
 
 /** Beam tick along row `ly` (x beyond sx): core if the beam crosses it, else area chip. */
 export function applyCoreAwareBeam(e, dmg, ly, fxList) {
+  if (e && e._coreBall) { // snake core ball: the beam row crossing the ball hits the core
+    if (coreOwnerOf(e) && Math.abs(e.y - ly) < CORE_R + CORE_HIT_PAD + 1) return applyCoreAwareHit(e, dmg, e.x, e.y, fxList);
+    return { hit: 'none', killed: false };
+  }
+  if (e && e._coreSeg) { // snake head = core (shared HP): the beam row crossing the head hits it
+    if (Math.abs(e.y - ly) < CORE_R + CORE_HIT_PAD + 1) return applyCoreAwareHit(e, dmg, e.x, e.y, fxList);
+    e._bodyFlash = 0.1;
+    if (fxList) fxList.push(spawnDeflectSpark(e.x, ly));
+    return { hit: 'body', killed: false };
+  }
   const c = coreWorld(e);
   if (c && e.core.hp > 0 && Math.abs(c.y - ly) < c.r + CORE_HIT_PAD + 1) return applyCoreAwareHit(e, dmg, c.x, c.y, fxList);
   if (fxList) fxList.push(spawnDeflectSpark(e.x - e.w * 0.35, ly));
@@ -864,6 +921,11 @@ export function spawnLaserBoom(x, y, cheap = false) {
 }
 /** Returns 'core' / 'corehit' / 'body' like applyCoreAwareBeam. */
 export function applyLaserTick(e, ly, fxList, shipX) {
+  if (e && e._coreBall) { // snake core ball: one core strike per tick (shared core HP), like every core
+    const h = applyCoreAwareBeam(e, 1.05 / 3, ly, fxList).hit;
+    if (h !== 'none' && fxList) fxList.push(spawnLaserBoom(e.x, ly));
+    return h;
+  }
   if (hasCore(e)) {
     const h = applyCoreAwareBeam(e, 1.05 / 3, ly, fxList).hit; // core: one strike per tick (core HP is shared); 10-04: 1/3 (was 1.05)
     if (fxList) fxList.push(spawnLaserBoom(Math.max(shipX, e.x - e.w * 0.35), ly));
@@ -990,7 +1052,7 @@ export function serializeField(state) {
     at: state.player.activeTimer,
     enemies: state.enemies.filter(e => e.kind !== 'wave_bubble' || e.x - (e.w || 0) / 2 < (state._fw || 1e9)).slice(0, 40).map(e => ({
       x: e.x, y: e.y, w: e.w, h: e.h, kind: e.kind, hp: e.hp, c: e.color, s: !!e.sent,
-      at2: (e._chainOf || e._lead) ? 1 : undefined, ch: e.core ? e.core.hp : undefined, cm: e.core ? e.core.maxHp : undefined, cs: e._sh ? e._sh.st : undefined, sk: e._shake > 0 ? 1 : undefined,
+      at2: (e._chainOf || e._lead) ? 1 : undefined, ch: e.core && !e._coreSeg ? e.core.hp : (e._coreBall && e._chainOf && e._chainOf.core ? e._chainOf.core.hp : undefined), cm: e.core && !e._coreSeg ? e.core.maxHp : (e._coreBall && e._chainOf && e._chainOf.core ? e._chainOf.core.maxHp : undefined), cb: e._coreBall ? 1 : undefined, cf: (e._coreBall ? (e._chainOf && e._chainOf._coreFlash) : e._coreFlash) > 0 ? 1 : undefined, bf: e._coreSeg && e._bodyFlash > 0 ? 1 : undefined, cs: e._sh ? e._sh.st : undefined, sk: e._shake > 0 ? 1 : undefined,
       dr: e.drones ? e.drones.map(d => d.hp) : undefined,
       sp: e.spr || undefined, ro: e.rot || undefined, tn: e.tone || undefined,
       pA: e._chainOf && e._chainOf._portalA != null && e._chainOf._portalA < 1 ? +e._chainOf._portalA.toFixed(2) : undefined, // snake portal fade-in

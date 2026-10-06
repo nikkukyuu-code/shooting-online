@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261006160356';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261006165200';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -370,7 +370,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261006160356`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261006165200`;
 }
 
 function loadKindSprite(kind) {
@@ -456,8 +456,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261006160356'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261006160356'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261006165200'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261006165200'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -518,7 +518,9 @@ function drawCoreSpriteBody(ctx, e, kind, w, h, t, flash) {
     const tip = waveSprite('snake_head_art');
     if (tip) {
       if (e.rot) { ctx.rotate(e.rot); }
-      ctx.imageSmoothingEnabled = false; drawFit(ctx, tip, w * 1.75, h * 1.75, false); // 10-06 video cut: ring+glow ≈ 2× ship height
+      ctx.imageSmoothingEnabled = false; drawFit(ctx, tip, w * 1.75, h * 1.75, flash || (e._coreFlash || 0) > 0); // 10-06 video cut: ring+glow ≈ 2× ship height
+      const hf = Math.max(0, Math.min(1, (e._coreFlash || 0) / 0.1)); // user 10-06: head = core too (shared HP) → same core hit flash as the ball
+      if (hf > 0) { ctx.fillStyle = `rgba(255,255,255,${0.85 * hf})`; ctx.beginPath(); ctx.arc(0, 0, (e.core ? e.core.r : 9) * 1.05, 0, Math.PI * 2); ctx.fill(); }
       return true;
     }
     // fallback procedural
@@ -1218,7 +1220,12 @@ function drawSegBall(ctx, e, w, h, t) {
   if (e.rot) ctx.rotate(e.rot);
   if (e.tone === 'red') {
     const ball = waveSprite('snake_redball');
-    if (ball) { ctx.imageSmoothingEnabled = false; drawFit(ctx, ball, w * 1.5, h * 1.5, false); return; } // video: red link ≈ 0.85× ship
+    const cf = Math.max(0, Math.min(1, (e._coreFlash || 0) / 0.1)); // user 10-06: this ball is the snake's CORE → core hit flash
+    if (ball) {
+      ctx.imageSmoothingEnabled = false; drawFit(ctx, ball, w * 1.5, h * 1.5, cf > 0); // video: red link ≈ 0.85× ship
+      if (cf > 0) { ctx.fillStyle = `rgba(255,255,255,${0.85 * cf})`; ctx.beginPath(); ctx.arc(0, 0, r * 1.05, 0, Math.PI * 2); ctx.fill(); }
+      return;
+    }
     const g = ctx.createRadialGradient(-r * 0.25, -r * 0.25, 0, 0, 0, r);
     g.addColorStop(0, '#ffd0a0'); g.addColorStop(0.35, '#ff5030'); g.addColorStop(0.75, '#c01818'); g.addColorStop(1, '#501010');
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
@@ -3680,19 +3687,22 @@ export function drawField(ctx, area, snap, opts = {}) {
       laserAimX: (e.laserAimX ?? e.ax) != null ? (e.laserAimX ?? e.ax) * sx : undefined,
       laserAimY: (e.laserAimY ?? e.ay) != null ? (e.laserAimY ?? e.ay) * sy : undefined,
       laserTeleOffs: Array.isArray(e.laserTeleOffs ?? e.lo) ? (e.laserTeleOffs ?? e.lo).map((o) => o * sy) : undefined,
-      spr: e.spr ?? e.sp, rot: e.rot ?? e.ro, tone: e.tone ?? e.tn, cm: e.cm, cs: e.cs ?? (e._sh ? e._sh.st : undefined), sk: e.sk ?? (e._shake > 0 ? 1 : 0), _coreFlash: e._coreFlash, _warn: e._warn, _dashWarn: e._dashWarn, claw: e.claw, podR: e.podR != null ? e.podR * Math.min(sx, sy) : undefined,
-      core: e.core ? { ox: e.core.ox * sx, oy: e.core.oy * sy, r: e.core.r * Math.min(sx, sy), hp: e.core.hp, maxHp: e.core.maxHp }
+      spr: e.spr ?? e.sp, rot: e.rot ?? e.ro, tone: e.tone ?? e.tn, cm: e.cm, cs: e.cs ?? (e._sh ? e._sh.st : undefined), sk: e.sk ?? (e._shake > 0 ? 1 : 0), _coreFlash: e._coreBall ? (e._chainOf ? e._chainOf._coreFlash : 0) : (e._coreFlash ?? (e.cf ? 0.1 : 0)), _warn: e._warn, _dashWarn: e._dashWarn, claw: e.claw, podR: e.podR != null ? e.podR * Math.min(sx, sy) : undefined,
+      core: e.core && !e._coreSeg ? { ox: e.core.ox * sx, oy: e.core.oy * sy, r: e.core.r * Math.min(sx, sy), hp: e.core.hp, maxHp: e.core.maxHp }
         : (e.ch != null ? { ox: e.kind === 'wave_core_boss' ? -(e.w || 66) * 0.3 * sx : e.kind === 'wave_grid_core' ? -(e.w || 62) * 0.3 * sx : 0, oy: 0, r: 9 * Math.min(sx, sy), hp: e.ch, maxHp: e.cm } : undefined),
       drones: e.drones ? e.drones.map((d) => ({ ang: d.ang, dist: d.dist * Math.min(sx, sy), ky: (d.ky || 1) * sy / Math.min(sx, sy), r: d.r * Math.min(sx, sy), hp: d.hp, w: d.w }))
         : (Array.isArray(e.dr) ? e.dr.map((hp, i, a) => ({ ang: (Math.PI * 2 * i) / a.length + performance.now() / 1000 * 1.6, dist: (e.kind === 'wave_eye_boss' ? 80 : e.kind === 'wave_ring_core' ? Math.max(20, ((e.w || 92) - 20) / 2) : 36 + (i % 2) * 8) * Math.min(sx, sy), ky: e.kind === 'wave_ring_core' ? Math.max(1, ((e.h || 92) - 16) / Math.max(1, (e.w || 92) - 20)) : 1, r: (e.kind === 'wave_eye_boss' ? 15 : e.kind === 'wave_ring_core' ? 7.5 : 12) * Math.min(sx, sy), hp })) : undefined),
-      bodyFlash: e._bodyFlash || 0,
+      bodyFlash: e._bodyFlash || (e.bf ? 0.1 : 0),
       _portalA: e._chainOf ? e._chainOf._portalA : e.pA, _portalOut: e._chainOf ? e._chainOf._portalOut : e.pO, // snake portal fade in / out
     });
   }
   if (bonds.length) drawCoreBonds(ctx, bonds, sx, sy, 1);
   // User 10-04d: core life gauge above every core unit (attached guard units stay bar-less)
   for (const e of enemies) {
-    const hp = e.core ? e.core.hp : e.ch, mx = e.core ? e.core.maxHp : e.cm;
+    if (e._coreSeg) continue; // snake head: its core (and gauge) is the orange body ball
+    const own = e._coreBall ? e._chainOf : null; // snake core ball (local): HP lives on the head
+    if (e._coreBall && (!own || own.hp <= 0 || e._chainT != null)) continue;
+    const hp = own ? (own.core && own.core.hp) : e.core ? e.core.hp : e.ch, mx = own ? (own.core && own.core.maxHp) : e.core ? e.core.maxHp : e.cm;
     if (hp == null || !mx || hp <= 0 || (e.hp ?? 1) <= 0) continue;
     drawCoreLifeBar(ctx, e.x * sx, (e.y - (e.h || 30) / 2) * sy - 14 * Math.min(1, sy), Math.max(56, Math.min(96, (e.w || 40) * 0.9)) * Math.min(1, Math.max(sx, 0.6)), hp / mx, Math.min(1, Math.max(sx, 0.6)));
   }

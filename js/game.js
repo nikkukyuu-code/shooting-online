@@ -1,19 +1,19 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261006160356';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261006165200';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
-  hasCore, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
+  hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261006160356';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261006160356';
-import { sfx } from './audio.js?v=20261006160356';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261006160356';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261006160356';
-import { hitBattleCounter } from './stats.js?v=20261006160356';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261006160356';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261006160356';
+} from './entities.js?v=20261006165200';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261006165200';
+import { sfx } from './audio.js?v=20261006165200';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261006165200';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261006165200';
+import { hitBattleCounter } from './stats.js?v=20261006165200';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261006165200';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261006165200';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1099,12 +1099,14 @@ export class Game {
 
   /** Core destroyed: big chain explosion + score burst (the decisive shot). */
   onCoreBreak(e, fx, mine, list) {
+    if (e && e._coreBall && e._chainOf) e = e._chainOf; // snake: the ball is the core, the head owns it
     // Core break: only the breaker's field blinks white (a bit longer than a hit), same for both sides
     this.fieldFlash(mine ? this.state : this._bot, 'break');
     const chained = markCoreChain(e, list); // cascading yellow chain wipe of the pack around the core
-    fx.push({ kind: 'corebreak', x: e.x + (e.core ? e.core.ox : 0), y: e.y + (e.core ? e.core.oy : 0), r: Math.max(e.w, e.h) * 0.9, life: 0.9, max: 0.9 });
-    fx.push(spawnExplosion(e.x - e.w * 0.25, e.y - e.h * 0.2, true));
-    fx.push(spawnExplosion(e.x + e.w * 0.25, e.y + e.h * 0.2, true));
+    const cw = e._coreSeg && e._coreAt === 'head' ? e : (coreWorld(e) || e); // snake: the core that broke (head or orange ball)
+    fx.push({ kind: 'corebreak', x: cw.x, y: cw.y, r: Math.max(e.w, e.h) * 0.9, life: 0.9, max: 0.9 });
+    fx.push(spawnExplosion(cw.x - e.w * 0.25, cw.y - e.h * 0.2, true));
+    fx.push(spawnExplosion(cw.x + e.w * 0.25, cw.y + e.h * 0.2, true));
     if (mine) {
       this.state.player.score += e.score; // burst on top of the normal kill score
       try { sfx.explode(); } catch (_) {}
@@ -2007,7 +2009,7 @@ export class Game {
       if (b.owner !== 'player' || b.dvis) continue; // direct shots fly out of our pane without hitting
       for (const e of S.enemies) {
         if (warping(e) || e.passShots) continue; // shots pass through warping units / striker chain
-        if (hasCore(e)) {
+        if (isCoreTarget(e)) {
           // Core weak point: core = instant kill, drones/body = almost nothing (deflect)
           const r = applyCoreAwareHit(e, b.dmg || 1, b.x, b.y, S.fx);
           if (r.hit === 'none') continue;
@@ -2041,7 +2043,7 @@ export class Game {
           if (src._chainDone >= (src._chainTotal || 0)) setTimeout(() => { if (!this.ended && !this.waiting && this._chainMsgSrc === src) this.setStatus(HINT); }, 1400);
         }
       }
-      if (hasCore(e) && !e._coreBreak && e.hp < 1) e.hp = 1;
+      if (((hasCore(e) && !e._coreBreak) || coreOwnerOf(e)) && e.hp < 1) e.hp = 1; // snake core ball: only the core rules end it
       if (e.hp <= 0) {
         if (e._chainT != null && !e._chainKill) { // doomed unit finished off early (shot / rammed): still part of the chain
           e._chainKill = true; S.fx.push(spawnChainBoom(e));
@@ -2733,7 +2735,7 @@ export class Game {
       if (b.owner !== 'player' || b.dir || b.dvis) continue; // direct shots only hit the COM ship
       for (const e of B.enemies) {
         if (warping(e) || e.passShots) continue; // shots pass through warping units / striker chain
-        if (hasCore(e)) {
+        if (isCoreTarget(e)) {
           const r = applyCoreAwareHit(e, b.dmg || 1, b.x, b.y, B.fx);
           if (r.hit === 'none') continue;
           if (r.hit === 'core') this.onCoreBreak(e, B.fx, false, B.enemies);
@@ -2752,7 +2754,7 @@ export class Game {
     const kept = [];
     for (const e of B.enemies) {
       if (tickChain(e, dt)) B.fx.push(spawnChainBoom(e));
-      if (hasCore(e) && !e._coreBreak && e.hp < 1) e.hp = 1;
+      if (((hasCore(e) && !e._coreBreak) || coreOwnerOf(e)) && e.hp < 1) e.hp = 1; // snake core ball: only the core rules end it
       if (e.hp <= 0) {
         if (e._chainT != null && !e._chainKill) { e._chainKill = true; B.fx.push(spawnChainBoom(e)); }
         if (e.kind === 'wave_bubble') { if (e._eclT !== B.time) { e._eclAt = null; pushEclipse(B.fx, e, B.time); } } else if (!e._chainKill) pushKillBooms(B.fx, e, resolveEnemyTier(e.kind) === 'boss', isLargeEnemy(e));
