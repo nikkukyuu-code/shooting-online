@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261006045901';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261006130641';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -505,6 +505,7 @@ function jetBoss(fw, fh) {
 export const WAVE_SCRIPT = [
   // W1
   [2, (w, h) => mechArc(w, h, true, 4, false)],
+  [3, (w, h) => snake(w, h, 0.31, 12)], // DEBUG 10-06: snake at match start for checking — remove when done (original only at 146)
   [4.2, (w, h) => mechArc(w, h, false, 4, true)],
   [6.8, (w, h) => stopShoot(w, h, [0.3, 0.7])],
   [7.8, (w, h) => zig(w, h, 0.22, 5)], // fodder (kills → drops → sends)
