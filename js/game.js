@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261006192854';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261007145546';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,14 +6,15 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, tickChain, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261006192854';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261006192854';
-import { sfx } from './audio.js?v=20261006192854';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261006192854';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261006192854';
-import { hitBattleCounter } from './stats.js?v=20261006192854';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261006192854';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261006192854';
+} from './entities.js?v=20261007145546';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261007145546';
+import { sfx } from './audio.js?v=20261007145546';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261007145546';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261007145546';
+import { hitBattleCounter } from './stats.js?v=20261007145546';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261007145546';
+import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261007145546';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261007145546';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1922,6 +1923,7 @@ export class Game {
       if (e.lingerT > 0) e.lingerT = Math.max(0, e.lingerT - dt);
       const surge = Math.sin(e.surgePhase) * (e.surgeAmp || 32);
       // Sent: linger on the right (bob/weave OK, no left push) until lingerT expires
+      let pz = null; // sent-unit personality (js/sentai.js): own movement + signature attack after the linger
       if (moveScripted(e, dt, fw, fh, P.y * fh, P.x)) { /* scripted STO path */ } else if (e.sent && e.lingerT > 0) {
         if (e.holdX == null) e.holdX = fw * (0.72 + Math.random() * 0.14);
         if (e.holdY == null) e.holdY = e.y;
@@ -1933,6 +1935,8 @@ export class Game {
           e.x += (targetX - e.x) * Math.min(1, 5 * dt);
           e.y = e.holdY + Math.sin(e.phase) * ((() => { const t = resolveEnemyTier(e.kind); return (t === 'swarm' || t === 'drone') ? 28 : 18; })());
         }
+      } else if (e.sent && (pz = tickPersona(e, { dt, fw, fh, tx: P.x, ty: P.y * fh, field: S.enemies, bullets: S.bullets }))) {
+        /* personality movement */
       } else {
         // Drift left (normal waves + sent after linger ends)
         const advance = e.speed + Math.cos(e.surgePhase) * (e.speed * 0.55);
@@ -1947,7 +1951,7 @@ export class Game {
       if (!e.mv) e.y = Math.max(16, Math.min(fh - 16, e.y)); // scripted paths may enter / leave via the top & bottom edges
       const onScreen = e.x < fw + 10;
       const parked = (e.sent && e.lingerT > 0) ? e.x <= (e.holdX || fw) + 8 : true;
-      if (!fireScripted(e, S.bullets, P.x, P.y * fh, dt, onScreen && !e.noFire)) tickEnemyLaserFire(e, S.bullets, P.x, P.y * fh, dt, onScreen && parked && !e.noFire, () => {
+      if (!fireScripted(e, S.bullets, P.x, P.y * fh, dt, onScreen && !e.noFire)) tickEnemyLaserFire(e, S.bullets, P.x, P.y * fh, dt, onScreen && parked && !e.noFire && (!pz || pz.fire), () => {
         const tier = resolveEnemyTier(e.kind);
         return e.sent
           ? ((tier === 'boss' || tier === 'tank' || tier === 'mech') ? 0.95
@@ -1969,7 +1973,7 @@ export class Game {
       } else if (b.homing && b.owner === 'enemy' && !b.laser) {
         steerEnemyHoming(b, P.x, pyAim, dt);
       }
-      if (b.k && b.owner === 'enemy') updateEnemyBullet(b, dt, spawnedEB);
+      if (b.k && b.owner === 'enemy') updateEnemyBullet(b, dt, spawnedEB, P.x, pyAim);
       b.x += b.vx * dt;
       b.y += b.vy * dt;
       b.life -= dt;
@@ -2008,7 +2012,7 @@ export class Game {
     for (const b of S.bullets) {
       if (b.owner !== 'player' || b.dvis) continue; // direct shots fly out of our pane without hitting
       for (const e of S.enemies) {
-        if (warping(e) || e.passShots) continue; // shots pass through warping units / striker chain
+        if (warping(e) || e.passShots || personaIntangible(e)) continue; // shots pass through warping / cloaked units / striker chain
         if (isCoreTarget(e)) {
           // Core weak point: core = instant kill, drones/body = almost nothing (deflect)
           const r = applyCoreAwareHit(e, b.dmg || 1, b.x, b.y, S.fx);
@@ -2019,6 +2023,7 @@ export class Game {
           break;
         }
         if (Math.abs(b.x - e.x) < e.w * 0.45 + 4 && Math.abs(b.y - e.y) < e.h * 0.45 + 4) {
+          if (personaShieldBlocks(e, b)) { b.life = 0; S.fx.push(spawnHitSpark(b.x, b.y, 10)); break; } // front shield
           e.hp -= b.dmg;
           // pierce (direct volley / laser bullets): keep flying until off-screen
           if (!b.pierce) b.life = 0;
@@ -2682,6 +2687,7 @@ export class Game {
       if (e.lingerT > 0) e.lingerT = Math.max(0, e.lingerT - dt);
       const surge = Math.sin(e.surgePhase) * (e.surgeAmp || 32);
       // Sent: linger on the right (bob/weave OK) until lingerT expires, then advance left
+      let pz = null; // same personality driver as the player field
       if (moveScripted(e, dt, fw, fh, B.y * fh, shipX)) { /* scripted STO path */ } else if (e.sent && e.lingerT > 0) {
         if (e.holdX == null) e.holdX = fw * (0.72 + Math.random() * 0.14);
         if (e.holdY == null) e.holdY = e.y;
@@ -2692,6 +2698,8 @@ export class Game {
           e.x += (targetX - e.x) * Math.min(1, 5 * dt);
           e.y = e.holdY + Math.sin(e.phase) * ((() => { const t = resolveEnemyTier(e.kind); return (t === 'swarm' || t === 'drone') ? 28 : 18; })());
         }
+      } else if (e.sent && (pz = tickPersona(e, { dt, fw, fh, tx: shipX, ty: B.y * fh, field: B.enemies, bullets: B.bullets }))) {
+        /* personality movement */
       } else {
         const advance = e.speed + Math.cos(e.surgePhase) * (e.speed * 0.55);
         e.x -= advance * dt;
@@ -2702,7 +2710,7 @@ export class Game {
       }
       if (!e.mv) e.y = Math.max(20, Math.min(fh - 20, e.y));
       const parked = (e.sent && e.lingerT > 0) ? e.x <= (e.holdX || fw) + 8 : true;
-      if (!fireScripted(e, B.bullets, shipX, B.y * fh, dt, e.x < fw - 10 && !e.noFire)) tickEnemyLaserFire(e, B.bullets, shipX, B.y * fh, dt, parked && !e.noFire, () => {
+      if (!fireScripted(e, B.bullets, shipX, B.y * fh, dt, e.x < fw - 10 && !e.noFire)) tickEnemyLaserFire(e, B.bullets, shipX, B.y * fh, dt, parked && !e.noFire && (!pz || pz.fire), () => {
         const tier = resolveEnemyTier(e.kind);
         return e.sent
           ? ((['elite', 'boss', 'mech', 'tank'].includes(tier)) ? 1.1 : 1.55)
@@ -2715,7 +2723,7 @@ export class Game {
       if (b.homing && b.owner === 'enemy' && !b.laser) {
         steerEnemyHoming(b, shipX, botPy, dt);
       }
-      if (b.k && b.owner === 'enemy') updateEnemyBullet(b, dt, spawnedBB);
+      if (b.k && b.owner === 'enemy') updateEnemyBullet(b, dt, spawnedBB, shipX, botPy);
       b.x += b.vx * dt;
       b.y += b.vy * dt;
       b.life -= dt;
@@ -2734,7 +2742,7 @@ export class Game {
     for (const b of B.bullets) {
       if (b.owner !== 'player' || b.dir || b.dvis) continue; // direct shots only hit the COM ship
       for (const e of B.enemies) {
-        if (warping(e) || e.passShots) continue; // shots pass through warping units / striker chain
+        if (warping(e) || e.passShots || personaIntangible(e)) continue; // shots pass through warping / cloaked units / striker chain
         if (isCoreTarget(e)) {
           const r = applyCoreAwareHit(e, b.dmg || 1, b.x, b.y, B.fx);
           if (r.hit === 'none') continue;
@@ -2744,6 +2752,7 @@ export class Game {
           break;
         }
         if (Math.abs(b.x - e.x) < e.w * 0.45 && Math.abs(b.y - e.y) < e.h * 0.45) {
+          if (personaShieldBlocks(e, b)) { b.life = 0; B.fx.push(spawnHitSpark(b.x, b.y, 10)); break; } // same front shield rule
           e.hp -= b.dmg;
           if (!b.pierce) b.life = 0;
           if (e.kind !== 'wave_bubble') B.fx.push(spawnHitSpark(b.x, b.y));

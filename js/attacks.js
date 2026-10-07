@@ -8,8 +8,8 @@
  *  - Player-hit damage per projectile: homing 3, everything else 5 (see game.js),
  *    × the firing unit's 攻撃力 multiplier (b.atk, catalog.js atkDamageMul).
  */
-import { spawnBullet, resolveEnemyTier, isLargeEnemy, isWaveKind } from './entities.js?v=20261006192854';
-import { unitAttackLoadout } from './catalog.js?v=20261006192854';
+import { spawnBullet, resolveEnemyTier, isLargeEnemy, isWaveKind } from './entities.js?v=20261007145546';
+import { unitAttackLoadout } from './catalog.js?v=20261007145546';
 
 const PI = Math.PI;
 const TAU = PI * 2;
@@ -42,6 +42,8 @@ function clampAim(a) {
   return PI + d;
 }
 
+/** Emit context (per-enemy / per-field caps, 攻撃力) — also used by sentai.js signature attacks. */
+export function attackCtx(e, bullets, tx, ty) { return makeCtx(e, bullets, tx, ty); }
 function makeCtx(e, bullets, tx, ty) {
   const ox = e.x - (e.w || 20) * 0.4;
   const oy = e.y;
@@ -303,8 +305,22 @@ export function tickEnemyAttackQueue(e, bullets, tx, ty, dt) {
  * Per-frame special bullet motion (wave / split / mine / boomerang).
  * Call BEFORE the generic x += vx*dt step. Newly spawned bullets go to `out`.
  */
-export function updateEnemyBullet(b, dt, out) {
+export function updateEnemyBullet(b, dt, out, tx, ty) {
   switch (b.k) {
+    case 'mini': { // sent-unit mini drone: flies out, brakes, hovers blinking (tell), then darts at the ship
+      b.mt += dt;
+      if (b.mt < b.mh) { const f = Math.exp(-3.2 * dt); b.vx *= f; b.vy *= f; }
+      else if (!b.go) {
+        b.vx *= Math.exp(-8 * dt); b.vy *= Math.exp(-8 * dt);
+        if (b.mt >= b.mh + b.mw && tx != null) {
+          b.go = 1;
+          const a = Math.atan2(ty - b.y, tx - b.x);
+          b.vx = Math.cos(a) * 250; b.vy = Math.sin(a) * 250;
+          b.life = Math.min(b.life, 2.6);
+        }
+      }
+      break;
+    }
     case 'saw': { // boomerang ring: flies out, stops, homes back to where it was spat from
       b.st += dt;
       b.spin = (b.spin || 0) + dt * 9;

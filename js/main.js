@@ -1,12 +1,13 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261006192854';
-import { Net } from './net.js?v=20261006192854';
-import { Game } from './game.js?v=20261006192854';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261006192854';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261006192854';
-import { loadBattleCount } from './stats.js?v=20261006192854';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261006192854';
-import { ALL_KIND_IDS } from './catalog.js?v=20261006192854';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261006192854';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261007145546';
+import { Net } from './net.js?v=20261007145546';
+import { Game } from './game.js?v=20261007145546';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261007145546';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261007145546';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261007145546';
+import { loadBattleCount } from './stats.js?v=20261007145546';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261007145546';
+import { ALL_KIND_IDS } from './catalog.js?v=20261007145546';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261007145546';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -148,7 +149,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261006192854`;
+  return `assets/enemies/${id}/0.png?v=20261007145546`;
 }
 
 function unitName(id) {
@@ -179,6 +180,17 @@ function refreshDeckNewDot() {
   els.btnDeck.classList.toggle('has-new', n > 0);
 }
 
+/** 転送キャラの個性: short chip「動き・必殺」 and the one-line description (js/sentai.js PERSONA). */
+function personaChip(id) {
+  const p = PERSONA[id];
+  if (!p) return '';
+  return `${MOVE_JA[p.mv] || ''}・${p.sp ? SPECIAL_JA[p.sp] : SPECIAL_JA.dash}`;
+}
+function personaLine(id) {
+  const p = PERSONA[id];
+  return p ? p.ja : '';
+}
+
 function renderUnitDetail(container, unitId, opts = {}) {
   if (!container) return;
   if (!unitId) {
@@ -201,6 +213,7 @@ function renderUnitDetail(container, unitId, opts = {}) {
         ${price}
       </div>
       <div class="detail-stats">${detailStatsHtml(unitId)}</div>
+      ${personaChip(unitId) ? `<div class="detail-attack"><span class="detail-label">個性</span>${personaChip(unitId)}</div><p class="detail-blurb"><b>${personaLine(unitId)}</b></p>` : ''}
       <div class="detail-attack"><span class="detail-label">攻撃</span>${intro.attack}</div>
       <p class="detail-blurb">${intro.blurb}</p>
     </div>
@@ -263,7 +276,7 @@ function renderDeckScreen() {
       <span class="slot-equipped">装備中 · ${i + 1}</span>
       <div class="slot-art"><img src="${spriteUrl(id)}" alt="" width="56" height="56" loading="lazy" /></div>
       <span class="slot-name">${unitName(id)}</span>
-      <span class="slot-attack">${intro.attack.split('／')[0]}</span>
+      <span class="slot-attack">${personaChip(id) || intro.attack.split('／')[0]}</span>
       ${statsHtml(id, true)}
     `;
     btn.addEventListener('click', () => {
@@ -295,7 +308,7 @@ function renderDeckScreen() {
       ${isNew ? NEW_BADGE : ''}
       <div class="unit-art"><img src="${spriteUrl(u.id)}" alt="" width="64" height="64" loading="lazy" /></div>
       <span class="unit-name">${u.name}</span>
-      <span class="unit-attack-chip">${intro.attack.split('／')[0]}</span>
+      <span class="unit-attack-chip">${personaChip(u.id) || intro.attack.split('／')[0]}</span>
       ${statsHtml(u.id)}
       <span class="rarity ${u.rarity}">${rarityLabel(u.rarity)}</span>
     `;
@@ -412,7 +425,7 @@ function renderShopScreen() {
       ${isNew ? NEW_BADGE : ''}
       <div class="unit-art"><img src="${spriteUrl(u.id)}" alt="" width="72" height="72" loading="lazy" /></div>
       <span class="unit-name">${u.name}</span>
-      <span class="unit-attack-chip">${intro.attack.split('／')[0]}</span>
+      <span class="unit-attack-chip">${personaChip(u.id) || intro.attack.split('／')[0]}</span>
       ${statsHtml(u.id)}
       <span class="rarity ${u.rarity}">${rarityLabel(u.rarity)}</span>
       <span class="unit-price">${priceLabel}</span>
@@ -445,7 +458,7 @@ function renderZukanScreen() {
       btn.innerHTML = `
         <div class="unit-art"><img src="${spriteUrl(u.id)}" alt="" width="72" height="72" loading="lazy" /></div>
         <span class="unit-name">${u.name}</span>
-        <span class="unit-attack-chip">${intro.attack.split('／')[0]}</span>
+        <span class="unit-attack-chip">${personaChip(u.id) || intro.attack.split('／')[0]}</span>
         ${statsHtml(u.id)}
         <span class="rarity ${u.rarity}">${rarityLabel(u.rarity)}</span>
       `;

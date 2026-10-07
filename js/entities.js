@@ -1066,6 +1066,10 @@ export function serializeField(state) {
       ax: e.laserTeleT > 0 && e.laserAimX != null ? +e.laserAimX.toFixed(1) : undefined,
       ay: e.laserTeleT > 0 && e.laserAimY != null ? +e.laserAimY.toFixed(1) : undefined,
       lo: e.laserTeleT > 0 && e.laserTeleOffs ? e.laserTeleOffs : undefined,
+      // sent-unit personality tell (js/sentai.js) — kind, progress, target, rows / columns, cloak alpha, shield, angle, heal glow
+      zk: e.zk, zu: e.zu != null ? +e.zu.toFixed(2) : undefined, zx: e.zx != null ? Math.round(e.zx) : undefined, zy: e.zy != null ? Math.round(e.zy) : undefined,
+      zc: e.zc, za: e.za != null ? +e.za.toFixed(2) : undefined, zs: e.zs != null ? +e.zs.toFixed(2) : undefined, zg: e.zg != null ? +e.zg.toFixed(2) : undefined,
+      hx: e._healFx > 0 ? 1 : undefined,
     })),
     bullets: state.bullets.filter(b => b.owner === 'player' || b.owner === 'enemy').slice(0, 60).map(b => ({
       x: b.x, y: b.y, o: b.owner, h: !!b.homing, vx: b.vx, vy: b.vy,
@@ -1073,6 +1077,8 @@ export function serializeField(state) {
       D: b.dir ? 1 : undefined,
       k: b.k || undefined,
       r: b.r > 3.5 ? b.r : undefined,
+      g: b.tgx != null && b.st > 0 ? [Math.round(b.tgx), Math.round(b.tgy), +(1 - b.st / (b.tg0 || 1)).toFixed(2)] : undefined, // bomb target marker
+      bl: b.k === 'mini' && !b.go && b.mt >= b.mh ? 1 : undefined, // mini drone blinking (about to dart)
     })),
     fx: state.fx.filter((f) => f.kind !== 'coin').slice(0, 12).concat(state.fx.filter((f) => f.kind === 'coin').slice(0, 10)).map(f => ({ x: f.x, y: f.y, l: f.life, m: f.max, r: f.r, k: f.kind, t: f.t, a: f.a, g: f.g, ph: f.ph, sd: f.sd, big: f.big })),
     ff: state.ff ? { n: state.ff.n, k: state.ff.k } : undefined,

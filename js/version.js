@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-06 19:28:54';
+export const VERSION_LABEL = '2026-10-07 14:55:46';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1791282534953;
-export const BUILD_NOTE = 'ヘビは1分に1体 2分30秒に2体 4分に3体';
+export const BUILD_TIME = 1791352546415;
+export const BUILD_NOTE = '転送キャラ69体に個性 動きと予告つき必殺技';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

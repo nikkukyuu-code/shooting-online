@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261006192854';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261007145546';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -370,7 +370,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261006192854`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261007145546`;
 }
 
 function loadKindSprite(kind) {
@@ -456,8 +456,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261006192854'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261006192854'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261007145546'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261007145546'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -1349,6 +1349,119 @@ function bubbleAlpha(e) {
   void ki; // 10-05: no entry shimmer — unhit bubbles stay fully invisible
   return kh > 0 ? 1 : 0;
 }
+/** Sent-unit personality tells (js/sentai.js), absolute pane coordinates (drawn under the body). */
+function drawPersonaTell(ctx, e) {
+  const t = performance.now() / 1000, u = Math.max(0, Math.min(1, e.zu || 0));
+  const blink = Math.floor(t * 12) % 2 === 0;
+  const mx = e.x - (e.w || 40) * 0.4, my = e.y;
+  ctx.save();
+  switch (e.zk) {
+    case 'snipe': { // aim line(s): follow → lock (white blink)
+      const base = Math.atan2((e.zy ?? my) - my, (e.zx ?? 0) - mx), sp = e.zg || 0;
+      const lock = u > 0.65;
+      ctx.lineWidth = lock ? 2.6 : 1.8;
+      ctx.strokeStyle = lock ? (blink ? 'rgba(255,255,255,0.95)' : 'rgba(255,40,40,0.95)') : `rgba(255,60,60,${0.5 + 0.4 * u})`;
+      for (const d of sp ? [-sp, 0, sp] : [0]) {
+        ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(mx + Math.cos(base + d) * 700, my + Math.sin(base + d) * 700); ctx.stroke();
+      }
+      if (e.zx != null) { ctx.beginPath(); ctx.arc(e.zx, e.zy, 9 + 6 * (1 - u), 0, Math.PI * 2); ctx.stroke(); }
+      break;
+    }
+    case 'dash': { // red lane + chevrons along the dash direction
+      const a = e.zg ?? Math.PI, hw = (e.h || 30) * 0.36;
+      ctx.translate(e.x, e.y); ctx.rotate(a);
+      ctx.fillStyle = `rgba(255,30,30,${(blink ? 0.32 : 0.16) + 0.15 * u})`;
+      ctx.fillRect(0, -hw, 900, hw * 2);
+      ctx.fillStyle = `rgba(255,220,200,${0.5 + 0.4 * u})`;
+      for (let i = 0; i < 4; i++) {
+        const x = 40 + i * 46 + ((t * 120) % 46);
+        ctx.beginPath(); ctx.moveTo(x + 10, -8); ctx.lineTo(x + 20, 0); ctx.lineTo(x + 10, 8); ctx.lineTo(x + 14, 0); ctx.closePath(); ctx.fill();
+      }
+      break;
+    }
+    case 'dashing': {
+      ctx.fillStyle = 'rgba(255,120,60,0.35)';
+      ctx.fillRect(e.x, e.y - (e.h || 30) * 0.25, 70, (e.h || 30) * 0.5);
+      break;
+    }
+    case 'blink': { // destination ring (where it will reappear)
+      if (e.zx == null) break;
+      const r = Math.max(e.w || 40, e.h || 30) * (0.75 - 0.25 * u);
+      ctx.strokeStyle = `rgba(120,240,255,${0.5 + 0.45 * (blink ? 1 : 0.4)})`; ctx.lineWidth = 2.5; ctx.setLineDash([6, 4]);
+      ctx.beginPath(); ctx.arc(e.zx, e.zy, r, t * 3, t * 3 + Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = `rgba(120,240,255,${0.12 + 0.2 * u})`; ctx.beginPath(); ctx.arc(e.zx, e.zy, r * 0.8, 0, Math.PI * 2); ctx.fill();
+      break;
+    }
+    case 'decloak': case 'blinkin': {
+      ctx.strokeStyle = `rgba(160,255,255,${0.8 * (1 - u * 0.6)})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(e.x, e.y, Math.max(e.w || 40, e.h || 30) * (0.9 - 0.35 * u), 0, Math.PI * 2); ctx.stroke();
+      break;
+    }
+    case 'ring': { // swelling pink glow → ring of shots
+      const r = Math.max(e.w || 40, e.h || 30) * (0.45 + 0.4 * u);
+      ctx.fillStyle = `rgba(255,80,200,${0.12 + 0.22 * u})`; ctx.beginPath(); ctx.arc(e.x, e.y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = `rgba(255,140,230,${0.5 + 0.5 * (blink ? 1 : 0.3)})`; ctx.lineWidth = 2; ctx.stroke();
+      break;
+    }
+    case 'hatch': { // launch bay glow (mines / mini drones)
+      ctx.fillStyle = blink ? 'rgba(255,240,120,0.95)' : 'rgba(255,140,40,0.7)';
+      for (const dy of [-0.22, 0.22]) { ctx.beginPath(); ctx.arc(e.x, e.y + (e.h || 30) * dy, 4 + 3 * u, 0, Math.PI * 2); ctx.fill(); }
+      break;
+    }
+    case 'rear': { // tail flare (boomerangs thrown backwards)
+      ctx.fillStyle = `rgba(255,170,40,${0.4 + 0.5 * u})`;
+      ctx.beginPath(); ctx.arc(e.x + (e.w || 40) * 0.45, e.y, 6 + 8 * u, 0, Math.PI * 2); ctx.fill();
+      break;
+    }
+    case 'beam': case 'beamw': { // charge line along its row, thickening
+      const wide = e.zk === 'beamw', th = (wide ? 26 : 8) * (0.3 + 0.7 * u);
+      ctx.fillStyle = `rgba(150,230,255,${0.12 + 0.25 * u})`; ctx.fillRect(0, my - th / 2, mx, th);
+      ctx.strokeStyle = u > 0.7 && blink ? 'rgba(255,255,255,0.95)' : 'rgba(120,220,255,0.75)'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(0, my - th / 2); ctx.lineTo(mx, my - th / 2); ctx.moveTo(0, my + th / 2); ctx.lineTo(mx, my + th / 2); ctx.stroke();
+      ctx.fillStyle = 'rgba(220,250,255,0.9)'; ctx.beginPath(); ctx.arc(mx, my, 3 + 7 * u, 0, Math.PI * 2); ctx.fill();
+      break;
+    }
+    case 'rain': { // columns where shots will fall
+      const fh = e._fh || 400;
+      ctx.strokeStyle = blink ? 'rgba(255,60,40,0.85)' : 'rgba(255,170,60,0.55)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]);
+      for (const x of e.zc || []) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, fh); ctx.stroke(); }
+      ctx.setLineDash([]); ctx.fillStyle = 'rgba(255,80,40,0.95)';
+      for (const x of e.zc || []) { ctx.beginPath(); ctx.moveTo(x - 7, 2); ctx.lineTo(x + 7, 2); ctx.lineTo(x, 14); ctx.closePath(); ctx.fill(); }
+      break;
+    }
+    case 'gate': { // rows where the lasers will run (the gaps are safe)
+      ctx.strokeStyle = blink ? 'rgba(255,60,40,0.95)' : 'rgba(255,170,60,0.8)'; ctx.lineWidth = 2.5 + u * 2.5; ctx.setLineDash([10, 6]);
+      for (const y of e.zc || []) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(mx, y); ctx.stroke(); }
+      ctx.setLineDash([]);
+      break;
+    }
+    case 'heal': { // green tether to the ally being repaired
+      if (e.zx == null) break;
+      ctx.strokeStyle = `rgba(90,255,140,${0.5 + 0.4 * (blink ? 1 : 0.4)})`; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.zx, e.zy); ctx.stroke();
+      ctx.fillStyle = 'rgba(120,255,160,0.95)'; ctx.fillRect(e.zx - 2, e.zy - 9, 4, 18); ctx.fillRect(e.zx - 9, e.zy - 2, 18, 4);
+      break;
+    }
+    default: break;
+  }
+  ctx.restore();
+}
+
+/** Front shield arc + heal glow (local space, after the body). */
+function drawPersonaLocal(ctx, e, t) {
+  if (e.zs > 0) {
+    const r = Math.max(e.w || 40, e.h || 30) * 0.62;
+    ctx.strokeStyle = `rgba(120,220,255,${0.45 + 0.5 * e.zs})`; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(0, 0, r, Math.PI * 0.62, Math.PI * 1.38); ctx.stroke();
+    ctx.fillStyle = `rgba(120,220,255,${0.16 * e.zs})`;
+    ctx.beginPath(); ctx.arc(0, 0, r, Math.PI * 0.62, Math.PI * 1.38); ctx.lineTo(0, 0); ctx.closePath(); ctx.fill();
+  }
+  if (e.hx) {
+    ctx.fillStyle = `rgba(90,255,140,${0.25 + 0.2 * Math.sin(t * 14)})`;
+    ctx.beginPath(); ctx.arc(0, 0, Math.max(e.w || 40, e.h || 30) * 0.5, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
 function drawEnemy(ctx, e) {
   if (e.kind === 'wave_bubble') {
     const ba = bubbleAlpha(e);
@@ -1387,6 +1500,7 @@ function drawEnemy(ctx, e) {
     ctx.fillStyle = `rgba(255,40,30,${a})`;
     ctx.fillRect(0, e.y - e.h * 0.32, e.x, e.h * 0.64);
   }
+  if (e.zk) drawPersonaTell(ctx, e);
   ctx.translate(e.x, e.y);
   if ((e._shake || 0) > 0 || e.sk) ctx.translate((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6);
   if (e._warn) {
@@ -1407,6 +1521,7 @@ function drawEnemy(ctx, e) {
 
   const kind = e.kind || 'basic';
   const w = e.w, h = e.h;
+  if (e.za != null && !(e.warpT > 0)) ctx.globalAlpha *= Math.max(0.08, Math.min(1, e.za)); // stealth / blink fade
 
   // Warp-in (transferred units): ring + blink 0–3s, steady 3–5s, ring pop at 5s
   const warpT = e.warpT > 0 ? e.warpT : 0;
@@ -1479,6 +1594,7 @@ function drawEnemy(ctx, e) {
     ctx.textAlign = 'center';
     ctx.fillText('SEND', 0, e.h * 0.78);
   }
+  if (e.zs > 0 || e.hx) { ctx.globalAlpha = 1; drawPersonaLocal(ctx, e, t); }
   // Laser telegraph (large sent units) — drawn in local space after body
   if (e.laserTeleT > 0) {
     ctx.globalAlpha = 1;
@@ -1810,6 +1926,13 @@ function drawEnemyShot(ctx, b, k, ux, uy, ang) {
       break;
     }
     case 'split': {
+      if (b.g) { // bomb: target marker where the shell will burst (shrinking ring + cross)
+        const [gx, gy, gu] = b.g, rr = 30 - 16 * Math.min(1, gu || 0), on = Math.floor(now * 8) % 2 === 0;
+        ctx.save(); ctx.strokeStyle = on ? 'rgba(255,60,40,0.95)' : 'rgba(255,200,60,0.8)'; ctx.lineWidth = 2;
+        ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.arc(gx, gy, rr, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+        ctx.beginPath(); ctx.moveTo(gx - 7, gy); ctx.lineTo(gx + 7, gy); ctx.moveTo(gx, gy - 7); ctx.lineTo(gx, gy + 7); ctx.stroke();
+        ctx.restore();
+      }
       const warn = b.st != null && b.st < 0.22;
       dot(b.x, b.y, r + (warn ? 3 : 1.5), warn ? 'rgba(255,255,160,0.5)' : 'rgba(255,150,40,0.35)');
       dot(b.x, b.y, r, '#ffa030');
@@ -1833,6 +1956,15 @@ function drawEnemyShot(ctx, b, k, ux, uy, ang) {
       ctx.strokeStyle = '#ff5060'; ctx.lineWidth = 1.2;
       ctx.beginPath(); ctx.arc(b.x, b.y, r, 0, Math.PI * 2); ctx.stroke();
       if (Math.floor(now * 4 + b.x * 0.01) % 2 === 0) dot(b.x, b.y, 1.8, '#ffe066');
+      break;
+    }
+    case 'mini': { // sent-unit mini drone (blinks white just before it darts at the ship)
+      const bl = b.bl && Math.floor(now * 12) % 2 === 0;
+      ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(now * 6);
+      ctx.fillStyle = bl ? '#ffffff' : '#7ee8ff'; ctx.strokeStyle = bl ? '#ff4040' : '#1a6a8a'; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(0, -r - 1.5); ctx.lineTo(r + 1.5, 0); ctx.lineTo(0, r + 1.5); ctx.lineTo(-r - 1.5, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.restore();
+      if (bl) { ctx.strokeStyle = 'rgba(255,70,60,0.8)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(b.x, b.y, r + 5, 0, Math.PI * 2); ctx.stroke(); }
       break;
     }
     case 'boom': { // spinning three-blade boomerang
@@ -3693,6 +3825,10 @@ export function drawField(ctx, area, snap, opts = {}) {
       drones: e.drones ? e.drones.map((d) => ({ ang: d.ang, dist: d.dist * Math.min(sx, sy), ky: (d.ky || 1) * sy / Math.min(sx, sy), r: d.r * Math.min(sx, sy), hp: d.hp, w: d.w }))
         : (Array.isArray(e.dr) ? e.dr.map((hp, i, a) => ({ ang: (Math.PI * 2 * i) / a.length + performance.now() / 1000 * 1.6, dist: (e.kind === 'wave_eye_boss' ? 80 : e.kind === 'wave_ring_core' ? Math.max(20, ((e.w || 92) - 20) / 2) : 36 + (i % 2) * 8) * Math.min(sx, sy), ky: e.kind === 'wave_ring_core' ? Math.max(1, ((e.h || 92) - 16) / Math.max(1, (e.w || 92) - 20)) : 1, r: (e.kind === 'wave_eye_boss' ? 15 : e.kind === 'wave_ring_core' ? 7.5 : 12) * Math.min(sx, sy), hp })) : undefined),
       bodyFlash: e._bodyFlash || (e.bf ? 0.1 : 0),
+      // sent-unit personality tell (js/sentai.js) — same fields locally and in the online snapshot
+      zk: e.zk, zu: e.zu, zx: e.zx != null ? e.zx * sx : undefined, zy: e.zy != null ? e.zy * sy : undefined,
+      zc: Array.isArray(e.zc) ? e.zc.map((v) => v * (e.zk === 'rain' ? sx : sy)) : undefined, za: e.za, zs: e.zs, zg: e.zg,
+      hx: e.hx || (e._healFx > 0 ? 1 : 0), _fw: fw, _fh: fh,
       _portalA: e._chainOf ? e._chainOf._portalA : e.pA, _portalOut: e._chainOf ? e._chainOf._portalOut : e.pO, // snake portal fade in / out
     });
   }
@@ -3716,6 +3852,8 @@ export function drawField(ctx, area, snap, opts = {}) {
       x: b.x * sx, y: b.y * sy, owner: isDir ? 'player' : (b.o || b.owner), homing: isDir ? false : (b.h || b.homing),
       tint: isDir && !darkened ? 'in' : undefined, r: (b.r || 3) * Math.min(sx, sy), vx: b.vx, vy: b.vy,
       laser: !!(b.L || b.laser), k: b.k, st: b.st,
+      g: b.g ? [b.g[0] * sx, b.g[1] * sy, b.g[2]] : (b.tgx != null && b.st > 0 ? [b.tgx * sx, b.tgy * sy, 1 - b.st / (b.tg0 || 1)] : undefined),
+      bl: b.bl || (b.k === 'mini' && !b.go && b.mt >= b.mh) ? 1 : 0,
       trail: Array.isArray(b.trail) ? b.trail.map((p) => ({ x: p.x * sx, y: p.y * sy })) : undefined,
     });
   }
