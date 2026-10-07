@@ -1,13 +1,14 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261007145546';
-import { Net } from './net.js?v=20261007145546';
-import { Game } from './game.js?v=20261007145546';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261007145546';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261007145546';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261007145546';
-import { loadBattleCount } from './stats.js?v=20261007145546';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261007145546';
-import { ALL_KIND_IDS } from './catalog.js?v=20261007145546';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261007145546';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261007160224';
+import { Net } from './net.js?v=20261007160224';
+import { Game } from './game.js?v=20261007160224';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261007160224';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261007160224';
+import { resetDeckToDefault } from './meta.js?v=20261007160224';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261007160224';
+import { loadBattleCount } from './stats.js?v=20261007160224';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261007160224';
+import { ALL_KIND_IDS } from './catalog.js?v=20261007160224';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261007160224';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -149,7 +150,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261007145546`;
+  return `assets/enemies/${id}/0.png?v=20261007160224`;
 }
 
 function unitName(id) {
@@ -766,6 +767,21 @@ els.btnZukan?.addEventListener('click', () => {
   show('zukan');
 });
 
+// 初期デッキに戻す: confirm first; only the deck changes (PT / owned untouched)
+{
+  const dlg = document.getElementById('deck-reset-dialog');
+  const close = () => dlg && dlg.classList.add('hidden');
+  document.getElementById('btn-deck-reset')?.addEventListener('click', () => { if (dlg) { dlg.classList.remove('hidden'); document.getElementById('btn-deck-reset-cancel')?.focus(); } });
+  document.getElementById('btn-deck-reset-cancel')?.addEventListener('click', close);
+  dlg?.addEventListener('click', (ev) => { if (ev.target === dlg) close(); });
+  document.getElementById('btn-deck-reset-ok')?.addEventListener('click', () => {
+    resetDeckToDefault(loadMeta());
+    close();
+    selectedDeckSlot = 0;
+    renderDeckScreen();
+    if (els.deckHint) els.deckHint.textContent = 'デッキを初期の状態に戻しました';
+  });
+}
 els.btnDeckBack?.addEventListener('click', () => {
   refreshPtDisplay();
   refreshDeckNewDot();

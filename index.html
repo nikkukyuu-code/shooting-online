@@ -9,7 +9,7 @@
   <meta name="theme-color" content="#1a0a08" />
   <script>
   (function () {
-    var PAGE_LABEL = '2026-10-07 14:55:46';
+    var PAGE_LABEL = '2026-10-07 16:02:24';
     var busy = false;
     function check() {
       if (busy || window.__stbScreen === 'game' || document.visibilityState === 'hidden') return;
@@ -62,7 +62,7 @@
   }
   </script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=20261007145546" />
+  <link rel="stylesheet" href="css/style.css?v=20261007160224" />
 <link rel="apple-touch-icon" href="/shooting-online/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-title" content="スペトリ" />
 </head>
@@ -72,7 +72,7 @@
       <div class="sky sky-space" aria-hidden="true"></div>
       <div class="menu-pt" id="menu-pt" aria-live="polite">いまの持ちPT 0</div>
       <div class="menu-hero">
-        <img class="menu-hero-art" src="assets/title-hero.svg?v=20261007145546" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
+        <img class="menu-hero-art" src="assets/title-hero.svg?v=20261007160224" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
         <header class="menu-brand">
           <h1 class="game-title">スペーストリックバトル<span class="beta-badge">β版</span></h1>
           <p class="game-subtitle">オンライン対戦</p>
@@ -115,7 +115,7 @@
         <p class="menu-hint">部屋名→入室（ゲスト）／部屋を作る（ホスト）</p>
         <a class="hub-link" href="https://nikkukyuu-code.github.io/">トップページへ</a>
         <div id="app-meta" class="app-meta">
-          <span id="app-version">2026-10-07 14:55:46</span>
+          <span id="app-version">2026-10-07 16:02:24</span>
           <span class="meta-sep">·</span>
           <span id="app-visits">アクセス …</span>
           <span class="meta-sep" hidden>·</span>
@@ -135,6 +135,7 @@
         <h3 class="sub-section-title deck-equipped-heading">装備中デッキ</h3>
         <div id="deck-slots" class="deck-slots" aria-label="装備中デッキ"></div>
         <p id="deck-hint" class="sub-hint">スロットを選んでから、下の所持ユニットをタップして入れ替え</p>
+        <button type="button" id="btn-deck-reset" class="deck-reset-btn">初期デッキに戻す</button>
         <div id="deck-detail" class="unit-detail" aria-live="polite"></div>
         <h3 class="sub-section-title">所持ユニット</h3>
         <div id="deck-owned" class="unit-grid"></div>
@@ -143,6 +144,15 @@
           <div id="deck-items-list" class="items-intro-list"></div>
         </details>
         <button type="button" id="btn-deck-back" class="menu-btn">メニューへ</button>
+        <div id="deck-reset-dialog" class="deck-reset-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="deck-reset-msg">
+          <div class="deck-reset-box">
+            <p id="deck-reset-msg" class="deck-reset-msg">デッキを初期の状態に戻します。よろしいですか？<br><small>持っているキャラやPTは消えません</small></p>
+            <div class="deck-reset-row">
+              <button type="button" id="btn-deck-reset-cancel" class="deck-reset-cancel">やめる</button>
+              <button type="button" id="btn-deck-reset-ok" class="deck-reset-ok">戻す</button>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -191,7 +201,7 @@
       <div id="ui-overlay">
         <button type="button" id="btn-stop" class="stop-btn">ストップ</button>
         <div id="match-timer" class="match-timer" hidden aria-live="polite"><span class="mt-main"></span><span class="mt-sub" hidden></span></div>
-        <div id="game-version" class="game-version">2026-10-07 14:55:46</div>
+        <div id="game-version" class="game-version">2026-10-07 16:02:24</div>
         <div id="status-bar" class="status-bar">対戦相手を待っています</div>
       </div>
       <div id="end-overlay" class="end-overlay hidden">
@@ -203,6 +213,6 @@
   </div>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script type="module" src="js/main.js?v=20261007145546"></script>
+  <script type="module" src="js/main.js?v=20261007160224"></script>
 </body>
 </html>

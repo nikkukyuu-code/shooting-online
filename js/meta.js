@@ -2,7 +2,7 @@
  * localStorage key: shootingOnline_meta (NEVER rename — would wipe player PT).
  * Backup key: shootingOnline_meta_bak. On every update, preserve pt; never clear storage.
  */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20261007145546';
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20261007160224';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;
@@ -452,6 +452,15 @@ export function clearUnitNew(id) {
  * Always length === 5 after save.
  * Returns { ok, meta, reason: 'set'|'swap'|'same'|'slot'|'unowned', swappedFrom? }
  */
+/**
+ * 初期デッキに戻す: deck ← STARTER_DECK (the 5 free starters, always owned). Only `deck` changes —
+ * PT / owned are passed through unchanged; saved via saveMeta (same keys, backup kept in sync).
+ */
+export function resetDeckToDefault(meta) {
+  const next = { ...meta, owned: [...meta.owned], deck: fillUniqueDeck([...STARTER_DECK], new Set(meta.owned)) };
+  return saveMeta(next);
+}
+
 export function setDeckSlot(meta, slot, unitId) {
   if (slot < 0 || slot >= DECK_SIZE) return { ok: false, meta, reason: 'slot' };
   if (!meta.owned.includes(unitId) || !CATALOG_BY_ID[unitId]) {
