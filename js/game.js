@@ -1,20 +1,20 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261010114642';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261010115712';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
-  markCoreChain, tickChain, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261010114642';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261010114642';
-import { sfx } from './audio.js?v=20261010114642';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261010114642';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261010114642';
-import { hitBattleCounter } from './stats.js?v=20261010114642';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261010114642';
-import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261010114642';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261010114642';
+  markCoreChain, tickChain, spawnChainBoom, spawnCorePale, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
+} from './entities.js?v=20261010115712';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261010115712';
+import { sfx } from './audio.js?v=20261010115712';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261010115712';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261010115712';
+import { hitBattleCounter } from './stats.js?v=20261010115712';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261010115712';
+import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261010115712';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261010115712';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1101,13 +1101,18 @@ export class Game {
   /** Core destroyed: big chain explosion + score burst (the decisive shot). */
   onCoreBreak(e, fx, mine, list) {
     if (e && e._coreBall && e._chainOf) e = e._chainOf; // snake: the ball is the core, the head owns it
-    // Core break: only the breaker's field blinks white (a bit longer than a hit), same for both sides
-    this.fieldFlash(mine ? this.state : this._bot, 'break');
-    const chained = markCoreChain(e, list); // cascading yellow chain wipe of the pack around the core
+    // Core break = the video: the core goes pale-spiky for 1 frame (0.1 s) and vanishes. No field flash, no blast at the core.
+    // (was: field white 0.1 s hold + 0.9 s fade, 0.9 s 'corebreak' ring, 2 big explosions)
+    const chained = markCoreChain(e, list); // attached units still pop in the chain (unchanged)
     const cw = e._coreSeg && e._coreAt === 'head' ? e : (coreWorld(e) || e); // snake: the core that broke (head or orange ball)
-    fx.push({ kind: 'corebreak', x: cw.x, y: cw.y, r: Math.max(e.w, e.h) * 0.9, life: 0.9, max: 0.9 });
-    fx.push(spawnExplosion(cw.x - e.w * 0.25, cw.y - e.h * 0.2, true));
-    fx.push(spawnExplosion(cw.x + e.w * 0.25, cw.y + e.h * 0.2, true));
+    const cr = cw === e && e.kind === 'wave_snake_head' ? e.w * 0.9 : (e.core ? Math.max(9, e.core.r * 2) : Math.max(e.w, e.h) * 0.35);
+    fx.push(spawnCorePale(cw.x, cw.y, cr));
+    if (e.kind === 'wave_snake_head' && e._coreAt === 'head') e._quietDeath = true; // the head IS the core: it just vanishes
+    const ballCore = e._coreSeg && e._coreAt !== 'head' ? e._coreSeg : null;
+    if (ballCore) { const cwb = ballCore; // snake orange ball = the core: it vanishes with the pale frame (not a chain pop)
+      if (cwb._chainT != null) { cwb._chainT = null; e._chainTotal = Math.max(0, (e._chainTotal || 1) - 1); }
+      cwb.hp = 0; cwb._quietDeath = true;
+    }
     if (mine) {
       this.state.player.score += e.score; // burst on top of the normal kill score
       try { sfx.explode(); } catch (_) {}
@@ -2054,7 +2059,7 @@ export class Game {
           e._chainKill = true; S.fx.push(spawnChainBoom(e));
           if (e._chainSrc) e._chainSrc._chainDone = (e._chainSrc._chainDone || 0) + 1;
         }
-        if (e.kind === 'wave_bubble') { if (e._eclT !== S.time) { e._eclAt = null; pushEclipse(S.fx, e, S.time); } } else if (!e._chainKill) pushKillBooms(S.fx, e, resolveEnemyTier(e.kind) === 'boss', isLargeEnemy(e)); // chain pops use the 2× chain boom
+        if (e.kind === 'wave_bubble') { if (e._eclT !== S.time) { e._eclAt = null; pushEclipse(S.fx, e, S.time); } } else if (!e._chainKill && !e._quietDeath) pushKillBooms(S.fx, e, resolveEnemyTier(e.kind) === 'boss', isLargeEnemy(e)); // chain pops use the 2× chain boom
         S.fx.push(spawnCoin(e.x, e.y, this.coinGold(e)));
         sfx.explode();
         P.score += e.score;
@@ -2766,7 +2771,7 @@ export class Game {
       if (((hasCore(e) && !e._coreBreak) || coreOwnerOf(e)) && e.hp < 1) e.hp = 1; // snake core ball: only the core rules end it
       if (e.hp <= 0) {
         if (e._chainT != null && !e._chainKill) { e._chainKill = true; B.fx.push(spawnChainBoom(e)); }
-        if (e.kind === 'wave_bubble') { if (e._eclT !== B.time) { e._eclAt = null; pushEclipse(B.fx, e, B.time); } } else if (!e._chainKill) pushKillBooms(B.fx, e, resolveEnemyTier(e.kind) === 'boss', isLargeEnemy(e));
+        if (e.kind === 'wave_bubble') { if (e._eclT !== B.time) { e._eclAt = null; pushEclipse(B.fx, e, B.time); } } else if (!e._chainKill && !e._quietDeath) pushKillBooms(B.fx, e, resolveEnemyTier(e.kind) === 'boss', isLargeEnemy(e));
         B.fx.push(spawnCoin(e.x, e.y, this.coinGold(e)));
         // Same as the player: drops are orbs that the COM ship must fly into (8s life)
         if (e._coreBreak) {

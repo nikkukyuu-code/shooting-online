@@ -534,7 +534,7 @@ function snakeCoreHit(H, px, py, bx, by, dmg, fxList, where) {
   c.hp -= dmg; H._coreFlash = CORE_FLASH_T; H._shake = 0.14; H._coreAt = where;
   if (c.hp > 0) { if (fxList) fxList.push(spawnHitSpark(bx, by)); return { hit: 'corehit', killed: false }; }
   c.hp = 0; H.hp = 0; H._coreBreak = true;
-  if (fxList) { fxList.push(spawnExplosion(px, py, true)); fxList.push(spawnHitSpark(px, py)); }
+  // break look = game.js onCoreBreak (video: the core goes pale-spiky for 1 frame, then is gone — no blast at the core)
   return { hit: 'core', killed: true };
 }
 
@@ -639,8 +639,7 @@ export function applyCoreAwareHit(e, dmg, bx, by, fxList) {
     e.hp = 0;
     e._coreBreak = true;
     if (fxList) {
-      fxList.push(spawnExplosion(cx, cy, true));
-      fxList.push(spawnHitSpark(cx, cy));
+      // video: no blast / spark at the core on a break — game.js onCoreBreak draws the 1-frame pale core
       // Guards (pods / claws / drones) are not popped here: markCoreChain turns them into
       // chain debris that blows one after another round the circle.
     }
@@ -979,6 +978,10 @@ export function tickCoins(fxList, sx, sy, dt) {
   return pt;
 }
 
+/** Core BREAK (video user_ref 4:43–4:49, phone 4:58–5:01): the core turns into a pale lavender-white
+ *  spiky silhouette for exactly 1 frame of the original (10 fps → 0.1 s), then is simply gone. */
+export const CORE_BREAK_T = 0.1;
+export function spawnCorePale(x, y, r) { return { kind: 'corepale', x, y, r, life: CORE_BREAK_T - 1e-4, max: CORE_BREAK_T }; }
 export function spawnHitSpark(x, y, r = 24) {
   return {
     kind: 'hit',
