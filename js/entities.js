@@ -526,7 +526,7 @@ export function isCoreTarget(e) { return hasCore(e) || !!(e && e._coreBall); }
 /** User 10-06 16:49: the snake has TWO cores — the head and the orange body ball — sharing ONE life (the head's
  *  e.core HP, one gauge). A hit on either lowers it and flashes both (H._coreFlash); 0 → the whole snake chains.
  *  (video user_ref 4:45.6–4:45.8: a shot on the head stops there and the head flashes.) */
-export const CORE_FLASH_T = 0.5; // user 10-10: core hit effect 0.5 s (was 0.1 s)
+export const CORE_FLASH_T = 0.3; // user 10-10: core hit effect 0.3 s
 function snakeCoreHit(H, px, py, bx, by, dmg, fxList, where) {
   const c = H.core;
   if (!c || c.hp <= 0 || H.hp <= 0 || H._portalOnly) return { hit: 'none', killed: false };
