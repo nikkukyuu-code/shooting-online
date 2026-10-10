@@ -374,7 +374,7 @@ export function isChainable(o) {
 /** Original (old src 0:41.467 break → first attached-unit pop 0:42.533): the pack waits until the 0.9 s flash is over,
  *  then pops from the core outward. Was 0.12 s. */
 export const CHAIN_FIRST = 1.07;
-export const CHAIN_STEP = 0.04; // s between consecutive chain pops; user 10-06: half (was 0.08) — every core type, both fields
+export const CHAIN_STEP = 0.1; // 10-10: = original footage (one pop per 10 fps game frame, bottom→top); was 0.04 — s between consecutive chain pops; user 10-06: half (was 0.08) — every core type, both fields
 export function markCoreChain(e, list) {
   const c = coreWorld(e) || e;
   const seq = [];
@@ -436,7 +436,7 @@ export function tickChain(o, dt) {
 }
 export function spawnChainBoom(o) {
   // User 09-29: each chained unit blows up at about TWICE its own size (fireball diameter ≈ 2 × unit)
-  return { kind: 'chainboom', x: o.x, y: o.y, r: Math.max(o.w || 30, o.h || 24) * 2, life: 1.35, max: 1.35, sd: (o._uid || 1) % 7 };
+  return { kind: 'chainboom', x: o.x, y: o.y, r: Math.max(o.w || 30, o.h || 24) * 2, life: 1.2, max: 1.2, sd: (o._uid || 1) % 7 };
 }
 
 /**

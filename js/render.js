@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261010122207';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261010123631';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -193,28 +193,40 @@ function roundRectPath(ctx, x, y, w, h, rad) {
 }
 
 
-// Player ship = sprite cropped from the original footage (user_ref 40.09 s, rest size), nearest-neighbour.
-const SHIP_IMG = (() => { const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/player_ship.png?v=20261010122207'; return im; })();
-// Entry (match start): ship zooms in from huge to rest size, stepped at the original 10 fps.
-// Scale per game frame measured from the mosaic block size in user_ref 38.41–40.09 s (block px ÷ 1.5 video px).
+// Player ship = pixel sprite from the original feature-phone footage (old src 0:13–0:24, 1 px = 1 native px,
+// median of 87 position-aligned frames, palette snapped to 7 colours). Two frames alternate (rear forks):
+// A 5 game frames, B 3 game frames (measured run lengths at 10 fps). Drawn nearest-neighbour, 1 native px = G game px.
+const SHIP_IMGS = ['lo', 'hi'].map((k) => { const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/player_ship_' + k + '.png?v=20261010123631'; return im; });
+const SHIP_NATIVE_BODY_H = 12; // body height in native px (orbs above/below not counted)
+// Entry (match/round start). Zoom part measured in user_ref.mp4 38.41–40.09 s (mosaic block size ÷ 1.5 video px):
 const SHIP_ENTRY_SCALE = [20, 18.7, 18, 16.7, 15.3, 14.7, 14, 13.3, 12, 11.3, 10, 8.7, 8, 6.7, 4.7, 3.3, 2.7, 1];
+// ship-centre offset from the end point per zoom step, native px (red core centroid per step; curved: high → low → up)
+const SHIP_ENTRY_DX = [19, 20, 13, 15, 15, 10, 5, 0, -2, -2, -2, -1, -1, -1, 0, 0, 0, 0];
+const SHIP_ENTRY_DY = [-31, -34, -25, -17, -14, -1, -1, 11, 19, 21, 20, 20, 22, 23, 15, 10, 4, 0];
+// then the slide-in seen in the old footage (old src 0:12.80–0:13.27): from 30 native px left of rest, +5 px per frame
+const SHIP_SLIDE = [-30, -25, -20, -15, -10, -5];
 let _shipEntryT0 = null;
 export function startShipEntry() { _shipEntryT0 = performance.now(); }
 function shipEntryState() {
   if (_shipEntryT0 == null) return null;
   const i = Math.floor((performance.now() - _shipEntryT0) / 100);
-  if (i >= SHIP_ENTRY_SCALE.length) { _shipEntryT0 = null; return null; }
-  return { i, sc: SHIP_ENTRY_SCALE[i], k: i / (SHIP_ENTRY_SCALE.length - 1) };
+  const nz = SHIP_ENTRY_SCALE.length;
+  if (i < nz) return { sc: SHIP_ENTRY_SCALE[i], dx: SHIP_ENTRY_DX[i] + SHIP_SLIDE[0], dy: SHIP_ENTRY_DY[i] };
+  if (i < nz + SHIP_SLIDE.length) return { sc: 1, dx: SHIP_SLIDE[i - nz], dy: 0 };
+  _shipEntryT0 = null; return null;
 }
-function drawShipSprite(ctx, x, y, h, angle = 0, tint = null, fw = 0) {
-  if (!SHIP_IMG.complete || !SHIP_IMG.naturalWidth) return false;
+function drawShipSprite(ctx, x, y, bodyH, angle = 0, tint = null) {
+  const fr = Math.floor(performance.now() / 100) % 8 < 5 ? 0 : 1;
+  const im = SHIP_IMGS[fr];
+  if (!im.complete || !im.naturalWidth) return false;
+  const G = bodyH / SHIP_NATIVE_BODY_H;
   const en = shipEntryState();
   let sc = 1;
-  if (en) { sc = en.sc; if (fw) x = fw * 0.62 + (x - fw * 0.62) * en.k; } // video: starts right of centre, slides to rest while shrinking
-  const H = h * sc, W = H * SHIP_IMG.naturalWidth / SHIP_IMG.naturalHeight;
-  ctx.save(); ctx.translate(x, y); ctx.rotate(angle || 0); ctx.imageSmoothingEnabled = false;
+  if (en) { sc = en.sc; x += en.dx * G; y += en.dy * G; }
+  const k = G * sc, W = im.naturalWidth * k, H = im.naturalHeight * k;
+  ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.rotate(angle || 0); ctx.imageSmoothingEnabled = false;
   if (tint) ctx.filter = tint;
-  ctx.drawImage(SHIP_IMG, Math.round(-W / 2), Math.round(-H / 2), Math.round(W), Math.round(H));
+  ctx.drawImage(im, Math.round(-W * 15.5 / 31), Math.round(-H * 12.5 / 25), Math.round(W), Math.round(H));
   ctx.restore();
   return true;
 }
@@ -397,7 +409,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261010122207`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261010123631`;
 }
 
 function loadKindSprite(kind) {
@@ -483,8 +495,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261010122207'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261010122207'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261010123631'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261010123631'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -3944,7 +3956,7 @@ export function drawField(ctx, area, snap, opts = {}) {
       if (ramOn || oppRam) drawRamShip(ctx, px, py, 48 * Math.min(sx, 1.2), 28 * Math.min(sy, 1.2), performance.now() / 1000);
       else {
         const tint = lowHp ? (lowBlink ? 'sepia(1) saturate(6) hue-rotate(-30deg)' : 'sepia(1) saturate(4) hue-rotate(-40deg)') : (!darkened && snap.invuln > 0 ? 'sepia(0.6) saturate(3) hue-rotate(-30deg)' : null);
-        if (!drawShipSprite(ctx, px, py, 18 * Math.min(sy, 1.2), ang, tint, fw)) drawShip(ctx, px, py, 28 * Math.min(sx, 1.2), 18 * Math.min(sy, 1.2), shipColor, 1, ang);
+        if (!drawShipSprite(ctx, px, py, 18 * Math.min(sy, 1.2), ang, tint)) drawShip(ctx, px, py, 28 * Math.min(sx, 1.2), 18 * Math.min(sy, 1.2), shipColor, 1, ang);
       }
     }
     if (!darkened && snap.player) drawLaser(ctx, snap.player, fh);
