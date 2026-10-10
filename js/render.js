@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261010193940';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261010212205';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -196,16 +196,56 @@ function roundRectPath(ctx, x, y, w, h, rad) {
 // Player ship = pixel sprite from the original feature-phone footage (old src 0:13–0:24, 1 px = 1 native px,
 // median of 87 position-aligned frames, palette snapped to 7 colours). Two frames alternate (rear forks):
 // A 5 game frames, B 3 game frames (measured run lengths at 10 fps). Drawn nearest-neighbour, 1 native px = G game px.
-const SHIP_IMGS = ['lo', 'hi'].map((k) => { const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/player_ship_' + k + '.png?v=20261010193940'; return im; });
+const SHIP_IMGS = ['lo', 'hi'].map((k) => { const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/player_ship_' + k + '.png?v=20261010212205'; return im; });
 const SHIP_NATIVE_BODY_H = 12; // body height in native px (orbs above/below not counted)
 // Entry (match start) — rebuilt 10-10 19:xx from user_ref.mp4 38.41–40.09 s, 18 game frames at 10 fps.
 // The ship is NOT squashed: each step is its own pre-drawn roll frame (assets/fx/ship_roll_00..17.png, 24×13 dots),
 // cut from the video by detecting the block grid (block = k_i × 1.5 video px, k = 20,19,…,10,9,8,7,5,4,3,2) and
 // sampling one pixel per block; palette snapped to the ship's colours, red orbs removed. Dots hidden by the field edge
 // or HUD were completed from the nearest step that shows them (see ship_roll_frames.png).
-// 10-10 19:4x: roll is baked as a round (cylindrical) hull — 72 frames every 5°, 31×25 dots like the rest sprite
-// (assets/fx/ship_roll_atlas.png; frame 0 = player_ship_lo.png exactly). Picked by angle every render frame.
-const SHIP_ROLL_ATLAS = (() => { const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/ship_roll_atlas.png?v=20261010193940'; return im; })();
+// 10-10 21:xx: roll rendered live as a round cylinder around the nose-tail axis, into a cached offscreen canvas
+// at up to 8× native resolution (matching on-screen size), so the surface slides in fine steps; hull height constant.
+const ROLL = { cv: null, ctx: null, id: null, s: 0, th: NaN, tex: null, hull: null };
+function rollInit() {
+  const src = SHIP_IMGS[0]; if (!src.complete || !src.naturalWidth) return false;
+  const c = document.createElement('canvas'); c.width = 31; c.height = 25; const x = c.getContext('2d'); x.drawImage(src, 0, 0);
+  ROLL.tex = x.getImageData(0, 0, 31, 25).data; ROLL.hull = [];
+  const op = (cx, cy) => ROLL.tex[(cy * 31 + cx) * 4 + 3] > 0;
+  for (let cx = 0; cx < 31; cx++) {
+    let h = null;
+    for (const y0 of [12, 13, 11, 14]) if (op(cx, y0)) { let t = y0, bb = y0; while (t > 0 && op(cx, t - 1)) t--; while (bb < 24 && op(cx, bb + 1)) bb++; h = [t, bb]; break; }
+    ROLL.hull.push(h);
+  }
+  ROLL.cv = document.createElement('canvas'); ROLL.ctx = ROLL.cv.getContext('2d');
+  return true;
+}
+function rollRender(th, s) {
+  if (!ROLL.tex && !rollInit()) return null;
+  if (s === ROLL.s && Math.abs(th - ROLL.th) < 0.004) return ROLL.cv;
+  if (s !== ROLL.s) { ROLL.cv.width = 31 * s; ROLL.cv.height = 25 * s; ROLL.id = ROLL.ctx.createImageData(31 * s, 25 * s); ROLL.s = s; }
+  ROLL.th = th; const W = 31 * s, H = 25 * s, D = ROLL.id.data, T = ROLL.tex; D.fill(0);
+  const c = Math.cos(th), sn = Math.sin(th), shadeAmt = 0.3 * Math.min(1, Math.abs(sn) * 2), CY = 12.5;
+  for (let cx = 0; cx < 31; cx++) {
+    const h = ROLL.hull[cx];
+    // fins: swing about the axis (foreshorten), drawn under the hull
+    for (let ty = 0; ty < 25; ty++) {
+      const ti = (ty * 31 + cx) * 4; if (!T[ti + 3] || (h && ty >= h[0] && ty <= h[1])) continue;
+      let y0 = (CY + (ty - CY) * c) * s, y1 = (CY + (ty + 1 - CY) * c) * s; if (y0 > y1) { const q = y0; y0 = y1; y1 = q; }
+      let Y0 = Math.round(y0), Y1 = Math.max(Y0 + 1, Math.round(y1)); const f = 0.75 + 0.25 * Math.abs(c);
+      for (let Y = Math.max(0, Y0); Y < Math.min(H, Y1); Y++) for (let X = cx * s; X < cx * s + s; X++) { const o = (Y * W + X) * 4; D[o] = T[ti] * f; D[o + 1] = T[ti + 1] * f; D[o + 2] = T[ti + 2] * f; D[o + 3] = 255; }
+    }
+    if (!h) continue;
+    const t = h[0], r = (h[1] + 1 - t) / 2, cy = t + r;
+    for (let Y = t * s; Y < (h[1] + 1) * s; Y++) {
+      const z = Math.max(-1, Math.min(1, ((Y + 0.5) / s - cy) / r)), phi = Math.asin(z);
+      const sy = Math.min(h[1], Math.max(t, Math.floor(cy + r * Math.sin(phi + th))));
+      const ti = (sy * 31 + cx) * 4; if (!T[ti + 3]) continue;
+      const k = 1 - shadeAmt * (1 - Math.cos(phi));
+      for (let X = cx * s; X < cx * s + s; X++) { const o = (Y * W + X) * 4; D[o] = T[ti] * k; D[o + 1] = T[ti + 1] * k; D[o + 2] = T[ti + 2] * k; D[o + 3] = 255; }
+    }
+  }
+  ROLL.ctx.putImageData(ROLL.id, 0, 0); return ROLL.cv;
+}
 const SHIP_ENTRY_ROLL = [0, 45, 90, 120, 150, 175, 200, 225, 250, 265, 275, 290, 310, 335, 360, 360, 360, 360]; // one full roll, slowing
 const SHIP_ENTRY_SCALE = [10, 9.5, 9, 8.5, 8, 7.5, 7, 6.5, 6, 5.5, 5, 4.5, 4, 3.5, 2.5, 2, 1.5, 1]; // × rest size (k ÷ 2)
 // ship-centre offset from rest, in rest-size dots (block-grid centre per step, [1 2 1]-smoothed)
@@ -232,20 +272,22 @@ function shipEntryState() {
 function drawShipSprite(ctx, x, y, bodyH, angle = 0, tint = null, fh = 0) {
   const G = bodyH / SHIP_NATIVE_BODY_H;
   const en = shipEntryState();
-  let im = SHIP_IMGS[Math.floor(performance.now() / 100) % 8 < 5 ? 0 : 1], k = G, sx = 0;
-  if (en && SHIP_ROLL_ATLAS.complete && SHIP_ROLL_ATLAS.naturalWidth) {
-    im = SHIP_ROLL_ATLAS; k = G * en.sc;
-    const deg = ((en.roll % 360) + 360) % 360;
-    sx = (Math.round(deg / 5) % 72) * 31;
-    x += en.dx * G; y += en.dy * G;
-    // keep the whole hull (dots rows 6..19) inside the field while large
+  let im = SHIP_IMGS[Math.floor(performance.now() / 100) % 8 < 5 ? 0 : 1], k = G;
+  let sw = 31, sh = 25, ss = 1;
+  if (en) {
+    k = G * en.sc; x += en.dx * G; y += en.dy * G;
     if (fh) { const top = 6.5 * k, bot = 7.5 * k; if (top + bot < fh - 4) y = Math.max(top + 2, Math.min(fh - bot - 2, y)); }
+    const deg = ((en.roll % 360) + 360) % 360;
+    if (deg > 0.3 && deg < 359.7) { // else exactly the rest sprite (no pop at the end)
+      ss = Math.max(1, Math.min(8, Math.round(k))); const cv = rollRender(deg * Math.PI / 180, ss);
+      if (cv) { im = cv; sw = 31 * ss; sh = 25 * ss; }
+    }
   }
-  if (!im.complete || !im.naturalWidth) return false;
+  if (im !== ROLL.cv && (!im.complete || !im.naturalWidth)) return false;
   const W = 31 * k, H = 25 * k;
   ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.rotate(angle || 0); ctx.imageSmoothingEnabled = false;
   if (tint) ctx.filter = tint;
-  ctx.drawImage(im, sx, 0, 31, 25, Math.round(-15.5 * k), Math.round(-12.5 * k), Math.round(W), Math.round(H));
+  ctx.drawImage(im, 0, 0, sw, sh, Math.round(-15.5 * k), Math.round(-12.5 * k), Math.round(W), Math.round(H));
   ctx.restore();
   return true;
 }
@@ -428,7 +470,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261010193940`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261010212205`;
 }
 
 function loadKindSprite(kind) {
@@ -514,8 +556,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261010193940'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261010193940'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261010212205'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261010212205'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
