@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261010115911';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261010122207';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -192,6 +192,33 @@ function roundRectPath(ctx, x, y, w, h, rad) {
   ctx.closePath();
 }
 
+
+// Player ship = sprite cropped from the original footage (user_ref 40.09 s, rest size), nearest-neighbour.
+const SHIP_IMG = (() => { const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/player_ship.png?v=20261010122207'; return im; })();
+// Entry (match start): ship zooms in from huge to rest size, stepped at the original 10 fps.
+// Scale per game frame measured from the mosaic block size in user_ref 38.41–40.09 s (block px ÷ 1.5 video px).
+const SHIP_ENTRY_SCALE = [20, 18.7, 18, 16.7, 15.3, 14.7, 14, 13.3, 12, 11.3, 10, 8.7, 8, 6.7, 4.7, 3.3, 2.7, 1];
+let _shipEntryT0 = null;
+export function startShipEntry() { _shipEntryT0 = performance.now(); }
+function shipEntryState() {
+  if (_shipEntryT0 == null) return null;
+  const i = Math.floor((performance.now() - _shipEntryT0) / 100);
+  if (i >= SHIP_ENTRY_SCALE.length) { _shipEntryT0 = null; return null; }
+  return { i, sc: SHIP_ENTRY_SCALE[i], k: i / (SHIP_ENTRY_SCALE.length - 1) };
+}
+function drawShipSprite(ctx, x, y, h, angle = 0, tint = null, fw = 0) {
+  if (!SHIP_IMG.complete || !SHIP_IMG.naturalWidth) return false;
+  const en = shipEntryState();
+  let sc = 1;
+  if (en) { sc = en.sc; if (fw) x = fw * 0.62 + (x - fw * 0.62) * en.k; } // video: starts right of centre, slides to rest while shrinking
+  const H = h * sc, W = H * SHIP_IMG.naturalWidth / SHIP_IMG.naturalHeight;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(angle || 0); ctx.imageSmoothingEnabled = false;
+  if (tint) ctx.filter = tint;
+  ctx.drawImage(SHIP_IMG, Math.round(-W / 2), Math.round(-H / 2), Math.round(W), Math.round(H));
+  ctx.restore();
+  return true;
+}
+
 function drawShip(ctx, x, y, w, h, color = '#e8f0ff', facing = 1, angle = 0) {
   ctx.save();
   ctx.translate(x, y);
@@ -370,7 +397,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261010115911`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261010122207`;
 }
 
 function loadKindSprite(kind) {
@@ -456,8 +483,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261010115911'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261010115911'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261010122207'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261010122207'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -3797,6 +3824,8 @@ export function drawField(ctx, area, snap, opts = {}) {
   }
 
   nebula(ctx, fw, fh, (snap.scroll || 0) * (darkened ? 0.7 : 1), darkened ? 7 : 0);
+  { const bfa = breakFlashAlpha(snap.ff); // core break: background goes light grey, units drawn on top (as in the original)
+    if (bfa > 0) { ctx.fillStyle = `rgba(255,255,255,${bfa.toFixed(3)})`; ctx.fillRect(-40, -40, fw + 80, fh + 80); } }
 
   // Opponent view: same fiery nebula, ~20% darker — NOT a purple starfield
   if (darkened) {
@@ -3913,7 +3942,10 @@ export function drawField(ctx, area, snap, opts = {}) {
     const oppRam = darkened && (snap.ap === 'ram');
     if (!blink) {
       if (ramOn || oppRam) drawRamShip(ctx, px, py, 48 * Math.min(sx, 1.2), 28 * Math.min(sy, 1.2), performance.now() / 1000);
-      else drawShip(ctx, px, py, 28 * Math.min(sx, 1.2), 18 * Math.min(sy, 1.2), shipColor, 1, ang);
+      else {
+        const tint = lowHp ? (lowBlink ? 'sepia(1) saturate(6) hue-rotate(-30deg)' : 'sepia(1) saturate(4) hue-rotate(-40deg)') : (!darkened && snap.invuln > 0 ? 'sepia(0.6) saturate(3) hue-rotate(-30deg)' : null);
+        if (!drawShipSprite(ctx, px, py, 18 * Math.min(sy, 1.2), ang, tint, fw)) drawShip(ctx, px, py, 28 * Math.min(sx, 1.2), 18 * Math.min(sy, 1.2), shipColor, 1, ang);
+      }
     }
     if (!darkened && snap.player) drawLaser(ctx, snap.player, fh);
   }
@@ -3944,13 +3976,22 @@ export function drawField(ctx, area, snap, opts = {}) {
 }
 
 /** 10-04: core-hit flash fades out by alpha over ≈0.5 s (h 0.6, w 0.3, break 0.7 held 0.1 s then 0.5 s fade). */
+/** Core BREAK field flash, measured frame by frame in the original (old source 0:41.467–0:42.333 = compare video
+ *  0:14.47–0:15.33): the background turns light grey for 9 game frames (10 fps → 0.9 s) and then cuts off.
+ *  Per-frame level on black (0–255): 228 227 225 218 214 204 192 170 129 → off. Sprites stay unwashed on top. */
+const BREAK_FLASH = [228, 227, 225, 218, 214, 204, 192, 170, 129].map((v) => v / 255);
+function breakFlashAlpha(ff) {
+  if (!ff || ff.t0 == null || ff.k !== 'b') return 0;
+  const i = Math.floor(Math.max(0, performance.now() - ff.t0) / 100); // stepped at the original's 10 fps
+  return i < BREAK_FLASH.length ? BREAK_FLASH[i] : 0;
+}
 function coreFlashAlpha(ff) {
   if (!ff || ff.t0 == null) return 0;
   const now = performance.now();
   const fade = (age, peak, dur) => (age >= dur ? 0 : peak * Math.pow(1 - age / dur, 1.6));
   const age = Math.max(0, now - ff.t0);
   let a;
-  if (ff.k === 'b') a = age < 100 ? 0.7 : fade(age - 100, 0.7, 900); // user 10-10: core break effect 1.0 s total
+  if (ff.k === 'b') return 0; // core break: drawn UNDER the units (breakFlashAlpha, right after the background)
   else if (ff.k === 'w') a = fade(age, 0.3, 300); // user 10-10: core-hit effect 0.3 s
   else a = fade(age, 0.6, 300);
   if (ff.b0 != null) a = Math.max(a, fade(Math.max(0, now - ff.b0), 0.3, 300)); // weak re-boost

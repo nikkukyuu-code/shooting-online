@@ -371,6 +371,9 @@ export function isChainable(o) {
   if (typeof o.kind !== 'string' || !o.kind.startsWith('wave_')) return false;
   return !LARGE_ENEMY_TIERS.has(resolveEnemyTier(o.kind));
 }
+/** Original (old src 0:41.467 break → first attached-unit pop 0:42.533): the pack waits until the 0.9 s flash is over,
+ *  then pops from the core outward. Was 0.12 s. */
+export const CHAIN_FIRST = 1.07;
 export const CHAIN_STEP = 0.04; // s between consecutive chain pops; user 10-06: half (was 0.08) — every core type, both fields
 export function markCoreChain(e, list) {
   const c = coreWorld(e) || e;
@@ -417,7 +420,7 @@ export function markCoreChain(e, list) {
   }
   rest.sort((p, q) => p[0] - q[0]);
   for (const [, o] of rest) seq.push(o);
-  seq.forEach((o, i) => { o._chainT = 0.12 + i * CHAIN_STEP; o._chainSrc = e; });
+  seq.forEach((o, i) => { o._chainT = CHAIN_FIRST + i * CHAIN_STEP; o._chainSrc = e; });
   e._chainTotal = seq.length; e._chainDone = 0;
   return seq.length;
 }
