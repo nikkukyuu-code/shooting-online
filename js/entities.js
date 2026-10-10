@@ -526,11 +526,12 @@ export function isCoreTarget(e) { return hasCore(e) || !!(e && e._coreBall); }
 /** User 10-06 16:49: the snake has TWO cores — the head and the orange body ball — sharing ONE life (the head's
  *  e.core HP, one gauge). A hit on either lowers it and flashes both (H._coreFlash); 0 → the whole snake chains.
  *  (video user_ref 4:45.6–4:45.8: a shot on the head stops there and the head flashes.) */
+export const CORE_FLASH_T = 0.2; // user 10-10: core hit effect twice as long (was 0.1 s)
 function snakeCoreHit(H, px, py, bx, by, dmg, fxList, where) {
   const c = H.core;
   if (!c || c.hp <= 0 || H.hp <= 0 || H._portalOnly) return { hit: 'none', killed: false };
   if (Math.hypot(bx - px, by - py) >= c.r + CORE_HIT_PAD) return { hit: 'none', killed: false };
-  c.hp -= dmg; H._coreFlash = 0.1; H._shake = 0.14; H._coreAt = where;
+  c.hp -= dmg; H._coreFlash = CORE_FLASH_T; H._shake = 0.14; H._coreAt = where;
   if (c.hp > 0) { if (fxList) fxList.push(spawnHitSpark(bx, by)); return { hit: 'corehit', killed: false }; }
   c.hp = 0; H.hp = 0; H._coreBreak = true;
   if (fxList) { fxList.push(spawnExplosion(px, py, true)); fxList.push(spawnHitSpark(px, py)); }
@@ -626,7 +627,7 @@ export function applyCoreAwareHit(e, dmg, bx, by, fxList) {
       return { hit: 'body', killed: false };
     }
     c.hp -= dmg;
-    e._coreFlash = 0.1;
+    e._coreFlash = CORE_FLASH_T;
     e._shake = 0.14;
     if (c.hp > 0) {
       if (fxList) fxList.push(spawnHitSpark(bx, by));
