@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261010114347';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261010114642';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -370,7 +370,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261010114347`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261010114642`;
 }
 
 function loadKindSprite(kind) {
@@ -456,8 +456,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261010114347'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261010114347'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261010114642'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261010114642'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -3950,7 +3950,7 @@ function coreFlashAlpha(ff) {
   const fade = (age, peak, dur) => (age >= dur ? 0 : peak * Math.pow(1 - age / dur, 1.6));
   const age = Math.max(0, now - ff.t0);
   let a;
-  if (ff.k === 'b') a = age < 100 ? 0.7 : fade(age - 100, 0.7, 700); // user 10-10: core break effect 0.8 s total
+  if (ff.k === 'b') a = age < 100 ? 0.7 : fade(age - 100, 0.7, 900); // user 10-10: core break effect 1.0 s total
   else if (ff.k === 'w') a = fade(age, 0.3, 300); // user 10-10: core-hit effect 0.3 s
   else a = fade(age, 0.6, 300);
   if (ff.b0 != null) a = Math.max(a, fade(Math.max(0, now - ff.b0), 0.3, 300)); // weak re-boost
