@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261011000232';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261011040248';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -370,7 +370,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261011000232`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261011040248`;
 }
 
 function loadKindSprite(kind) {
@@ -456,8 +456,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261011000232'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261011000232'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261011040248'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261011040248'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -1052,12 +1052,22 @@ function drawEnemyFallback(ctx, e, kind, sent, w, h, t, pulse) {
   ctx.strokeStyle = rim;
   ctx.lineWidth = 1.5;
   ctx.stroke();
-  ctx.fillStyle = rim;
-  ctx.font = `bold ${Math.max(8, Math.floor(h * 0.35))}px sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText((kind || '?')[0].toUpperCase(), 0, 0);
   ctx.restore();
+  retryKindSprite(kind); // user 10-11: never show a letter placeholder ('D'); re-fetch a sprite that failed to load
+}
+const _spriteRetryAt = {};
+function retryKindSprite(kind) {
+  if (!kind || typeof Image === 'undefined') return;
+  const fr = enemySprites[kind];
+  const im = fr && fr[ENEMY_STATIC_FRAME];
+  const now = performance.now();
+  if (im && !(im.complete && !im.naturalWidth)) return; // still loading or fine
+  if (now - (_spriteRetryAt[kind] || -1e9) < 3000) return;
+  _spriteRetryAt[kind] = now;
+  const img = new Image(); img.decoding = 'async';
+  img.src = enemyAssetUrl(kind, ENEMY_STATIC_FRAME) + '&r=' + Math.floor(now);
+  if (!enemySprites[kind]) enemySprites[kind] = [];
+  enemySprites[kind][ENEMY_STATIC_FRAME] = img;
 }
 
 /** Warning aim-beam + muzzle charge for large sent laser telegraph. */
