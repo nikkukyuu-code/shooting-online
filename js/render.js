@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261010112304';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261010114143';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -370,7 +370,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261010112304`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261010114143`;
 }
 
 function loadKindSprite(kind) {
@@ -456,8 +456,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261010112304'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261010112304'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261010114143'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261010114143'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -519,7 +519,7 @@ function drawCoreSpriteBody(ctx, e, kind, w, h, t, flash) {
     if (tip) {
       if (e.rot) { ctx.rotate(e.rot); }
       ctx.imageSmoothingEnabled = false; drawFit(ctx, tip, w * 1.75, h * 1.75, flash || (e._coreFlash || 0) > 0); // 10-06 video cut: ring+glow ≈ 2× ship height
-      const hf = Math.max(0, Math.min(1, (e._coreFlash || 0) / 0.2)); // user 10-06: head = core too (shared HP) → same core hit flash as the ball
+      const hf = Math.max(0, Math.min(1, (e._coreFlash || 0) / 0.5)); // user 10-06: head = core too (shared HP) → same core hit flash as the ball
       if (hf > 0) { ctx.fillStyle = `rgba(255,255,255,${0.85 * hf})`; ctx.beginPath(); ctx.arc(0, 0, (e.core ? e.core.r : 9) * 1.05, 0, Math.PI * 2); ctx.fill(); }
       return true;
     }
@@ -861,7 +861,7 @@ function drawCoreEnemy(ctx, e, kind, w, h, t) {
     ctx.globalAlpha = 1;
     // Hit flash
     if ((e._coreFlash || 0) > 0) {
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fillStyle = `rgba(255,255,255,${(0.85 * Math.min(1, (e._coreFlash || 0) / 0.5)).toFixed(3)})`; // fades out over 0.5 s
       ctx.beginPath(); ctx.arc(c.ox, c.oy, r * 1.05, 0, Math.PI * 2); ctx.fill();
     }
     // Armour plates: warn = sliding in + blinking edges, shut = closed (hits blocked)
@@ -1220,7 +1220,7 @@ function drawSegBall(ctx, e, w, h, t) {
   if (e.rot) ctx.rotate(e.rot);
   if (e.tone === 'red') {
     const ball = waveSprite('snake_redball');
-    const cf = Math.max(0, Math.min(1, (e._coreFlash || 0) / 0.2)); // user 10-06: this ball is the snake's CORE → core hit flash
+    const cf = Math.max(0, Math.min(1, (e._coreFlash || 0) / 0.5)); // user 10-06: this ball is the snake's CORE → core hit flash
     if (ball) {
       ctx.imageSmoothingEnabled = false; drawFit(ctx, ball, w * 1.5, h * 1.5, cf > 0); // video: red link ≈ 0.85× ship
       if (cf > 0) { ctx.fillStyle = `rgba(255,255,255,${0.85 * cf})`; ctx.beginPath(); ctx.arc(0, 0, r * 1.05, 0, Math.PI * 2); ctx.fill(); }
@@ -3819,7 +3819,7 @@ export function drawField(ctx, area, snap, opts = {}) {
       laserAimX: (e.laserAimX ?? e.ax) != null ? (e.laserAimX ?? e.ax) * sx : undefined,
       laserAimY: (e.laserAimY ?? e.ay) != null ? (e.laserAimY ?? e.ay) * sy : undefined,
       laserTeleOffs: Array.isArray(e.laserTeleOffs ?? e.lo) ? (e.laserTeleOffs ?? e.lo).map((o) => o * sy) : undefined,
-      spr: e.spr ?? e.sp, rot: e.rot ?? e.ro, tone: e.tone ?? e.tn, cm: e.cm, cs: e.cs ?? (e._sh ? e._sh.st : undefined), sk: e.sk ?? (e._shake > 0 ? 1 : 0), _coreFlash: e._coreBall ? (e._chainOf ? e._chainOf._coreFlash : 0) : (e._coreFlash ?? (e.cf ? 0.2 : 0)), _warn: e._warn, _dashWarn: e._dashWarn, claw: e.claw, podR: e.podR != null ? e.podR * Math.min(sx, sy) : undefined,
+      spr: e.spr ?? e.sp, rot: e.rot ?? e.ro, tone: e.tone ?? e.tn, cm: e.cm, cs: e.cs ?? (e._sh ? e._sh.st : undefined), sk: e.sk ?? (e._shake > 0 ? 1 : 0), _coreFlash: e._coreBall ? (e._chainOf ? e._chainOf._coreFlash : 0) : (e._coreFlash ?? (e.cf ? 0.5 : 0)), _warn: e._warn, _dashWarn: e._dashWarn, claw: e.claw, podR: e.podR != null ? e.podR * Math.min(sx, sy) : undefined,
       core: e.core && !e._coreSeg ? { ox: e.core.ox * sx, oy: e.core.oy * sy, r: e.core.r * Math.min(sx, sy), hp: e.core.hp, maxHp: e.core.maxHp }
         : (e.ch != null ? { ox: e.kind === 'wave_core_boss' ? -(e.w || 66) * 0.3 * sx : e.kind === 'wave_grid_core' ? -(e.w || 62) * 0.3 * sx : 0, oy: 0, r: 9 * Math.min(sx, sy), hp: e.ch, maxHp: e.cm } : undefined),
       drones: e.drones ? e.drones.map((d) => ({ ang: d.ang, dist: d.dist * Math.min(sx, sy), ky: (d.ky || 1) * sy / Math.min(sx, sy), r: d.r * Math.min(sx, sy), hp: d.hp, w: d.w }))
@@ -3951,9 +3951,9 @@ function coreFlashAlpha(ff) {
   const age = Math.max(0, now - ff.t0);
   let a;
   if (ff.k === 'b') a = age < 100 ? 0.7 : fade(age - 100, 0.7, 500);
-  else if (ff.k === 'w') a = fade(age, 0.3, 1000); // user 10-10: core-hit effect ×2 (was 500 ms)
-  else a = fade(age, 0.6, 1000);
-  if (ff.b0 != null) a = Math.max(a, fade(Math.max(0, now - ff.b0), 0.3, 1000)); // weak re-boost
+  else if (ff.k === 'w') a = fade(age, 0.3, 500); // user 10-10: core-hit effect 0.5 s
+  else a = fade(age, 0.6, 500);
+  if (ff.b0 != null) a = Math.max(a, fade(Math.max(0, now - ff.b0), 0.3, 500)); // weak re-boost
   return a;
 }
 
