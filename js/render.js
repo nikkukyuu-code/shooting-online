@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261010180150';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261010180850';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -196,34 +196,46 @@ function roundRectPath(ctx, x, y, w, h, rad) {
 // Player ship = pixel sprite from the original feature-phone footage (old src 0:13–0:24, 1 px = 1 native px,
 // median of 87 position-aligned frames, palette snapped to 7 colours). Two frames alternate (rear forks):
 // A 5 game frames, B 3 game frames (measured run lengths at 10 fps). Drawn nearest-neighbour, 1 native px = G game px.
-const SHIP_IMGS = ['lo', 'hi'].map((k) => { const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/player_ship_' + k + '.png?v=20261010180150'; return im; });
+const SHIP_IMGS = ['lo', 'hi'].map((k) => { const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/player_ship_' + k + '.png?v=20261010180850'; return im; });
 const SHIP_NATIVE_BODY_H = 12; // body height in native px (orbs above/below not counted)
-// Entry (match/round start). Zoom part measured in user_ref.mp4 38.41–40.09 s (mosaic block size ÷ 1.5 video px):
-const SHIP_ENTRY_SCALE = [20, 18.7, 18, 16.7, 15.3, 14.7, 14, 13.3, 12, 11.3, 10, 8.7, 8, 6.7, 4.7, 3.3, 2.7, 1];
-// ship-centre offset from the end point per zoom step, native px (red core centroid per step; curved: high → low → up)
-const SHIP_ENTRY_DX = [19, 20, 13, 15, 15, 10, 5, 0, -2, -2, -2, -1, -1, -1, 0, 0, 0, 0];
-const SHIP_ENTRY_DY = [-31, -34, -25, -17, -14, -1, -1, 11, 19, 21, 20, 20, 22, 23, 15, 10, 4, 0];
-// then the slide-in seen in the old footage (old src 0:12.80–0:13.27): from 30 native px left of rest, +5 px per frame
-const SHIP_SLIDE = [-30, -25, -20, -15, -10, -5];
+// Entry (match start), re-measured 10-10 18:xx in user_ref.mp4 38.41–40.09 s (18 game frames at 10 fps):
+//  scale  = ship width (steps 13–17, fully on screen) and red-core block width (steps 0–12, ship clipped)
+//  dx,dy  = ship-centre offset from the rest pose in native px (red core column centroid − core offset × scale)
+//  roll   = 3D roll about the ship's long axis: the vertical red core/orb column collapses to one block when edge-on
+//           (step 2 ≈ 90°, steps 8–11 ≈ 270°) and is full height again from step 14 → one full turn (0→360°), slowing down.
+//           Never an in-plane spin: in every sampled frame the nose points right and the red column stays vertical.
+const SHIP_ENTRY_SCALE = [8.6, 8.0, 7.4, 7.0, 6.4, 6.0, 5.6, 5.2, 4.8, 4.3, 3.9, 3.5, 3.0, 2.4, 1.8, 1.6, 1.4, 1];
+const SHIP_ENTRY_DX = [105, 99, 94, 87, 81, 75, 68, 61, 54, 49, 42, 37, 33, 29, 23, 17, 8, 0];
+const SHIP_ENTRY_DY = [-51, -41, -26, -18, -17, -4, -3, 5, 15, 9, 16, 19, 19, 17, 15, 12, 3, 0];
+const SHIP_ENTRY_ROLL = [0, 45, 90, 120, 150, 175, 200, 225, 250, 265, 275, 290, 310, 335, 360, 360, 360, 360];
+const SHIP_ENTRY_DUR = 1800; // ms, unchanged total length
 let _shipEntryT0 = null;
 export function startShipEntry() { _shipEntryT0 = performance.now(); }
+function catmull(a, u) { // Catmull-Rom through the 10 fps samples, u in [0, n-1]
+  const n = a.length, i = Math.min(n - 2, Math.floor(u)), f = u - i;
+  const p0 = a[Math.max(0, i - 1)], p1 = a[i], p2 = a[i + 1], p3 = a[Math.min(n - 1, i + 2)];
+  return 0.5 * (2 * p1 + (-p0 + p2) * f + (2 * p0 - 5 * p1 + 4 * p2 - p3) * f * f + (-p0 + 3 * p1 - 3 * p2 + p3) * f * f * f);
+}
+const SHIP_LOGSC = SHIP_ENTRY_SCALE.map(Math.log);
 function shipEntryState() {
   if (_shipEntryT0 == null) return null;
-  const i = Math.floor((performance.now() - _shipEntryT0) / 100);
-  const nz = SHIP_ENTRY_SCALE.length;
-  if (i < nz) return { sc: SHIP_ENTRY_SCALE[i], dx: SHIP_ENTRY_DX[i], dy: SHIP_ENTRY_DY[i] }; // user 10-10: zoom entry only (slide-in removed)
-  _shipEntryT0 = null; return null;
+  const t = performance.now() - _shipEntryT0;
+  if (t >= SHIP_ENTRY_DUR) { _shipEntryT0 = null; return null; }
+  const u = Math.min(SHIP_ENTRY_SCALE.length - 1, t / 100); // continuous every render frame; samples 100 ms apart (video), rest pose held 1.7–1.8 s
+  return { sc: Math.exp(catmull(SHIP_LOGSC, u)), dx: catmull(SHIP_ENTRY_DX, u), dy: catmull(SHIP_ENTRY_DY, u), roll: catmull(SHIP_ENTRY_ROLL, u) * Math.PI / 180 };
 }
+export function shipEntryElapsed() { return _shipEntryT0 == null ? null : performance.now() - _shipEntryT0; }
 function drawShipSprite(ctx, x, y, bodyH, angle = 0, tint = null) {
   const fr = Math.floor(performance.now() / 100) % 8 < 5 ? 0 : 1;
   const im = SHIP_IMGS[fr];
   if (!im.complete || !im.naturalWidth) return false;
   const G = bodyH / SHIP_NATIVE_BODY_H;
   const en = shipEntryState();
-  let sc = 1;
-  if (en) { sc = en.sc; x += en.dx * G; y += en.dy * G; }
+  let sc = 1, roll = 0;
+  if (en) { sc = en.sc; roll = en.roll; x += en.dx * G; y += en.dy * G; }
   const k = G * sc, W = im.naturalWidth * k, H = im.naturalHeight * k;
   ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.rotate(angle || 0); ctx.imageSmoothingEnabled = false;
+  if (roll) { const c = Math.cos(roll); ctx.scale(1, Math.abs(c) < 0.06 ? Math.sign(c || 1) * 0.06 : c); } // 3D roll: vertical squash, upside-down past 90°
   if (tint) ctx.filter = tint;
   ctx.drawImage(im, Math.round(-W * 15.5 / 31), Math.round(-H * 12.5 / 25), Math.round(W), Math.round(H));
   ctx.restore();
@@ -408,7 +420,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261010180150`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261010180850`;
 }
 
 function loadKindSprite(kind) {
@@ -494,8 +506,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261010180150'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261010180150'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261010180850'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261010180850'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
