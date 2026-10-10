@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261010212205';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261010220927';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -196,7 +196,7 @@ function roundRectPath(ctx, x, y, w, h, rad) {
 // Player ship = pixel sprite from the original feature-phone footage (old src 0:13–0:24, 1 px = 1 native px,
 // median of 87 position-aligned frames, palette snapped to 7 colours). Two frames alternate (rear forks):
 // A 5 game frames, B 3 game frames (measured run lengths at 10 fps). Drawn nearest-neighbour, 1 native px = G game px.
-const SHIP_IMGS = ['lo', 'hi'].map((k) => { const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/player_ship_' + k + '.png?v=20261010212205'; return im; });
+const SHIP_IMGS = ['lo', 'hi'].map((k) => { const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/player_ship_' + k + '.png?v=20261010220927'; return im; });
 const SHIP_NATIVE_BODY_H = 12; // body height in native px (orbs above/below not counted)
 // Entry (match start) — rebuilt 10-10 19:xx from user_ref.mp4 38.41–40.09 s, 18 game frames at 10 fps.
 // The ship is NOT squashed: each step is its own pre-drawn roll frame (assets/fx/ship_roll_00..17.png, 24×13 dots),
@@ -212,8 +212,8 @@ function rollInit() {
   ROLL.tex = x.getImageData(0, 0, 31, 25).data; ROLL.hull = [];
   const op = (cx, cy) => ROLL.tex[(cy * 31 + cx) * 4 + 3] > 0;
   for (let cx = 0; cx < 31; cx++) {
-    let h = null;
-    for (const y0 of [12, 13, 11, 14]) if (op(cx, y0)) { let t = y0, bb = y0; while (t > 0 && op(cx, t - 1)) t--; while (bb < 24 && op(cx, bb + 1)) bb++; h = [t, bb]; break; }
+    let h = null; // whole column = round cross-section: top-most..bottom-most opaque dot (rear prongs included)
+    for (let y = 0; y < 25; y++) if (op(cx, y)) { if (!h) h = [y, y]; else h[1] = y; }
     ROLL.hull.push(h);
   }
   ROLL.cv = document.createElement('canvas'); ROLL.ctx = ROLL.cv.getContext('2d');
@@ -227,21 +227,14 @@ function rollRender(th, s) {
   const c = Math.cos(th), sn = Math.sin(th), shadeAmt = 0.3 * Math.min(1, Math.abs(sn) * 2), CY = 12.5;
   for (let cx = 0; cx < 31; cx++) {
     const h = ROLL.hull[cx];
-    // fins: swing about the axis (foreshorten), drawn under the hull
-    for (let ty = 0; ty < 25; ty++) {
-      const ti = (ty * 31 + cx) * 4; if (!T[ti + 3] || (h && ty >= h[0] && ty <= h[1])) continue;
-      let y0 = (CY + (ty - CY) * c) * s, y1 = (CY + (ty + 1 - CY) * c) * s; if (y0 > y1) { const q = y0; y0 = y1; y1 = q; }
-      let Y0 = Math.round(y0), Y1 = Math.max(Y0 + 1, Math.round(y1)); const f = 0.75 + 0.25 * Math.abs(c);
-      for (let Y = Math.max(0, Y0); Y < Math.min(H, Y1); Y++) for (let X = cx * s; X < cx * s + s; X++) { const o = (Y * W + X) * 4; D[o] = T[ti] * f; D[o + 1] = T[ti + 1] * f; D[o + 2] = T[ti + 2] * f; D[o + 3] = 255; }
-    }
     if (!h) continue;
     const t = h[0], r = (h[1] + 1 - t) / 2, cy = t + r;
     for (let Y = t * s; Y < (h[1] + 1) * s; Y++) {
       const z = Math.max(-1, Math.min(1, ((Y + 0.5) / s - cy) / r)), phi = Math.asin(z);
       const sy = Math.min(h[1], Math.max(t, Math.floor(cy + r * Math.sin(phi + th))));
-      const ti = (sy * 31 + cx) * 4; if (!T[ti + 3]) continue;
-      const k = 1 - shadeAmt * (1 - Math.cos(phi));
-      for (let X = cx * s; X < cx * s + s; X++) { const o = (Y * W + X) * 4; D[o] = T[ti] * k; D[o + 1] = T[ti + 1] * k; D[o + 2] = T[ti + 2] * k; D[o + 3] = 255; }
+      const ti = (sy * 31 + cx) * 4, gap = !T[ti + 3]; // gaps inside the body = dark grooves on the surface
+      const k = 1 - shadeAmt * (1 - Math.cos(phi)), R = gap ? 22 : T[ti], Gc = gap ? 20 : T[ti + 1], B = gap ? 26 : T[ti + 2];
+      for (let X = cx * s; X < cx * s + s; X++) { const o = (Y * W + X) * 4; D[o] = R * k; D[o + 1] = Gc * k; D[o + 2] = B * k; D[o + 3] = 255; }
     }
   }
   ROLL.ctx.putImageData(ROLL.id, 0, 0); return ROLL.cv;
@@ -470,7 +463,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261010212205`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261010220927`;
 }
 
 function loadKindSprite(kind) {
@@ -556,8 +549,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261010212205'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261010212205'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261010220927'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261010220927'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
