@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261010115712';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261010114642';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -370,7 +370,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261010115712`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261010114642`;
 }
 
 function loadKindSprite(kind) {
@@ -456,8 +456,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261010115712'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261010115712'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261010114642'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261010114642'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -2993,20 +2993,6 @@ function drawCoinHud(ctx, L, pt, lastGold, pop) {
   ctx.restore();
 }
 
-/** Core break, as in the video: the core is drawn once more as a pale lavender-white spiky silhouette
- *  (no fade, 0.1 s = 1 frame of the 10 fps original), then nothing is left. */
-function drawCorePale(ctx, f) {
-  const r = f.r || 12, n = 12;
-  ctx.save(); ctx.translate(f.x, f.y);
-  ctx.beginPath();
-  for (let i = 0; i < n * 2; i++) { const a = (i / (n * 2)) * Math.PI * 2, rr = i % 2 ? r * 0.78 : r; ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
-  ctx.closePath();
-  ctx.fillStyle = '#d6bcd6'; ctx.fill(); ctx.lineWidth = Math.max(1, r * 0.08); ctx.strokeStyle = '#f4e8f6'; ctx.stroke();
-  ctx.fillStyle = '#f2e2f2'; ctx.beginPath(); ctx.arc(0, 0, r * 0.62, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#1a1030'; ctx.beginPath(); ctx.arc(0, 0, r * 0.36, 0, Math.PI * 2); ctx.fill(); // dark ring as in the clip
-  ctx.fillStyle = '#fff8d8'; ctx.beginPath(); ctx.arc(0, 0, r * 0.26, 0, Math.PI * 2); ctx.fill(); // pale-yellow centre
-  ctx.restore();
-}
 function drawFx(ctx, f) {
   if (drawExFx(ctx, f)) return; // v1.5.67 extra attack items (attack_items.js)
   if (f.kind === 'shock') { drawShockFx(ctx, f); return; }
@@ -3019,7 +3005,6 @@ function drawFx(ctx, f) {
   if (f.kind === 'hit') { drawHitSpark(ctx, f); return; }
   if (f.kind === 'deflect') { drawDeflectSpark(ctx, f); return; }
   if (f.kind === 'corebreak') { drawCoreBreak(ctx, f); return; }
-  if (f.kind === 'corepale') { drawCorePale(ctx, f); return; }
   if (f.kind === 'chainboom') { drawChainBoom(ctx, f); return; }
   if (f.kind === 'fieldflash') {
     // Whole-field white flash on a core break: hold ~0.25 s, then fade (capped alpha, no strobe)
@@ -3892,9 +3877,7 @@ export function drawField(ctx, area, snap, opts = {}) {
     ctx.fillRect(-60, -60, fw + 120, fh + 120);
   }
 
-  const fx0 = snap.fx || [];
-  // the 1-frame pale core of a break sits on top of the coin it leaves (video: only the pale core is visible)
-  const fx = fx0.some((f) => (f.k ?? f.kind) === 'corepale') ? fx0.filter((f) => (f.k ?? f.kind) !== 'corepale').concat(fx0.filter((f) => (f.k ?? f.kind) === 'corepale')) : fx0;
+  const fx = snap.fx || [];
   for (const f of fx) {
     const tg = f.t || null;
     drawFx(ctx, {
