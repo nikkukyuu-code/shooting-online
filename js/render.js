@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261010223340';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261010225637';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -196,7 +196,15 @@ function roundRectPath(ctx, x, y, w, h, rad) {
 // Player ship = pixel sprite from the original feature-phone footage (old src 0:13–0:24, 1 px = 1 native px,
 // median of 87 position-aligned frames, palette snapped to 7 colours). Two frames alternate (rear forks):
 // A 5 game frames, B 3 game frames (measured run lengths at 10 fps). Drawn nearest-neighbour, 1 native px = G game px.
-const SHIP_IMGS = ['lo', 'hi', 'lo_1', 'lo_2', 'lo_3', 'hi_1', 'hi_2', 'hi_3'].map((k) => { const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/player_ship_' + k + '.png?v=20261010223340'; return im; });
+const SHIP_IMGS = ['lo', 'hi', 'lo_1', 'lo_2', 'lo_3', 'hi_1', 'hi_2', 'hi_3'].map((k) => { const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/player_ship_' + k + '.png?v=20261010225637'; return im; });
+// red core: steady most of the time; bright flare with a soft translucent glow ~0.5 s every 2.5–4 s (pseudo-random)
+const SHIP_FLARES = ['', '_hi'].map((k) => { const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/player_ship_flare' + k + '.png?v=20261010225532'; return im; });
+const _flare = { next: 2500, t0: -1e9, n: 0 };
+function coreFlareAlpha(now) {
+  if (now >= _flare.next) { _flare.t0 = now; _flare.n++; const r = Math.sin(_flare.n * 12.9898) * 43758.5453; _flare.next = now + 2500 + (r - Math.floor(r)) * 1500; }
+  const u = (now - _flare.t0) / 500; if (u < 0 || u >= 1) return 0;
+  return u < 0.18 ? u / 0.18 : Math.pow(1 - (u - 0.18) / 0.82, 1.6);
+}
 const SHIP_NATIVE_BODY_H = 12; // body height in native px (orbs above/below not counted)
 // Entry (match start) — rebuilt 10-10 19:xx from user_ref.mp4 38.41–40.09 s, 18 game frames at 10 fps.
 // The ship is NOT squashed: each step is its own pre-drawn roll frame (assets/fx/ship_roll_00..17.png, 24×13 dots),
@@ -274,14 +282,14 @@ function drawShipSprite(ctx, x, y, bodyH, angle = 0, tint = null, fh = 0) {
   const _now = performance.now(), _hi = Math.floor(_now / 100) % 8 >= 5, _ph = Math.floor(_now / 70) % 4; // A/B pose + 4-frame engine/core pulse
   let im = SHIP_IMGS[_ph === 0 ? (_hi ? 1 : 0) : (_hi ? 4 : 1) + _ph], k = G;
   if (!im.complete || !im.naturalWidth) im = SHIP_IMGS[_hi ? 1 : 0];
-  let sw = 31, sh = 25, ss = 1;
+  let sw = 31, sh = 25, ss = 1, rolling = false;
   if (en) {
     k = G * en.sc; x += en.dx * G; y += en.dy * G;
     if (fh) { const top = 6.5 * k, bot = 7.5 * k; if (top + bot < fh - 4) y = Math.max(top + 2, Math.min(fh - bot - 2, y)); }
     const deg = ((en.roll % 360) + 360) % 360;
     if (deg > 0.3 && deg < 359.7) { // else exactly the rest sprite (no pop at the end)
       ss = Math.max(1, Math.min(8, Math.round(k))); const cv = rollRender(deg * Math.PI / 180, ss);
-      if (cv) { im = cv; sw = 31 * ss; sh = 25 * ss; }
+      if (cv) { im = cv; sw = 31 * ss; sh = 25 * ss; rolling = true; }
     }
   }
   if (im !== ROLL.cv && (!im.complete || !im.naturalWidth)) return false;
@@ -289,6 +297,12 @@ function drawShipSprite(ctx, x, y, bodyH, angle = 0, tint = null, fh = 0) {
   ctx.save(); ctx.translate(Math.round(x), Math.round(y)); ctx.rotate(angle || 0); ctx.imageSmoothingEnabled = false;
   if (tint) ctx.filter = tint;
   ctx.drawImage(im, 0, 0, sw, sh, Math.round(-15.5 * k), Math.round(-12.5 * k), Math.round(W), Math.round(H));
+  const fa = rolling ? 0 : coreFlareAlpha(_now);
+  const FL = SHIP_FLARES[_hi ? 1 : 0];
+  if (fa > 0.01 && FL.complete && FL.naturalWidth) {
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = fa;
+    ctx.drawImage(FL, Math.round(-15.5 * k), Math.round(-12.5 * k), Math.round(W), Math.round(H));
+  }
   ctx.restore();
   return true;
 }
@@ -471,7 +485,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261010223340`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261010225637`;
 }
 
 function loadKindSprite(kind) {
@@ -557,8 +571,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261010223340'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261010223340'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261010225637'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261010225637'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
