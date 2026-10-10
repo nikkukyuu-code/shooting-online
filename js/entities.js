@@ -526,13 +526,13 @@ export function isCoreTarget(e) { return hasCore(e) || !!(e && e._coreBall); }
 /** User 10-06 16:49: the snake has TWO cores — the head and the orange body ball — sharing ONE life (the head's
  *  e.core HP, one gauge). A hit on either lowers it and flashes both (H._coreFlash); 0 → the whole snake chains.
  *  (video user_ref 4:45.6–4:45.8: a shot on the head stops there and the head flashes.) */
-export const CORE_FLASH_T = 0.1; // user 10-10 「動画と同じ長さ」: video = the core goes pale for exactly 1 game frame (10 fps → 0.1 s), on/off, no fade
+export const CORE_FLASH_T = 0.2; // user 10-10: core hit effect twice as long (was 0.1 s)
 function snakeCoreHit(H, px, py, bx, by, dmg, fxList, where) {
   const c = H.core;
   if (!c || c.hp <= 0 || H.hp <= 0 || H._portalOnly) return { hit: 'none', killed: false };
   if (Math.hypot(bx - px, by - py) >= c.r + CORE_HIT_PAD) return { hit: 'none', killed: false };
-  c.hp -= dmg; H._coreFlash = CORE_FLASH_T; H._shake = CORE_FLASH_T; H._coreAt = where;
-  if (c.hp > 0) return { hit: 'corehit', killed: false }; // video: a core hit = the core goes pale 1 frame only (no spark)
+  c.hp -= dmg; H._coreFlash = CORE_FLASH_T; H._shake = 0.14; H._coreAt = where;
+  if (c.hp > 0) { if (fxList) fxList.push(spawnHitSpark(bx, by)); return { hit: 'corehit', killed: false }; }
   c.hp = 0; H.hp = 0; H._coreBreak = true;
   if (fxList) { fxList.push(spawnExplosion(px, py, true)); fxList.push(spawnHitSpark(px, py)); }
   return { hit: 'core', killed: true };
@@ -541,7 +541,7 @@ function snakeCoreHit(H, px, py, bx, by, dmg, fxList, where) {
 /** Advance swarm-core drone orbits (call each tick). */
 export function tickCoreExtras(e, dt) {
   if (!e) return;
-  if (e._coreFlash > 0) { e._coreFlash -= dt; if (e._coreFlash < 1e-4) e._coreFlash = 0; } // epsilon: 0.1 s = exactly 6 steps at 60 fps
+  if (e._coreFlash > 0) e._coreFlash = Math.max(0, e._coreFlash - dt);
   if (e._bodyFlash > 0) e._bodyFlash = Math.max(0, e._bodyFlash - dt);
   if (e._shake > 0) e._shake = Math.max(0, e._shake - dt);
   if (e._guardT > 0) e._guardT = Math.max(0, e._guardT - dt);
@@ -628,9 +628,9 @@ export function applyCoreAwareHit(e, dmg, bx, by, fxList) {
     }
     c.hp -= dmg;
     e._coreFlash = CORE_FLASH_T;
-    e._shake = CORE_FLASH_T; // was 0.14 s; video: everything about a hit lasts 1 frame (0.1 s)
+    e._shake = 0.14;
     if (c.hp > 0) {
-      // video: no spark on a core hit — only the core itself goes pale for 0.1 s
+      if (fxList) fxList.push(spawnHitSpark(bx, by));
       // Escorts close ranks in front of a core under fire (cooldown so it is a moment, not a wall)
       if (e._guardCd <= 0 && c.hp < c.maxHp * 0.75) { e._guardT = 1.6; e._guardCd = 5; }
       return { hit: 'corehit', killed: false };
