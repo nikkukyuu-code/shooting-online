@@ -404,9 +404,9 @@ export function markCoreChain(e, list) {
   const ball = e._coreSeg;
   const segs = (list || []).filter((o) => o !== e && o._chainOf === e && o.chainIdx != null && isChainable(o));
   if (ball) {
-    const k0 = e._coreAt === 'head' ? 0 : ball.chainIdx;
+    const k0 = ball.chainIdx;
     const pool = segs.map((o) => [o.chainIdx, o]);
-    if (list && list.includes(e)) { e.hp = Math.max(1, e.hp); pool.push([0, e]); } // head = element 0 (past the tip)
+    if (list && list.includes(e) && !e._headDead) { e.hp = Math.max(1, e.hp); pool.push([0, e]); } // head = element 0 (past the tip)
     pool.sort((p, q) => (Math.abs(p[0] - k0) - Math.abs(q[0] - k0)) || (p[0] - q[0]));
     seq.push(...pool.map((p) => p[1]));
   } else seq.push(...segs.sort((p, q) => p.chainIdx - q.chainIdx));
@@ -536,11 +536,20 @@ function snakeCoreHit(H, px, py, bx, by, dmg, fxList, where) {
   if (Math.hypot(bx - px, by - py) >= c.r + CORE_HIT_PAD) return { hit: 'none', killed: false };
   c.hp -= dmg; H._coreFlash = CORE_FLASH_T; H._shake = 0.14; H._coreAt = where;
   if (c.hp > 0) { if (fxList) fxList.push(spawnHitSpark(bx, by)); return { hit: 'corehit', killed: false }; }
-  c.hp = 0; H.hp = 0; H._coreBreak = true;
+  c.hp = 0; H._coreBreak = true; // user 10-12: the head is a normal part now — it pops in the core chain (not instantly)
   if (fxList) { fxList.push(spawnExplosion(px, py, true)); fxList.push(spawnHitSpark(px, py)); }
   return { hit: 'core', killed: true };
 }
 
+/** User 10-12: snake head shot down (normal kill). The head object still owns the snake's core HP and drives the
+ *  body, so it stays in the list as an invisible, intangible, harmless driver (_headDead): the body keeps moving and
+ *  the orange core ball stays shootable; the core break then pops whatever is left. Returns true when it handled e. */
+export function snakeHeadDown(e) {
+  if (!e || !e._coreSeg || e._headDead || e._coreBreak || e._chainT != null || e.hp > 0) return false;
+  if (!e.core || e.core.hp <= 0) return false;
+  e._headDead = true; e.hp = 1; e.noFire = true; e.passShots = true; e.score = 0;
+  return true;
+}
 /** Advance swarm-core drone orbits (call each tick). */
 export function tickCoreExtras(e, dt) {
   if (!e) return;
@@ -613,7 +622,12 @@ export function applyCoreAwareHit(e, dmg, bx, by, fxList) {
     if (!H) return { hit: 'none', killed: false };
     return snakeCoreHit(H, e.x, e.y, bx, by, dmg, fxList, 'ball');
   }
-  if (e._coreSeg) return snakeCoreHit(e, e.x, e.y, bx, by, dmg, fxList, 'head'); // snake head = core too (same HP)
+  if (e._coreSeg) { // user 10-12: the snake head is NOT a core — a normal body part that blows up when shot down
+    if (e._headDead || Math.abs(bx - e.x) >= e.w * 0.45 + 4 || Math.abs(by - e.y) >= e.h * 0.45 + 4) return { hit: 'none', killed: false };
+    e.hp -= dmg; e._bodyFlash = 0.1;
+    if (fxList) fxList.push(spawnHitSpark(bx, by));
+    return { hit: 'body', killed: e.hp <= 0 };
+  }
   if (!hasCore(e) || !e.core) {
     e.hp -= dmg;
     if (fxList) fxList.push(spawnHitSpark(bx, by));
@@ -699,9 +713,9 @@ export function applyCoreAwareArea(e, dmg, ox, oy, fxList) {
     if (ox != null && coreOwnerOf(e) && Math.hypot(ox - e.x, oy - e.y) < CORE_R + 18) return applyCoreAwareHit(e, dmg, e.x, e.y, fxList);
     return { hit: 'body', killed: false };
   }
-  if (e._coreSeg) { // snake head: a blast centred on it reaches the shared core (same rule as other cores)
-    if (ox != null && Math.hypot(ox - e.x, oy - e.y) < CORE_R + 18) return applyCoreAwareHit(e, dmg, e.x, e.y, fxList);
-    e._bodyFlash = 0.1; return { hit: 'body', killed: false };
+  if (e._coreSeg) { // snake head: normal body part (user 10-12)
+    if (e._headDead) return { hit: 'none', killed: false };
+    e.hp -= dmg; e._bodyFlash = 0.1; return { hit: 'body', killed: e.hp <= 0 };
   }
   if (!hasCore(e) || !e.core) {
     e.hp -= dmg;
@@ -739,11 +753,11 @@ export function applyCoreAwareBeam(e, dmg, ly, fxList) {
     if (coreOwnerOf(e) && Math.abs(e.y - ly) < CORE_R + CORE_HIT_PAD + 1) return applyCoreAwareHit(e, dmg, e.x, e.y, fxList);
     return { hit: 'none', killed: false };
   }
-  if (e && e._coreSeg) { // snake head = core (shared HP): the beam row crossing the head hits it
-    if (Math.abs(e.y - ly) < CORE_R + CORE_HIT_PAD + 1) return applyCoreAwareHit(e, dmg, e.x, e.y, fxList);
-    e._bodyFlash = 0.1;
-    if (fxList) fxList.push(spawnDeflectSpark(e.x, ly));
-    return { hit: 'body', killed: false };
+  if (e && e._coreSeg) { // snake head: normal body part (user 10-12)
+    if (e._headDead) return { hit: 'none', killed: false };
+    e.hp -= dmg; e._bodyFlash = 0.1;
+    if (fxList) fxList.push(spawnHitSpark(e.x, ly));
+    return { hit: 'body', killed: e.hp <= 0 };
   }
   const c = coreWorld(e);
   if (c && e.core.hp > 0 && Math.abs(c.y - ly) < c.r + CORE_HIT_PAD + 1) return applyCoreAwareHit(e, dmg, c.x, c.y, fxList);
@@ -930,7 +944,7 @@ export function applyLaserTick(e, ly, fxList, shipX) {
     if (h !== 'none' && fxList) fxList.push(spawnLaserBoom(e.x, ly));
     return h;
   }
-  if (hasCore(e)) {
+  if (hasCore(e) && !e._coreSeg) {
     const h = applyCoreAwareBeam(e, 1.05 / 3, ly, fxList).hit; // core: one strike per tick (core HP is shared); 10-04: 1/3 (was 1.05)
     if (fxList) fxList.push(spawnLaserBoom(Math.max(shipX, e.x - e.w * 0.35), ly));
     return h;
@@ -1054,7 +1068,7 @@ export function serializeField(state) {
     items: state.player.items.slice(0, 4),
     ap: state.player.activePower,
     at: state.player.activeTimer,
-    enemies: state.enemies.filter(e => e.kind !== 'wave_bubble' || e.x - (e.w || 0) / 2 < (state._fw || 1e9)).slice(0, 40).map(e => ({
+    enemies: state.enemies.filter(e => !e._headDead && (e.kind !== 'wave_bubble' || e.x - (e.w || 0) / 2 < (state._fw || 1e9))).slice(0, 40).map(e => ({
       x: e.x, y: e.y, w: e.w, h: e.h, kind: e.kind, hp: e.hp, c: e.color, s: !!e.sent,
       at2: (e._chainOf || e._lead) ? 1 : undefined, ch: e.core && !e._coreSeg ? e.core.hp : (e._coreBall && e._chainOf && e._chainOf.core ? e._chainOf.core.hp : undefined), cm: e.core && !e._coreSeg ? e.core.maxHp : (e._coreBall && e._chainOf && e._chainOf.core ? e._chainOf.core.maxHp : undefined), cb: e._coreBall ? 1 : undefined, cf: (e._coreBall ? (e._chainOf && e._chainOf._coreFlash) : e._coreFlash) > 0 ? 1 : undefined, bf: e._coreSeg && e._bodyFlash > 0 ? 1 : undefined, cs: e._sh ? e._sh.st : undefined, sk: e._shake > 0 ? 1 : undefined,
       dr: e.drones ? e.drones.map(d => d.hp) : undefined,

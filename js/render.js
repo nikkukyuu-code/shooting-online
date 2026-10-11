@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261012043635';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261012045025';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -370,7 +370,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261012043635`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261012045025`;
 }
 
 function loadKindSprite(kind) {
@@ -456,8 +456,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261012043635'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261012043635'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261012045025'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261012045025'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -518,9 +518,7 @@ function drawCoreSpriteBody(ctx, e, kind, w, h, t, flash) {
     const tip = waveSprite('snake_head_art');
     if (tip) {
       if (e.rot) { ctx.rotate(e.rot); }
-      ctx.imageSmoothingEnabled = false; drawFit(ctx, tip, w * 1.75, h * 1.75, flash || (e._coreFlash || 0) > 0); // 10-06 video cut: ring+glow ≈ 2× ship height
-      const hf = Math.max(0, Math.min(1, (e._coreFlash || 0) / 0.3)); // user 10-06: head = core too (shared HP) → same core hit flash as the ball
-      if (hf > 0) { ctx.fillStyle = `rgba(255,255,255,${0.85 * hf})`; ctx.beginPath(); ctx.arc(0, 0, (e.core ? e.core.r : 9) * 1.05, 0, Math.PI * 2); ctx.fill(); }
+      ctx.imageSmoothingEnabled = false; drawFit(ctx, tip, w * 1.75, h * 1.75, flash || (e._bodyFlash || 0) > 0); // 10-06 video cut: ring+glow ≈ 2× ship height
       return true;
     }
     // fallback procedural
@@ -1473,6 +1471,7 @@ function drawPersonaLocal(ctx, e, t) {
 }
 
 function drawEnemy(ctx, e) {
+  if (e._headDead) return; // shot-down snake head (invisible body driver)
   if (e.kind === 'wave_bubble') {
     const ba = bubbleAlpha(e);
     if (ba <= 0.01) return;
