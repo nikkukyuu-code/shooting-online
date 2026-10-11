@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261011040248';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261012043635';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -610,11 +610,45 @@ export const WAVE_SCRIPT = [
 export const REAR_FIRE_CD = [3.0, 4.5]; // s per unit
 export const REAR_PACK_GAP = 0.7;       // s between shots of one pack (no floods)
 export const REAR_TELE = 0.4;           // s red-ring warning before each shot
+
+/** User 10-12: no core guard may stay parked behind the core (the side away from the player). Every guard /
+ *  pod on the core's back side SORTIES at staggered random moments: 0.3 s blink tell → 0.6 s arc round the hull
+ *  to the player-facing side (off the core row) → 0.4 s red-ring aim → 2 aimed shots 0.18 s apart → 0.4 s hold →
+ *  0.7 s arc back to its slot. Each rear unit every 2.5–5 s, at most 2 out per core at once. Both fields. */
+export const SORTIE_CD = [2.5, 5.0];
+const SORTIE_MAX = 2;
+const S_TELL = 0.3, S_OUT = 0.6, S_AIM = 0.4, S_GAP = 0.18, S_HOLD = 0.4, S_BACK = 0.7;
+const ease = (u) => u * u * (3 - 2 * u);
+const sortieCd = () => SORTIE_CD[0] + Math.random() * (SORTIE_CD[1] - SORTIE_CD[0]);
+function sortieShot(sx, sy, px, py, bullets) {
+  const a = Math.atan2(py - sy, px - sx), spd = 150;
+  const rb = spawnBullet(sx, sy, Math.cos(a) * spd, Math.sin(a) * spd, 'enemy', false, 2, { life: 5 }); rb.rg = 1; bullets.push(rb);
+}
+/** Advance one unit's sortie (state on `u`); returns the path weight w (0 at slot, 1 at the front point) or -1 if idle. */
+function stepSortie(u, L, dt, rear, fire, stay) {
+  if (u._so == null) { if (u._soCd == null) u._soCd = 0.4 + Math.random() * 2.2; if (rear) u._soCd -= dt; else u._soCd = Math.max(u._soCd, 0.8);
+    if (u._soCd <= 0 && (L._soOut || 0) < SORTIE_MAX && (L._soNext == null || L._soT >= L._soNext)) {
+      u._so = 0; u._soT = 0; u._soShots = 0; L._soOut = (L._soOut || 0) + 1; L._soNext = (L._soT || 0) + 0.9; // stagger: ≥0.9 s between launches
+    } else return -1; }
+  u._soT += dt; const t = u._soT;
+  const T1 = S_TELL, T2 = T1 + S_OUT, T3 = T2 + S_AIM, T4 = T3 + S_GAP + S_HOLD, T5 = T4 + S_BACK;
+  u._soWarn = 0;
+  if (t < T1) { u._soBlink = Math.floor(t / 0.06) % 2; return 0; }
+  u._soBlink = 0;
+  if (t < T2) return ease((t - T1) / S_OUT);
+  if (t < T3) { u._soWarn = 1; return 1; }
+  if (u._soShots < 1) { u._soShots = 1; fire(); }
+  if (t >= T3 + S_GAP && u._soShots < 2) { u._soShots = 2; fire(); }
+  if (t < T4) return 1;
+  if (stay) { u._so = null; u._soCd = sortieCd(); u._soStay = 1; L._soOut = Math.max(0, (L._soOut || 1) - 1); return 1; } // keeps station in front
+  if (t < T5) return 1 - ease((t - T4) / S_BACK);
+  u._so = null; u._soCd = sortieCd(); L._soOut = Math.max(0, (L._soOut || 1) - 1); return 0;
+}
 /** Ring / swarm cores: their guards are drawn pods (drones). Rear-side pods patrol along the loop,
  *  lean toward the core row when the player lines up, and fire the same telegraphed aimed shots. */
 function tickPodGuards(e, dt, px, py, bullets, fw) {
   const ring = e.kind === 'wave_ring_core';
-  e._rgT = (e._rgT || 0) + dt;
+  e._rgT = (e._rgT || 0) + dt; e._soT = (e._soT || 0) + dt;
   const cy = e.y + (e.core.oy || 0);
   const cover = Math.abs(py - cy) < 46;
   const live = e.hp > 0 && e.core.hp > 0 && e.x < fw - 10 && e.x > 0;
@@ -625,6 +659,18 @@ function tickPodGuards(e, dt, px, py, bullets, fw) {
     if (ring && d.a0 != null && Math.cos(d.a0) > 0.2) {
       d._cv = (d._cv || 0) + ((cover ? -Math.sin(d.a0) * 0.22 : 0) - (d._cv || 0)) * Math.min(1, dt * 3);
       d.ang += Math.sin(e._rgT * 1.1) * 0.17 + Math.sin(e._rgT * 2.3 + k * 2.3) * 0.03 + d._cv; // patrol along the back of the loop in step (pods keep their spacing)
+    }
+    { // sortie: a pod parked on the back of the loop swings round to the front, aims, fires, swings back
+      const prev = d._saAp || 0; d.ang -= ring ? 0 : prev; // remove last frame's offset (ring resets ang itself)
+      const rear = live && !d._soStay && Math.cos(d.ang) > 0.3;
+      if (d._so == null && d._sTo != null && !d._soStay) d._sTo = null;
+      const w = live ? stepSortie(d, e, dt, rear, () => { const sx = e.x + Math.cos(d.ang + d._sa) * d.dist, sy = e.y + Math.sin(d.ang + d._sa) * d.dist * (d.ky || 1); sortieShot(sx - d.r, sy, px, py, bullets); }, ring) : -1;
+      if (w >= 0) {
+        if (d._sTo == null) { const side = Math.sin(d.ang) >= 0 ? 1 : -1; const tgt = Math.PI - side * (0.55 + Math.random() * 0.4); let dd = tgt - d.ang; dd = Math.atan2(Math.sin(dd), Math.cos(dd)); d._sTo = dd; }
+        d._sa = d._sTo * w;
+      } else if (d._soStay) d._sa = d._sTo; else { d._sa = 0; if (!live && d._so != null) { d._so = null; e._soOut = Math.max(0, (e._soOut || 1) - 1); } }
+      d.ang += d._sa; d._saAp = d._sa;
+      if (d._so != null) { d.w = d._soWarn || d._soBlink ? 1 : 0; continue; } // own sortie shots only while out
     }
     const ox = Math.cos(d.ang) * d.dist, oy = Math.sin(d.ang) * d.dist * (d.ky || 1);
     if (!live) { d.w = 0; if (d._tele > 0) d._tele = 0; continue; } // every surrounding pod may fire (same caps)
@@ -650,6 +696,7 @@ export function tickRearGuard(e, dt, px, py, bullets, fw, fh) {
   if (e.drones && e.core && (e.kind === 'wave_ring_core' || e.kind === 'wave_swarm_core' || e.kind === 'wave_eye_boss')) { tickPodGuards(e, dt, px, py, bullets, fw); return; }
   const L = e._chainOf || e._lead;
   if (!L) return; // free enemies (e.g. bubble wall) are never touched
+  if (e._so != null && (e.hp <= 0 || e._chainT != null || L.hp <= 0)) { e._so = null; L._soOut = Math.max(0, (L._soOut || 1) - 1); }
   if (e.hp <= 0 || e._chainT != null || e.mv === 'armseg' || e.passShots) { e._gOx = 0; e._gOy = 0; return; }
   if (L.hp <= 0) return;
   // 10-04: guards surround / shield the core (no 'rear' slot any more). Every guard patrols a little,
@@ -667,6 +714,24 @@ export function tickRearGuard(e, dt, px, py, bullets, fw, fh) {
     if (Math.abs(ny) < clr) ty = Math.sign(by - L.y || 1) * clr - (by - L.y);
   }
   if (bx + tx < cx && Math.abs(by + ty - cy) < eh + 12) ty = Math.sign(by - cy || 1) * (eh + 12) - (by - cy); // lane to the core stays open
+  // sortie (user 10-12): guards behind the core's centre fly round the hull to the player side, aim, fire, return
+  L._soT = (L._soT || 0) + (L._soTick === e ? dt : 0); if (L._soTick == null || L._soTick.hp <= 0) L._soTick = e;
+  const rearG = !e._soStay && bx > cx + 6 && e.x < fw - 10 && e.x > 0;
+  const sw = stepSortie(e, L, dt, rearG, () => sortieShot(e.x - ew * 0.8, e.y, px, py, bullets), true);
+  if (sw >= 0) {
+    if (e._soP == null) {
+      const side = (by - L.y) >= 0 ? 1 : -1, ox0 = e._gOx || 0, oy0 = e._gOy || 0;
+      const fx = Math.min(cx, L.x - hw) - ew - 14 - Math.random() * 46, fy = cy + side * (eh + 16 + Math.random() * 48);
+      const ctx_ = L.x + hw * 0.2, cty = L.y + side * (hh + eh + 22);
+      e._soP = [ox0, oy0, ctx_ - bx, cty - by, fx - bx, fy - by];
+    }
+    const [x0, y0, x1, y1, x2, y2] = e._soP, u = sw, v = 1 - u;
+    e._gOx = v * v * x0 + 2 * v * u * x1 + u * u * x2; e._gOy = v * v * y0 + 2 * v * u * y1 + u * u * y2;
+    e._warn = e._soWarn || e._soBlink ? 1 : 0;
+    return;
+  }
+  if (e._soStay && e._soP) { tx = e._soP[4] + Math.sin(e._rgT * 1.3 + ph) * 6; ty = e._soP[5] + Math.sin(e._rgT * 0.9 + ph * 0.6) * 5; } // station in front of the core (off its row)
+  else e._soP = null;
   const k = Math.min(1, dt * 3);
   e._gOx = (e._gOx || 0) + (tx - (e._gOx || 0)) * k;
   e._gOy = (e._gOy || 0) + (ty - (e._gOy || 0)) * k;
