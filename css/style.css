@@ -650,6 +650,9 @@ html, body {
   opacity: 0.9;
 }
 .sub-panel > * { position: relative; z-index: 1; }
+/* Never let flex shrink squash sections (caused item intro to spill under 「メニューへ」); the panel itself scrolls */
+.sub-panel > *:not(.deck-reset-dialog) { flex-shrink: 0; }
+.sub-panel > .menu-btn { margin-top: 4px; }
 
 .sub-head {
   text-align: center;
