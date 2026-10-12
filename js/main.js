@@ -1,14 +1,14 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261012163356';
-import { Net } from './net.js?v=20261012163356';
-import { Game } from './game.js?v=20261012163356';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261012163356';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261012163356';
-import { resetDeckToDefault } from './meta.js?v=20261012163356';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261012163356';
-import { loadBattleCount } from './stats.js?v=20261012163356';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261012163356';
-import { ALL_KIND_IDS } from './catalog.js?v=20261012163356';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261012163356';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261012164826';
+import { Net } from './net.js?v=20261012164826';
+import { Game } from './game.js?v=20261012164826';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261012164826';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261012164826';
+import { resetDeckToDefault } from './meta.js?v=20261012164826';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261012164826';
+import { loadBattleCount } from './stats.js?v=20261012164826';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261012164826';
+import { ALL_KIND_IDS } from './catalog.js?v=20261012164826';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261012164826';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -150,7 +150,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261012163356`;
+  return `assets/enemies/${id}/0.png?v=20261012164826`;
 }
 
 function unitName(id) {
@@ -569,7 +569,7 @@ function startCpuMatchNow(comDifficulty) {
   cleanupGame();
   net = new Net();
   net.usingBot = true;
-  const label = comDifficulty === 'normal' ? 'CPU対戦（普通・ライフPT×3）' : 'CPU対戦（強い・ライフPT×10）';
+  const label = comDifficulty === 'normal' ? 'COM対戦（普通・ライフPT×3）' : 'COM対戦（強い・ライフPT×10）';
   els.fieldFind.value = label;
   try {
     startGameSession({ bot: true, comDifficulty });
@@ -595,7 +595,7 @@ els.btnTutorial?.addEventListener('click', () => {
   cleanupGame();
   net = new Net();
   net.usingBot = true;
-  els.fieldFind.value = 'チュートリアル（CPU）';
+  els.fieldFind.value = 'チュートリアル（COM）';
   try {
     startGameSession({ bot: true, comDifficulty: 'normal' });
     if (game) {

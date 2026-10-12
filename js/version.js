@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-12 16:33:56';
+export const VERSION_LABEL = '2026-10-12 16:48:26';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1791790436000;
-export const BUILD_NOTE = 'ボム発動の瞬間に下の操作画面が消える不具合を修正';
+export const BUILD_TIME = 1791791306000;
+export const BUILD_NOTE = '対戦表記をCOM対戦に名称変更し、メニューで目立つように';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
