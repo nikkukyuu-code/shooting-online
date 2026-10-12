@@ -1,8 +1,8 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261013014317';
-import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261013014317';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261013015223';
+import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261013015223';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -371,7 +371,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261013014317`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261013015223`;
 }
 
 function loadKindSprite(kind) {
@@ -457,8 +457,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261013014317'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261013014317'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261013015223'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261013015223'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -3437,10 +3437,9 @@ function drawDirectTimerHud(ctx, L, localState) {
 
 function drawLaser(ctx, player, fieldH) {
   if (player.activePower !== 'laser' || player.activeTimer <= 0) return;
-  // User 10-13 01:21: match feature-phone ref video (user_ref / orig) — continuous staccato dashes,
-  // segment ≈ ship length (28 px), spacing 52 (gap ≈ 24), thickness 7 / 2.4. Measured from user_ref
-  // t≈75.7 (seg ~28, gap ~19–24) with ship ~24–29 video-px ≈ game ship 28 px (scale ≈ 1).
-  // Purely horizontal scrolling train (never weaves). Edge-clip maxX kept so the train fills the pane.
+  // Restored to pre-bc8245b (2026-10-12 21:49): continuous staccato bolts — segment 28 / spacing 52,
+  // thickness 7 / 2.4, shadow 14 / 5, phase blink/fade, scroll 0.55. Purely horizontal (never weaves).
+  // Kept bugfixes: edge-clip maxX (cssW+400 fills pane); COM pane draws laser via snap.ap branch.
   const now = performance.now();
   const x0 = player.x + 16;
   const y = player.y * fieldH;

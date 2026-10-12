@@ -933,7 +933,7 @@ export function spawnExplosion(x, y, big = false) {
  */
 export const LASER_HIT_DMG = 0.5 / 3; // 10-04: laser power 1/3 (was 0.5)
 export const LASER_MAX_HITS = 10;
-/** User 10-13 01:21: match ref video continuous staccato — restore 0.07 s tick (0.5 s was 10-12 pulse experiment). Per-hit damage unchanged. */
+/** Restored to pre-bc8245b tick (0.07 s continuous). Named constant; per-hit damage unchanged. */
 export const LASER_IV = 0.07;
 export const FX_SOFT_CAP = 90; // phone guard: past this, laser booms reuse a cheaper life
 // User 10-04d: the widest enemy hull (boss tier, 184 px) is the 10-hit reference; others scale by width.

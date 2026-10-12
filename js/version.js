@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-13 01:43:17';
+export const VERSION_LABEL = '2026-10-13 01:52:23';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1791823397413;
-export const BUILD_NOTE = 'コインをリッチに（金グラデ・立体回転・キラッ・取得時の輝き）';
+export const BUILD_TIME = 1791823943588;
+export const BUILD_NOTE = 'レーザーを bc8245b 以前に復元（28/52・IV 0.07・見た目そのまま／COM描画・端クリップは維持）';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
