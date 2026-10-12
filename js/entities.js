@@ -909,7 +909,8 @@ export function pushBigKillBooms(list, e, big = false) {
 /** User 10-12 19:39: every explosion animation plays 2× as long (same size/look) — FX life ticks at half
  *  speed for explosion kinds. Not touched: core-hit flash, core-break flash, chain-pop scheduling, sparks. */
 /*  User 10-12 21:41 (爆破の時間を3割減らして): 0.7 × that → explosions now last 1.4× the pre-19:46 length. */
-export const BOOM_SLOW = 1 / 1.4;
+/*  User 10-13 01:03 (爆破の時間を3割短く): 0.7 × 1.4 = 0.98× the pre-19:46 length. */
+export const BOOM_SLOW = 1 / 0.98;
 const BOOM_KINDS = new Set(['kboom', 'eclipse', 'chainboom', 'bomb']);
 export function fxRate(f) { return (f.kind == null || BOOM_KINDS.has(f.kind)) ? BOOM_SLOW : 1; }
 export function spawnExplosion(x, y, big = false) {

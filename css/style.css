@@ -1317,6 +1317,12 @@ html, body {
   color: #ffe566;
   text-shadow: 0 0 18px rgba(255,200,40,0.9), 0 3px 0 #a06000, 0 6px 16px #000;
 }
+.vic-banner .vic-jp { font-size: clamp(2.4rem, 12vw, 3.6rem); letter-spacing: 0.08em; white-space: nowrap; }
+.lose-banner { animation-duration: 0.45s; }
+.lose-banner .vic-jp {
+  color: #ff5a5a;
+  text-shadow: 0 0 18px rgba(255,40,40,0.85), 0 3px 0 #6a0000, 0 6px 16px #000;
+}
 .vic-en {
   font-size: 0.95rem;
   font-weight: 800;

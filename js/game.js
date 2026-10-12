@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261012215259';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261013010621';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,17 +6,17 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261012215259';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261012215259';
-import { sfx } from './audio.js?v=20261012215259';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261012215259';
-import { fxRate } from './entities.js?v=20261012215259';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261012215259';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261012215259';
-import { hitBattleCounter } from './stats.js?v=20261012215259';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261012215259';
-import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261012215259';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261012215259';
+} from './entities.js?v=20261013010621';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261013010621';
+import { sfx } from './audio.js?v=20261013010621';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261013010621';
+import { fxRate } from './entities.js?v=20261013010621';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261013010621';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261013010621';
+import { hitBattleCounter } from './stats.js?v=20261013010621';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261013010621';
+import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261013010621';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261013010621';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -3359,7 +3359,7 @@ export class Game {
     this._ko = null;
     this.clearKoFx();
     if (K) {
-      this.setStatus(K.won ? 'あなたの勝ちです' : 'あなたの負けです');
+      this.setStatus(K.won ? 'YOU WIN' : 'YOU LOSE');
       this.showEndCelebration(K.won);
     }
   }
@@ -3425,7 +3425,7 @@ export class Game {
       msgEl.innerHTML = '';
       const banner = document.createElement('div');
       banner.className = 'vic-banner';
-      banner.innerHTML = '<span class="vic-jp">勝利</span><span class="vic-en">YOU WIN</span>';
+      banner.innerHTML = '<span class="vic-jp">YOU WIN</span>';
       ov.insertBefore(banner, msgEl);
 
       const fx = document.createElement('div');
@@ -3448,7 +3448,7 @@ export class Game {
       fx.appendChild(flash);
       ov.insertBefore(fx, banner);
 
-      msgEl.textContent = 'あなたの勝ちです';
+      msgEl.textContent = '';
 
       if (this._ptReward) {
         ov.classList.add('pt-show');
@@ -3504,7 +3504,11 @@ export class Game {
         requestAnimationFrame(step);
       }
     } else {
-      msgEl.textContent = 'あなたの負けです';
+      msgEl.innerHTML = '';
+      const lb = document.createElement('div');
+      lb.className = 'vic-banner lose-banner';
+      lb.innerHTML = '<span class="vic-jp">YOU LOSE</span>';
+      ov.insertBefore(lb, msgEl);
       if (this.useBot && !this.isOnline() && !ov.querySelector('.pt-lose')) {
         const box = document.createElement('div');
         box.className = 'pt-reward pt-lose';
