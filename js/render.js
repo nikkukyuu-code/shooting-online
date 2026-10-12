@@ -1,8 +1,8 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261013010621';
-import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261013010621';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261013011046';
+import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261013011046';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -371,7 +371,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261013010621`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261013011046`;
 }
 
 function loadKindSprite(kind) {
@@ -457,8 +457,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261013010621'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261013010621'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261013011046'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261013011046'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -3344,7 +3344,7 @@ function drawLaser(ctx, player, fieldH) {
   const cssW = (ctx.canvas && ctx.canvas.clientWidth) || 0;
   const maxX = Math.max(x0 + 40, fieldH * 2.2, cssW + 400);
   const head = Math.min(maxX, x0 + since * 3200);
-  const boltLen = 336, spacing = 360; // user 10-12 21:52: レーザー6倍 (56→336 px, gap stays 24 px)
+  const boltLen = 235, spacing = 259; // user 10-13 01:09: レーザー3割短く (336→235 px, spacing 259, gap stays 24 px)
   const fade = 1 - since / LIFE;
   ctx.save();
   ctx.lineCap = 'round';
