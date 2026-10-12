@@ -908,7 +908,8 @@ export function pushBigKillBooms(list, e, big = false) {
 
 /** User 10-12 19:39: every explosion animation plays 2× as long (same size/look) — FX life ticks at half
  *  speed for explosion kinds. Not touched: core-hit flash, core-break flash, chain-pop scheduling, sparks. */
-export const BOOM_SLOW = 0.5;
+/*  User 10-12 21:41 (爆破の時間を3割減らして): 0.7 × that → explosions now last 1.4× the pre-19:46 length. */
+export const BOOM_SLOW = 1 / 1.4;
 const BOOM_KINDS = new Set(['kboom', 'eclipse', 'chainboom', 'bomb']);
 export function fxRate(f) { return (f.kind == null || BOOM_KINDS.has(f.kind)) ? BOOM_SLOW : 1; }
 export function spawnExplosion(x, y, big = false) {
@@ -931,6 +932,8 @@ export function spawnExplosion(x, y, big = false) {
  */
 export const LASER_HIT_DMG = 0.5 / 3; // 10-04: laser power 1/3 (was 0.5)
 export const LASER_MAX_HITS = 10;
+/** User 10-12 21:41: laser item fires once every 0.5 s (was a 0.07 s tick); per-hit damage unchanged. */
+export const LASER_IV = 0.5;
 export const FX_SOFT_CAP = 90; // phone guard: past this, laser booms reuse a cheaper life
 // User 10-04d: the widest enemy hull (boss tier, 184 px) is the 10-hit reference; others scale by width.
 export const LASER_W_MAX = Math.max(...Object.values(ENEMY_TIER_STATS).map((t) => t.w));
@@ -1073,6 +1076,7 @@ export function serializeField(state) {
     items: state.player.items.slice(0, 4),
     ap: state.player.activePower,
     at: state.player.activeTimer,
+    lc: state.player.activePower === 'laser' ? +(state.player.laserCd || 0).toFixed(2) : undefined,
     enemies: state.enemies.filter(e => !e._headDead && (e.kind !== 'wave_bubble' || e.x - (e.w || 0) / 2 < (state._fw || 1e9))).slice(0, 40).map(e => ({
       x: e.x, y: e.y, w: e.w, h: e.h, kind: e.kind, hp: e.hp, c: e.color, s: !!e.sent,
       at2: (e._chainOf || e._lead) ? 1 : undefined, ch: e.core && !e._coreSeg ? e.core.hp : (e._coreBall && e._chainOf && e._chainOf.core ? e._chainOf.core.hp : undefined), cm: e.core && !e._coreSeg ? e.core.maxHp : (e._coreBall && e._chainOf && e._chainOf.core ? e._chainOf.core.maxHp : undefined), cb: e._coreBall ? 1 : undefined, cf: (e._coreBall ? (e._chainOf && e._chainOf._coreFlash) : e._coreFlash) > 0 ? 1 : undefined, bf: e._coreSeg && e._bodyFlash > 0 ? 1 : undefined, cs: e._sh ? e._sh.st : undefined, kt: e._ctr && e._ctr.t < 0.5 ? e._ctr.p : undefined, kq: e._ctr && e._ctr.t < 0.5 ? +Math.min(1, 1 - e._ctr.t / 0.5).toFixed(2) : undefined, kx: e._ctr && e._ctr.t < 0.5 ? Math.round(e._ctr.cx) : undefined, ky: e._ctr && e._ctr.t < 0.5 ? Math.round(e._ctr.cy) : undefined, sk: e._shake > 0 ? 1 : undefined,

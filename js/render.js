@@ -1,8 +1,8 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261012194624';
-import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261012194624';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261012214945';
+import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261012214945';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -371,7 +371,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261012194624`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261012214945`;
 }
 
 function loadKindSprite(kind) {
@@ -457,8 +457,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261012194624'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261012194624'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261012214945'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261012214945'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -2790,7 +2790,9 @@ function* buildPxBigGen(out) {
         if (d > 1 - rimW) k = 0;
         const rgb = PXB_RGB[k];
         img.data[i * 4] = rgb[0]; img.data[i * 4 + 1] = rgb[1]; img.data[i * 4 + 2] = rgb[2];
-        const patch = fade >= 1 ? 1 : Math.max(0, Math.min(1, fade * 1.8 - (1 - blur[i]) * 1.0 + (1 - d) * 0.2)); // smoke breaks up in blotches
+        // 10-12: soft blotchy smoke break-up (was a hard 0/1 screen-door that looked like a checker grid at the slowed rate);
+        // the overall fade-out is a smooth alpha ramp in drawPxBoom.
+        const patch = fade >= 1 ? 1 : Math.max(0.35, Math.min(1, 0.55 + fade * 0.6 + (blur[i] - 0.5) * 0.6));
         img.data[i * 4 + 3] = Math.round(255 * patch * (k === 0 ? 0.9 : 1));
       }
       g.putImageData(img, 0, 0); frames.push(c);
@@ -2898,6 +2900,17 @@ function drawPxBoom(ctx, f, sizeMul = 1) {
   const sd = Math.abs(Math.round((f.sd != null ? f.sd : f.x * 7 + f.y * 3)));
   const bv = f.big && _pxBig && _pxBig[sd % PXB_VAR];
   const bfr = bv && bv.length === PXB_N && bv[Math.floor(t * PXB_N)]; // 10-06 big-enemy burst frames
+  if (bfr) { // 10-12 (user: デカキャラの爆破が変): cross-fade frames + smooth alpha tail + gentle billow → no stutter / checker / pop-off
+    const ft = t * PXB_N - 0.5, i0 = Math.max(0, Math.min(PXB_N - 1, Math.floor(ft))), i1 = Math.min(PXB_N - 1, i0 + 1), fr0 = Math.max(0, ft - i0);
+    const A = t < 0.5 ? 1 : Math.pow(Math.max(0, 1 - (t - 0.5) / 0.5), 1.6);
+    const D = (f.r || 42) * 2 * sizeMul * (1 + 0.05 * t);
+    const x = f.x - D / 2, y = f.y - D / 2;
+    ctx.save(); ctx.imageSmoothingEnabled = false;
+    ctx.globalAlpha = A; ctx.drawImage(bv[i0], x, y, D, D);
+    if (i1 !== i0 && fr0 > 0.02) { ctx.globalAlpha = A * fr0; ctx.drawImage(bv[i1], x, y, D, D); }
+    ctx.restore();
+    return;
+  }
   const v = _pxBoom[sd % PX_VAR] || _pxBoom[0];
   const fr = bfr || (v && v[Math.floor(t * PX_N)]);
   if (!fr) { // frames still being built (first second after load): cheap plain fireball
@@ -3319,46 +3332,28 @@ function drawDirectTimerHud(ctx, L, localState) {
 
 function drawLaser(ctx, player, fieldH) {
   if (player.activePower !== 'laser' || player.activeTimer <= 0) return;
-  // Straight forward staccato bolts — NO vertical weave (that looked like homing)
-  const now = performance.now();
+  // User 10-12 21:41: one shot every 0.5 s with 2× longer bolts (28 → 56 px). Each shot is a train of long bolts
+  // that streaks forward from the nose and fades before the next shot. Purely horizontal (never weaves).
+  const IV = 0.5;
+  const since = player.laserCd != null ? Math.max(0, IV - player.laserCd) : (performance.now() / 1000) % IV;
+  const LIFE = 0.34;
+  if (since > LIFE) return;
   const x0 = player.x + 16;
   const y = player.y * fieldH;
   const maxX = Math.max(x0 + 40, fieldH * 2.2);
-  const span = maxX - x0;
-  const boltLen = 28;
-  const spacing = 52;
-  // Sliding wave of bolts moving purely on +X
-  const scroll = (now * 0.55) % spacing;
-
+  const head = Math.min(maxX, x0 + since * 3200);
+  const boltLen = 56, spacing = 80;
+  const fade = 1 - since / LIFE;
   ctx.save();
   ctx.lineCap = 'round';
   ctx.shadowColor = '#4af';
-
-  for (let x = x0 + scroll; x < maxX; x += spacing) {
-    // Blink each bolt briefly
-    const phase = ((now / 30) + x * 0.05) % 1;
-    if (phase > 0.55) continue;
-    const a = 0.55 + 0.45 * (1 - phase / 0.55);
-    const xA = x;
-    const xB = Math.min(maxX, x + boltLen);
-
-    ctx.globalAlpha = a * 0.9;
-    ctx.strokeStyle = '#66ddff';
-    ctx.lineWidth = 7;
-    ctx.shadowBlur = 14;
-    ctx.beginPath();
-    ctx.moveTo(xA, y);
-    ctx.lineTo(xB, y);
-    ctx.stroke();
-
-    ctx.globalAlpha = a;
-    ctx.strokeStyle = '#eefcff';
-    ctx.lineWidth = 2.4;
-    ctx.shadowBlur = 5;
-    ctx.beginPath();
-    ctx.moveTo(xA, y);
-    ctx.lineTo(xB, y);
-    ctx.stroke();
+  for (let x = x0; x < head; x += spacing) {
+    const xB = Math.min(head, x + boltLen);
+    const a = fade * (0.6 + 0.4 * (1 - (head - x) / Math.max(1, maxX - x0)));
+    ctx.globalAlpha = a * 0.9; ctx.strokeStyle = '#66ddff'; ctx.lineWidth = 8; ctx.shadowBlur = 16;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(xB, y); ctx.stroke();
+    ctx.globalAlpha = a; ctx.strokeStyle = '#eefcff'; ctx.lineWidth = 2.8; ctx.shadowBlur = 5;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(xB, y); ctx.stroke();
   }
   ctx.restore();
 }
@@ -3926,7 +3921,9 @@ function drawFieldInner(ctx, area, snap, opts = {}) {
   }
 
   const fx = snap.fx || [];
-  for (const f of fx) {
+  // 10-12: coins first so a big-enemy blast covers the coin it drops (was a yellow chip popping through the fireball)
+  const fxOrd = fx.some((f) => (f.k ?? f.kind) === 'coin') ? [...fx.filter((f) => (f.k ?? f.kind) === 'coin'), ...fx.filter((f) => (f.k ?? f.kind) !== 'coin')] : fx;
+  for (const f of fxOrd) {
     const tg = f.t || null;
     drawFx(ctx, {
       x: f.x * sx, y: f.y * sy, life: f.l ?? f.life, max: f.m ?? f.max, r: (f.r || 14) * sx,
@@ -3964,6 +3961,7 @@ function drawFieldInner(ctx, area, snap, opts = {}) {
       else drawShip(ctx, px, py, 28 * Math.min(sx, 1.2), 18 * Math.min(sy, 1.2), shipColor, 1, ang);
     }
     if (!darkened && snap.player) drawLaser(ctx, snap.player, fh);
+    else if (!snap.player && snap.ap === 'laser' && !(snap.at <= 0)) drawLaser(ctx, { activePower: 'laser', activeTimer: 1, x: px, y: py / fh, laserCd: snap.lc }, fh); // COM / online opponent
   }
 
   // Bomb detonation: white → orange full-pane flash, then a fading warm tint

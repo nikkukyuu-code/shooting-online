@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-12 19:46:24';
+export const VERSION_LABEL = '2026-10-12 21:49:45';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1791801984000;
-export const BUILD_NOTE = '爆発演出を2倍の長さに・コアに近づいて攻撃すると1〜2秒後にランダムな反撃';
+export const BUILD_TIME = 1791809385000;
+export const BUILD_NOTE = '爆発を3割短く・デカ敵の爆発を自然に・レーザーを長く0.5秒ごとに発射';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
