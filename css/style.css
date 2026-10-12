@@ -2155,3 +2155,15 @@ html, body {
   #screen-menu .cpu-diff-block { padding-top: 3px; padding-bottom: 4px; gap: 2px; }
   #screen-menu .menu-btn.transfer-btn { padding-top: 4px; padding-bottom: 4px; }
 }
+
+/* Sub-screens: sections show full content; only the panel scrolls (one natural scroll) */
+#screen-deck .unit-detail, #screen-shop .unit-detail, #screen-zukan .unit-detail,
+#screen-deck .unit-grid, #screen-shop .unit-grid, #screen-zukan .unit-grid,
+#screen-deck .items-intro-list, #screen-shop .items-intro-list, #screen-zukan .items-intro-list {
+  max-height: none !important;
+  min-height: 0 !important;
+  height: auto !important;
+  overflow: visible !important;
+  flex: 0 0 auto !important;
+  overscroll-behavior: auto;
+}

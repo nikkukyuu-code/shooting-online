@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-13 02:21:25';
+export const VERSION_LABEL = '2026-10-13 02:37:37';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1791825685560;
-export const BUILD_NOTE = 'デッキ・ショップのアイテム紹介が「メニューへ」と重なる表示を修正';
+export const BUILD_TIME = 1791826657446;
+export const BUILD_NOTE = 'デッキ・ショップ・図鑑の各セクションを切れずに全部表示（パネル全体でスクロール）';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
