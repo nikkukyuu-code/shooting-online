@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-12 04:50:25';
+export const VERSION_LABEL = '2026-10-12 16:33:56';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1791748225000;
-export const BUILD_NOTE = 'ヘビの頭は普通に撃墜できる部位に・コア撃破で配下全体が連鎖爆破';
+export const BUILD_TIME = 1791790436000;
+export const BUILD_NOTE = 'ボム発動の瞬間に下の操作画面が消える不具合を修正';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

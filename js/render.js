@@ -1,7 +1,7 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261012045025';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261012163356';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -370,7 +370,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261012045025`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261012163356`;
 }
 
 function loadKindSprite(kind) {
@@ -456,8 +456,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261012045025'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261012045025'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261012163356'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261012163356'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -2154,7 +2154,7 @@ function drawItem(ctx, it) {
   ctx.strokeStyle = 'rgba(0,0,0,0.45)';
   ctx.lineWidth = 1.2;
   ctx.beginPath();
-  ctx.arc(0, 0, R - 2.2, 0, Math.PI * 2);
+  ctx.arc(0, 0, Math.max(0, R - 2.2), 0, Math.PI * 2);
   ctx.stroke();
 
   // Icon — large, dark, fitted inside the orb (2-char icons shrink to fit)
@@ -2434,7 +2434,7 @@ function drawBombFx(ctx, f) {
       ctx.beginPath(); ctx.arc(cx, cy, rg.r, 0, Math.PI * 2); ctx.stroke();
       ctx.strokeStyle = `rgba(${rg.core},${0.95 * rg.a})`;
       ctx.lineWidth = Math.max(1.5, rg.w * 0.25 * sc);
-      ctx.beginPath(); ctx.arc(cx, cy, rg.r - rg.w * 0.2 * sc, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, cy, Math.max(0, rg.r - rg.w * 0.2 * sc), 0, Math.PI * 2); ctx.stroke(); // 10-12: never negative (IndexSizeError broke the HUD)
     }
 
     // 4) Smoke puffs (lingering, drift up)
@@ -2623,7 +2623,7 @@ function drawHealFx(ctx, f) {
     ctx.strokeStyle = `rgba(255,255,255,${aa * 0.7})`;
     ctx.lineWidth = 1.4 * sc;
     ctx.beginPath();
-    ctx.arc(cx, cy, rr - 2 * sc, 0, Math.PI * 2);
+    ctx.arc(cx, cy, Math.max(0, rr - 2 * sc), 0, Math.PI * 2);
     ctx.stroke();
   }
 
@@ -3784,7 +3784,26 @@ function drawCoreBonds(ctx, groups, sx, sy, pass) {
 }
 
 /** Draw one field into a clipped region. `snap` is local state or remote snapshot. */
+/** 10-12 bug 「ボムを爆発した瞬間 下の操作画面が消えた」: an exception inside a pane left its ctx.save()+clip on the
+ *  stack, so every later pane (control panel, info, HUD) was clipped away for the rest of the match.
+ *  Unwind the whole canvas state stack (restore() on an empty stack is a no-op) and reset drawing state. */
+function resetCtxState(ctx) {
+  for (let i = 0; i < 64; i++) ctx.restore();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  ctx.shadowBlur = 0; ctx.shadowColor = 'rgba(0,0,0,0)';
+  if ('filter' in ctx) ctx.filter = 'none';
+}
+let _paneErrLogged = 0;
+/** Draw a stage pane; a throw inside it is contained so the other panes (bottom controls) still draw. */
 export function drawField(ctx, area, snap, opts = {}) {
+  try { drawFieldInner(ctx, area, snap, opts); }
+  catch (err) {
+    resetCtxState(ctx);
+    if (_paneErrLogged++ < 3) console.warn('pane draw error (contained)', err);
+  }
+}
+function drawFieldInner(ctx, area, snap, opts = {}) {
   const { darkened = false } = opts;
   ctx.save();
   ctx.beginPath();
@@ -3978,6 +3997,7 @@ function coreFlashAlpha(ff) {
 }
 
 export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
+  resetCtxState(ctx); // never inherit a stuck clip / transform from a previous frame
   ctx.clearRect(0, 0, L.W, L.H);
 
   const localSnap = {
@@ -4044,7 +4064,8 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
   const selfHpShown = koHp && Number.isFinite(koHp.self) ? koHp.self : null;
 
   // 3) Control — 操作画面 (purple/blue nebula pad)
-  drawControlPanel(ctx, L.ctrl, localState);
+  try { drawControlPanel(ctx, L.ctrl, localState); }
+  catch (err) { resetCtxState(ctx); if (_paneErrLogged++ < 3) console.warn('control pane draw error (contained)', err); }
 
   // Divider between own and control
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
