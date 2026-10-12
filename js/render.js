@@ -1,7 +1,8 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261012164826';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261012194624';
+import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261012194624';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -370,7 +371,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261012164826`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261012194624`;
 }
 
 function loadKindSprite(kind) {
@@ -456,8 +457,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261012164826'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261012164826'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261012194624'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261012194624'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -3863,6 +3864,23 @@ function drawFieldInner(ctx, area, snap, opts = {}) {
     });
   }
   if (bonds.length) drawCoreBonds(ctx, bonds, sx, sy, 1);
+  // User 10-12: core counterattack telegraph (charging glow, colour per pattern) — local + online snapshot
+  for (const e of enemies) {
+    const t = counterTele(e) || (e.kt != null ? { p: e.kt, q: e.kq || 0, x: e.kx, y: e.ky } : null);
+    if (!t || t.x == null) continue;
+    const col = (COUNTER_PATTERNS[t.p] || COUNTER_PATTERNS[0]).col, k = Math.min(sx, sy);
+    const x = t.x * sx, y = t.y * sy, pul = 0.5 + 0.5 * Math.sin(performance.now() / 45);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const R = (14 + 26 * t.q) * k;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, R * 1.6);
+    g.addColorStop(0, col); g.addColorStop(0.45, col + '88'); g.addColorStop(1, col + '00');
+    ctx.globalAlpha = 0.55 + 0.35 * pul; ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, R * 1.6, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.9; ctx.strokeStyle = col; ctx.lineWidth = 3 * k;
+    ctx.beginPath(); ctx.arc(x, y, (48 - 34 * t.q) * k, 0, Math.PI * 2); ctx.stroke(); // ring closing in = about to fire
+    ctx.restore();
+  }
   // User 10-04d: core life gauge above every core unit (attached guard units stay bar-less)
   for (const e of enemies) {
     if (e._coreSeg) continue; // snake head: its core (and gauge) is the orange body ball

@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261012164826';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261012194624';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,15 +6,17 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261012164826';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261012164826';
-import { sfx } from './audio.js?v=20261012164826';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261012164826';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261012164826';
-import { hitBattleCounter } from './stats.js?v=20261012164826';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261012164826';
-import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261012164826';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261012164826';
+} from './entities.js?v=20261012194624';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261012194624';
+import { sfx } from './audio.js?v=20261012194624';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261012194624';
+import { fxRate } from './entities.js?v=20261012194624';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261012194624';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261012194624';
+import { hitBattleCounter } from './stats.js?v=20261012194624';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261012194624';
+import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261012194624';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261012194624';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1892,7 +1894,7 @@ export class Game {
           if (Math.abs(e.y - ly) < e.h * 0.55 + 8 && e.x > P.x) {
             // 10-04b: up to 10 hits per tick by hull width, a small explosion at every hit
             const bh = applyLaserTick(e, ly, S.fx, P.x);
-            if (bh === 'core') this.onCoreBreak(e, S.fx, true, S.enemies); else if (bh === 'corehit') this.fieldFlash(S, 'hit');
+            if (bh === 'core') this.onCoreBreak(e, S.fx, true, S.enemies); else if (bh === 'corehit') { this.fieldFlash(S, 'hit'); noteCoreHit(e, P.x, P.y * fh, fw, S.time); }
           }
         }
       }
@@ -2018,7 +2020,8 @@ export class Game {
         if (S.coinHud) { S.coinLastGold = got >= 30; S.coinPop = { n: got, t: performance.now() / 1000, gold: got >= 30 }; } // animated at the HUD counter (render.js drawCoinHud)
       }
     }
-    for (const f of S.fx) f.life -= dt;
+    for (const f of S.fx) f.life -= dt * fxRate(f);
+    tickCounters(S.enemies, S.bullets, P.x, P.y * fh, dt, S.time);
 
     // Collisions player bullets -> enemies
     for (const b of S.bullets) {
@@ -2030,7 +2033,7 @@ export class Game {
           const r = applyCoreAwareHit(e, b.dmg || 1, b.x, b.y, S.fx);
           if (r.hit === 'none') continue;
           if (r.hit === 'core') this.onCoreBreak(e, S.fx, true, S.enemies);
-          else if (r.hit === 'corehit') this.fieldFlash(S, 'hit');
+          else if (r.hit === 'corehit') { this.fieldFlash(S, 'hit'); noteCoreHit(e, P.x, P.y * fh, fw, S.time); }
           if (!b.pierce) b.life = 0;
           break;
         }
@@ -2663,7 +2666,7 @@ export class Game {
           if (warping(e)) continue;
           if (e.x > shipX && Math.abs(e.y - by) < (e.h * 0.55 + 8)) {
             const bh = applyLaserTick(e, by, B.fx, shipX); // same rule as the player
-            if (bh === 'core') this.onCoreBreak(e, B.fx, false, B.enemies); else if (bh === 'corehit') this.fieldFlash(B, 'hit');
+            if (bh === 'core') this.onCoreBreak(e, B.fx, false, B.enemies); else if (bh === 'corehit') { this.fieldFlash(B, 'hit'); noteCoreHit(e, shipX, B.y * fh, fw, B.time); }
           }
         }
       }
@@ -2763,7 +2766,7 @@ export class Game {
           const r = applyCoreAwareHit(e, b.dmg || 1, b.x, b.y, B.fx);
           if (r.hit === 'none') continue;
           if (r.hit === 'core') this.onCoreBreak(e, B.fx, false, B.enemies);
-          else if (r.hit === 'corehit') this.fieldFlash(B, 'hit');
+          else if (r.hit === 'corehit') { this.fieldFlash(B, 'hit'); noteCoreHit(e, shipX, B.y * fh, fw, B.time); }
           if (!b.pierce) b.life = 0;
           break;
         }
@@ -2895,7 +2898,8 @@ export class Game {
     if (B.bullets.length > 100) B.bullets.length = 100;
     trimFx(B.fx, 120); // keep newest (hit sparks), never coins
     B.coinPt = (B.coinPt || 0) + tickCoins(B.fx, shipX, B.y * fh, dt);
-    for (const f of B.fx) f.life -= dt;
+    for (const f of B.fx) f.life -= dt * fxRate(f);
+    tickCounters(B.enemies, B.bullets, shipX, B.y * fh, dt, B.time);
     B.fx = B.fx.filter((f) => f.life > 0);
 
     // --- Smart item / power usage ---
@@ -3318,7 +3322,7 @@ export class Game {
       F.scroll = (F.scroll || 0) + 20 * sdt;
       for (const b of F.bullets || []) { b.x += (b.vx || 0) * sdt; b.y += (b.vy || 0) * sdt; }
       for (const e of F.enemies || []) e.x -= (e.speed || 40) * 0.5 * sdt;
-      for (const f of F.fx || []) f.life -= sdt;
+      for (const f of F.fx || []) f.life -= sdt * fxRate(f);
       if (F.fx) { const keep = F.fx.filter((f) => f.life > 0); F.fx.length = 0; F.fx.push(...keep); }
     };
     slowField(this.state);

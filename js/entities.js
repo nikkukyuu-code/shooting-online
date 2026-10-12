@@ -906,6 +906,11 @@ export function pushBigKillBooms(list, e, big = false) {
   }
 }
 
+/** User 10-12 19:39: every explosion animation plays 2× as long (same size/look) — FX life ticks at half
+ *  speed for explosion kinds. Not touched: core-hit flash, core-break flash, chain-pop scheduling, sparks. */
+export const BOOM_SLOW = 0.5;
+const BOOM_KINDS = new Set(['kboom', 'eclipse', 'chainboom', 'bomb']);
+export function fxRate(f) { return (f.kind == null || BOOM_KINDS.has(f.kind)) ? BOOM_SLOW : 1; }
 export function spawnExplosion(x, y, big = false) {
   return {
     x, y,
@@ -1070,7 +1075,7 @@ export function serializeField(state) {
     at: state.player.activeTimer,
     enemies: state.enemies.filter(e => !e._headDead && (e.kind !== 'wave_bubble' || e.x - (e.w || 0) / 2 < (state._fw || 1e9))).slice(0, 40).map(e => ({
       x: e.x, y: e.y, w: e.w, h: e.h, kind: e.kind, hp: e.hp, c: e.color, s: !!e.sent,
-      at2: (e._chainOf || e._lead) ? 1 : undefined, ch: e.core && !e._coreSeg ? e.core.hp : (e._coreBall && e._chainOf && e._chainOf.core ? e._chainOf.core.hp : undefined), cm: e.core && !e._coreSeg ? e.core.maxHp : (e._coreBall && e._chainOf && e._chainOf.core ? e._chainOf.core.maxHp : undefined), cb: e._coreBall ? 1 : undefined, cf: (e._coreBall ? (e._chainOf && e._chainOf._coreFlash) : e._coreFlash) > 0 ? 1 : undefined, bf: e._coreSeg && e._bodyFlash > 0 ? 1 : undefined, cs: e._sh ? e._sh.st : undefined, sk: e._shake > 0 ? 1 : undefined,
+      at2: (e._chainOf || e._lead) ? 1 : undefined, ch: e.core && !e._coreSeg ? e.core.hp : (e._coreBall && e._chainOf && e._chainOf.core ? e._chainOf.core.hp : undefined), cm: e.core && !e._coreSeg ? e.core.maxHp : (e._coreBall && e._chainOf && e._chainOf.core ? e._chainOf.core.maxHp : undefined), cb: e._coreBall ? 1 : undefined, cf: (e._coreBall ? (e._chainOf && e._chainOf._coreFlash) : e._coreFlash) > 0 ? 1 : undefined, bf: e._coreSeg && e._bodyFlash > 0 ? 1 : undefined, cs: e._sh ? e._sh.st : undefined, kt: e._ctr && e._ctr.t < 0.5 ? e._ctr.p : undefined, kq: e._ctr && e._ctr.t < 0.5 ? +Math.min(1, 1 - e._ctr.t / 0.5).toFixed(2) : undefined, kx: e._ctr && e._ctr.t < 0.5 ? Math.round(e._ctr.cx) : undefined, ky: e._ctr && e._ctr.t < 0.5 ? Math.round(e._ctr.cy) : undefined, sk: e._shake > 0 ? 1 : undefined,
       dr: e.drones ? e.drones.map(d => d.hp) : undefined,
       sp: e.spr || undefined, ro: e.rot || undefined, tn: e.tone || undefined,
       pA: e._chainOf && e._chainOf._portalA != null && e._chainOf._portalA < 1 ? +e._chainOf._portalA.toFixed(2) : undefined, // snake portal fade-in
