@@ -1,8 +1,8 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261013013404';
-import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261013013404';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261013014317';
+import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261013014317';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -371,7 +371,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261013013404`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261013014317`;
 }
 
 function loadKindSprite(kind) {
@@ -457,8 +457,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261013013404'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261013013404'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261013014317'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261013014317'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -2923,28 +2923,132 @@ function drawPxBoom(ctx, f, sizeMul = 1) {
   ctx.drawImage(fr, Math.round(f.x - D / 2), Math.round(f.y - D / 2), Math.round(D), Math.round(D));
   ctx.restore();
 }
-function buildPxCoin() {
-  const mk = (cols) => {
-    const S = 12, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
-    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-      const d = Math.hypot(x - S / 2 + 0.5, y - S / 2 + 0.5) / (S / 2);
-      if (d > 1) continue;
-      g.fillStyle = d > 0.8 ? cols[0] : (d > 0.58 && d < 0.72) ? cols[1] : (x < S / 2 - 1 && y < S / 2 - 1 && d < 0.5) ? cols[3] : cols[2];
-      g.fillRect(x, y, 1, 1);
-    }
-    return c;
+// 10-13: rich coin — smooth gradients, rim + inner relief, specular, 3D spin with edge thickness,
+// star glint, warm glow. All frames pre-rendered once per metal (offscreen canvases), drawn smoothed.
+const COIN_FR = 32, COIN_RES = 64; // spin frames per turn; texture px for the full coin diameter
+const COIN_PAL = {
+  gold: { dk: '#6b3c00', md: '#b87a08', hi: '#ffd84a', lt: '#fff6c2', rim0: '#ffe680', rim1: '#8a5200', edge: '#9a6008', glow: '255,196,60' },
+  silver: { dk: '#3f4652', md: '#8a94a4', hi: '#e8edf5', lt: '#ffffff', rim0: '#ffffff', rim1: '#4e5664', edge: '#6e7684', glow: '200,225,255' },
+};
+function buildRichCoin(P) {
+  const R = COIN_RES / 2, pad = 2, S = COIN_RES + pad * 2;
+  // flat face texture (front, full width)
+  const face = document.createElement('canvas'); face.width = face.height = S;
+  const g = face.getContext('2d'), c = S / 2;
+  const disc = (rr, fill) => { g.beginPath(); g.arc(c, c, rr, 0, Math.PI * 2); g.fillStyle = fill; g.fill(); };
+  let gr = g.createLinearGradient(c - R, c - R, c + R, c + R);
+  gr.addColorStop(0, P.rim0); gr.addColorStop(0.45, P.hi); gr.addColorStop(1, P.rim1);
+  disc(R, gr); // outer rim (bevel lit top-left)
+  gr = g.createLinearGradient(c - R, c - R, c + R, c + R);
+  gr.addColorStop(0, P.rim1); gr.addColorStop(1, P.rim0);
+  disc(R * 0.84, gr); // inner bevel (inverse light = recessed)
+  gr = g.createRadialGradient(c - R * 0.3, c - R * 0.35, R * 0.05, c, c, R * 0.8);
+  gr.addColorStop(0, P.lt); gr.addColorStop(0.35, P.hi); gr.addColorStop(0.8, P.md); gr.addColorStop(1, P.dk);
+  disc(R * 0.78, gr); // field
+  // embossed star relief
+  const star = (ox, oy, col) => {
+    g.beginPath();
+    for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = (i % 2 ? 0.2 : 0.47) * R; g.lineTo(c + ox + Math.cos(a) * rr, c + oy + Math.sin(a) * rr); }
+    g.closePath(); g.fillStyle = col; g.fill();
   };
-  return { gold: mk(['#8a5a00', '#c89000', '#f8d828', '#fff8b0']), silver: mk(['#5c6470', '#8f98a6', '#dde3ec', '#ffffff']) };
+  star(R * 0.06, R * 0.07, P.dk); star(-R * 0.05, -R * 0.05, P.lt);
+  gr = g.createLinearGradient(c - R * 0.4, c - R * 0.4, c + R * 0.4, c + R * 0.4);
+  gr.addColorStop(0, P.hi); gr.addColorStop(1, P.md); star(0, 0, gr);
+  // specular streak (clipped to coin)
+  g.save(); g.beginPath(); g.arc(c, c, R, 0, Math.PI * 2); g.clip();
+  g.globalCompositeOperation = 'lighter';
+  gr = g.createRadialGradient(c - R * 0.42, c - R * 0.48, 0, c - R * 0.42, c - R * 0.48, R * 0.5);
+  gr.addColorStop(0, 'rgba(255,255,255,0.75)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, S, S);
+  g.restore();
+  g.lineWidth = 1.5; g.strokeStyle = P.dk; g.beginPath(); g.arc(c, c, R - 0.5, 0, Math.PI * 2); g.stroke();
+  // spin frames
+  const frames = [];
+  for (let i = 0; i < COIN_FR; i++) {
+    const a = (i / COIN_FR) * Math.PI * 2, k = Math.cos(a), ak = Math.abs(k), sn = Math.sin(a);
+    const cv = document.createElement('canvas'); cv.width = cv.height = S; const h = cv.getContext('2d');
+    const w = Math.max(0.06, ak) * R, th = R * 0.16 * Math.sqrt(1 - ak * ak); // edge thickness grows edge-on
+    const off = sn >= 0 ? th / 2 : -th / 2;
+    // edge band (ridged side)
+    if (th > 0.4) {
+      h.save(); h.translate(c - off, c);
+      const eg = h.createLinearGradient(0, -R, 0, R);
+      eg.addColorStop(0, P.hi); eg.addColorStop(0.3, P.edge); eg.addColorStop(0.7, P.dk); eg.addColorStop(1, P.edge);
+      h.fillStyle = eg; h.beginPath(); h.ellipse(0, 0, w, R, 0, 0, Math.PI * 2); h.fill();
+      h.fillRect(0, -R, off * 2, R * 2);
+      h.restore();
+      h.save(); h.globalAlpha = 0.35; h.fillStyle = P.dk;
+      for (let y = -R + 2; y < R; y += 3) h.fillRect(Math.min(c - off, c + off) + (sn >= 0 ? -w : w) * 0 , c + y, Math.abs(off * 2), 1);
+      h.restore();
+    }
+    h.save(); h.translate(c + off, c); h.scale(Math.max(0.06, ak), 1);
+    h.drawImage(face, -c, -c);
+    // shading change with angle: darker when turned away, brighter sheen sweep
+    h.globalCompositeOperation = 'source-atop';
+    h.fillStyle = `rgba(40,20,0,${(1 - ak) * 0.45})`; h.fillRect(-c, -c, S, S);
+    const sx = sn * R * 0.9;
+    const sg = h.createLinearGradient(sx - R * 0.5, -R, sx + R * 0.5, R);
+    sg.addColorStop(0, 'rgba(255,255,255,0)'); sg.addColorStop(0.5, `rgba(255,255,240,${0.25 + 0.3 * ak})`); sg.addColorStop(1, 'rgba(255,255,255,0)');
+    h.globalCompositeOperation = 'lighter'; h.globalAlpha = 0.9;
+    h.save(); h.beginPath(); h.arc(0, 0, R, 0, Math.PI * 2); h.clip(); h.fillStyle = sg; h.fillRect(-c, -c, S, S); h.restore();
+    h.restore();
+    frames.push(cv);
+  }
+  // soft warm glow sprite
+  const gl = document.createElement('canvas'); gl.width = gl.height = 64; const q = gl.getContext('2d');
+  const gg = q.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gg.addColorStop(0, `rgba(${P.glow},0.55)`); gg.addColorStop(0.45, `rgba(${P.glow},0.22)`); gg.addColorStop(1, `rgba(${P.glow},0)`);
+  q.fillStyle = gg; q.fillRect(0, 0, 64, 64);
+  return { frames, glow: gl, S, pad };
 }
-
-/** Spinning coin (video: flat yellow disc whose width flips; gold bigger than silver). */
+let _glint = null;
+function glintSprite() {
+  if (_glint) return _glint;
+  const c = document.createElement('canvas'); c.width = c.height = 48; const g = c.getContext('2d');
+  g.translate(24, 24); g.globalCompositeOperation = 'lighter';
+  const ray = (len, wid) => { const gr = g.createLinearGradient(-len, 0, len, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.beginPath(); g.moveTo(-len, 0); g.lineTo(0, -wid); g.lineTo(len, 0); g.lineTo(0, wid); g.fill(); };
+  ray(23, 2.2); g.rotate(Math.PI / 2); ray(23, 2.2); g.rotate(Math.PI / 4); ray(11, 1.4); g.rotate(Math.PI / 2); ray(11, 1.4);
+  const rg = g.createRadialGradient(0, 0, 0, 0, 0, 7); rg.addColorStop(0, 'rgba(255,255,230,1)'); rg.addColorStop(1, 'rgba(255,240,180,0)');
+  g.fillStyle = rg; g.fillRect(-8, -8, 16, 16);
+  return (_glint = c);
+}
+function drawGlint(ctx, x, y, s, a) {
+  if (a <= 0.01 || s <= 0) return;
+  ctx.save(); ctx.globalAlpha = Math.min(1, a); ctx.globalCompositeOperation = 'lighter';
+  ctx.drawImage(glintSprite(), x - s / 2, y - s / 2, s, s); ctx.restore();
+}
+/** Spinning coin: same drawn size as before (height 2r, width ≤ 2r). */
 function drawCoin(ctx, f) {
-  if (!_pxCoin) _pxCoin = buildPxCoin();
-  const r = f.r || 6, k = Math.cos(f.ph || 0);
-  const w = Math.max(2, Math.abs(k) * r * 2);
-  ctx.save(); ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(f.g ? _pxCoin.gold : _pxCoin.silver, Math.round(f.x - w / 2), Math.round(f.y - r), Math.round(w), Math.round(r * 2));
-  if (Math.abs(k) < 0.3) { ctx.fillStyle = f.g ? '#c89000' : '#8f98a6'; ctx.fillRect(Math.round(f.x - 1), Math.round(f.y - r), 2, Math.round(r * 2)); } // edge-on rim
+  if (!_pxCoin) _pxCoin = { gold: buildRichCoin(COIN_PAL.gold), silver: buildRichCoin(COIN_PAL.silver) };
+  const C = f.g ? _pxCoin.gold : _pxCoin.silver;
+  const r = f.r || 6, ph = f.ph || 0;
+  const idx = ((Math.round((ph / (Math.PI * 2)) * COIN_FR) % COIN_FR) + COIN_FR) % COIN_FR;
+  const sc = (r * 2) / COIN_RES, D = C.S * sc;
+  ctx.save(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  const pulse = 0.85 + 0.15 * Math.sin(ph * 0.7);
+  ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = (f.g ? 0.42 : 0.3) * pulse;
+  const gs = r * 2.2; ctx.drawImage(C.glow, f.x - gs, f.y - gs, gs * 2, gs * 2);
+  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  ctx.drawImage(C.frames[idx], f.x - D / 2, f.y - D / 2, D, D);
+  // periodic star glint (phase-offset per coin via its own spin phase)
+  const gp = (ph * 0.16 + (f.g ? 0.3 : 0)) % 1, gt = gp < 0.22 ? Math.sin((gp / 0.22) * Math.PI) : 0;
+  if (gt > 0) drawGlint(ctx, f.x - r * 0.4 * Math.abs(Math.cos(ph)), f.y - r * 0.45, r * 2.1 * gt, gt);
+  ctx.restore();
+}
+/** Pickup: brief shine flash + small sparkle burst (visual only). */
+function drawCoinBurst(ctx, f) {
+  if (!_pxCoin) _pxCoin = { gold: buildRichCoin(COIN_PAL.gold), silver: buildRichCoin(COIN_PAL.silver) };
+  const C = f.g ? _pxCoin.gold : _pxCoin.silver;
+  const t = 1 - Math.max(0, f.life) / (f.max || 0.4), r = f.r || 6;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = Math.max(0, 1 - t) * 0.9;
+  const gs = r * (1.6 + t * 2.4); ctx.drawImage(C.glow, f.x - gs, f.y - gs, gs * 2, gs * 2);
+  drawGlint(ctx, f.x, f.y, r * (2.6 + 1.2 * Math.sin(t * Math.PI)), 1 - t);
+  const n = f.g ? 10 : 7;
+  for (let i = 0; i < n; i++) {
+    const a = i / n * Math.PI * 2 + (f.g ? 0.2 : 0.5), d = r * (0.6 + t * 2.0);
+    drawGlint(ctx, f.x + Math.cos(a) * d, f.y + Math.sin(a) * d, r * 0.9 * (1 - t), 1 - t);
+  }
   ctx.restore();
 }
 
@@ -2995,7 +3099,7 @@ function drawCoinHud(ctx, L, pt, lastGold, pop) {
   ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
   ctx.font = 'bold 13px sans-serif'; ctx.fillStyle = '#f2f2f2';
   ctx.fillText('今回のコイン', x0 + 8, y0 + 12);
-  drawCoin(ctx, { x: x0 + 20, y: y0 + 34, r: 11 * (1 + bump * 0.6), g: lastGold ? 1 : 0, ph: 0 });
+  drawCoin(ctx, { x: x0 + 20, y: y0 + 34, r: 11 * (1 + bump * 0.6), g: lastGold ? 1 : 0, ph: performance.now() / 1000 * 4 });
   ctx.save();
   ctx.translate(x1 - 8, y0 + 34); ctx.scale(1 + bump, 1 + bump);
   if (glow > 0) { ctx.shadowColor = gold ? '#ffd21e' : '#ffffff'; ctx.shadowBlur = (gold ? 18 : 10) * glow; }
@@ -3022,6 +3126,7 @@ function drawFx(ctx, f) {
   if (f.kind === 'bomb') { drawBombFx(ctx, f); return; }
   if (f.kind === 'heal') { drawHealFx(ctx, f); return; }
   if (f.kind === 'coin') { drawCoin(ctx, f); return; }
+  if (f.kind === 'coinburst') { drawCoinBurst(ctx, f); return; }
   if (f.kind === 'kboom') { drawPxBoom(ctx, f); return; }
   if (f.kind === 'eclipse') { drawEclipse(ctx, f); return; }
   if (f.kind === 'ptpop') { drawPtPop(ctx, f); return; }
@@ -4129,3 +4234,5 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
 }
 
 
+
+export const _coinTest = { drawCoin, drawCoinBurst };

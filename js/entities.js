@@ -1000,7 +1000,7 @@ export function tickCoins(fxList, sx, sy, dt) {
     c.x += c.vx * dt; c.y += c.vy * dt;
     c.life = Math.max(c.life, 1); // never expire before it reaches the ship
     // 10-04d: pickup radius 10+0.6r → 18+0.9r
-    if (Math.hypot(sx - c.x, sy - c.y) < 18 + c.r * 0.9 || c.age > 5) { c.life = 0; pt += c.g ? COIN_GOLD_PT : COIN_SILVER_PT; }
+    if (Math.hypot(sx - c.x, sy - c.y) < 18 + c.r * 0.9 || c.age > 5) { c.life = 0; pt += c.g ? COIN_GOLD_PT : COIN_SILVER_PT; fxList.push({ kind: 'coinburst', x: c.x, y: c.y, life: 0.4, max: 0.4, r: c.r, g: c.g }); } // 10-13: visual-only shine burst
   }
   return pt;
 }
