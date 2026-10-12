@@ -1,14 +1,14 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261013011046';
-import { Net } from './net.js?v=20261013011046';
-import { Game } from './game.js?v=20261013011046';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261013011046';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261013011046';
-import { resetDeckToDefault } from './meta.js?v=20261013011046';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261013011046';
-import { loadBattleCount } from './stats.js?v=20261013011046';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261013011046';
-import { ALL_KIND_IDS } from './catalog.js?v=20261013011046';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261013011046';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261013013404';
+import { Net } from './net.js?v=20261013013404';
+import { Game } from './game.js?v=20261013013404';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261013013404';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261013013404';
+import { resetDeckToDefault } from './meta.js?v=20261013013404';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261013013404';
+import { loadBattleCount } from './stats.js?v=20261013013404';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261013013404';
+import { ALL_KIND_IDS } from './catalog.js?v=20261013013404';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261013013404';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -150,7 +150,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261013011046`;
+  return `assets/enemies/${id}/0.png?v=20261013013404`;
 }
 
 function unitName(id) {

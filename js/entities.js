@@ -371,9 +371,9 @@ export function isChainable(o) {
   if (typeof o.kind !== 'string' || !o.kind.startsWith('wave_')) return false;
   return !LARGE_ENEMY_TIERS.has(resolveEnemyTier(o.kind));
 }
-/** Original (old src 0:41.467 break → first attached-unit pop 0:42.533): the pack waits until the 0.9 s flash is over,
- *  then pops from the core outward. Was 0.12 s. */
-export const CHAIN_FIRST = 1.07;
+/** User 10-13 01:19: half the delay from core explosion to first guard chain pop (was 1.07 → 0.535).
+ *  CHAIN_STEP / core-hit 0.3 s / core-break flash unchanged. All core types + snake, both fields. */
+export const CHAIN_FIRST = 0.535;
 export const CHAIN_STEP = 0.05; // user 10-10 23:59: half (was 0.1); 10-10: = original footage (one pop per 10 fps game frame, bottom→top); was 0.04 — s between consecutive chain pops; user 10-06: half (was 0.08) — every core type, both fields
 export function markCoreChain(e, list) {
   const c = coreWorld(e) || e;
@@ -933,8 +933,8 @@ export function spawnExplosion(x, y, big = false) {
  */
 export const LASER_HIT_DMG = 0.5 / 3; // 10-04: laser power 1/3 (was 0.5)
 export const LASER_MAX_HITS = 10;
-/** User 10-12 21:41: laser item fires once every 0.5 s (was a 0.07 s tick); per-hit damage unchanged. */
-export const LASER_IV = 0.5;
+/** User 10-13 01:21: match ref video continuous staccato — restore 0.07 s tick (0.5 s was 10-12 pulse experiment). Per-hit damage unchanged. */
+export const LASER_IV = 0.07;
 export const FX_SOFT_CAP = 90; // phone guard: past this, laser booms reuse a cheaper life
 // User 10-04d: the widest enemy hull (boss tier, 184 px) is the 10-hit reference; others scale by width.
 export const LASER_W_MAX = Math.max(...Object.values(ENEMY_TIER_STATS).map((t) => t.w));

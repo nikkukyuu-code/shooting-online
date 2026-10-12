@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261013011046';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261013013404';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,17 +6,17 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261013011046';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261013011046';
-import { sfx } from './audio.js?v=20261013011046';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261013011046';
-import { fxRate } from './entities.js?v=20261013011046';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261013011046';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261013011046';
-import { hitBattleCounter } from './stats.js?v=20261013011046';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261013011046';
-import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261013011046';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261013011046';
+} from './entities.js?v=20261013013404';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261013013404';
+import { sfx } from './audio.js?v=20261013013404';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261013013404';
+import { fxRate } from './entities.js?v=20261013013404';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261013013404';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261013013404';
+import { hitBattleCounter } from './stats.js?v=20261013013404';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261013013404';
+import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261013013404';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261013013404';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1107,8 +1107,8 @@ export class Game {
     this.fieldFlash(mine ? this.state : this._bot, 'break');
     const chained = markCoreChain(e, list); // cascading yellow chain wipe of the pack around the core
     const cw = coreWorld(e) || e; // snake: the orange ball (its only core)
-    // Original footage (old src 0:41.467 = compare 0:14.47): the core just vanishes with the grey field flash —
-    // no blast at the core; the attached units pop 1.07 s later, one per game frame (0.1 s).
+    // Core vanishes with the grey field flash — no blast at the core; attached units pop after CHAIN_FIRST
+    // (0.535 s as of 10-13; was 1.07), then one per CHAIN_STEP (0.05 s).
     // (was: 0.9 s 'corebreak' ring + 2 big explosions at the core)
     void cw;
     if (!e._coreSeg || e._headDead) e._quietDeath = true; // a live snake head pops in the chain like the rest (user 10-12)
@@ -1887,7 +1887,7 @@ export class Game {
     if (P.activePower === 'laser' && P.activeTimer > 0) {
       P.laserCd = (P.laserCd || 0) - dt;
       if (P.laserCd <= 0) {
-        P.laserCd = LASER_IV; // user 10-12 21:41: 0.5秒に1回発射 (was 0.07)
+        P.laserCd = LASER_IV; // video-matched continuous tick (0.07; was 0.5 pulse 10-12)
         const ly = P.y * fh;
         for (const e of S.enemies) {
           if (warping(e)) continue;
