@@ -1,15 +1,15 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261014024752';
-import { Net } from './net.js?v=20261014024752';
-import { Game } from './game.js?v=20261014024752';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261014024752';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261014024752';
-import { resetDeckToDefault } from './meta.js?v=20261014024752';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261014024752';
-import { loadBattleCount } from './stats.js?v=20261014024752';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261014024752';
-import { ALL_KIND_IDS } from './catalog.js?v=20261014024752';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261014024752';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261014024752';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261014030743';
+import { Net } from './net.js?v=20261014030743';
+import { Game } from './game.js?v=20261014030743';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261014030743';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261014030743';
+import { resetDeckToDefault } from './meta.js?v=20261014030743';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261014030743';
+import { loadBattleCount } from './stats.js?v=20261014030743';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261014030743';
+import { ALL_KIND_IDS } from './catalog.js?v=20261014030743';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261014030743';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261014030743';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -153,7 +153,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261014024752`;
+  return `assets/enemies/${id}/0.png?v=20261014030743`;
 }
 
 function unitName(id) {
@@ -956,6 +956,8 @@ async function refreshMenuMedals() {
   if (nickEl) nickEl.textContent = me.nickname || DEFAULT_NICK;
   const shelf = document.getElementById('mm-shelf');
   if (!shelf) return;
+  const rkEl = document.getElementById('mm-rank');
+  if (rkEl) fetchRanking('week', 'top3').then((w) => { rkEl.textContent = w && w.ok ? rankText(w, '今週') : '今週 ―'; rkEl.classList.toggle('in', !!(w && w.me)); }).catch(() => {});
   if (!me.id) { shelf.replaceChildren(Object.assign(document.createElement('span'), { className: 'medal-none', textContent: 'COM「強い」でランキング参加' })); return; }
   const r = await fetchMedals([me.id]);
   if (!r.ok) { shelf.replaceChildren(Object.assign(document.createElement('span'), { className: 'medal-none', textContent: 'メダル（オフライン）' })); return; }
@@ -991,9 +993,9 @@ async function renderRanking() {
   const me = rankIdentity();
   meBox.replaceChildren();
   if (r.me) {
-    meBox.innerHTML = `あなたの順位 <b class="rk-me-rank">${r.me.rank}位</b><span class="rk-me-of">/ ${r.total}人</span><b class="rk-me-pt">${r.me.score.toLocaleString('ja-JP')}PT</b>`;
+    meBox.innerHTML = `あなたは <b class="rk-me-rank">${r.total}人中${r.me.rank}位</b><b class="rk-me-pt">${r.me.score.toLocaleString('ja-JP')}PT</b>`;
   } else {
-    meBox.textContent = me.id ? 'あなたの記録はまだありません（COM「強い」で勝つと記録）' : 'COM「強い」で勝つとランキングに参加できます';
+    meBox.innerHTML = `<b class="rk-me-rank">未参加（${r.total}人参加中）</b><span class="rk-me-of">COM「強い」で勝つと参加</span>`;
   }
   if (!r.top.length) {
     list.replaceChildren(Object.assign(document.createElement('li'), { className: 'rk-empty', textContent: 'まだ記録がありません' }));

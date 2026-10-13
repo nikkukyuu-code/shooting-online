@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261014024752';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261014030743';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,18 +6,18 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261014024752';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261014024752';
-import { sfx } from './audio.js?v=20261014024752';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261014024752';
-import { fxRate } from './entities.js?v=20261014024752';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261014024752';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261014024752';
-import { hitBattleCounter } from './stats.js?v=20261014024752';
-import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261014024752';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261014024752';
-import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261014024752';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261014024752';
+} from './entities.js?v=20261014030743';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261014030743';
+import { sfx } from './audio.js?v=20261014030743';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261014030743';
+import { fxRate } from './entities.js?v=20261014030743';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261014030743';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261014030743';
+import { hitBattleCounter } from './stats.js?v=20261014030743';
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261014030743';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261014030743';
+import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261014030743';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261014030743';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -3185,7 +3185,7 @@ export class Game {
       else {
         submitStrongResult(pt).then((r) => {
           const el = document.getElementById('end-rank-msg');
-          if (el && r && r.message) { el.textContent = r.message; el.hidden = false; el.classList.toggle('ok', !!r.ok); }
+          if (el && r && r.message) { const [a, b] = String(r.message).split('\n'); el.textContent = a; if (b) { const big = document.createElement('b'); big.className = 'end-rank-big'; big.textContent = b; el.append(document.createElement('br'), big); } el.hidden = false; el.classList.toggle('ok', !!r.ok); }
         }).catch(() => {});
       }
     }

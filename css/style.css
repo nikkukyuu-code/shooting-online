@@ -2205,7 +2205,10 @@ html, body {
 .mm-who { appearance: none; border: 0; background: rgba(255,255,255,0.08); color: #ffe9a8; border-radius: 8px; padding: 4px 6px; font: 800 0.8rem/1.1 inherit; font-family: inherit; display: flex; align-items: center; gap: 3px; max-width: 34%; cursor: pointer; flex-shrink: 0; }
 .mm-nick { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mm-edit { opacity: 0.8; font-size: 0.75rem; }
-.mm-shelf { flex: 1; min-width: 0; overflow: hidden; cursor: pointer; }
+.mm-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.mm-rank { font-weight: 900; font-size: 0.82rem; line-height: 1.15; color: #d8c79a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mm-rank.in { color: #ffd23a; text-shadow: 0 0 6px rgba(255,200,60,0.5); }
+.mm-shelf { min-width: 0; overflow: hidden; cursor: pointer; }
 .mm-rank-btn { appearance: none; flex-shrink: 0; border: 1px solid #ffd76a; border-radius: 9px; padding: 4px 8px; cursor: pointer;
   background: linear-gradient(180deg, #ffcf3a, #c98a06); color: #3a2200; font: 900 0.78rem/1 inherit; font-family: inherit; display: flex; align-items: center; gap: 2px; box-shadow: 0 2px 0 #7a5000; }
 .mm-rank-btn:active { transform: translateY(1px); box-shadow: none; }
@@ -2269,7 +2272,8 @@ html, body {
 .vs-nick { font-size: 0.9rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ffe39a; }
 .vs-side .medal-shelf { justify-content: center; max-width: 100%; }
 .vs-x { font: 900 1.2rem sans-serif; color: #ff5a5a; text-shadow: 0 0 8px rgba(255,80,80,0.7); flex-shrink: 0; }
-.end-rank-msg { font-size: 0.85rem; color: #ffd36a; margin: 4px 0; text-align: center; }
+.end-rank-msg { white-space: pre-line; font-size: 0.85rem; color: #ffd36a; margin: 4px 0; text-align: center; }
 .end-rank-msg.ok { color: #9fe8a8; }
+.end-rank-big { display: inline-block; margin-top: 4px; font-size: 1.35rem; color: #ffd23a; text-shadow: 0 0 8px rgba(255,200,60,0.5); }
 .vs-side .medal-shelf { width: 100%; min-width: 0; flex-wrap: wrap; justify-content: center; row-gap: 2px; }
 .nick-row button { padding: 10px 8px; border-radius: 9px; font-weight: 800; }

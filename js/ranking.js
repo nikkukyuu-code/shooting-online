@@ -7,7 +7,7 @@
  *   shootingOnline_rankSecret / _bak   secret key proving ownership of the id
  *   shootingOnline_nickname / _bak     nickname (server-confirmed, unique)
  */
-import { sealScore } from './seal.js?v=20261014024752';
+import { sealScore } from './seal.js?v=20261014030743';
 export const RANK_API = 'https://stb-ranking.nikkukyuu.workers.dev';
 const K_ID = 'shootingOnline_rankId';
 const K_SECRET = 'shootingOnline_rankSecret';
@@ -84,7 +84,15 @@ export function beginStrongMatch() {
   const m = _match;
   m.p = ensurePlayer().then((me) => {
     if (!me.ok) return null;
-    return api('/match/start', { method: 'POST', body: { id: me.id, secret: me.secret } }).then((r) => {
+    return api('/match/start', { method: 'POST', body: { id: me.id, secret: me.secret } }).then(async (r) => {
+      if (!r.ok && r.status === 401) {
+        // Server no longer knows this id (e.g. account removed): register again with the same nickname.
+        const re = await api('/register', { method: 'POST', body: { nickname: rankIdentity().nickname } });
+        if (re.ok) {
+          lsSet(K_ID, re.id); lsSet(K_SECRET, re.secret); lsSet(K_NICK, re.nickname);
+          r = await api('/match/start', { method: 'POST', body: { id: re.id, secret: re.secret } });
+        }
+      }
       if (r.ok) m.token = r.token;
       return r.ok ? r.token : null;
     });
@@ -103,13 +111,24 @@ export async function submitStrongResult(pt) {
     // Score is encrypted + signed (key derived from the single-use token); server rejects tampering.
     const sealed = await sealScore(token, { s: Math.max(0, Math.floor(pt) || 0), d: Math.round(performance.now() - m.t0) });
     const r = await api('/match/submit', { method: 'POST', body: { id: me.id, secret: me.secret, token, ...sealed } });
-    if (r.ok) return { ok: true, message: r.recorded ? `ランキングに記録しました（${r.pt.toLocaleString('ja-JP')}PT）` : '' };
+    if (r.ok) {
+      if (!r.recorded) return { ok: true, message: '' };
+      let msg = `ランキングに記録しました（${r.pt.toLocaleString('ja-JP')}PT）`;
+      const w = await fetchRanking('week', 'top3').catch(() => null);
+      if (w && w.ok) msg += '\n' + rankText(w, '今週');
+      return { ok: true, message: msg };
+    }
     return { ok: false, message: 'ランキング未登録：' + (r.message || '') };
   } catch (_) {
     return { ok: false, message: 'ランキング未登録（通信エラー）' };
   }
 }
 
+/** 「今週 3人中1位」 / 「今週 未参加（3人参加中）」 */
+export function rankText(r, prefix = '') {
+  const p = prefix ? prefix + ' ' : '';
+  return r && r.me ? `${p}${r.total}人中${r.me.rank}位` : `${p}未参加（${(r && r.total) || 0}人参加中）`;
+}
 export function fetchRanking(period, board, key) {
   const me = rankIdentity();
   const q = new URLSearchParams({ period, board });
