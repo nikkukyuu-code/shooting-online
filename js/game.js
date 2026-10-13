@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261014030743';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261014034922';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,18 +6,18 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261014030743';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261014030743';
-import { sfx } from './audio.js?v=20261014030743';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261014030743';
-import { fxRate } from './entities.js?v=20261014030743';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261014030743';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261014030743';
-import { hitBattleCounter } from './stats.js?v=20261014030743';
-import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261014030743';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261014030743';
-import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261014030743';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261014030743';
+} from './entities.js?v=20261014034922';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261014034922';
+import { sfx } from './audio.js?v=20261014034922';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261014034922';
+import { fxRate } from './entities.js?v=20261014034922';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261014034922';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261014034922';
+import { hitBattleCounter } from './stats.js?v=20261014034922';
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261014034922';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261014034922';
+import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261014034922';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261014034922';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -1313,8 +1313,7 @@ export class Game {
     }
     if (statusLabel) this.setStatus(statusLabel);
     const p = this.state.player;
-    p.activePower = null;
-    p.activeTimer = 0;
+    // (kept: a running timed weapon is NOT cancelled by instant items)
     setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
   }
 
@@ -1460,8 +1459,7 @@ export class Game {
         ));
       }
       this.state.fx.push(spawnExplosion(p.x + 30, by, false));
-      p.activePower = null;
-      p.activeTimer = 0;
+      // (kept: a running timed weapon is NOT cancelled by instant items)
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1000);
     } else if (id === 'bomb') {
       // Screen bomb: heavy damage to all enemies, clear nearby enemy bullets
@@ -1479,8 +1477,7 @@ export class Game {
       // Stage-wide bomb FX from the ship (front of list so it survives net snapshot slice)
       this.state.fx.unshift(spawnBombFx(p.x, p.y * this.L.own.h, this.L.own.w, this.L.own.h, targets));
       this.showItemBanner(meta, `（敵${hits}体）`);
-      p.activePower = null;
-      p.activeTimer = 0;
+      // (kept: a running timed weapon is NOT cancelled by instant items)
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1200);
     } else if (id === 'shock') {
       // Lightning: damage nearby enemies
@@ -1502,8 +1499,7 @@ export class Game {
       // Area FX drawn at the exact hit radius (front of list so it survives net snapshot slice)
       this.state.fx.unshift(spawnShockFx(p.x, py, SHOCK_RADIUS, targets));
       this.showItemBanner(meta, `（命中${hits}）`);
-      p.activePower = null;
-      p.activeTimer = 0;
+      // (kept: a running timed weapon is NOT cancelled by instant items)
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1200);
     } else if (id === 'rapid') {
       p.activePower = 'rapid';
@@ -1525,8 +1521,7 @@ export class Game {
         this.rainMeteors(this.state.meteors, fw, fh, p.y, 4, p.x);
       }
       this.showItemBanner(meta);
-      p.activePower = null;
-      p.activeTimer = 0;
+      // (kept: a running timed weapon is NOT cancelled by instant items)
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1600);
     } else if (id === 'heal') {
       const before = p.hp;
@@ -1535,8 +1530,7 @@ export class Game {
       this.state.hpDisplay = p.hp;
       this.state.healFlash = 0.7;
       this.showItemBanner(meta, `（+${p.hp - before}）`);
-      p.activePower = null;
-      p.activeTimer = 0;
+      // (kept: a running timed weapon is NOT cancelled by instant items)
       // Front of list so it survives net snapshot slice (like bomb / shock)
       this.state.fx.unshift(spawnHealFx(p.x + 8, p.y * this.L.own.h, false));
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1200);
@@ -1547,8 +1541,7 @@ export class Game {
       this.state.hpDisplay = p.hp;
       this.state.healFlash = 0.95;
       this.showItemBanner(meta, `（+${p.hp - before}）`);
-      p.activePower = null;
-      p.activeTimer = 0;
+      // (kept: a running timed weapon is NOT cancelled by instant items)
       this.state.fx.unshift(spawnHealFx(p.x + 8, p.y * this.L.own.h, true));
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1200);
     } else if (id === 'direct') {
@@ -1583,8 +1576,7 @@ export class Game {
       // v1.5.67+ extra items (貫通 / ビット / クラスター / 黒穴 / 凍結 / 反射 / バリア)
       const extra = useExItem(id, this.exField());
       if (extra) this.showItemBanner(meta, extra);
-      p.activePower = null;
-      p.activeTimer = 0;
+      // (kept: a running timed weapon is NOT cancelled by instant items)
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1400);
     }
   }

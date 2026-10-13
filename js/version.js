@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-14 03:07:43';
+export const VERSION_LABEL = '2026-10-14 03:49:22';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1791914863737;
-export const BUILD_NOTE = '自分の順位を「N人中M位」で表示';
+export const BUILD_TIME = 1791917362247;
+export const BUILD_NOTE = '回復・ボムなどの即時アイテムで武器（レーザー等）が止まる不具合を修正';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
