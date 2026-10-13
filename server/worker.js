@@ -4,13 +4,36 @@ const ORIGINS = ['https://nikkukyuu-code.github.io'];
 const LOCAL_RE = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 const MIN_MATCH_SEC = 20;          // server-measured token age before a submit is accepted
 const MAX_TOKEN_AGE_SEC = 20 * 60; // token expires
-const PT_CAP = 3000;               // life PT max 100×10 + coin PT allowance
+const SEAL_SECRET = 'SET_AT_DEPLOY'; // real value only in the deployed Worker (also embedded obfuscated in the client)
 const TOKENS_PER_HOUR_PLAYER = 30;
 const TOKENS_PER_HOUR_IP = 60;
 const REGISTER_PER_HOUR_IP = 10;
 const TYPES = ['day', 'week', 'month', 'year'];
 const BOARDS = ['top3', 'best'];
 const JST = 9 * 3600 * 1000;
+
+// Score sealing: AES-GCM + HMAC-SHA256, keys derived from SEAL_SECRET and the single-use match token.
+const b64d = (s) => Uint8Array.from(atob(String(s)), (c) => c.charCodeAt(0));
+async function sealKeys(token) {
+  const enc = new TextEncoder();
+  const a = await crypto.subtle.digest('SHA-256', enc.encode('enc|' + SEAL_SECRET + '|' + token));
+  const m = await crypto.subtle.digest('SHA-256', enc.encode('mac|' + SEAL_SECRET + '|' + token));
+  return {
+    aes: await crypto.subtle.importKey('raw', a, 'AES-GCM', false, ['decrypt']),
+    mac: await crypto.subtle.importKey('raw', m, { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']),
+  };
+}
+async function openSeal(token, b) {
+  if (typeof b.iv !== 'string' || typeof b.ct !== 'string' || typeof b.mac !== 'string' || b.ct.length > 4000) return null;
+  try {
+    const k = await sealKeys(token);
+    const ok = await crypto.subtle.verify('HMAC', k.mac, b64d(b.mac), new TextEncoder().encode(b.iv + '.' + b.ct));
+    if (!ok) return null;
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(b.iv) }, k.aes, b64d(b.ct));
+    const o = JSON.parse(new TextDecoder().decode(pt));
+    return o && o.t === token && typeof o.n === 'string' && o.n.length >= 8 ? o : null;
+  } catch (_) { return null; }
+}
 
 function cors(req) {
   const o = req.headers.get('Origin') || '';
@@ -164,17 +187,18 @@ export default {
         const b = await body(req);
         const p = await auth(env, b.id, b.secret);
         if (!p) return err(req, 'auth', '認証に失敗しました', 401);
-        if (typeof b.token !== 'string') return err(req, 'token', 'トークンがありません');
-        const pt = Number(b.pt);
-        if (!Number.isInteger(pt) || pt < 0) return err(req, 'pt', 'PTが不正です');
-        if (pt > PT_CAP) return err(req, 'cap', 'PTが上限を超えています', 422);
+        if (typeof b.token !== 'string' || b.token.length > 64) return err(req, 'token', 'トークンがありません');
+        const o = await openSeal(b.token, b);
+        if (!o) return err(req, 'seal', '記録の署名が不正です（改ざん）', 422);
+        const pt = Number(o.s);
+        if (!Number.isSafeInteger(pt) || pt < 0) return err(req, 'pt', 'PTが不正です');
         // Atomically consume the token (single use).
         const used = await env.DB.prepare('UPDATE tokens SET used_at = ?1 WHERE token = ?2 AND player_id = ?3 AND used_at IS NULL RETURNING issued_at').bind(now, b.token, p.id).first();
         if (!used) return err(req, 'token', 'トークンが無効か使用済みです', 409);
         const age = (now - used.issued_at) / 1000;
         if (age < MIN_MATCH_SEC) return err(req, 'fast', '試合時間が短すぎます', 422);
         if (age > MAX_TOKEN_AGE_SEC) return err(req, 'expired', 'トークンの期限切れです', 422);
-        if (Number.isFinite(Number(b.durationMs)) && Number(b.durationMs) / 1000 > age + 5) return err(req, 'time', '試合時間が一致しません', 422);
+        if (Number.isFinite(Number(o.d)) && Number(o.d) / 1000 > age + 5) return err(req, 'time', '試合時間が一致しません', 422);
         await closePeriods(env, now);
         if (pt === 0) return json(req, { ok: true, recorded: false });
         const k = periodKeys(now);

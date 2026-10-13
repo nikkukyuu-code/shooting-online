@@ -7,6 +7,7 @@
  *   shootingOnline_rankSecret / _bak   secret key proving ownership of the id
  *   shootingOnline_nickname / _bak     nickname (server-confirmed, unique)
  */
+import { sealScore } from './seal.js?v=20261014024752';
 export const RANK_API = 'https://stb-ranking.nikkukyuu.workers.dev';
 const K_ID = 'shootingOnline_rankId';
 const K_SECRET = 'shootingOnline_rankSecret';
@@ -99,7 +100,9 @@ export async function submitStrongResult(pt) {
     const token = m.token || await m.p;
     if (!token) return { ok: false, message: 'ランキング未登録（サーバーに接続できませんでした）' };
     const me = rankIdentity();
-    const r = await api('/match/submit', { method: 'POST', body: { id: me.id, secret: me.secret, token, pt: Math.max(0, Math.floor(pt) || 0), durationMs: Math.round(performance.now() - m.t0) } });
+    // Score is encrypted + signed (key derived from the single-use token); server rejects tampering.
+    const sealed = await sealScore(token, { s: Math.max(0, Math.floor(pt) || 0), d: Math.round(performance.now() - m.t0) });
+    const r = await api('/match/submit', { method: 'POST', body: { id: me.id, secret: me.secret, token, ...sealed } });
     if (r.ok) return { ok: true, message: r.recorded ? `ランキングに記録しました（${r.pt.toLocaleString('ja-JP')}PT）` : '' };
     return { ok: false, message: 'ランキング未登録：' + (r.message || '') };
   } catch (_) {
