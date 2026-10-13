@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-13 14:37:31';
+export const VERSION_LABEL = '2026-10-14 02:34:54';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1791869851823;
-export const BUILD_NOTE = '自動更新用PAGE_LABELを最新に同期（不要な再読み込みを解消）';
+export const BUILD_TIME = 1791912894010;
+export const BUILD_NOTE = '世界ランキング（COM強い）とメダルを追加';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

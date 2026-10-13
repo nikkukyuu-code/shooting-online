@@ -1,0 +1,14 @@
+CREATE TABLE IF NOT EXISTS players (id TEXT PRIMARY KEY, secret_hash TEXT NOT NULL, nickname TEXT NOT NULL, ip TEXT, created_at INTEGER NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS players_nick ON players(nickname);
+CREATE INDEX IF NOT EXISTS players_ip ON players(ip, created_at);
+CREATE TABLE IF NOT EXISTS tokens (token TEXT PRIMARY KEY, player_id TEXT NOT NULL, ip TEXT, issued_at INTEGER NOT NULL, used_at INTEGER);
+CREATE INDEX IF NOT EXISTS tokens_player ON tokens(player_id, issued_at);
+CREATE INDEX IF NOT EXISTS tokens_ip ON tokens(ip, issued_at);
+CREATE TABLE IF NOT EXISTS scores (id INTEGER PRIMARY KEY AUTOINCREMENT, player_id TEXT NOT NULL, pt INTEGER NOT NULL, created_at INTEGER NOT NULL, day TEXT NOT NULL, week TEXT NOT NULL, month TEXT NOT NULL, year TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS scores_day ON scores(day, player_id, pt);
+CREATE INDEX IF NOT EXISTS scores_week ON scores(week, player_id, pt);
+CREATE INDEX IF NOT EXISTS scores_month ON scores(month, player_id, pt);
+CREATE INDEX IF NOT EXISTS scores_year ON scores(year, player_id, pt);
+CREATE TABLE IF NOT EXISTS medals (period_type TEXT NOT NULL, period_key TEXT NOT NULL, board TEXT NOT NULL, rank INTEGER NOT NULL, player_id TEXT NOT NULL, pt INTEGER NOT NULL, awarded_at INTEGER NOT NULL, PRIMARY KEY (period_type, period_key, board, rank));
+CREATE INDEX IF NOT EXISTS medals_player ON medals(player_id);
+CREATE TABLE IF NOT EXISTS closed (period_type TEXT NOT NULL, period_key TEXT NOT NULL, closed_at INTEGER NOT NULL, PRIMARY KEY (period_type, period_key));

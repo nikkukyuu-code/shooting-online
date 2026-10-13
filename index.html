@@ -9,7 +9,7 @@
   <meta name="theme-color" content="#1a0a08" />
   <script>
   (function () {
-    var PAGE_LABEL = '2026-10-13 14:37:31';
+    var PAGE_LABEL = '2026-10-14 02:34:54';
     var busy = false;
     function check() {
       if (busy || window.__stbScreen === 'game' || document.visibilityState === 'hidden') return;
@@ -62,7 +62,7 @@
   }
   </script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=20261013143731" />
+  <link rel="stylesheet" href="css/style.css?v=20261014023454" />
 <link rel="apple-touch-icon" href="/shooting-online/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-title" content="スペトリ" />
 </head>
@@ -72,7 +72,7 @@
       <div class="sky sky-space" aria-hidden="true"></div>
       <div class="menu-pt" id="menu-pt" aria-live="polite">いまの持ちPT 0</div>
       <div class="menu-hero">
-        <img class="menu-hero-art" src="assets/title-hero.svg?v=20261013143731" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
+        <img class="menu-hero-art" src="assets/title-hero.svg?v=20261014023454" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
         <header class="menu-brand">
           <h1 class="game-title">スペーストリックバトル<span class="beta-badge">β版</span></h1>
           <p class="game-subtitle">オンライン対戦</p>
@@ -83,6 +83,11 @@
         <div class="cr-row" id="cr-normal"><span class="cr-diff">普通</span><span class="cr-rate">勝率 ―</span><span class="cr-rec">（0勝0敗）</span><span class="cr-lv">敵Lv <b class="cr-lv-n">1</b></span></div>
         <div class="cr-row" id="cr-strong"><span class="cr-diff cr-strong">強い</span><span class="cr-rate">勝率 ―</span><span class="cr-rec">（0勝0敗）</span><span class="cr-lv">敵Lv <b class="cr-lv-n">30</b></span></div>
         <p class="cr-note">勝率が上がるほど、敵が強くなります（敵Lv 最高<span id="cr-max">100</span>）</p>
+      </div>
+      <div class="menu-medals" id="menu-medals">
+        <button type="button" class="mm-who" id="btn-nick-edit" aria-label="ニックネームを変更"><span class="mm-nick" id="mm-nick">名無し</span><span class="mm-edit">✎</span></button>
+        <div class="mm-shelf" id="mm-shelf"></div>
+        <button type="button" class="mm-rank-btn" id="btn-ranking">🏆<span>ランキング</span></button>
       </div>
       <div class="menu-center">
       <div class="menu-panel">
@@ -115,7 +120,7 @@
         <p class="menu-hint">部屋名→入室（ゲスト）／部屋を作る（ホスト）</p>
         <a class="hub-link" href="https://nikkukyuu-code.github.io/">トップページへ</a>
         <div id="app-meta" class="app-meta">
-          <span id="app-version">2026-10-13 14:37:31</span>
+          <span id="app-version">2026-10-14 02:34:54</span>
           <span class="meta-sep">·</span>
           <span id="app-visits">アクセス …</span>
           <span class="meta-sep" hidden>·</span>
@@ -196,23 +201,78 @@
       </div>
     </section>
 
+    <section id="screen-ranking" class="screen sub-screen space-sub">
+      <div class="sky sky-space"></div>
+      <div class="sub-panel">
+        <header class="sub-head">
+          <h2>🏆 ランキング</h2>
+          <p class="sub-desc">COM対戦「強い」の勝利PTだけが記録されます（対人戦・普通は対象外）</p>
+        </header>
+        <div class="rk-nick">
+          <label for="rk-nick-input">ニックネーム</label>
+          <div class="rk-nick-row">
+            <input type="text" id="rk-nick-input" maxlength="12" autocomplete="off" enterkeyhint="done" placeholder="名無し" />
+            <button type="button" id="btn-rk-nick-save" class="rk-save">変更</button>
+          </div>
+          <p id="rk-nick-msg" class="rk-nick-msg" role="status" aria-live="polite"></p>
+        </div>
+        <div class="rk-tabs rk-period" role="tablist">
+          <button type="button" class="rk-tab" data-period="day">日間</button>
+          <button type="button" class="rk-tab active" data-period="week">週間</button>
+          <button type="button" class="rk-tab" data-period="month">月間</button>
+          <button type="button" class="rk-tab" data-period="year">年間</button>
+        </div>
+        <div class="rk-tabs rk-board" role="tablist">
+          <button type="button" class="rk-tab active" data-board="top3">ベスト3合計</button>
+          <button type="button" class="rk-tab" data-board="best">1試合最高</button>
+        </div>
+        <div class="rk-nav">
+          <button type="button" id="btn-rk-prev" class="rk-arrow" aria-label="前の期間">◀</button>
+          <div class="rk-when"><b id="rk-label">―</b><small id="rk-sub">集計中</small></div>
+          <button type="button" id="btn-rk-next" class="rk-arrow" aria-label="次の期間">▶</button>
+        </div>
+        <div id="rk-me" class="rk-me">―</div>
+        <ol id="rk-list" class="rk-list"></ol>
+        <details class="intro-panel rk-help">
+          <summary>メダルとルール</summary>
+          <div class="rk-help-body">
+            <p>各期間（日間・週間・月間・年間）の「ベスト3合計」と「1試合最高」で、期間が終わった時点の1〜3位に金・銀・銅メダルが贈られ、ずっと残ります。</p>
+            <p>週間は日曜0:00〜次の日曜0:00（日本時間）。長い期間ほど豪華なメダルです。</p>
+            <div id="rk-medal-sample" class="rk-medal-sample"></div>
+          </div>
+        </details>
+        <div class="sub-footer"><button type="button" id="btn-ranking-back" class="menu-btn">メニューへ</button></div>
+      </div>
+    </section>
+
     <section id="screen-game" class="screen">
       <canvas id="game" width="390" height="700"></canvas>
       <div id="ui-overlay">
         <button type="button" id="btn-stop" class="stop-btn">ストップ</button>
         <div id="match-timer" class="match-timer" hidden aria-live="polite"><span class="mt-main"></span><span class="mt-sub" hidden></span></div>
-        <div id="game-version" class="game-version">2026-10-13 14:37:31</div>
+        <div id="game-version" class="game-version">2026-10-14 02:34:54</div>
         <div id="status-bar" class="status-bar">対戦相手を待っています</div>
+        <div id="vs-medals" class="vs-medals hidden" aria-live="polite"></div>
       </div>
       <div id="end-overlay" class="end-overlay hidden">
         <p id="end-message"></p>
+        <p id="end-rank-msg" class="end-rank-msg" hidden></p>
         <button type="button" id="btn-again" class="menu-btn">メニューへ</button>
         <a class="hub-link hub-link-end" href="https://nikkukyuu-code.github.io/">トップページへ</a>
       </div>
     </section>
+    <div id="nick-dialog" class="nick-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="nick-dialog-title">
+      <div class="nick-box">
+        <p id="nick-dialog-title" class="nick-title">ニックネーム</p>
+        <input type="text" id="nick-dialog-input" maxlength="12" autocomplete="off" enterkeyhint="done" placeholder="名無し" />
+        <p class="nick-note">ランキングと対戦相手に表示されます（12文字まで）</p>
+        <p id="nick-dialog-msg" class="rk-nick-msg" role="status" aria-live="polite"></p>
+        <div class="nick-row"><button type="button" id="btn-nick-cancel" class="deck-reset-cancel">閉じる</button><button type="button" id="btn-nick-save" class="deck-reset-ok">決定</button></div>
+      </div>
+    </div>
   </div>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script type="module" src="js/main.js?v=20261013143731"></script>
+  <script type="module" src="js/main.js?v=20261014023454"></script>
 </body>
 </html>

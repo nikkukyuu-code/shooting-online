@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261013143731';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261014023454';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,17 +6,18 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261013143731';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261013143731';
-import { sfx } from './audio.js?v=20261013143731';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261013143731';
-import { fxRate } from './entities.js?v=20261013143731';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261013143731';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261013143731';
-import { hitBattleCounter } from './stats.js?v=20261013143731';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261013143731';
-import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261013143731';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261013143731';
+} from './entities.js?v=20261014023454';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261014023454';
+import { sfx } from './audio.js?v=20261014023454';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261014023454';
+import { fxRate } from './entities.js?v=20261014023454';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261014023454';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261014023454';
+import { hitBattleCounter } from './stats.js?v=20261014023454';
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261014023454';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261014023454';
+import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261014023454';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261014023454';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -539,7 +540,7 @@ export class Game {
       net.on('connected', (info) => {
         if (info && info.bot) return;
         if (!this.running || this.ended) return;
-        net.send({ type: 'hello', role: net.role });
+        net.send({ type: 'hello', role: net.role, ...(window.__stbRankHello ? window.__stbRankHello() : {}) });
         if (this.waiting && net.ready) this.beginMatch();
       });
     }
@@ -551,7 +552,7 @@ export class Game {
     // Handshake — send only if conn already open; otherwise connected handler will send
     if (net && !bot) {
       if (net.ready) {
-        net.send({ type: 'hello', role: net.role });
+        net.send({ type: 'hello', role: net.role, ...(window.__stbRankHello ? window.__stbRankHello() : {}) });
         // stay in waiting until mutual hello — also allow local start after short delay
         setTimeout(() => {
           if (this.waiting && net.ready) {
@@ -1608,6 +1609,9 @@ export class Game {
   onNet(msg) {
     if (!msg || !msg.type) return;
     if (msg.type === 'hello' || msg.type === 'start') {
+      if (msg.type === 'hello' && (msg.pid || msg.nick)) {
+        try { window.__stbShowVsMedals && window.__stbShowVsMedals({ pid: String(msg.pid || '').slice(0, 40), nick: String(msg.nick || '').slice(0, 12) }); } catch (_) {}
+      }
       this.beginMatch();
       return;
     }
@@ -3171,6 +3175,18 @@ export class Game {
       } catch (e) {
         console.warn('PT grant failed', e);
         this._ptReward = { gain: hp, total: hp, remainingHp: hp, mult: 1, label: '普通', base: hp };
+      }
+    }
+
+    // World ranking: COM「強い」 wins only (PvP / 普通 / tutorial never submitted). Best-effort, async.
+    if (this.useBot && !this.isOnline() && !this._tutorialMatch && this.comDifficulty === 'strong') {
+      const pt = won && this._ptReward ? this._ptReward.gain : 0;
+      if (!won) { try { cancelStrongMatch(); } catch (_) {} }
+      else {
+        submitStrongResult(pt).then((r) => {
+          const el = document.getElementById('end-rank-msg');
+          if (el && r && r.message) { el.textContent = r.message; el.hidden = false; el.classList.toggle('ok', !!r.ok); }
+        }).catch(() => {});
       }
     }
 

@@ -1,14 +1,15 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261013143731';
-import { Net } from './net.js?v=20261013143731';
-import { Game } from './game.js?v=20261013143731';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261013143731';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261013143731';
-import { resetDeckToDefault } from './meta.js?v=20261013143731';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261013143731';
-import { loadBattleCount } from './stats.js?v=20261013143731';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261013143731';
-import { ALL_KIND_IDS } from './catalog.js?v=20261013143731';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261013143731';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261014023454';
+import { Net } from './net.js?v=20261014023454';
+import { Game } from './game.js?v=20261014023454';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261014023454';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261014023454';
+import { resetDeckToDefault } from './meta.js?v=20261014023454';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261014023454';
+import { loadBattleCount } from './stats.js?v=20261014023454';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261014023454';
+import { ALL_KIND_IDS } from './catalog.js?v=20261014023454';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261014023454';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261014023454';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -24,6 +25,7 @@ const screens = {
   deck: $('#screen-deck'),
   shop: $('#screen-shop'),
   zukan: $('#screen-zukan'),
+  ranking: $('#screen-ranking'),
 };
 
 const els = {
@@ -78,6 +80,7 @@ function show(screen) {
   Object.values(screens).forEach((s) => s && s.classList.remove('active'));
   if (screens[screen]) screens[screen].classList.add('active');
   window.__stbScreen = screen;
+  if (screen === 'menu' && typeof refreshMenuMedals === 'function') setTimeout(() => { try { refreshMenuMedals(); } catch (_) {} }, 0);
   if (screen === 'menu' && window.__stbCheckUpdate) setTimeout(() => { if (window.__stbScreen === 'menu') window.__stbCheckUpdate(); }, 1500);
 }
 
@@ -150,7 +153,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261013143731`;
+  return `assets/enemies/${id}/0.png?v=20261014023454`;
 }
 
 function unitName(id) {
@@ -497,6 +500,8 @@ function goMenu() {
 function startGameSession({ bot = false, comDifficulty = 'strong' } = {}) {
   show('game');
   els.endOverlay.classList.add('hidden');
+  { const m = document.getElementById('end-rank-msg'); if (m) { m.hidden = true; m.textContent = ''; } }
+  { const v = document.getElementById('vs-medals'); if (v) { v.classList.add('hidden'); v.dataset.key = ''; } }
   game = new Game(els.canvas, {
     statusBar: els.statusBar,
     endOverlay: els.endOverlay,
@@ -572,6 +577,8 @@ function startCpuMatchNow(comDifficulty) {
   const label = comDifficulty === 'normal' ? 'COM対戦（普通・ライフPT×3）' : 'COM対戦（強い・ライフPT×10）';
   els.fieldFind.value = label;
   try {
+    // World ranking: only COM「強い」 gets a single-use server match token (best-effort, never blocks)
+    if (comDifficulty === 'strong') { try { beginStrongMatch(); } catch (_) {} }
     startGameSession({ bot: true, comDifficulty });
     game.beginMatch();
   } catch (e) {
@@ -931,3 +938,170 @@ loadBattleCount(document.getElementById('app-battles'));
 
 // 10-04k: warm up match assets in the background on the title screen
 setTimeout(() => { prepareMatchAssets().catch(() => {}); }, 300);
+
+
+/* ================= 世界ランキング・メダル (ranking.js) ================= */
+const rk = { period: 'week', board: 'top3', key: null, seq: 0 };
+
+function nickMsg(el, r, okText) {
+  if (!el) return;
+  if (r && r.ok) el.textContent = r.adjusted ? `${DUP_MSG}（${r.nickname}）` : (okText || `「${r.nickname}」に決まりました`);
+  else el.textContent = (r && r.message) || 'ランキングサーバーに接続できません';
+  el.classList.toggle('warn', !!(r && (!r.ok || r.adjusted)));
+}
+
+async function refreshMenuMedals() {
+  const me = rankIdentity();
+  const nickEl = document.getElementById('mm-nick');
+  if (nickEl) nickEl.textContent = me.nickname || DEFAULT_NICK;
+  const shelf = document.getElementById('mm-shelf');
+  if (!shelf) return;
+  if (!me.id) { shelf.replaceChildren(Object.assign(document.createElement('span'), { className: 'medal-none', textContent: 'COM「強い」でランキング参加' })); return; }
+  const r = await fetchMedals([me.id]);
+  if (!r.ok) { shelf.replaceChildren(Object.assign(document.createElement('span'), { className: 'medal-none', textContent: 'メダル（オフライン）' })); return; }
+  const entry = r.medals && r.medals[me.id];
+  if (entry && entry.nickname && nickEl) nickEl.textContent = entry.nickname;
+  shelf.replaceChildren(medalShelf(entry, { compact: true, max: 8 }));
+}
+
+function rkSetTabs() {
+  document.querySelectorAll('#screen-ranking [data-period]').forEach((b) => b.classList.toggle('active', b.dataset.period === rk.period));
+  document.querySelectorAll('#screen-ranking [data-board]').forEach((b) => b.classList.toggle('active', b.dataset.board === rk.board));
+}
+
+async function renderRanking() {
+  rkSetTabs();
+  const cur = periodKeys()[rk.period];
+  if (!rk.key || rk.key > cur) rk.key = cur;
+  const isCur = rk.key === cur;
+  document.getElementById('rk-label').textContent = `${PERIOD_JA[rk.period]}・${periodLabel(rk.period, rk.key)}`;
+  document.getElementById('rk-sub').textContent = isCur ? `${BOARD_JA[rk.board]}・集計中（期間終了で1〜3位にメダル）` : `${BOARD_JA[rk.board]}・確定（1〜3位はメダル獲得）`;
+  document.getElementById('btn-rk-next').disabled = isCur;
+  const list = document.getElementById('rk-list');
+  const meBox = document.getElementById('rk-me');
+  list.replaceChildren(Object.assign(document.createElement('li'), { className: 'rk-empty', textContent: '読み込み中…' }));
+  const seq = ++rk.seq;
+  const r = await fetchRanking(rk.period, rk.board, rk.key);
+  if (seq !== rk.seq) return;
+  if (!r.ok) {
+    meBox.textContent = 'ランキングサーバーに接続できません（ゲームはそのまま遊べます）';
+    list.replaceChildren(Object.assign(document.createElement('li'), { className: 'rk-empty', textContent: r.message || '通信エラー' }));
+    return;
+  }
+  const me = rankIdentity();
+  meBox.replaceChildren();
+  if (r.me) {
+    meBox.innerHTML = `あなたの順位 <b class="rk-me-rank">${r.me.rank}位</b><span class="rk-me-of">/ ${r.total}人</span><b class="rk-me-pt">${r.me.score.toLocaleString('ja-JP')}PT</b>`;
+  } else {
+    meBox.textContent = me.id ? 'あなたの記録はまだありません（COM「強い」で勝つと記録）' : 'COM「強い」で勝つとランキングに参加できます';
+  }
+  if (!r.top.length) {
+    list.replaceChildren(Object.assign(document.createElement('li'), { className: 'rk-empty', textContent: 'まだ記録がありません' }));
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  for (const row of r.top) {
+    const li = document.createElement('li');
+    li.className = 'rk-row' + (row.id === me.id ? ' me' : '') + (row.rank <= 3 ? ' top' + row.rank : '');
+    const rankEl = document.createElement('span'); rankEl.className = 'rk-rank';
+    if (row.rank <= 3) rankEl.appendChild(medalCanvas(rk.period, row.rank, 26)); else rankEl.textContent = row.rank;
+    const nm = document.createElement('span'); nm.className = 'rk-name'; nm.textContent = row.nickname + (row.id === me.id ? '（あなた）' : '');
+    const sc = document.createElement('span'); sc.className = 'rk-score'; sc.textContent = row.score.toLocaleString('ja-JP') + 'PT';
+    if (rk.board === 'top3') { const n = document.createElement('small'); n.textContent = `${Math.min(3, row.n)}試合`; sc.appendChild(n); }
+    li.append(rankEl, nm, sc);
+    frag.appendChild(li);
+  }
+  list.replaceChildren(frag);
+}
+
+function openRanking() {
+  if (busy) return;
+  const me = rankIdentity();
+  const inp = document.getElementById('rk-nick-input');
+  if (inp) inp.value = me.nickname || DEFAULT_NICK;
+  const msg = document.getElementById('rk-nick-msg'); if (msg) { msg.textContent = ''; msg.classList.remove('warn'); }
+  const sample = document.getElementById('rk-medal-sample');
+  if (sample && !sample.childElementCount) {
+    for (const t of ['day', 'week', 'month', 'year']) {
+      const col = document.createElement('div'); col.className = 'rk-sample-col';
+      const row = document.createElement('div'); row.className = 'rk-sample-row';
+      for (const r of [1, 2, 3]) row.appendChild(medalCanvas(t, r));
+      col.append(row, Object.assign(document.createElement('span'), { textContent: PERIOD_JA[t] }));
+      sample.appendChild(col);
+    }
+  }
+  rk.key = null;
+  show('ranking');
+  renderRanking();
+}
+
+document.getElementById('btn-ranking')?.addEventListener('click', openRanking);
+document.getElementById('mm-shelf')?.addEventListener('click', openRanking);
+document.getElementById('btn-ranking-back')?.addEventListener('click', () => { show('menu'); refreshMenuMedals(); });
+document.querySelectorAll('#screen-ranking [data-period]').forEach((b) => b.addEventListener('click', () => { rk.period = b.dataset.period; rk.key = null; renderRanking(); }));
+document.querySelectorAll('#screen-ranking [data-board]').forEach((b) => b.addEventListener('click', () => { rk.board = b.dataset.board; renderRanking(); }));
+document.getElementById('btn-rk-prev')?.addEventListener('click', () => { rk.key = shiftKey(rk.period, rk.key || periodKeys()[rk.period], -1); renderRanking(); });
+document.getElementById('btn-rk-next')?.addEventListener('click', () => { rk.key = shiftKey(rk.period, rk.key || periodKeys()[rk.period], 1); renderRanking(); });
+document.getElementById('btn-rk-nick-save')?.addEventListener('click', async (ev) => {
+  const btn = ev.currentTarget; const inp = document.getElementById('rk-nick-input'); const msg = document.getElementById('rk-nick-msg');
+  btn.disabled = true; if (msg) msg.textContent = '送信中…';
+  const r = await setNickname(inp.value);
+  btn.disabled = false;
+  nickMsg(msg, r);
+  if (r.ok) { inp.value = r.nickname; renderRanking(); }
+  refreshMenuMedals();
+});
+
+// Title nickname dialog
+{
+  const dlg = document.getElementById('nick-dialog');
+  const inp = document.getElementById('nick-dialog-input');
+  const msg = document.getElementById('nick-dialog-msg');
+  const close = () => dlg && dlg.classList.add('hidden');
+  document.getElementById('btn-nick-edit')?.addEventListener('click', () => {
+    if (!dlg) return;
+    inp.value = rankIdentity().nickname || DEFAULT_NICK; msg.textContent = ''; msg.classList.remove('warn');
+    dlg.classList.remove('hidden'); setTimeout(() => inp.focus(), 50);
+  });
+  document.getElementById('btn-nick-cancel')?.addEventListener('click', close);
+  dlg?.addEventListener('click', (ev) => { if (ev.target === dlg) close(); });
+  const save = async () => {
+    const b = document.getElementById('btn-nick-save'); b.disabled = true; msg.textContent = '送信中…';
+    const r = await setNickname(inp.value);
+    b.disabled = false; nickMsg(msg, r);
+    if (r.ok) { inp.value = r.nickname; refreshMenuMedals(); if (!r.adjusted) setTimeout(close, 900); }
+  };
+  document.getElementById('btn-nick-save')?.addEventListener('click', save);
+  inp?.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); });
+}
+
+/* PvP: both players' medals before the match (ids exchanged in the PeerJS hello) */
+let _vsTimer = 0;
+window.__stbShowVsMedals = async (peer) => {
+  const box = document.getElementById('vs-medals');
+  if (!box || !peer) return;
+  const me = rankIdentity();
+  const key = (peer.pid || '') + '|' + (peer.nick || '');
+  if (box.dataset.key === key && !box.classList.contains('hidden')) return;
+  box.dataset.key = key;
+  const side = (label, nick, entry) => {
+    const d = document.createElement('div'); d.className = 'vs-side';
+    d.append(Object.assign(document.createElement('span'), { className: 'vs-label', textContent: label }),
+      Object.assign(document.createElement('b'), { className: 'vs-nick', textContent: nick || DEFAULT_NICK }),
+      medalShelf(entry, { compact: true, max: 6 }));
+    return d;
+  };
+  const draw = (m) => {
+    box.replaceChildren(side('あなた', me.nickname, m && m[me.id]), Object.assign(document.createElement('div'), { className: 'vs-x', textContent: 'VS' }), side('相手', (m && m[peer.pid] && m[peer.pid].nickname) || peer.nick, m && m[peer.pid]));
+  };
+  draw(null);
+  box.classList.remove('hidden');
+  clearTimeout(_vsTimer);
+  _vsTimer = setTimeout(() => box.classList.add('hidden'), 6000);
+  const r = await fetchMedals([me.id, peer.pid]);
+  if (r.ok && box.dataset.key === key) draw(r.medals);
+};
+window.__stbRankHello = () => { const me = rankIdentity(); return { pid: me.id || '', nick: me.nickname || DEFAULT_NICK }; };
+
+// Title medals: the server player is created lazily (ranking / COM強い / nickname), so first visit costs nothing.
+refreshMenuMedals();
