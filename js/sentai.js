@@ -10,9 +10,9 @@
  * Render state lives in short fields (zk tell kind, zu 0..1 progress, zx/zy target, zc rows/columns,
  * za alpha, zs shield, zg angle) that go into the online snapshot as-is (entities.js serializeField).
  */
-import { spawnBullet, resolveEnemyTier } from './entities.js?v=20261014211703';
-import { attackCtx } from './attacks.js?v=20261014211703';
-import { unitAttackLoadout } from './catalog.js?v=20261014211703';
+import { spawnBullet, resolveEnemyTier } from './entities.js?v=20261014212349';
+import { attackCtx } from './attacks.js?v=20261014212349';
+import { unitAttackLoadout } from './catalog.js?v=20261014212349';
 
 const PI = Math.PI, TAU = PI * 2;
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -501,6 +501,7 @@ export function tickPersona(e, X) {
   const pm = e._pm || (e._pm = { age: 0, spCd: rnd(1.0, 2.0) });
   pm.age += X.dt;
   if (e._rf > 0) { e._rf -= X.dt; if (e._rf <= 0) { e._rf = 0; e._rfc = undefined; } }
+  if (e._ff > 0) { e._ff -= X.dt; if (e._ff <= 0) { e._ff = 0; e._fk = undefined; } }
   pm.fire = true;
   if (e._healFx > 0) e._healFx -= X.dt;
   // leave after its time on the field (keeps firing on the way out)
@@ -537,6 +538,7 @@ export function tickPersona(e, X) {
       if (sp.t >= sp.max) {
         const c = attackCtx(e, X.bullets, X.tx, X.ty);
         SP.fire(e, sp, S, X, c);
+        if (P.sp !== 'shield') { e._ff = 0.3; e._fk = P.sp; } // muzzle / firing flash (render only)
         e._sp = null; clearTell(e);
         pm.spCd = (S.cd || 6) * rnd(0.9, 1.1);
         // the signature attack replaces the next volley → damage per second stays near the price
