@@ -1,8 +1,8 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261014212349';
-import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261014212349';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261015012814';
+import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261015012814';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -371,7 +371,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261014212349`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261015012814`;
 }
 
 function loadKindSprite(kind) {
@@ -457,8 +457,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261014212349'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261014212349'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261015012814'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261015012814'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -1388,6 +1388,8 @@ function drawFireFlash(ctx, e) {
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
   if (!ctr) { ctx.strokeStyle = `rgba(255,255,230,${k})`; ctx.lineWidth = 2; const d = back ? 1 : -1;
     for (const a of [-0.5, 0, 0.5]) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + d * Math.cos(a) * R * 1.4, y + Math.sin(a) * R * 1.4); ctx.stroke(); } }
+  if (e._fk === 'gate' && e._ffr) { ctx.strokeStyle = `rgba(230,180,255,${k})`; ctx.lineWidth = 4;
+    for (const ry of e._ffr) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, ry); ctx.stroke(); } }
   const p = 1 - k; ctx.fillStyle = `rgba(170,165,160,${0.45 * k})`;
   for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(e.x + (i - 1.5) * ew * 0.18, e.y - (e.h || 30) * 0.4 - p * (14 + i * 5), 4 + p * 9, 0, Math.PI * 2); ctx.fill(); }
   ctx.restore();
@@ -1500,7 +1502,7 @@ function drawPersonaTell(ctx, e) {
         ctx.beginPath(); ctx.moveTo(e.x, top - 4); ctx.quadraticCurveTo((e.x + cx) / 2, -fh * 0.08, cx, 6); ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0; }
       const la = hot ? (blink ? 0.95 : 0.6) : 0.35 + 0.35 * pulse;
       // shells visibly launched UP from the unit toward each lane (arrive as the rain starts) → source is obvious
-      if (u > 0.5) { const k = (u - 0.5) / 0.5;
+      if (u > 0.35) { const k = (u - 0.35) / 0.65;
         cols.forEach((x, i) => { const q = Math.max(0, Math.min(1, k * 1.15 - i * 0.04)), sx0 = e.x, sy0 = top, cxp = (e.x + x) / 2, cyp = -fh * 0.15;
           const P = (v) => [(1 - v) * (1 - v) * sx0 + 2 * (1 - v) * v * cxp + v * v * x, (1 - v) * (1 - v) * sy0 + 2 * (1 - v) * v * cyp + v * v * -6];
           const [px, py] = P(q), [qx, qy] = P(Math.max(0, q - 0.12));
@@ -1524,6 +1526,8 @@ function drawPersonaTell(ctx, e) {
       ctx.strokeStyle = blink ? 'rgba(255,60,40,0.95)' : 'rgba(255,170,60,0.8)'; ctx.lineWidth = 2.5 + u * 2.5; ctx.setLineDash([10, 6]);
       for (const y of e.zc || []) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(mx, y); ctx.stroke(); }
       ctx.setLineDash([]);
+      if (u > 0.3) { const k2 = Math.min(1, (u - 0.3) / 0.5); ctx.strokeStyle = `rgba(210,140,255,${0.5 + 0.4 * k2})`; ctx.lineWidth = 2 + 2 * k2;
+        for (const y of e.zc || []) { ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(mx, my + (y - my) * k2); ctx.stroke(); ctx.fillStyle = '#f0d8ff'; ctx.beginPath(); ctx.arc(mx, my + (y - my) * k2, 3.5, 0, Math.PI * 2); ctx.fill(); } }
       for (const y of e.zc || []) { const gg = ctx.createLinearGradient(0, y - 10, 0, y + 10); gg.addColorStop(0, 'rgba(190,110,255,0)'); gg.addColorStop(0.5, `rgba(200,120,255,${0.12 + 0.2 * u})`); gg.addColorStop(1, 'rgba(190,110,255,0)');
         ctx.fillStyle = gg; ctx.fillRect(0, y - 10, mx, 20); ctx.fillStyle = blink && u > 0.6 ? '#fff' : 'rgba(255,90,60,1)'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText('◀', mx - 6, y); }
       break;
@@ -4065,7 +4069,7 @@ function drawFieldInner(ctx, area, snap, opts = {}) {
       bodyFlash: e._bodyFlash || (e.bf ? 0.1 : 0),
       // sent-unit personality tell (js/sentai.js) — same fields locally and in the online snapshot
       zk: e.zk, zu: e.zu, zx: e.zx != null ? e.zx * sx : undefined, zy: e.zy != null ? e.zy * sy : undefined,
-      zc: Array.isArray(e.zc) ? e.zc.map((v) => v * (e.zk === 'rain' ? sx : sy)) : undefined, za: e.za, zs: e.zs, zg: e.zg, _rf: e._rf ?? e.rf, _ff: e._ff ?? e.ff, _fk: e._fk ?? e.fk, _rfc: Array.isArray(e._rfc ?? e.rc) ? (e._rfc ?? e.rc).map((v) => v * sx) : undefined,
+      zc: Array.isArray(e.zc) ? e.zc.map((v) => v * (e.zk === 'rain' ? sx : sy)) : undefined, za: e.za, zs: e.zs, zg: e.zg, _rf: e._rf ?? e.rf, _ff: e._ff ?? e.ff, _fk: e._fk ?? e.fk, _ffr: Array.isArray(e._ffr ?? e.fr) ? (e._ffr ?? e.fr).map((v) => v * sy) : undefined, _rfc: Array.isArray(e._rfc ?? e.rc) ? (e._rfc ?? e.rc).map((v) => v * sx) : undefined,
       hx: e.hx || (e._healFx > 0 ? 1 : 0), _fw: fw, _fh: fh,
       _portalA: e._chainOf ? e._chainOf._portalA : e.pA, _portalOut: e._chainOf ? e._chainOf._portalOut : e.pO, // snake portal fade in / out
     });
@@ -4087,6 +4091,25 @@ function drawFieldInner(ctx, area, snap, opts = {}) {
     ctx.globalAlpha = 0.9; ctx.strokeStyle = col; ctx.lineWidth = 3 * k;
     ctx.beginPath(); ctx.arc(x, y, (48 - 34 * t.q) * k, 0, Math.PI * 2); ctx.stroke(); // ring closing in = about to fire
     ctx.restore();
+  }
+  // User 10-15: counter burst at the core when it fires + 近接ガード shimmer (local + online snapshot)
+  for (const e of enemies) {
+    const F = e._ctrF ? e._ctrF : (e.kf ? { p: e.kf[0], t: e.kf[1], x: e.kf[2], y: e.kf[3] } : null);
+    const k = Math.min(sx, sy), now = performance.now() / 1000;
+    if (F && F.t > 0) { const col = (COUNTER_PATTERNS[F.p] || COUNTER_PATTERNS[0]).col, q = F.t / 0.3, x = F.x * sx, y = F.y * sy, R = (20 + 40 * (1 - q)) * k;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const g = ctx.createRadialGradient(x, y, 0, x, y, R); g.addColorStop(0, '#ffffff'); g.addColorStop(0.35, col); g.addColorStop(1, col + '00');
+      ctx.globalAlpha = q; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = col; ctx.lineWidth = 3 * k; ctx.beginPath(); ctx.arc(x, y, R * 1.2, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
+    const G = e._gdT > 0 ? { t: e._gdT, x: e._gdX, y: e._gdY } : (e.gd ? { t: e.gd[0], x: e.gd[1], y: e.gd[2] } : null);
+    if (G && G.t > 0) { const q = Math.min(1, G.t / 0.35), x = G.x * sx, y = G.y * sy, R = 26 * k;
+      ctx.save(); ctx.globalAlpha = q;
+      ctx.strokeStyle = 'rgba(140,230,255,0.95)'; ctx.lineWidth = 3 * k;
+      for (let i = 0; i < 6; i++) { const a0 = i * 1.047 + now * 4; ctx.beginPath(); ctx.arc(x, y, R, a0, a0 + 0.7); ctx.stroke(); }
+      ctx.fillStyle = 'rgba(140,230,255,0.18)'; ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
+      ctx.font = `bold ${Math.round(13 * k + 3)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,30,60,0.9)'; ctx.strokeText('ガード', x, y - R - 2); ctx.fillStyle = '#bff3ff'; ctx.fillText('ガード', x, y - R - 2);
+      ctx.restore(); }
   }
   // User 10-04d: core life gauge above every core unit (attached guard units stay bar-less)
   for (const e of enemies) {

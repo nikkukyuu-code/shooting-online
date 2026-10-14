@@ -6,7 +6,7 @@
  * Each field is simulated by its owner and streamed (online), so Math.random is consistent with the
  * rest of the enemy randomness (which also uses Math.random on the owning client).
  */
-import { spawnBullet, coreWorld, coreOwnerOf } from './entities.js?v=20261014212349';
+import { spawnBullet, coreWorld, coreOwnerOf } from './entities.js?v=20261015012814';
 
 export const COUNTER_RANGE = 1 / 3, COUNTER_DMIN = 1.0, COUNTER_DMAX = 2.0, COUNTER_TELE = 0.5, COUNTER_CD = 1.0;
 /** id, colour, volleys [[delay s, fn]] */
@@ -48,8 +48,17 @@ function volley(C, bullets, sx, sy) {
 }
 
 /** Advance every pending counter of one field. */
-export function tickCounters(enemies, bullets, sx, sy, dt, now) {
+export function tickCounters(enemies, bullets, sx, sy, dt, now, fw) {
   for (const H of enemies) {
+    if (H._gdT > 0) H._gdT -= dt;
+    if (H._ctrF && (H._ctrF.t -= dt) <= 0) H._ctrF = null;
+    // User 10-15: approaching a core is enough — it keeps launching random strong attacks while the ship stays close
+    if (!H._ctr && fw && H.core && H.core.hp > 0 && H.hp > 0 && !H._portalOnly && now >= (H._ctrReady || 0)) {
+      const c = coreWorld(H);
+      if (c && Math.hypot(c.x - sx, c.y - sy) <= fw * COUNTER_RANGE) {
+        H._ctr = { p: Math.floor(Math.random() * COUNTER_PATTERNS.length), t: COUNTER_DMIN + Math.random() * (COUNTER_DMAX - COUNTER_DMIN), v: 0, vt: 0, cx: c.x, cy: c.y };
+      }
+    }
     const C = H._ctr; if (!C) continue;
     if (H.hp <= 0 || !H.core || H.core.hp <= 0) { H._ctr = null; continue; }
     const c = coreWorld(H); if (c) { C.cx = c.x; C.cy = c.y; }
@@ -58,8 +67,9 @@ export function tickCounters(enemies, bullets, sx, sy, dt, now) {
     C.vt -= dt;
     if (C.vt > 0) continue;
     const next = volley(C, bullets, sx, sy); C.v++;
+    H._ctrF = { p: C.p, t: 0.3, x: C.cx, y: C.cy }; // muzzle burst at the core (render)
     if (next > 0) C.vt = next;
-    else { H._ctr = null; H._ctrReady = now + COUNTER_CD; }
+    else { H._ctr = null; H._ctrReady = now + COUNTER_CD + Math.random() * 1.0; }
   }
 }
 /** Telegraph state for render / snapshot: {p, q 0..1 charge, x, y} or null. */

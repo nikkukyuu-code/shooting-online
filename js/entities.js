@@ -510,6 +510,16 @@ export function tickEscort(e, dt, fh) {
   return true;
 }
 
+/** User 10-15: 近接ガード — a core shot from point-blank range takes reduced damage (same rule for player and COM).
+ *  The field owner sets its ship position before resolving its shots. */
+export const GUARD_RANGE = 0.2, GUARD_MULT = 0.5, GUARD_FX_T = 0.35;
+const _gs = { x: -1e9, y: -1e9, fw: 1 };
+export function setGuardShip(x, y, fw) { _gs.x = x; _gs.y = y; _gs.fw = fw || 1; }
+function guardDmg(H, cx, cy, dmg) {
+  if (Math.hypot(cx - _gs.x, cy - _gs.y) >= _gs.fw * GUARD_RANGE) return dmg;
+  H._gdT = GUARD_FX_T; H._gdX = cx; H._gdY = cy;
+  return dmg * GUARD_MULT;
+}
 /** World-space core centre. */
 export function coreWorld(e) {
   if (!e || !e.core) return null;
@@ -534,7 +544,7 @@ function snakeCoreHit(H, px, py, bx, by, dmg, fxList, where) {
   const c = H.core;
   if (!c || c.hp <= 0 || H.hp <= 0 || H._portalOnly) return { hit: 'none', killed: false };
   if (Math.hypot(bx - px, by - py) >= c.r + CORE_HIT_PAD) return { hit: 'none', killed: false };
-  c.hp -= dmg; H._coreFlash = CORE_FLASH_T; H._shake = 0.14; H._coreAt = where;
+  c.hp -= guardDmg(H, px, py, dmg); H._coreFlash = CORE_FLASH_T; H._shake = 0.14; H._coreAt = where;
   if (c.hp > 0) { if (fxList) fxList.push(spawnHitSpark(bx, by)); return { hit: 'corehit', killed: false }; }
   c.hp = 0; H._coreBreak = true; // user 10-12: the head is a normal part now — it pops in the core chain (not instantly)
   if (fxList) { fxList.push(spawnExplosion(px, py, true)); fxList.push(spawnHitSpark(px, py)); }
@@ -643,7 +653,7 @@ export function applyCoreAwareHit(e, dmg, bx, by, fxList) {
       if (fxList) fxList.push(spawnDeflectSpark(bx, by));
       return { hit: 'body', killed: false };
     }
-    c.hp -= dmg;
+    c.hp -= guardDmg(e, cx, cy, dmg);
     e._coreFlash = CORE_FLASH_T;
     e._shake = 0.14;
     if (c.hp > 0) {
@@ -1080,7 +1090,7 @@ export function serializeField(state) {
     lc: state.player.activePower === 'laser' ? +(state.player.laserCd || 0).toFixed(2) : undefined,
     enemies: state.enemies.filter(e => !e._headDead && (e.kind !== 'wave_bubble' || e.x - (e.w || 0) / 2 < (state._fw || 1e9))).slice(0, 40).map(e => ({
       x: e.x, y: e.y, w: e.w, h: e.h, kind: e.kind, hp: e.hp, c: e.color, s: !!e.sent,
-      at2: (e._chainOf || e._lead) ? 1 : undefined, ch: e.core && !e._coreSeg ? e.core.hp : (e._coreBall && e._chainOf && e._chainOf.core ? e._chainOf.core.hp : undefined), cm: e.core && !e._coreSeg ? e.core.maxHp : (e._coreBall && e._chainOf && e._chainOf.core ? e._chainOf.core.maxHp : undefined), cb: e._coreBall ? 1 : undefined, cf: (e._coreBall ? (e._chainOf && e._chainOf._coreFlash) : e._coreFlash) > 0 ? 1 : undefined, bf: e._coreSeg && e._bodyFlash > 0 ? 1 : undefined, cs: e._sh ? e._sh.st : undefined, kt: e._ctr && e._ctr.t < 0.5 ? e._ctr.p : undefined, kq: e._ctr && e._ctr.t < 0.5 ? +Math.min(1, 1 - e._ctr.t / 0.5).toFixed(2) : undefined, kx: e._ctr && e._ctr.t < 0.5 ? Math.round(e._ctr.cx) : undefined, ky: e._ctr && e._ctr.t < 0.5 ? Math.round(e._ctr.cy) : undefined, sk: e._shake > 0 ? 1 : undefined,
+      at2: (e._chainOf || e._lead) ? 1 : undefined, ch: e.core && !e._coreSeg ? e.core.hp : (e._coreBall && e._chainOf && e._chainOf.core ? e._chainOf.core.hp : undefined), cm: e.core && !e._coreSeg ? e.core.maxHp : (e._coreBall && e._chainOf && e._chainOf.core ? e._chainOf.core.maxHp : undefined), cb: e._coreBall ? 1 : undefined, cf: (e._coreBall ? (e._chainOf && e._chainOf._coreFlash) : e._coreFlash) > 0 ? 1 : undefined, bf: e._coreSeg && e._bodyFlash > 0 ? 1 : undefined, cs: e._sh ? e._sh.st : undefined, kt: e._ctr && e._ctr.t < 0.5 ? e._ctr.p : undefined, kq: e._ctr && e._ctr.t < 0.5 ? +Math.min(1, 1 - e._ctr.t / 0.5).toFixed(2) : undefined, kx: e._ctr && e._ctr.t < 0.5 ? Math.round(e._ctr.cx) : undefined, ky: e._ctr && e._ctr.t < 0.5 ? Math.round(e._ctr.cy) : undefined, sk: e._shake > 0 ? 1 : undefined, kf: e._ctrF && e._ctrF.t > 0 ? [e._ctrF.p, +e._ctrF.t.toFixed(2), Math.round(e._ctrF.x), Math.round(e._ctrF.y)] : undefined, gd: e._gdT > 0 ? [+e._gdT.toFixed(2), Math.round(e._gdX), Math.round(e._gdY)] : undefined,
       dr: e.drones ? e.drones.map(d => d.hp) : undefined,
       sp: e.spr || undefined, ro: e.rot || undefined, tn: e.tone || undefined,
       pA: e._chainOf && e._chainOf._portalA != null && e._chainOf._portalA < 1 ? +e._chainOf._portalA.toFixed(2) : undefined, // snake portal fade-in
@@ -1098,7 +1108,7 @@ export function serializeField(state) {
       zk: e.zk, zu: e.zu != null ? +e.zu.toFixed(2) : undefined, zx: e.zx != null ? Math.round(e.zx) : undefined, zy: e.zy != null ? Math.round(e.zy) : undefined,
       zc: e.zc, za: e.za != null ? +e.za.toFixed(2) : undefined, zs: e.zs != null ? +e.zs.toFixed(2) : undefined, zg: e.zg != null ? +e.zg.toFixed(2) : undefined,
       hx: e._healFx > 0 ? 1 : undefined,
-      rf: e._rf > 0 ? +e._rf.toFixed(2) : undefined, rc: e._rf > 0 ? e._rfc : undefined, ff: e._ff > 0 ? +e._ff.toFixed(2) : undefined, fk: e._ff > 0 ? e._fk : undefined,
+      rf: e._rf > 0 ? +e._rf.toFixed(2) : undefined, rc: e._rf > 0 ? e._rfc : undefined, ff: e._ff > 0 ? +e._ff.toFixed(2) : undefined, fk: e._ff > 0 ? e._fk : undefined, fr: e._ff > 0 ? e._ffr : undefined,
     })),
     bullets: state.bullets.filter(b => b.owner === 'player' || b.owner === 'enemy').slice(0, 60).map(b => ({
       x: b.x, y: b.y, o: b.owner, h: !!b.homing, vx: b.vx, vy: b.vy,

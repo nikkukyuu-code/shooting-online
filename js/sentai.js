@@ -10,9 +10,9 @@
  * Render state lives in short fields (zk tell kind, zu 0..1 progress, zx/zy target, zc rows/columns,
  * za alpha, zs shield, zg angle) that go into the online snapshot as-is (entities.js serializeField).
  */
-import { spawnBullet, resolveEnemyTier } from './entities.js?v=20261014212349';
-import { attackCtx } from './attacks.js?v=20261014212349';
-import { unitAttackLoadout } from './catalog.js?v=20261014212349';
+import { spawnBullet, resolveEnemyTier } from './entities.js?v=20261015012814';
+import { attackCtx } from './attacks.js?v=20261015012814';
+import { unitAttackLoadout } from './catalog.js?v=20261015012814';
 
 const PI = Math.PI, TAU = PI * 2;
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -468,7 +468,7 @@ const SPECIALS = {
       sp.rows = []; for (let i = 0; i < n; i++) sp.rows.push(Math.round(clamp(sp0 * (i + 1) + j, 8, X.fh - 8)));
     },
     tick(e, sp) { e.zk = 'gate'; e.zc = sp.rows; },
-    fire(e, sp, S, X, c) { for (const y of sp.rows) c.laser(620, y - c.oy); },
+    fire(e, sp, S, X, c) { for (const y of sp.rows) c.laser(620, y - c.oy); e._ffr = sp.rows.slice(); },
   },
   heal: {
     hold: true,
@@ -501,7 +501,7 @@ export function tickPersona(e, X) {
   const pm = e._pm || (e._pm = { age: 0, spCd: rnd(1.0, 2.0) });
   pm.age += X.dt;
   if (e._rf > 0) { e._rf -= X.dt; if (e._rf <= 0) { e._rf = 0; e._rfc = undefined; } }
-  if (e._ff > 0) { e._ff -= X.dt; if (e._ff <= 0) { e._ff = 0; e._fk = undefined; } }
+  if (e._ff > 0) { e._ff -= X.dt; if (e._ff <= 0) { e._ff = 0; e._fk = undefined; e._ffr = undefined; } }
   pm.fire = true;
   if (e._healFx > 0) e._healFx -= X.dt;
   // leave after its time on the field (keeps firing on the way out)

@@ -1,25 +1,30 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261014212349';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261015012814';
 import {
-  POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
+  POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, setGuardShip, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
   setKindTier, resolveEnemyTier, isLargeEnemy, enemyAttackUsesLaser,
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261014212349';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261014212349';
-import { sfx } from './audio.js?v=20261014212349';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261014212349';
-import { fxRate } from './entities.js?v=20261014212349';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261014212349';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261014212349';
-import { hitBattleCounter } from './stats.js?v=20261014212349';
+} from './entities.js?v=20261015012814';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261015012814';
+import { sfx } from './audio.js?v=20261015012814';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261015012814';
+import { fxRate } from './entities.js?v=20261015012814';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261015012814';
+import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261015012814';
+import { hitBattleCounter } from './stats.js?v=20261015012814';
 // ===== DEBUG (temporary): 弾の雨 visual check — set to false to remove. While true, ranking submit is disabled. =====
 const DEBUG_RAIN_AT_START = false;
-import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261014212349';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261014212349';
-import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261014212349';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261014212349';
+// ===== DEBUG (temporary): 転送敵キャラ確認パレード — set to false to remove. =====
+// While true: every sendable unit appears one at a time from match start (own field + COM field), no other enemies,
+// ship + COM invincible, no time limit (∞), ranking submit / PT / COM rank record disabled.
+const DEBUG_UNIT_PARADE = true;
+const PARADE_SEC = 10;
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261015012814';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261015012814';
+import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261015012814';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261015012814';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -834,6 +839,7 @@ export class Game {
 
   applyPlayerDamage(amount, cause = 'hit') {
     const P = this.state.player;
+    if (DEBUG_UNIT_PARADE) return 0;
     if (this.isRamInvincible(P)) return 0;
     const before = P.hp;
     const dmg = Math.max(0, Math.min(amount, before));
@@ -883,6 +889,7 @@ export class Game {
       this.tickSuddenDeath();
       return;
     }
+    if (DEBUG_UNIT_PARADE) { this.matchLeft = 999; return; }
     this.matchLeft = Math.max(0, this.matchLeft - dt);
     if (this.isOnline()) {
       if (!this.isHost()) return; // guest: display only; waits for host timeUp
@@ -954,7 +961,7 @@ export class Game {
     let key;
     if (!active) key = 'off';
     else if (this.suddenDeath) key = 'sd';
-    else key = fmtClock(this.matchLeft);
+    else key = DEBUG_UNIT_PARADE ? '∞' : fmtClock(this.matchLeft);
     // Big center countdown (10…1) + red edge vignette in the last 10 s
     const leftNow = active && !this.suddenDeath ? Math.ceil(this.matchLeft) : null;
     this.renderCountdown(leftNow != null && leftNow <= 10 && leftNow >= 1 ? leftNow : null);
@@ -1197,6 +1204,26 @@ export class Game {
     e.holdY = res.pos[1];
   }
 
+  /** DEBUG_UNIT_PARADE: one sendable unit at a time (own + COM field), nothing else, both ships invincible. */
+  _paradeTick(dt) {
+    const S = this.state, B = this.useBot ? this._bot : null, fw = this.L.own.w, fh = this.L.own.h;
+    const list = this._paradeList || (this._paradeList = ALL_KIND_IDS.slice());
+    const R = this._parade || (this._parade = { i: -1, t: 1e9, cur: null, lbl: 0 });
+    S.player.hp = S.player.maxHp; if (B) B.hp = B.maxHp || PLAYER_MAX_HP;
+    const keep = (arr) => { for (let i = arr.length - 1; i >= 0; i--) if (!arr[i]._parade) arr.splice(i, 1); };
+    keep(S.enemies); if (B) keep(B.enemies);
+    R.t += dt; R.lbl -= dt;
+    const alive = R.cur && S.enemies.includes(R.cur) && R.cur.hp > 0;
+    if (!alive || R.t >= PARADE_SEC) {
+      S.enemies.length = 0; if (B) B.enemies.length = 0;
+      R.i = (R.i + 1) % list.length; R.t = 0; R.lbl = 0;
+      const kind = list[R.i];
+      const e = this.markSentEnemy(spawnEnemy(fw, fh, kind), fw, fh, S.enemies); e._parade = true; S.enemies.push(e); R.cur = e;
+      if (B) { const b = this.markSentEnemy(spawnEnemy(fw, fh, kind), fw, fh, B.enemies); b._parade = true; B.enemies.push(b); }
+    }
+    if (R.lbl <= 0) { R.lbl = 1; this.setStatus(`【確認用】${R.i + 1}/${list.length} ${UNIT_NAME_JA[list[R.i]] || list[R.i]}`); }
+  }
+
   markSentEnemy(e, fw, fh, field = null) {
     e.sent = true;
     // 攻撃力 / 防御力 (catalog.js): ATK scales this unit's bullet damage to the receiving ship,
@@ -1313,6 +1340,7 @@ export class Game {
   sendToOpponent(kinds, statusLabel) {
     const list = Array.isArray(kinds) ? kinds : [kinds];
     const fw = this.L.own.w, fh = this.L.own.h;
+    if (DEBUG_UNIT_PARADE) { this.setStatus('【確認用】パレード中は転送できません'); return; }
     if (this.useBot) {
       for (const kind of list) {
         const e = this.markSentEnemy(spawnEnemy(fw, fh, kind), fw, fh, this._bot.enemies);
@@ -1761,6 +1789,7 @@ export class Game {
   }
 
   update(dt) {
+    if (DEBUG_UNIT_PARADE && !this.waiting && !this.ended && this.state) this._paradeTick(dt);
     const S = this.state;
     const P = S.player;
     const fw = this.L.own.w;
@@ -1895,6 +1924,7 @@ export class Game {
       if (P.laserCd <= 0) {
         P.laserCd = LASER_IV; // pre-bc8245b continuous tick (0.07)
         const ly = P.y * fh;
+        setGuardShip(P.x, P.y * fh, fw);
         for (const e of S.enemies) {
           if (warping(e)) continue;
           if (Math.abs(e.y - ly) < e.h * 0.55 + 8 && e.x > P.x) {
@@ -1913,7 +1943,7 @@ export class Game {
     {
       const n0 = S.enemies.length;
       S._fw = fw; // serializeField: skip bubbles still queued off the right edge
-      const tags = runWaveScript(S, S.time, S.enemies, fw, fh);
+      const tags = DEBUG_UNIT_PARADE ? [] : runWaveScript(S, S.time, S.enemies, fw, fh);
       if (S.enemies.slice(n0).some((e) => hasCore(e))) this.coreTip();
       if (tags.includes('round2')) {
         this.setStatus('ROUND 2');
@@ -1922,7 +1952,7 @@ export class Game {
       // light filler so a quiet stretch never goes empty (same on both fields)
       this._spawnAcc += dt;
       const late = S.time > 240; // 10-04d: denser filler in the last minute / 延長戦 (same rule on the COM field)
-      if (this._spawnAcc >= (late ? 2 : 3) && S.enemies.filter((e) => !e.sent && !e._chainOf).length < (late ? 6 : 4)) {
+      if (!DEBUG_UNIT_PARADE && this._spawnAcc >= (late ? 2 : 3) && S.enemies.filter((e) => !e.sent && !e._chainOf).length < (late ? 6 : 4)) {
         this._spawnAcc = 0;
         S.enemies.push(spawnEnemy(fw, fh, Math.random() < 0.5 ? 'wave_basic' : 'wave_swarm'));
       }
@@ -2027,9 +2057,10 @@ export class Game {
       }
     }
     for (const f of S.fx) f.life -= dt * fxRate(f);
-    tickCounters(S.enemies, S.bullets, P.x, P.y * fh, dt, S.time);
+    tickCounters(S.enemies, S.bullets, P.x, P.y * fh, dt, S.time, fw);
 
     // Collisions player bullets -> enemies
+    setGuardShip(P.x, P.y * fh, fw);
     for (const b of S.bullets) {
       if (b.owner !== 'player' || b.dvis) continue; // direct shots fly out of our pane without hitting
       for (const e of S.enemies) {
@@ -2668,6 +2699,7 @@ export class Game {
       if (B.laserCd <= 0) {
         B.laserCd = LASER_IV; // same as player (pre-bc8245b 0.07)
         const by = B.y * fh;
+        setGuardShip(shipX, B.y * fh, fw);
         for (const e of B.enemies) {
           if (warping(e)) continue;
           if (e.x > shipX && Math.abs(e.y - by) < (e.h * 0.55 + 8)) {
@@ -2690,10 +2722,10 @@ export class Game {
     // --- Spawns (slightly denser so AI has something to think about) ---
     // Same wave rules as the player's field (interval, 1–2 per wave, kind mix, wave boss every 22s)
     // so COM gets the same number of kill → item-drop chances.
-    runWaveScript(B, B.time || 0, B.enemies, fw, fh); // same script / clock rules as the player field
+    if (!DEBUG_UNIT_PARADE) runWaveScript(B, B.time || 0, B.enemies, fw, fh); // same script / clock rules as the player field
     B.spawnAcc = (B.spawnAcc || 0) + dt;
     const lateB = (B.time || 0) > 240;
-    if (B.spawnAcc >= (lateB ? 2 : 3) && B.enemies.filter((e) => !e.sent && !e._chainOf).length < (lateB ? 6 : 4)) {
+    if (!DEBUG_UNIT_PARADE && B.spawnAcc >= (lateB ? 2 : 3) && B.enemies.filter((e) => !e.sent && !e._chainOf).length < (lateB ? 6 : 4)) {
       B.spawnAcc = 0;
       B.enemies.push(spawnEnemy(fw, fh, Math.random() < 0.5 ? 'wave_basic' : 'wave_swarm'));
     }
@@ -2764,6 +2796,7 @@ export class Game {
     }
 
     // Bot bullets hit enemies + item drops into bot inventory
+    setGuardShip(shipX, B.y * fh, fw);
     for (const b of B.bullets) {
       if (b.owner !== 'player' || b.dir || b.dvis) continue; // direct shots only hit the COM ship
       for (const e of B.enemies) {
@@ -2905,7 +2938,7 @@ export class Game {
     trimFx(B.fx, 120); // keep newest (hit sparks), never coins
     B.coinPt = (B.coinPt || 0) + tickCoins(B.fx, shipX, B.y * fh, dt);
     for (const f of B.fx) f.life -= dt * fxRate(f);
-    tickCounters(B.enemies, B.bullets, shipX, B.y * fh, dt, B.time);
+    tickCounters(B.enemies, B.bullets, shipX, B.y * fh, dt, B.time, fw);
     B.fx = B.fx.filter((f) => f.life > 0);
 
     // --- Smart item / power usage ---
@@ -3130,6 +3163,7 @@ export class Game {
       _sy: this.L.opp.h / fh,
     };
 
+    if (DEBUG_UNIT_PARADE) { this.state.player.hp = this.state.player.maxHp; B.hp = B.maxHp || PLAYER_MAX_HP; }
     if (B.hp <= 0) this.finish(true);
     if (this.state.player.hp <= 0) this.finish(false);
   }
@@ -3148,7 +3182,7 @@ export class Game {
 
     // COM win-rate record → enemy level (COM matches only; online / room PvP never counted)
     this._comRankChange = null;
-    if (this.useBot && !this.isOnline() && !this._tutorialMatch) {
+    if (!DEBUG_UNIT_PARADE && this.useBot && !this.isOnline() && !this._tutorialMatch) {
       try { this._comRankChange = recordComResult(this.comDifficulty, !!won); } catch (_) { this._comRankChange = null; }
     }
 
@@ -3156,7 +3190,7 @@ export class Game {
     this._ptReward = null;
     // Human-vs-human (online room / matchmaking) never grants PT — any end reason (KO, time-up,
     // 延長戦, disconnect / opponent left). COM matches only.
-    if (won && this.useBot && !this.isOnline()) {
+    if (!DEBUG_UNIT_PARADE && won && this.useBot && !this.isOnline()) {
       const rawHp = Math.max(0, this.state.player?.hp ?? 0);
       const maxHp = this.state.player?.maxHp || PLAYER_MAX_HP;
       const hp = Math.max(0, Math.floor((rawHp / maxHp) * 100)); // keep PT on 0–100 scale
@@ -3181,7 +3215,7 @@ export class Game {
     }
 
     // World ranking: COM「強い」 wins only (PvP / 普通 / tutorial never submitted). Best-effort, async.
-    if (DEBUG_RAIN_AT_START && this.useBot && this.comDifficulty === 'strong') { try { cancelStrongMatch(); } catch (_) {} const el = document.getElementById('end-rank-msg'); if (el) { el.textContent = '確認用ビルドのためランキング送信は停止中です'; el.hidden = false; } }
+    if ((DEBUG_RAIN_AT_START || DEBUG_UNIT_PARADE) && this.useBot && this.comDifficulty === 'strong') { try { cancelStrongMatch(); } catch (_) {} const el = document.getElementById('end-rank-msg'); if (el) { el.textContent = '確認用ビルドのためランキング送信は停止中です'; el.hidden = false; } }
     else if (this.useBot && !this.isOnline() && !this._tutorialMatch && this.comDifficulty === 'strong') {
 
       const pt = won && this._ptReward ? this._ptReward.gain : 0;
