@@ -1,8 +1,8 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261015012814';
-import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261015012814';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261015015820';
+import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261015015820';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -371,7 +371,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261015012814`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261015015820`;
 }
 
 function loadKindSprite(kind) {
@@ -457,8 +457,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261015012814'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261015012814'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261015015820'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261015015820'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -1421,42 +1421,14 @@ function drawPersonaTell(ctx, e) {
   if (TELL_RGB[e.zk]) drawChargeAura(ctx, e, TELL_RGB[e.zk], e.zk === 'dash' || e.zk === 'blink' ? Math.max(u, 0.4) : u);
   ctx.save();
   switch (e.zk) {
-    case 'snipe': { // aim line(s): follow → lock (white blink)
-      const base = Math.atan2((e.zy ?? my) - my, (e.zx ?? 0) - mx), sp = e.zg || 0;
-      const lock = u > 0.65;
-      ctx.lineWidth = lock ? 2.6 : 1.8;
-      ctx.strokeStyle = lock ? (blink ? 'rgba(255,255,255,0.95)' : 'rgba(255,40,40,0.95)') : `rgba(255,60,60,${0.5 + 0.4 * u})`;
-      for (const d of sp ? [-sp, 0, sp] : [0]) {
-        ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(mx + Math.cos(base + d) * 700, my + Math.sin(base + d) * 700); ctx.stroke();
-      }
-      if (e.zx != null) { ctx.beginPath(); ctx.arc(e.zx, e.zy, 9 + 6 * (1 - u), 0, Math.PI * 2); ctx.stroke(); }
-      break;
-    }
-    case 'dash': { // red lane + chevrons along the dash direction
-      const a = e.zg ?? Math.PI, hw = (e.h || 30) * 0.36;
-      ctx.translate(e.x, e.y); ctx.rotate(a);
-      ctx.fillStyle = `rgba(255,30,30,${(blink ? 0.32 : 0.16) + 0.15 * u})`;
-      ctx.fillRect(0, -hw, 900, hw * 2);
-      ctx.fillStyle = `rgba(255,220,200,${0.5 + 0.4 * u})`;
-      for (let i = 0; i < 4; i++) {
-        const x = 40 + i * 46 + ((t * 120) % 46);
-        ctx.beginPath(); ctx.moveTo(x + 10, -8); ctx.lineTo(x + 20, 0); ctx.lineTo(x + 10, 8); ctx.lineTo(x + 14, 0); ctx.closePath(); ctx.fill();
-      }
-      break;
-    }
+    case 'snipe': break; // 10-15: no aim-line pre-warning (unit charge glow only)
+    case 'dash': break; // 10-15: no lane pre-warning (unit charge glow only)
     case 'dashing': {
       ctx.fillStyle = 'rgba(255,120,60,0.35)';
       ctx.fillRect(e.x, e.y - (e.h || 30) * 0.25, 70, (e.h || 30) * 0.5);
       break;
     }
-    case 'blink': { // destination ring (where it will reappear)
-      if (e.zx == null) break;
-      const r = Math.max(e.w || 40, e.h || 30) * (0.75 - 0.25 * u);
-      ctx.strokeStyle = `rgba(120,240,255,${0.5 + 0.45 * (blink ? 1 : 0.4)})`; ctx.lineWidth = 2.5; ctx.setLineDash([6, 4]);
-      ctx.beginPath(); ctx.arc(e.zx, e.zy, r, t * 3, t * 3 + Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle = `rgba(120,240,255,${0.12 + 0.2 * u})`; ctx.beginPath(); ctx.arc(e.zx, e.zy, r * 0.8, 0, Math.PI * 2); ctx.fill();
-      break;
-    }
+    case 'blink': break; // 10-15: no destination pre-warning
     case 'decloak': case 'blinkin': {
       ctx.strokeStyle = `rgba(160,255,255,${0.8 * (1 - u * 0.6)})`; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(e.x, e.y, Math.max(e.w || 40, e.h || 30) * (0.9 - 0.35 * u), 0, Math.PI * 2); ctx.stroke();
@@ -1478,15 +1450,11 @@ function drawPersonaTell(ctx, e) {
       ctx.beginPath(); ctx.arc(e.x + (e.w || 40) * 0.45, e.y, 8 + 12 * u, 0, Math.PI * 2); ctx.fill();
       break;
     }
-    case 'beam': case 'beamw': { // charge line along its row, thickening
-      const wide = e.zk === 'beamw', th = (wide ? 26 : 8) * (0.3 + 0.7 * u);
-      ctx.fillStyle = `rgba(150,230,255,${0.18 + 0.3 * u})`; ctx.fillRect(0, my - th / 2, mx, th); ctx.fillStyle = `rgba(150,230,255,${0.08 + 0.12 * u})`; ctx.fillRect(0, my - th, mx, th * 2);
-      ctx.strokeStyle = u > 0.7 && blink ? 'rgba(255,255,255,0.95)' : 'rgba(120,220,255,0.75)'; ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.moveTo(0, my - th / 2); ctx.lineTo(mx, my - th / 2); ctx.moveTo(0, my + th / 2); ctx.lineTo(mx, my + th / 2); ctx.stroke();
+    case 'beam': case 'beamw': { // 10-15: muzzle charge only (no row warning lines)
       ctx.fillStyle = 'rgba(220,250,255,0.9)'; ctx.beginPath(); ctx.arc(mx, my, 3 + 7 * u, 0, Math.PI * 2); ctx.fill();
       break;
     }
-    case 'rain': { // 弾の雨: charge glow on unit + linking arc + lane warnings
+    case 'rain': { // 弾の雨: charge glow on unit + shells rising from it (10-15: no lane pre-warning)
       const fh = e._fh || 400, cols = e.zc || [];
       const pulse = 0.5 + 0.5 * Math.sin(t * (10 + u * 14)), hot = u > 0.7;
       const ew = e.w || 40, eh = e.h || 40, top = e.y - eh * 0.5;
@@ -1497,10 +1465,6 @@ function drawPersonaTell(ctx, e) {
       const fl = 14 + 26 * u * (0.8 + 0.4 * pulse), lg = ctx.createLinearGradient(0, top, 0, top - fl);
       lg.addColorStop(0, `rgba(255,200,90,${0.7 + 0.3 * u})`); lg.addColorStop(1, 'rgba(255,80,30,0)');
       ctx.fillStyle = lg; ctx.beginPath(); ctx.moveTo(e.x - 8, top); ctx.lineTo(e.x + 8, top); ctx.lineTo(e.x, top - fl); ctx.closePath(); ctx.fill();
-      if (cols.length) { const cx = (cols[0] + cols[cols.length - 1]) / 2;
-        ctx.strokeStyle = `rgba(255,150,60,${0.35 + 0.4 * pulse})`; ctx.lineWidth = 2.5; ctx.setLineDash([8, 6]); ctx.lineDashOffset = -t * 60;
-        ctx.beginPath(); ctx.moveTo(e.x, top - 4); ctx.quadraticCurveTo((e.x + cx) / 2, -fh * 0.08, cx, 6); ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0; }
-      const la = hot ? (blink ? 0.95 : 0.6) : 0.35 + 0.35 * pulse;
       // shells visibly launched UP from the unit toward each lane (arrive as the rain starts) → source is obvious
       if (u > 0.35) { const k = (u - 0.35) / 0.65;
         cols.forEach((x, i) => { const q = Math.max(0, Math.min(1, k * 1.15 - i * 0.04)), sx0 = e.x, sy0 = top, cxp = (e.x + x) / 2, cyp = -fh * 0.15;
@@ -1509,27 +1473,11 @@ function drawPersonaTell(ctx, e) {
           ctx.strokeStyle = 'rgba(255,120,40,0.75)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(qx, qy); ctx.lineTo(px, py); ctx.stroke();
           ctx.fillStyle = '#fff0c8'; ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill(); });
       }
-      for (const x of cols) {
-        const sg = ctx.createLinearGradient(x - 10, 0, x + 10, 0);
-        sg.addColorStop(0, 'rgba(255,60,30,0)'); sg.addColorStop(0.5, `rgba(255,70,30,${(hot ? 0.28 : 0.14) * (0.6 + 0.4 * pulse)})`); sg.addColorStop(1, 'rgba(255,60,30,0)');
-        ctx.fillStyle = sg; ctx.fillRect(x - 10, 0, 20, fh);
-        ctx.strokeStyle = hot ? `rgba(255,50,30,${la})` : `rgba(255,170,60,${la})`; ctx.lineWidth = hot ? 4 : 3; ctx.setLineDash([10, 6]); ctx.lineDashOffset = -t * 120;
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, fh); ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0;
-        const tg = ctx.createLinearGradient(0, 0, 0, 34); tg.addColorStop(0, `rgba(255,60,30,${0.75 * (0.6 + 0.4 * pulse)})`); tg.addColorStop(1, 'rgba(255,60,30,0)');
-        ctx.fillStyle = tg; ctx.fillRect(x - 12, 0, 24, 34);
-        ctx.fillStyle = hot && blink ? '#fff4c0' : 'rgba(255,90,40,1)'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-        ctx.fillText('▼', x, 2 + 3 * pulse);
-      }
       break;
     }
-    case 'gate': { // rows where the lasers will run (the gaps are safe)
-      ctx.strokeStyle = blink ? 'rgba(255,60,40,0.95)' : 'rgba(255,170,60,0.8)'; ctx.lineWidth = 2.5 + u * 2.5; ctx.setLineDash([10, 6]);
-      for (const y of e.zc || []) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(mx, y); ctx.stroke(); }
-      ctx.setLineDash([]);
+    case 'gate': { // 10-15: beams extend from the unit toward the rows (no row pre-warning)
       if (u > 0.3) { const k2 = Math.min(1, (u - 0.3) / 0.5); ctx.strokeStyle = `rgba(210,140,255,${0.5 + 0.4 * k2})`; ctx.lineWidth = 2 + 2 * k2;
         for (const y of e.zc || []) { ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(mx, my + (y - my) * k2); ctx.stroke(); ctx.fillStyle = '#f0d8ff'; ctx.beginPath(); ctx.arc(mx, my + (y - my) * k2, 3.5, 0, Math.PI * 2); ctx.fill(); } }
-      for (const y of e.zc || []) { const gg = ctx.createLinearGradient(0, y - 10, 0, y + 10); gg.addColorStop(0, 'rgba(190,110,255,0)'); gg.addColorStop(0.5, `rgba(200,120,255,${0.12 + 0.2 * u})`); gg.addColorStop(1, 'rgba(190,110,255,0)');
-        ctx.fillStyle = gg; ctx.fillRect(0, y - 10, mx, 20); ctx.fillStyle = blink && u > 0.6 ? '#fff' : 'rgba(255,90,60,1)'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillText('◀', mx - 6, y); }
       break;
     }
     case 'heal': { // green tether to the ally being repaired
@@ -1697,7 +1645,7 @@ function drawEnemy(ctx, e) {
   }
   if (e.zs > 0 || e.hx) { ctx.globalAlpha = 1; drawPersonaLocal(ctx, e, t); }
   // Laser telegraph (large sent units) — drawn in local space after body
-  if (e.laserTeleT > 0) {
+  if (e.laserTeleT > 0 && !e.sent) { // 10-15: sent units show only the unit charge glow
     ctx.globalAlpha = 1;
     drawLaserTelegraph(ctx, e, t);
   }
@@ -4130,7 +4078,7 @@ function drawFieldInner(ctx, area, snap, opts = {}) {
       x: b.x * sx, y: b.y * sy, owner: isDir ? 'player' : (b.o || b.owner), homing: isDir ? false : (b.h || b.homing),
       tint: isDir && !darkened ? 'in' : undefined, r: (b.r || 3) * Math.min(sx, sy), vx: b.vx, vy: b.vy,
       laser: !!(b.L || b.laser), k: b.k, st: b.st,
-      g: b.g ? [b.g[0] * sx, b.g[1] * sy, b.g[2]] : (b.tgx != null && b.st > 0 ? [b.tgx * sx, b.tgy * sy, 1 - b.st / (b.tg0 || 1)] : undefined),
+      g: b.g ? [b.g[0] * sx, b.g[1] * sy, b.g[2]] : undefined, // 10-15: no bomb target marker
       bl: b.bl || (b.k === 'mini' && !b.go && b.mt >= b.mh) ? 1 : 0,
       trail: Array.isArray(b.trail) ? b.trail.map((p) => ({ x: p.x * sx, y: p.y * sy })) : undefined,
     });
