@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-15 01:58:20';
+export const VERSION_LABEL = '2026-10-15 02:25:01';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1791997100000;
-export const BUILD_NOTE = '転送敵キャラの事前警告（点線・▼など）を廃止／確認用パレード（ランキング停止中）';
+export const BUILD_TIME = 1791998701000;
+export const BUILD_NOTE = '通常モードに戻す（確認用パレード終了・ランキング送信再開）';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
