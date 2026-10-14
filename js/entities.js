@@ -516,6 +516,7 @@ export const GUARD_RANGE = 0.2, GUARD_MULT = 0.5, GUARD_FX_T = 0.35;
 const _gs = { x: -1e9, y: -1e9, fw: 1 };
 export function setGuardShip(x, y, fw) { _gs.x = x; _gs.y = y; _gs.fw = fw || 1; }
 function guardDmg(H, cx, cy, dmg) {
+  if (H && H.kind === 'wave_snake_head') return dmg; // 10-15 fix: the snake chases the ship by design → no guard (was effectively unkillable)
   if (Math.hypot(cx - _gs.x, cy - _gs.y) >= _gs.fw * GUARD_RANGE) return dmg;
   H._gdT = GUARD_FX_T; H._gdX = cx; H._gdY = cy;
   return dmg * GUARD_MULT;

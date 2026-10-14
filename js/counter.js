@@ -6,7 +6,7 @@
  * Each field is simulated by its owner and streamed (online), so Math.random is consistent with the
  * rest of the enemy randomness (which also uses Math.random on the owning client).
  */
-import { spawnBullet, coreWorld, coreOwnerOf } from './entities.js?v=20261015022501';
+import { spawnBullet, coreWorld, coreOwnerOf } from './entities.js?v=20261015035605';
 
 export const COUNTER_RANGE = 1 / 3, COUNTER_DMIN = 1.0, COUNTER_DMAX = 2.0, COUNTER_TELE = 0.5, COUNTER_CD = 1.0;
 /** id, colour, volleys [[delay s, fn]] */
@@ -53,7 +53,7 @@ export function tickCounters(enemies, bullets, sx, sy, dt, now, fw) {
     if (H._gdT > 0) H._gdT -= dt;
     if (H._ctrF && (H._ctrF.t -= dt) <= 0) H._ctrF = null;
     // User 10-15: approaching a core is enough — it keeps launching random strong attacks while the ship stays close
-    if (!H._ctr && fw && H.core && H.core.hp > 0 && H.hp > 0 && !H._portalOnly && now >= (H._ctrReady || 0)) {
+    if (!H._ctr && fw && H.kind !== 'wave_snake_head' && H.core && H.core.hp > 0 && H.hp > 0 && !H._portalOnly && now >= (H._ctrReady || 0)) {
       const c = coreWorld(H);
       if (c && Math.hypot(c.x - sx, c.y - sy) <= fw * COUNTER_RANGE) {
         H._ctr = { p: Math.floor(Math.random() * COUNTER_PATTERNS.length), t: COUNTER_DMIN + Math.random() * (COUNTER_DMAX - COUNTER_DMIN), v: 0, vt: 0, cx: c.x, cy: c.y };
