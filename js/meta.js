@@ -2,7 +2,7 @@
  * localStorage key: shootingOnline_meta (NEVER rename — would wipe player PT).
  * Backup key: shootingOnline_meta_bak. On every update, preserve pt; never clear storage.
  */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20261015035605';
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20261015043351';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;
@@ -537,7 +537,7 @@ export { CATALOG, CATALOG_BY_ID, STARTER_DECK };
  *   shootingOnline_comRecord      {v:1, normal:{w,l}, strong:{w,l}}   w = wins, l = losses
  *   shootingOnline_comRecord_bak  previous value (written before every save)
  * A finished COM match is always a win or a loss (TIME UP / 延長戦 are decided by life), so there
- * are no draws. Quitting with ストップ is not counted.
+ * are no draws. Quitting with 対戦終了 is not counted.
  * Transfer merge (portal /transfer/): per difficulty keep the record with MORE matches (never reduces).
  *
  * ── Enemy level formula ─────────────────────────────────────────────────────────────
