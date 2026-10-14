@@ -1098,6 +1098,7 @@ export function serializeField(state) {
       zk: e.zk, zu: e.zu != null ? +e.zu.toFixed(2) : undefined, zx: e.zx != null ? Math.round(e.zx) : undefined, zy: e.zy != null ? Math.round(e.zy) : undefined,
       zc: e.zc, za: e.za != null ? +e.za.toFixed(2) : undefined, zs: e.zs != null ? +e.zs.toFixed(2) : undefined, zg: e.zg != null ? +e.zg.toFixed(2) : undefined,
       hx: e._healFx > 0 ? 1 : undefined,
+      rf: e._rf > 0 ? +e._rf.toFixed(2) : undefined, rc: e._rf > 0 ? e._rfc : undefined,
     })),
     bullets: state.bullets.filter(b => b.owner === 'player' || b.owner === 'enemy').slice(0, 60).map(b => ({
       x: b.x, y: b.y, o: b.owner, h: !!b.homing, vx: b.vx, vy: b.vy,

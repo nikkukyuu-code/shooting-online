@@ -10,9 +10,9 @@
  * Render state lives in short fields (zk tell kind, zu 0..1 progress, zx/zy target, zc rows/columns,
  * za alpha, zs shield, zg angle) that go into the online snapshot as-is (entities.js serializeField).
  */
-import { spawnBullet, resolveEnemyTier } from './entities.js?v=20261014164237';
-import { attackCtx } from './attacks.js?v=20261014164237';
-import { unitAttackLoadout } from './catalog.js?v=20261014164237';
+import { spawnBullet, resolveEnemyTier } from './entities.js?v=20261014211222';
+import { attackCtx } from './attacks.js?v=20261014211222';
+import { unitAttackLoadout } from './catalog.js?v=20261014211222';
 
 const PI = Math.PI, TAU = PI * 2;
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -455,8 +455,9 @@ const SPECIALS = {
     fire(e, sp, S, X, c) {
       sp.cols.forEach((x, i) => c.later(i * 0.05, (c2) => {
         const b = spawnBullet(x, -14, 0, 235, 'enemy', false, 2, { life: 3 });
-        b.k = 'needle'; c2.emit(b);
+        b.k = 'rain'; c2.emit(b); // visual only: same speed / life / damage / hitbox as the old needle
       }));
+      e._rf = 0.45; e._rfc = sp.cols.slice(); // firing flash + recoil smoke (render only)
     },
   },
   gate: {
@@ -499,6 +500,7 @@ export function tickPersona(e, X) {
   if (!P) return null;
   const pm = e._pm || (e._pm = { age: 0, spCd: rnd(1.0, 2.0) });
   pm.age += X.dt;
+  if (e._rf > 0) { e._rf -= X.dt; if (e._rf <= 0) { e._rf = 0; e._rfc = undefined; } }
   pm.fire = true;
   if (e._healFx > 0) e._healFx -= X.dt;
   // leave after its time on the field (keeps firing on the way out)

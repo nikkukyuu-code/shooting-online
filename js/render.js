@@ -1,8 +1,8 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261014164237';
-import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261014164237';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261014211222';
+import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261014211222';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -371,7 +371,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261014164237`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261014211222`;
 }
 
 function loadKindSprite(kind) {
@@ -457,8 +457,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261014164237'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261014164237'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261014211222'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261014211222'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -1358,6 +1358,25 @@ function bubbleAlpha(e) {
   void ki; // 10-05: no entry shimmer — unhit bubbles stay fully invisible
   return kh > 0 ? 1 : 0;
 }
+/** 弾の雨 firing: flash at the top of each lane + recoil smoke on the unit (visual only). */
+function drawRainFire(ctx, e) {
+  const k = Math.max(0, Math.min(1, e._rf / 0.45)), ew = e.w || 40, top = e.y - (e.h || 40) * 0.5;
+  ctx.save();
+  for (const x of e._rfc || []) {
+    const r = 10 + 22 * k, g = ctx.createRadialGradient(x, 4, 1, x, 4, r);
+    g.addColorStop(0, `rgba(255,255,220,${k})`); g.addColorStop(0.4, `rgba(255,140,40,${0.8 * k})`); g.addColorStop(1, 'rgba(255,60,20,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, 4, r, 0, Math.PI * 2); ctx.fill();
+  }
+  const mf = ctx.createRadialGradient(e.x, top, 1, e.x, top, ew * 0.7);
+  mf.addColorStop(0, `rgba(255,250,210,${k})`); mf.addColorStop(1, 'rgba(255,100,30,0)');
+  ctx.fillStyle = mf; ctx.beginPath(); ctx.arc(e.x, top, ew * 0.7, 0, Math.PI * 2); ctx.fill();
+  const p = 1 - k;
+  for (let i = 0; i < 5; i++) {
+    const ox = (i - 2) * ew * 0.16 + Math.sin(i * 2.3) * 4, oy = -p * (18 + i * 5);
+    ctx.fillStyle = `rgba(170,165,160,${0.5 * k})`; ctx.beginPath(); ctx.arc(e.x + ox, top + oy, 5 + p * 10 + i, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
 /** Sent-unit personality tells (js/sentai.js), absolute pane coordinates (drawn under the body). */
 function drawPersonaTell(ctx, e) {
   const t = performance.now() / 1000, u = Math.max(0, Math.min(1, e.zu || 0));
@@ -1430,12 +1449,32 @@ function drawPersonaTell(ctx, e) {
       ctx.fillStyle = 'rgba(220,250,255,0.9)'; ctx.beginPath(); ctx.arc(mx, my, 3 + 7 * u, 0, Math.PI * 2); ctx.fill();
       break;
     }
-    case 'rain': { // columns where shots will fall
-      const fh = e._fh || 400;
-      ctx.strokeStyle = blink ? 'rgba(255,60,40,0.85)' : 'rgba(255,170,60,0.55)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]);
-      for (const x of e.zc || []) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, fh); ctx.stroke(); }
-      ctx.setLineDash([]); ctx.fillStyle = 'rgba(255,80,40,0.95)';
-      for (const x of e.zc || []) { ctx.beginPath(); ctx.moveTo(x - 7, 2); ctx.lineTo(x + 7, 2); ctx.lineTo(x, 14); ctx.closePath(); ctx.fill(); }
+    case 'rain': { // 弾の雨: charge glow on unit + linking arc + lane warnings
+      const fh = e._fh || 400, cols = e.zc || [];
+      const pulse = 0.5 + 0.5 * Math.sin(t * (10 + u * 14)), hot = u > 0.7;
+      const ew = e.w || 40, eh = e.h || 40, top = e.y - eh * 0.5;
+      const gr = ew * (0.6 + 0.6 * u) * (0.9 + 0.2 * pulse);
+      const g = ctx.createRadialGradient(e.x, e.y, 2, e.x, e.y, gr);
+      g.addColorStop(0, `rgba(255,240,180,${0.55 + 0.35 * u})`); g.addColorStop(0.45, `rgba(255,120,30,${0.45 + 0.35 * u})`); g.addColorStop(1, 'rgba(255,60,20,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(e.x, e.y, gr, 0, Math.PI * 2); ctx.fill();
+      const fl = 14 + 26 * u * (0.8 + 0.4 * pulse), lg = ctx.createLinearGradient(0, top, 0, top - fl);
+      lg.addColorStop(0, `rgba(255,200,90,${0.7 + 0.3 * u})`); lg.addColorStop(1, 'rgba(255,80,30,0)');
+      ctx.fillStyle = lg; ctx.beginPath(); ctx.moveTo(e.x - 8, top); ctx.lineTo(e.x + 8, top); ctx.lineTo(e.x, top - fl); ctx.closePath(); ctx.fill();
+      if (cols.length) { const cx = (cols[0] + cols[cols.length - 1]) / 2;
+        ctx.strokeStyle = `rgba(255,150,60,${0.35 + 0.4 * pulse})`; ctx.lineWidth = 2.5; ctx.setLineDash([8, 6]); ctx.lineDashOffset = -t * 60;
+        ctx.beginPath(); ctx.moveTo(e.x, top - 4); ctx.quadraticCurveTo((e.x + cx) / 2, -fh * 0.08, cx, 6); ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0; }
+      const la = hot ? (blink ? 0.95 : 0.6) : 0.35 + 0.35 * pulse;
+      for (const x of cols) {
+        const sg = ctx.createLinearGradient(x - 10, 0, x + 10, 0);
+        sg.addColorStop(0, 'rgba(255,60,30,0)'); sg.addColorStop(0.5, `rgba(255,70,30,${(hot ? 0.28 : 0.14) * (0.6 + 0.4 * pulse)})`); sg.addColorStop(1, 'rgba(255,60,30,0)');
+        ctx.fillStyle = sg; ctx.fillRect(x - 10, 0, 20, fh);
+        ctx.strokeStyle = hot ? `rgba(255,50,30,${la})` : `rgba(255,170,60,${la})`; ctx.lineWidth = hot ? 4 : 3; ctx.setLineDash([10, 6]); ctx.lineDashOffset = -t * 120;
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, fh); ctx.stroke(); ctx.setLineDash([]); ctx.lineDashOffset = 0;
+        const tg = ctx.createLinearGradient(0, 0, 0, 34); tg.addColorStop(0, `rgba(255,60,30,${0.75 * (0.6 + 0.4 * pulse)})`); tg.addColorStop(1, 'rgba(255,60,30,0)');
+        ctx.fillStyle = tg; ctx.fillRect(x - 12, 0, 24, 34);
+        ctx.fillStyle = hot && blink ? '#fff4c0' : 'rgba(255,90,40,1)'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+        ctx.fillText('▼', x, 2 + 3 * pulse);
+      }
       break;
     }
     case 'gate': { // rows where the lasers will run (the gaps are safe)
@@ -1511,6 +1550,7 @@ function drawEnemy(ctx, e) {
     ctx.fillRect(0, e.y - e.h * 0.32, e.x, e.h * 0.64);
   }
   if (e.zk) drawPersonaTell(ctx, e);
+  if (e._rf > 0) drawRainFire(ctx, e);
   ctx.translate(e.x, e.y);
   if ((e._shake || 0) > 0 || e.sk) ctx.translate((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6);
   if (e._warn) {
@@ -1906,6 +1946,13 @@ function drawEnemyShot(ctx, b, k, ux, uy, ang) {
     ctx.moveTo(b.x - ux * len, b.y - uy * len); ctx.lineTo(b.x + ux * len * 0.35, b.y + uy * len * 0.35); ctx.stroke();
   };
   switch (k) {
+    case 'rain': { // 弾の雨 — long orange-red shell (look only; hitbox unchanged)
+      ctx.save(); ctx.shadowColor = 'rgba(255,80,20,0.9)'; ctx.shadowBlur = 10;
+      streak(30, 8, 'rgba(255,70,20,0.45)'); ctx.restore();
+      streak(26, 4, '#ff5a1e'); streak(18, 1.8, '#fff0c8');
+      dot(b.x + ux * 4, b.y + uy * 4, 3, '#ffe9b0');
+      break;
+    }
     case 'needle': // aimed / burst — yellow dart
       streak(15, 5, 'rgba(255,210,60,0.4)');
       streak(11, 2.2, '#fff2a0');
@@ -3971,7 +4018,7 @@ function drawFieldInner(ctx, area, snap, opts = {}) {
       bodyFlash: e._bodyFlash || (e.bf ? 0.1 : 0),
       // sent-unit personality tell (js/sentai.js) — same fields locally and in the online snapshot
       zk: e.zk, zu: e.zu, zx: e.zx != null ? e.zx * sx : undefined, zy: e.zy != null ? e.zy * sy : undefined,
-      zc: Array.isArray(e.zc) ? e.zc.map((v) => v * (e.zk === 'rain' ? sx : sy)) : undefined, za: e.za, zs: e.zs, zg: e.zg,
+      zc: Array.isArray(e.zc) ? e.zc.map((v) => v * (e.zk === 'rain' ? sx : sy)) : undefined, za: e.za, zs: e.zs, zg: e.zg, _rf: e._rf ?? e.rf, _rfc: Array.isArray(e._rfc ?? e.rc) ? (e._rfc ?? e.rc).map((v) => v * sx) : undefined,
       hx: e.hx || (e._healFx > 0 ? 1 : 0), _fw: fw, _fh: fh,
       _portalA: e._chainOf ? e._chainOf._portalA : e.pA, _portalOut: e._chainOf ? e._chainOf._portalOut : e.pO, // snake portal fade in / out
     });

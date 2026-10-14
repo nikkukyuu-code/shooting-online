@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261014164237';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261014211222';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,18 +6,20 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261014164237';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261014164237';
-import { sfx } from './audio.js?v=20261014164237';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261014164237';
-import { fxRate } from './entities.js?v=20261014164237';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261014164237';
-import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261014164237';
-import { hitBattleCounter } from './stats.js?v=20261014164237';
-import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261014164237';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261014164237';
-import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261014164237';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261014164237';
+} from './entities.js?v=20261014211222';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261014211222';
+import { sfx } from './audio.js?v=20261014211222';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261014211222';
+import { fxRate } from './entities.js?v=20261014211222';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261014211222';
+import { ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261014211222';
+import { hitBattleCounter } from './stats.js?v=20261014211222';
+// ===== DEBUG (temporary): 弾の雨 visual check — set to false to remove. While true, ranking submit is disabled. =====
+const DEBUG_RAIN_AT_START = true;
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261014211222';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261014211222';
+import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261014211222';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261014211222';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -530,7 +532,15 @@ export class Game {
         if (!this.ended && !this.waiting && this.state && this.state.statusText === msg) this.setStatus(HINT);
       }, 4200);
       // First-time (or forced) in-battle tutorial in the info pane
-      setTimeout(() => { if (!this.ended && !this.waiting) this.maybeStartTutorial(!!this._forceTutorial); this._forceTutorial = false; }, 700);
+      if (DEBUG_RAIN_AT_START) setTimeout(() => {
+      if (this.ended || this.waiting || !this.state) return;
+      const fw = this.L.own.w, fh = this.L.own.h;
+      const e = this.markSentEnemy(spawnEnemy(fw, fh, 'destroyer_class'), fw, fh, this.state.enemies);
+      e._pm = { age: 0, spCd: 0.4 }; // fire 弾の雨 right away (~2 s after start)
+      this.state.enemies.push(e);
+      this.setStatus('【確認用】烈火駆逐艦の弾の雨（ランキング送信は停止中）');
+    }, 500);
+    setTimeout(() => { if (!this.ended && !this.waiting) this.maybeStartTutorial(!!this._forceTutorial); this._forceTutorial = false; }, 700);
     } else if (net) {
       net.on('data', (msg) => this.onNet(msg));
       net.on('disconnected', () => {
@@ -3171,7 +3181,9 @@ export class Game {
     }
 
     // World ranking: COM「強い」 wins only (PvP / 普通 / tutorial never submitted). Best-effort, async.
-    if (this.useBot && !this.isOnline() && !this._tutorialMatch && this.comDifficulty === 'strong') {
+    if (DEBUG_RAIN_AT_START && this.useBot && this.comDifficulty === 'strong') { try { cancelStrongMatch(); } catch (_) {} const el = document.getElementById('end-rank-msg'); if (el) { el.textContent = '確認用ビルドのためランキング送信は停止中です'; el.hidden = false; } }
+    else if (this.useBot && !this.isOnline() && !this._tutorialMatch && this.comDifficulty === 'strong') {
+
       const pt = won && this._ptReward ? this._ptReward.gain : 0;
       if (!won) { try { cancelStrongMatch(); } catch (_) {} }
       else {
