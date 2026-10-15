@@ -2216,8 +2216,26 @@ html, body {
 .medal-shelf { display: flex; align-items: flex-end; gap: 3px; flex-wrap: nowrap; overflow: hidden; }
 .medal-shelf.compact { gap: 2px; }
 .medal-item { position: relative; display: inline-flex; flex-shrink: 0; }
-.medal-item .medal { display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
-.medal-n { position: absolute; right: -3px; bottom: -2px; font-size: 0.62rem; color: #fff; background: rgba(0,0,0,0.7); border-radius: 6px; padding: 0 3px; line-height: 1.3; }
+.medal-item .medal { display: block; }
+/* medal art: wrapper + light animation layers (month shine, year rays/sparkles/glow) */
+.medal { position: relative; display: inline-block; vertical-align: bottom; flex-shrink: 0; }
+.medal .medal-art { position: relative; display: block; z-index: 1; }
+.medal-week .medal-art { filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
+.medal-rays { position: absolute; z-index: 0; pointer-events: none; opacity: 0.85; animation: medal-spin 9s linear infinite; }
+.medal-shine { position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  -webkit-mask-size: 100% 100%; mask-size: 100% 100%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  background: linear-gradient(110deg, transparent 42%, rgba(255,255,255,0.6) 50%, transparent 58%) no-repeat;
+  background-size: 300% 100%; animation: medal-shine 3.4s ease-in-out infinite; }
+.medal-year .medal-shine { animation-duration: 2.6s; }
+.medal-spark { position: absolute; z-index: 3; pointer-events: none; color: #fff7c0; font-style: normal; line-height: 1;
+  text-shadow: 0 0 4px #ffd23a, 0 0 2px #fff; transform: translate(-50%, -50%) scale(0.3); opacity: 0; animation: medal-twinkle 1.8s ease-in-out infinite; }
+@keyframes medal-spin { to { transform: rotate(360deg); } }
+@keyframes medal-shine { 0% { background-position: 130% 0; } 55%, 100% { background-position: -30% 0; } }
+@keyframes medal-twinkle { 0%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.3) rotate(0deg); } 45% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(45deg); } }
+@media (prefers-reduced-motion: reduce) { .medal-rays, .medal-shine, .medal-spark { animation: none; } .medal-shine, .medal-spark { display: none; } }
+.medal-item { align-items: flex-end; }
+.medal-n { position: relative; z-index: 5; align-self: flex-end; margin: 0 1px 0 -3px; font-size: 0.6rem; font-weight: 900; color: #fff; background: rgba(0,0,0,0.72); border: 1px solid rgba(255,255,255,0.25); border-radius: 6px; padding: 0 3px; line-height: 1.25; }
+.medal-more { align-self: center; flex-shrink: 0; font: 900 0.7rem/1 inherit; font-family: inherit; color: #ffe39a; background: rgba(0,0,0,0.45); border: 1px solid rgba(255,210,90,0.5); border-radius: 8px; padding: 3px 5px; }
 .medal-none { color: #d8c79a; font-size: 0.72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 @media (max-height: 600px) { .menu-medals { min-height: 34px; padding: 2px 6px; } }
 
@@ -2248,7 +2266,7 @@ html, body {
 .rk-row.top2 { background: linear-gradient(90deg, rgba(210,220,235,0.22), rgba(14,24,50,0.85)); }
 .rk-row.top3 { background: linear-gradient(90deg, rgba(216,138,74,0.25), rgba(14,24,50,0.85)); }
 .rk-row.me { outline: 2px solid #5fe0ff; }
-.rk-rank { width: 30px; flex-shrink: 0; text-align: center; font-weight: 900; color: #cfe0ff; display: flex; justify-content: center; }
+.rk-rank { width: 36px; flex-shrink: 0; text-align: center; font-weight: 900; color: #cfe0ff; display: flex; justify-content: center; }
 .rk-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
 .rk-score { flex-shrink: 0; font-weight: 900; color: #ffe27a; text-align: right; display: flex; flex-direction: column; line-height: 1.1; }
 .rk-score small { font-size: 0.62rem; color: #9fb4d6; font-weight: 600; }
@@ -2257,6 +2275,7 @@ html, body {
 .rk-medal-sample { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 10px 14px; padding-top: 6px; }
 .rk-sample-col { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 0.72rem; color: #ffe39a; }
 .rk-sample-row { display: flex; align-items: flex-end; gap: 2px; }
+.rk-medal-legend { font-size: 0.72rem; color: #cfe0ff; text-align: center; }
 
 .nick-dialog { position: absolute; inset: 0; z-index: 9500; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; padding: 16px; }
 .nick-box { width: min(100%, 340px); background: linear-gradient(165deg, #1c2a52, #0c1228); border: 1px solid rgba(255,210,90,0.55); border-radius: 14px; padding: 16px; color: #e8f2ff; display: flex; flex-direction: column; gap: 8px; }

@@ -1,15 +1,15 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261015213840';
-import { Net } from './net.js?v=20261015213840';
-import { Game } from './game.js?v=20261015213840';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261015213840';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261015213840';
-import { resetDeckToDefault } from './meta.js?v=20261015213840';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261015213840';
-import { loadBattleCount } from './stats.js?v=20261015213840';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261015213840';
-import { ALL_KIND_IDS } from './catalog.js?v=20261015213840';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261015213840';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261015213840';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261016024940';
+import { Net } from './net.js?v=20261016024940';
+import { Game } from './game.js?v=20261016024940';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261016024940';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261016024940';
+import { resetDeckToDefault } from './meta.js?v=20261016024940';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261016024940';
+import { loadBattleCount } from './stats.js?v=20261016024940';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261016024940';
+import { ALL_KIND_IDS } from './catalog.js?v=20261016024940';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261016024940';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261016024940';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -153,7 +153,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261015213840`;
+  return `assets/enemies/${id}/0.png?v=20261016024940`;
 }
 
 function unitName(id) {
@@ -967,7 +967,8 @@ async function refreshMenuMedals() {
   const entry = r.medals && r.medals[me.id];
   if (entry && entry.nickname && nickEl) nickEl.textContent = entry.nickname;
   _myMedalCache = entry || null;
-  shelf.replaceChildren(medalShelf(entry, { compact: true, max: 8 }));
+  shelf.replaceChildren(medalShelf(entry, { compact: true, max: 8, scale: 0.64 }));
+  requestAnimationFrame(() => fitShelf(shelf));
 }
 
 function rkSetTabs() {
@@ -1010,7 +1011,7 @@ async function renderRanking() {
     const li = document.createElement('li');
     li.className = 'rk-row' + (row.id === me.id ? ' me' : '') + (row.rank <= 3 ? ' top' + row.rank : '');
     const rankEl = document.createElement('span'); rankEl.className = 'rk-rank';
-    if (row.rank <= 3) rankEl.appendChild(medalCanvas(rk.period, row.rank, 26)); else rankEl.textContent = row.rank;
+    if (row.rank <= 3) rankEl.appendChild(medalCanvas(rk.period, row.rank, 30, { board: rk.board })); else rankEl.textContent = row.rank;
     const nm = document.createElement('span'); nm.className = 'rk-name'; nm.textContent = row.nickname + (row.id === me.id ? '（あなた）' : '');
     const sc = document.createElement('span'); sc.className = 'rk-score'; sc.textContent = row.score.toLocaleString('ja-JP') + 'PT';
     if (rk.board === 'top3') { const n = document.createElement('small'); n.textContent = `${Math.min(3, row.n)}試合`; sc.appendChild(n); }
