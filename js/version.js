@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-15 13:20:44';
+export const VERSION_LABEL = '2026-10-15 19:39:10';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1792038044000;
-export const BUILD_NOTE = '切断お知らせがメニューに残る不具合を修正、対人戦のメダル表示を両方に';
+export const BUILD_TIME = 1792060750000;
+export const BUILD_NOTE = 'コアの配下が戦隊を組んで出撃・コアを守る護衛、500PTごとの突破演出、延長戦で敵が途切れないように';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

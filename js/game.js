@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261015132044';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261015193910';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, setGuardShip, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261015132044';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261015132044';
-import { sfx } from './audio.js?v=20261015132044';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261015132044';
-import { fxRate } from './entities.js?v=20261015132044';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261015132044';
-import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261015132044';
-import { hitBattleCounter } from './stats.js?v=20261015132044';
+} from './entities.js?v=20261015193910';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261015193910';
+import { sfx } from './audio.js?v=20261015193910';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261015193910';
+import { fxRate } from './entities.js?v=20261015193910';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261015193910';
+import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261015193910';
+import { hitBattleCounter } from './stats.js?v=20261015193910';
 // ===== DEBUG (temporary): 弾の雨 visual check — set to false to remove. While true, ranking submit is disabled. =====
 const DEBUG_RAIN_AT_START = false;
 // ===== DEBUG (temporary): 転送敵キャラ確認パレード — set to false to remove. =====
@@ -21,11 +21,12 @@ const DEBUG_RAIN_AT_START = false;
 // ship + COM invincible, no time limit (∞), ranking submit / PT / COM rank record disabled.
 const DEBUG_UNIT_PARADE = false;
 const PARADE_SEC = 10;
-import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261015132044';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261015132044';
-import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261015132044';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261015132044';
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261015193910';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261015193910';
+import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261015193910';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261015193910';
 
+const PT_MILESTONE = 500; // 10-15: 突破演出 every 500 PT earned in the match
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
 const TUTORIAL_STEPS = [
@@ -2012,6 +2013,7 @@ export class Game {
         this._spawnAcc = 0;
         S.enemies.push(spawnEnemy(fw, fh, Math.random() < 0.5 ? 'wave_basic' : 'wave_swarm'));
       }
+      if (this.suddenDeath && !DEBUG_UNIT_PARADE) suddenDeathSpawn(S, S.enemies, dt, fw, fh); // 10-15: 延長戦 never runs dry
     }
 
     // Update enemies (vertical weave + forward/back surge)
@@ -2020,7 +2022,7 @@ export class Game {
       if (e.frozenT > 0) continue; // フリーズ: no movement / no fire while frozen
       if (e._chainT != null) continue; // doomed by a core chain: holds its place until its turn to pop
       tickCoreExtras(e, dt);
-      tickRearGuard(e, dt, P.x, P.y * fh, S.bullets, fw, fh); // rear units patrol, cover and shoot
+      if (tickRearGuard(e, dt, P.x, P.y * fh, S.bullets, fw, fh)) continue; // rear units patrol, cover and shoot; true = squad sortie / core guard moved it (10-15)
       if (tickEscort(e, dt, fh)) continue; // formation escort: follows its core unit, no guns
       if (e._entryX != null) { if (e.x > e._entryX) e.x -= 120 * dt; else e._entryX = null; } // core boss + pack fly in together
       e.phase += dt * 2;
@@ -2110,6 +2112,14 @@ export class Game {
       if (got > 0) {
         S.coinPt = (S.coinPt || 0) + got;
         if (S.coinHud) { S.coinLastGold = got >= 30; S.coinPop = { n: got, t: performance.now() / 1000, gold: got >= 30 }; } // animated at the HUD counter (render.js drawCoinHud)
+        // 10-15: 500PT突破 banner — every time this match's coin PT (the 今回のコイン counter) passes 500, 1000, 1500 …
+        // (each milestone once; a big pickup that skips one shows only the highest). Visual + sound only.
+        const mile = Math.floor(S.coinPt / PT_MILESTONE);
+        if (S.coinHud && mile > (S.ptMile || 0)) {
+          S.ptMile = mile;
+          S.ptMilestone = { n: mile * PT_MILESTONE, t: performance.now() / 1000 };
+          try { sfx.milestone(); } catch (_) {}
+        }
       }
     }
     for (const f of S.fx) f.life -= dt * fxRate(f);
@@ -2785,13 +2795,14 @@ export class Game {
       B.spawnAcc = 0;
       B.enemies.push(spawnEnemy(fw, fh, Math.random() < 0.5 ? 'wave_basic' : 'wave_swarm'));
     }
+    if (this.suddenDeath && !DEBUG_UNIT_PARADE) suddenDeathSpawn(B, B.enemies, dt, fw, fh); // same 延長戦 rule on the COM field
 
     for (const e of B.enemies) {
       if (tickWarp(e, dt)) continue; // warp-in: scripted glide / hold, no fire
       if (e.frozenT > 0) continue; // フリーズ: no movement / no fire while frozen
       if (e._chainT != null) continue; // doomed by a core chain: holds its place until its turn to pop
       tickCoreExtras(e, dt);
-      tickRearGuard(e, dt, shipX, B.y * fh, B.bullets, fw, fh); // same rule as the player field
+      if (tickRearGuard(e, dt, shipX, B.y * fh, B.bullets, fw, fh)) continue; // same rule as the player field (squads / core guards)
       if (tickEscort(e, dt, fh)) continue; // formation escort: follows its core unit, no guns
       if (e._entryX != null) { if (e.x > e._entryX) e.x -= 120 * dt; else e._entryX = null; } // core boss + pack fly in together
       e.phase += dt * 2;

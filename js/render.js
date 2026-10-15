@@ -1,8 +1,8 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261015132044';
-import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261015132044';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261015193910';
+import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261015193910';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -371,7 +371,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261015132044`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261015193910`;
 }
 
 function loadKindSprite(kind) {
@@ -457,8 +457,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261015132044'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261015132044'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261015193910'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261015193910'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -1549,6 +1549,7 @@ function drawEnemy(ctx, e) {
   if (e.zk) drawPersonaTell(ctx, e);
   if (e._rf > 0) drawRainFire(ctx, e);
   if (e._ff > 0) drawFireFlash(ctx, e);
+  if (e._sqg > 0 && !e.zk) drawChargeAura(ctx, e, '255,150,60', Math.min(1, e._sqg)); // 10-15 core squad: glow on the unit before it fires
   if (e.laserTeleT > 0 && !e.zk) drawChargeAura(ctx, e, TELL_RGB.laser, Math.min(1, 1 - e.laserTeleT / (e.laserTeleMax || 0.55)));
   ctx.translate(e.x, e.y);
   if ((e._shake || 0) > 0 || e.sk) ctx.translate((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6);
@@ -3166,6 +3167,55 @@ function drawCoinHud(ctx, L, pt, lastGold, pop) {
   ctx.restore();
 }
 
+/** 10-15: 「500PT突破！」 banner (own field only, ≈1.4 s, canvas-drawn → never blocks touches; stays inside the own
+ *  pane so the control bar / life display below are never covered). Pop-in, glow band, ring + gold particle burst. */
+const PT_MILE_T = 1.4;
+function drawPtMilestone(ctx, L, m) {
+  const age = performance.now() / 1000 - m.t;
+  if (!(age >= 0 && age < PT_MILE_T)) return;
+  const A = L.own, cx = A.x + A.w / 2, cy = A.y + A.h * 0.4;
+  const fs = Math.max(18, Math.min(A.w * 0.105, A.h * 0.15));
+  const pop = age < 0.12 ? 0.45 + 0.8 * (age / 0.12) : age < 0.24 ? 1.25 - 0.25 * ((age - 0.12) / 0.12) : 1;
+  const fade = age > PT_MILE_T - 0.35 ? Math.max(0, (PT_MILE_T - age) / 0.35) : 1;
+  const rise = age > PT_MILE_T - 0.35 ? (0.35 - (PT_MILE_T - age)) * fs * 0.9 : 0;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(A.x, A.y, A.w, A.h); ctx.clip();
+  // glow band behind the text
+  const bh = fs * 1.9 * Math.min(1, age / 0.1);
+  const band = ctx.createLinearGradient(A.x, 0, A.x + A.w, 0);
+  band.addColorStop(0, 'rgba(255,190,40,0)'); band.addColorStop(0.5, `rgba(255,200,60,${0.42 * fade})`); band.addColorStop(1, 'rgba(255,190,40,0)');
+  ctx.fillStyle = band; ctx.fillRect(A.x, cy - rise - bh / 2, A.w, bh);
+  // expanding shock ring
+  if (age < 0.7) {
+    const u = age / 0.7;
+    ctx.strokeStyle = `rgba(255,240,170,${0.85 * (1 - u)})`; ctx.lineWidth = Math.max(2, fs * 0.16 * (1 - u));
+    ctx.beginPath(); ctx.ellipse(cx, cy, A.w * 0.08 + A.w * 0.5 * u, fs * 0.6 + fs * 1.6 * u, 0, 0, Math.PI * 2); ctx.stroke();
+  }
+  // particle burst (gold + white sparks flying out, gravity)
+  const n = 28;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + (i % 3) * 0.13, sp = fs * (2.4 + (i * 37 % 11) / 4);
+    const tt = Math.min(age, 1.2), x = cx + Math.cos(a) * sp * tt, y = cy + Math.sin(a) * sp * tt * 0.75 + 60 * tt * tt;
+    const al = Math.max(0, 1 - age / 1.2) * fade;
+    if (al <= 0) continue;
+    ctx.fillStyle = i % 4 === 0 ? `rgba(255,255,255,${al})` : `rgba(255,${190 + (i % 3) * 20},40,${al})`;
+    const r = Math.max(1.5, fs * 0.09 * (1 - tt * 0.5));
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  // text
+  ctx.translate(cx, cy - rise); ctx.scale(pop, pop);
+  ctx.globalAlpha = fade;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `900 ${Math.round(fs)}px sans-serif`;
+  const txt = `${m.n}PT突破！`;
+  ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(4, fs * 0.2); ctx.strokeStyle = 'rgba(70,25,0,0.95)'; ctx.strokeText(txt, 0, 0);
+  ctx.shadowColor = '#ffd21e'; ctx.shadowBlur = fs * 0.7 * (0.6 + 0.4 * Math.sin(age * 18));
+  const g = ctx.createLinearGradient(0, -fs * 0.5, 0, fs * 0.5);
+  g.addColorStop(0, '#fffbe0'); g.addColorStop(0.45, '#ffe066'); g.addColorStop(1, '#ff9a1e');
+  ctx.fillStyle = g; ctx.fillText(txt, 0, 0);
+  ctx.restore();
+}
+
 function drawFx(ctx, f) {
   if (drawExFx(ctx, f)) return; // v1.5.67 extra attack items (attack_items.js)
   if (f.kind === 'shock') { drawShockFx(ctx, f); return; }
@@ -3895,7 +3945,7 @@ function coreBondGroups(enemies) {
   if (!out) return [];
   for (const o of enemies) {
     const L = o._chainOf || o._lead;
-    if (!L || o.hp <= 0 || o._chainT != null) continue;
+    if (!L || o.hp <= 0 || o._chainT != null || o._sqId) continue; // 10-15: no long dotted tether to a squad out on a sortie
     const g = out.find((q) => q.e === L);
     if (g) g.m.push(o);
   }
@@ -4017,7 +4067,7 @@ function drawFieldInner(ctx, area, snap, opts = {}) {
       bodyFlash: e._bodyFlash || (e.bf ? 0.1 : 0),
       // sent-unit personality tell (js/sentai.js) — same fields locally and in the online snapshot
       zk: e.zk, zu: e.zu, zx: e.zx != null ? e.zx * sx : undefined, zy: e.zy != null ? e.zy * sy : undefined,
-      zc: Array.isArray(e.zc) ? e.zc.map((v) => v * (e.zk === 'rain' ? sx : sy)) : undefined, za: e.za, zs: e.zs, zg: e.zg, _rf: e._rf ?? e.rf, _ff: e._ff ?? e.ff, _fk: e._fk ?? e.fk, _ffr: Array.isArray(e._ffr ?? e.fr) ? (e._ffr ?? e.fr).map((v) => v * sy) : undefined, _rfc: Array.isArray(e._rfc ?? e.rc) ? (e._rfc ?? e.rc).map((v) => v * sx) : undefined,
+      zc: Array.isArray(e.zc) ? e.zc.map((v) => v * (e.zk === 'rain' ? sx : sy)) : undefined, za: e.za, zs: e.zs, zg: e.zg, _rf: e._rf ?? e.rf, _ff: e._ff ?? e.ff, _fk: e._fk ?? e.fk, _sqg: e._sqg ?? e.sg, _ffr: Array.isArray(e._ffr ?? e.fr) ? (e._ffr ?? e.fr).map((v) => v * sy) : undefined, _rfc: Array.isArray(e._rfc ?? e.rc) ? (e._rfc ?? e.rc).map((v) => v * sx) : undefined,
       hx: e.hx || (e._healFx > 0 ? 1 : 0), _fw: fw, _fh: fh,
       _portalA: e._chainOf ? e._chainOf._portalA : e.pA, _portalOut: e._chainOf ? e._chainOf._portalOut : e.pO, // snake portal fade in / out
     });
@@ -4249,6 +4299,7 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
   // Match decided (KO / TIME UP sequence running): drop the red low-HP vignette so the finish text stays readable
   if (!localState.koHp) drawLowHpWarning(ctx, L, localState.player.hp, playerMaxHp);
   drawDamageNumbers(ctx, L, localState.damageNumbers);
+  if (localState.ptMilestone) drawPtMilestone(ctx, L, localState.ptMilestone);
 
   // Divider between opp and own
   ctx.fillStyle = 'rgba(0,0,0,0.55)';

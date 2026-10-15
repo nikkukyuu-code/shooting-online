@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261015132044';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261015193910';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -699,6 +699,7 @@ export function tickRearGuard(e, dt, px, py, bullets, fw, fh) {
   if (e._so != null && (e.hp <= 0 || e._chainT != null || L.hp <= 0)) { e._so = null; L._soOut = Math.max(0, (L._soOut || 1) - 1); }
   if (e.hp <= 0 || e._chainT != null || e.mv === 'armseg' || e.passShots) { e._gOx = 0; e._gOy = 0; return; }
   if (L.hp <= 0) return;
+  if (tickSquad(e, L, dt, px, py, bullets, fw, fh)) return true; // 10-15: squad sortie / core guard drives this unit
   // 10-04: guards surround / shield the core (no 'rear' slot any more). Every guard patrols a little,
   // never past the core's back edge, never into the lane in front of the core; all fire telegraphed shots.
   const cx = L.x + (L.core ? L.core.ox : 0), cy = L.y + (L.core ? L.core.oy : 0);
@@ -754,6 +755,146 @@ export function tickRearGuard(e, dt, px, py, bullets, fw, fh) {
   }
 }
 
+/* ------------------------------------------------------------------ 10-15 squads (user: 配下が動かない)
+ * Every core pack (grid core cage, tri / jet / eye boss escorts — NOT the snake, NOT ring pods) splits at random:
+ *  - 2–4 GUARDS orbit near the core (above / behind / below it — never parked in the lane in front of the core);
+ *  - everyone else goes out in small SQUADS (2–4) in a V or a line: short charge glow at its slot → flies in
+ *    formation toward the ship's side → each member glows and fires 2 visible aimed shots (muzzle flash) →
+ *    flies back to its own slot. At most 2 squads out per core, a new one every 2.2–3.6 s.
+ * Units keep _lead / _chainOf → a core break still blows the whole pack, squads out on a sortie included.
+ * Same code for both fields (player + COM). No lane / line warnings (user 10-15): only the unit's own glow + flash. */
+export const SQUAD = { FIRST: 1.6, GAP: [2.2, 3.6], MAX_OUT: 2, SIZE: [2, 4], TELL: 0.45, OUT_SPD: 165, FOLLOW: 260, ATK: 2.4,
+  SHOTS: 2, SHOT_T0: 0.35, SHOT_GAP: 0.8, SHOT_STAGGER: 0.16, SHOT_TELL: 0.3, SHOT_SPD: 150, BACK_SPD: 210, GUARD_W: 0.7 };
+const sqRnd = (a, b) => a + Math.random() * (b - a);
+/** Where this unit's slot is right now (formation slot / docked escort slot), without patrol offsets. */
+function squadHome(e, L) {
+  if (e.mv === 'form' && e.G) return formPos(e, e.mvT || 0);
+  return [L.x + (e.fdx || 0), L.y + (e.fdy || 0)];
+}
+function squadSlotAhead(e, L, dt) { // keep the slot clock running while the unit is driven by the squad
+  if (e.mv === 'form') e.mvT = (e.mvT || 0) + dt;
+  else if (e._lead) e.phase = (e.phase || 0) + dt * 2.2;
+}
+function moveToward(e, x, y, spd, dt) {
+  const dx = x - e.x, dy = y - e.y, d = Math.hypot(dx, dy);
+  if (d <= spd * dt || d < 0.5) { e.x = x; e.y = y; return true; }
+  e.x += (dx / d) * spd * dt; e.y += (dy / d) * spd * dt; return false;
+}
+function squadShot(e, px, py, bullets) {
+  const ox = e.x - (e.w || 22) * 0.45, oy = e.y, a = Math.atan2(py - oy, px - ox), spd = SQUAD.SHOT_SPD;
+  const b = spawnBullet(ox, oy, Math.cos(a) * spd, Math.sin(a) * spd, 'enemy', false, 2, { life: 5 });
+  b.r = 5; b.orb = true; bullets.push(b);
+  e._ff = 0.3; e._fk = 'snipe'; e._sqg = 0; // muzzle flash on the unit itself
+}
+function squadRelease(e) {
+  e._sqId = null; e._sqg = 0; e._gOx = 0; e._gOy = 0; e._soStay = 0; e._soP = null; e._so = null; e._warn = 0;
+  e._soCd = sortieCd() + 1.5;
+}
+function squadLive(u, L) { return u && u.hp > 0 && u._chainT == null && (u._lead === L || u._chainOf === L); }
+/** Lead-level scheduler (runs once per frame, from one member). */
+function squadPlan(L, Q, dt, px, py, fw, fh) {
+  Q.t += dt;
+  Q.mem = Q.mem.filter((u) => squadLive(u, L));
+  const onField = L.x < fw - (L.w || 40) * 0.25 && L.x > fw * 0.42 && L._ph !== 'leave' && L._entryX == null && L.core && L.core.hp > 0;
+  if (!onField) { for (const S of Q.out) if (S.st !== 'back') { S.st = 'back'; S.t = 0; } }
+  if (onField && Q.t > SQUAD.FIRST && !Q.gd) { // pick the core guards once (random)
+    Q.gd = true;
+    const pool = Q.mem.slice().sort(() => Math.random() - 0.5);
+    const n = pool.length, g = Math.min(n, Math.max(2, Math.min(4, Math.round(n / 5))));
+    pool.slice(0, g).forEach((u, i) => { u._sqGuard = { i, n: g, ph: Math.random() * 6 }; u._so = null; u._soStay = 0; u._soP = null; u._gOx = 0; u._gOy = 0; });
+    Q.next = Q.t + sqRnd(0.3, 1.2);
+  }
+  // advance squads
+  for (const S of Q.out) {
+    S.m = S.m.filter((u) => squadLive(u, L));
+    S.t += dt;
+    if (S.st === 'tell' && S.t >= SQUAD.TELL) { S.st = 'out'; S.t = 0; }
+    else if (S.st === 'out') {
+      if (moveToward(S.a, S.tx, S.ty, SQUAD.OUT_SPD, dt) || S.t > 4) { S.st = 'atk'; S.t = 0; }
+    } else if (S.st === 'atk') {
+      // slow, readable drift toward the ship's row
+      const wy = Math.max(30, Math.min(fh - 30, py));
+      S.a.y += Math.max(-32 * dt, Math.min(32 * dt, wy - S.a.y));
+      S.a.x = S.tx + Math.sin(S.t * 1.6) * 10;
+      if (S.t >= SQUAD.ATK) { S.st = 'back'; S.t = 0; }
+    }
+    if (!S.m.length || (S.st === 'back' && S.m.every((u) => u._sqHome))) {
+      for (const u of S.m) squadRelease(u);
+      S.done = true;
+    }
+  }
+  Q.out = Q.out.filter((S) => !S.done);
+  // launch a new squad
+  if (onField && Q.gd && Q.t >= (Q.next || 0) && Q.out.length < SQUAD.MAX_OUT) {
+    const idle = Q.mem.filter((u) => !u._sqGuard && !u._sqId && u._so == null && u.x < fw - 12 && u.x > 0 && u.y > 6 && u.y < fh - 6)
+      .sort(() => Math.random() - 0.5).sort((p, q) => (p._sqN || 0) - (q._sqN || 0)); // random, but units not out yet go first
+    if (idle.length) {
+      // a squad = one unit + its nearest idle neighbours (looks like a group breaking off, not random units)
+      const k = Math.min(idle.length, Math.round(sqRnd(SQUAD.SIZE[0], SQUAD.SIZE[1] + 0.49)));
+      const u0 = idle[0];
+      const m = idle.sort((p, q) => Math.hypot(p.x - u0.x, p.y - u0.y) - Math.hypot(q.x - u0.x, q.y - u0.y)).slice(0, k);
+      const ax = m.reduce((s, u) => s + u.x, 0) / m.length, ay = m.reduce((s, u) => s + u.y, 0) / m.length;
+      const tx = Math.max(fw * 0.32, Math.min(fw * 0.66, Math.min(L.x - (L.w || 40) * 0.5 - fw * 0.12, px + fw * 0.26))); // well clear of the core, ≈¼ pane ahead of the ship
+      const ty = Math.max(30, Math.min(fh - 30, py + sqRnd(-50, 50)));
+      const S = { id: ++Q.seq, m, st: 'tell', t: 0, a: { x: ax, y: ay }, tx, ty, shape: Math.random() < 0.5 ? 'vee' : 'line' };
+      m.sort((p, q) => p.y - q.y).forEach((u, i) => { u._sqId = S; u._sqI = i; u._sqN = (u._sqN || 0) + 1; u._sqHome = false; u._sqShots = 0; u._so = null; u._soStay = 0; u._soP = null; });
+      Q.out.push(S);
+    }
+    Q.next = Q.t + sqRnd(SQUAD.GAP[0], SQUAD.GAP[1]);
+  }
+}
+/** Per-unit squad / guard driver. Returns true when it moved this unit (caller skips slot flight + own gun). */
+function tickSquad(e, L, dt, px, py, bullets, fw, fh) {
+  if (L.kind === 'wave_snake_head' || !L.core) return false; // the snake keeps its own body chain
+  const Q = L._sq || (L._sq = { mem: [], out: [], t: 0, seq: 0, tick: null });
+  if (!e._sqReg) { e._sqReg = true; Q.mem.push(e); }
+  if (!Q.tick || !squadLive(Q.tick, L)) Q.tick = e;
+  if (Q.tick === e) squadPlan(L, Q, dt, px, py, fw, fh);
+  if (e._ff > 0) { e._ff -= dt; if (e._ff <= 0) { e._ff = 0; e._fk = undefined; } }
+  const S = e._sqId;
+  if (S && !S.done) {
+    squadSlotAhead(e, L, dt); e._warn = 0; e._gOx = 0; e._gOy = 0;
+    const [hx, hy] = squadHome(e, L);
+    if (S.st === 'tell') { // charge glow at its slot (the only warning: on the unit itself)
+      e._sqg = Math.min(1, S.t / SQUAD.TELL) * 0.7;
+      moveToward(e, hx, hy, SQUAD.FOLLOW, dt);
+      return true;
+    }
+    if (S.st === 'back') {
+      e._sqg = 0;
+      e._sqHome = moveToward(e, hx, hy, SQUAD.BACK_SPD, dt) || e._sqHome && Math.hypot(hx - e.x, hy - e.y) < 2;
+      if (e._sqHome) { e.x = hx; e.y = hy; }
+      if (e.face || (e.G && e.G.face)) e.rot = 0;
+      return true;
+    }
+    // out / atk: hold the V or line around the moving anchor
+    const n = S.m.length, k = e._sqI - (n - 1) / 2;
+    const off = S.shape === 'vee' ? [Math.abs(k) * 26, k * 26] : [0, k * 30];
+    const gx = S.a.x + off[0], gy = Math.max(12, Math.min(fh - 12, S.a.y + off[1]));
+    moveToward(e, gx, gy, SQUAD.FOLLOW, dt);
+    e._sqg = 0;
+    if (S.st === 'atk') {
+      for (let j = e._sqShots; j < SQUAD.SHOTS; j++) {
+        const at = SQUAD.SHOT_T0 + e._sqI * SQUAD.SHOT_STAGGER + j * SQUAD.SHOT_GAP;
+        if (S.t >= at) { squadShot(e, px, py, bullets); e._sqShots = j + 1; }
+        else { if (S.t >= at - SQUAD.SHOT_TELL) e._sqg = (S.t - (at - SQUAD.SHOT_TELL)) / SQUAD.SHOT_TELL; break; }
+      }
+    }
+    return true;
+  }
+  if (e._sqGuard) { // orbit near the core (behind / above / below — sweeps, never parks in front of the core)
+    squadSlotAhead(e, L, dt); e._warn = 0; e._gOx = 0; e._gOy = 0; e._sqg = 0;
+    const G = e._sqGuard, c = { x: L.x + (L.core.ox || 0), y: L.y + (L.core.oy || 0) };
+    const R = Math.max(L.w || 40, L.h || 30) * 0.5 + 22;
+    const base = G.n > 1 ? -1.6 + 3.2 * (G.i / (G.n - 1)) : 0;
+    const a = base + Math.sin(Q.t * SQUAD.GUARD_W + G.ph) * 0.9;
+    const gx = c.x + Math.cos(a) * R, gy = Math.max(12, Math.min(fh - 12, c.y + Math.sin(a) * R * 0.85));
+    moveToward(e, gx, gy, 170, dt);
+    return true;
+  }
+  return false;
+}
+
 const bubblesAlive = (list) => list.some((e) => e.kind === 'wave_bubble' && e.hp > 0 && e.x > -40);
 const LOOP_FROM = Math.max(0, WAVE_SCRIPT.findIndex((w) => w[0] >= 14.5));
 export function runWaveScript(st, time, list, fw, fh) {
@@ -765,6 +906,7 @@ export function runWaveScript(st, time, list, fw, fh) {
     if (off && build._firstRunOnly) continue; // snake: twice per match only
     if (build === bubbleWall) { if (!st._bubDone) { st._bubDone = true; st._bubPend = time; } continue; } // once per match (not on replay), spawned below, away from cores
     const es = build(fw, fh);
+    if (!es.some((e) => e.core || e._chainOf || e._lead) && es.length) { st._seenB = st._seenB || []; if (!st._seenB.includes(build)) st._seenB.push(build); } // 10-15: sudden-death pool
     if (es.some((e) => e.core) && bubblesAlive(list)) (st._coreHeld = st._coreHeld || []).push(...es); // no core joins a bubble wall
     else for (const e of es) list.push(e);
     if (tag && !off) tags.push(tag);
@@ -783,6 +925,29 @@ export function runWaveScript(st, time, list, fw, fh) {
     if (time >= last + 3) { st._waveI = LOOP_FROM; st._waveOff = time - WAVE_SCRIPT[LOOP_FROM][0]; }
   }
   return tags;
+}
+
+/**
+ * User 10-15: 延長戦 (sudden death) can last any length → never let a field run dry. While it lasts, whenever fewer
+ * than SD_MIN regular enemies are alive on this field, a random group of the regular field enemies that already
+ * appeared in this match (normal waves only: no cores / packs / snake / bubble wall) is placed — at most one group
+ * per SD_GAP s, groups capped at SD_GROUP units, never above SD_CAP enemies in total. Same rule for both fields.
+ * They are ordinary enemies (normal kill score / coins / drops).
+ */
+export const SUDDEN = { MIN: 4, GAP: 1.4, GROUP: 5, CAP: 22 };
+const SD_DEFAULT = WAVE_SCRIPT.filter((w) => w[0] < 14).map((w) => w[1]); // W1 = normal stage pool
+export function suddenDeathSpawn(st, list, dt, fw, fh) {
+  st._sdAcc = (st._sdAcc || 0) + dt;
+  if (st._sdAcc < SUDDEN.GAP) return 0;
+  const alive = list.filter((e) => e.hp > 0 && !e.sent && e._chainT == null && e.x > -40 && e.x < fw + 260).length;
+  if (alive >= SUDDEN.MIN || list.length >= SUDDEN.CAP) return 0;
+  st._sdAcc = 0;
+  const pool = st._seenB && st._seenB.length ? st._seenB : SD_DEFAULT;
+  const build = pool[Math.floor(Math.random() * pool.length)];
+  let es = build(fw, fh).filter((e) => !e.core && !e._chainOf && !e._lead);
+  if (es.length > SUDDEN.GROUP) es = es.slice(0, SUDDEN.GROUP);
+  for (const e of es) list.push(e);
+  return es.length;
 }
 
 // ---------- movers ----------
