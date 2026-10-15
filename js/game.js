@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261015043351';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard } from './waves.js?v=20261015132044';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, setGuardShip, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261015043351';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261015043351';
-import { sfx } from './audio.js?v=20261015043351';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261015043351';
-import { fxRate } from './entities.js?v=20261015043351';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261015043351';
-import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261015043351';
-import { hitBattleCounter } from './stats.js?v=20261015043351';
+} from './entities.js?v=20261015132044';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261015132044';
+import { sfx } from './audio.js?v=20261015132044';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261015132044';
+import { fxRate } from './entities.js?v=20261015132044';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261015132044';
+import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261015132044';
+import { hitBattleCounter } from './stats.js?v=20261015132044';
 // ===== DEBUG (temporary): 弾の雨 visual check — set to false to remove. While true, ranking submit is disabled. =====
 const DEBUG_RAIN_AT_START = false;
 // ===== DEBUG (temporary): 転送敵キャラ確認パレード — set to false to remove. =====
@@ -21,10 +21,10 @@ const DEBUG_RAIN_AT_START = false;
 // ship + COM invincible, no time limit (∞), ranking submit / PT / COM rank record disabled.
 const DEBUG_UNIT_PARADE = false;
 const PARADE_SEC = 10;
-import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261015043351';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261015043351';
-import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261015043351';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261015043351';
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261015132044';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261015132044';
+import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261015132044';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261015132044';
 
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
 const TUTORIAL_KEY = 'shootingOnline_tutorialDone';
@@ -547,18 +547,24 @@ export class Game {
     }, 500);
     setTimeout(() => { if (!this.ended && !this.waiting) this.maybeStartTutorial(!!this._forceTutorial); this._forceTutorial = false; }, 700);
     } else if (net) {
-      net.on('data', (msg) => this.onNet(msg));
+      net.on('data', (msg) => { if (!this._destroyed && this.net === net) this.onNet(msg); });
       net.on('disconnected', () => {
+        if (this._destroyed || this.net !== net) return;
         if (!this.ended && !this.waiting) this.peerGone('lost');
         else if (!this.ended) this.setStatus('接続が切れました');
       });
       // heartbeat: 1 s ping; nothing received for 5 s during a running match → connection lost
       this._lastRx = performance.now();
       this._hbIv = setInterval(() => {
+        if (this._destroyed || !this.running) { clearInterval(this._hbIv); return; }
         if (!this.net || this.ended) return;
         if (this.net.ready) { try { this.net.send({ type: 'hb' }); } catch (_) {} }
         if (!this.waiting && performance.now() - (this._lastRx || 0) > 5000) this.peerGone('lost');
       }, 1000);
+      { let n = 0; const iv = setInterval(() => {
+        if (this._destroyed || this._gotHello || ++n > 6) { clearInterval(iv); return; }
+        if (net.ready) { try { net.send({ type: 'hello', role: net.role, ...(window.__stbRankHello ? window.__stbRankHello() : {}) }); } catch (_) {} }
+      }, 1000); }
       this._onPageHide = () => { if (this.net && this.net.ready && !this.ended) { try { this.net.send({ type: 'quit' }); } catch (_) {} } };
       window.addEventListener('pagehide', this._onPageHide);
       // Resend hello when DataConnection opens (first send may have been before open)
@@ -661,6 +667,7 @@ export class Game {
   }
 
   destroy() {
+    this._destroyed = true; // 10-15 fix: late close / heartbeat events from this match must never show the overlay
     this.stopLoop();
     this._ko = null;
     this.clearKoFx();
@@ -679,7 +686,8 @@ export class Game {
 
   /** Online PvP: the opponent quit (対戦終了) or the connection was lost → end the match, show an overlay. */
   peerGone(kind) {
-    if (this.useBot || !this.net || this._peerGone || this.ended || this.waiting) return;
+    if (this._destroyed || !this.running || this.useBot || !this.net || this._peerGone || this.ended || this.waiting) return;
+    if (typeof document !== 'undefined') { if (window.__stbScreen && window.__stbScreen !== 'game') return; }
     this._peerGone = kind;
     this.ended = true; // match over: no PT / no result (online PvP never grants PT); bc already counted at start
     this.renderMatchTimer(true);
@@ -693,12 +701,12 @@ export class Game {
         + '<p id="peer-gone-msg" style="font-size:clamp(17px,4.6vw,22px);font-weight:bold;line-height:1.5;margin:0 0 18px;word-break:keep-all;overflow-wrap:anywhere"></p>'
         + '<button id="peer-gone-menu" type="button" style="font-size:18px;font-weight:bold;padding:12px 28px;border-radius:12px;border:0;background:#4b6bff;color:#fff;cursor:pointer;min-width:60%">メニューへ</button></div>';
       document.body.appendChild(ov);
-      ov.querySelector('#peer-gone-menu').addEventListener('click', () => { const b = document.getElementById('btn-stop'); if (b) b.click(); });
+      ov.querySelector('#peer-gone-menu').addEventListener('click', () => { ov.remove(); if (window.__stbGoMenu) window.__stbGoMenu(); else { const b = document.getElementById('btn-stop'); if (b) b.click(); } });
     }
     ov.querySelector('#peer-gone-msg').textContent = kind === 'quit' ? '相手が「対戦終了」を押しました' : '相手との接続が切れました';
     ov.style.display = 'flex';
   }
-  hidePeerGone() { const ov = typeof document !== 'undefined' && document.getElementById('peer-gone'); if (ov) ov.style.display = 'none'; }
+  hidePeerGone() { const ov = typeof document !== 'undefined' && document.getElementById('peer-gone'); if (ov) ov.remove(); }
 
   bindInput() {
     const c = this.canvas;
@@ -1682,6 +1690,11 @@ export class Game {
     if (msg.type === 'hb') return;
     if (msg.type === 'quit') { this.peerGone('quit'); return; }
     if (msg.type === 'hello' || msg.type === 'start') {
+      if (msg.type === 'hello') {
+        this._gotHello = true;
+        // 10-15 fix: always answer a hello once, so BOTH sides learn each other's id / nickname (VS medals)
+        if (!msg.ack && this.net && this.net.ready && !this._helloReplied) { this._helloReplied = true; try { this.net.send({ type: 'hello', ack: 1, role: this.net.role, ...(window.__stbRankHello ? window.__stbRankHello() : {}) }); } catch (_) {} }
+      }
       if (msg.type === 'hello' && (msg.pid || msg.nick)) {
         try { window.__stbShowVsMedals && window.__stbShowVsMedals({ pid: String(msg.pid || '').slice(0, 40), nick: String(msg.nick || '').slice(0, 12) }); } catch (_) {}
       }

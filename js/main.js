@@ -1,15 +1,15 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261015043351';
-import { Net } from './net.js?v=20261015043351';
-import { Game } from './game.js?v=20261015043351';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261015043351';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261015043351';
-import { resetDeckToDefault } from './meta.js?v=20261015043351';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261015043351';
-import { loadBattleCount } from './stats.js?v=20261015043351';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261015043351';
-import { ALL_KIND_IDS } from './catalog.js?v=20261015043351';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261015043351';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261015043351';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261015132044';
+import { Net } from './net.js?v=20261015132044';
+import { Game } from './game.js?v=20261015132044';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261015132044';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261015132044';
+import { resetDeckToDefault } from './meta.js?v=20261015132044';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261015132044';
+import { loadBattleCount } from './stats.js?v=20261015132044';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261015132044';
+import { ALL_KIND_IDS } from './catalog.js?v=20261015132044';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261015132044';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261015132044';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -153,7 +153,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261015043351`;
+  return `assets/enemies/${id}/0.png?v=20261015132044`;
 }
 
 function unitName(id) {
@@ -487,6 +487,7 @@ function setZukanTab(tab) {
 
 function goMenu() {
   cleanupGame();
+  document.getElementById('peer-gone')?.remove(); // 10-15 fix: never leave the PvP notice on the menu
   setBusy(false);
   els.fieldFind.value = '';
   els.fieldCode.value = '';
@@ -746,6 +747,7 @@ els.btnStart.addEventListener('click', async () => {
 els.btnStop.addEventListener('click', () => {
   goMenu();
 });
+window.__stbGoMenu = () => goMenu();
 
 els.btnAgain.addEventListener('click', () => {
   goMenu();
@@ -950,6 +952,7 @@ function nickMsg(el, r, okText) {
   el.classList.toggle('warn', !!(r && (!r.ok || r.adjusted)));
 }
 
+let _myMedalCache; // own medals from the last title refresh (memory only) → VS panel shows them instantly
 async function refreshMenuMedals() {
   const me = rankIdentity();
   const nickEl = document.getElementById('mm-nick');
@@ -963,6 +966,7 @@ async function refreshMenuMedals() {
   if (!r.ok) { shelf.replaceChildren(Object.assign(document.createElement('span'), { className: 'medal-none', textContent: 'メダル（オフライン）' })); return; }
   const entry = r.medals && r.medals[me.id];
   if (entry && entry.nickname && nickEl) nickEl.textContent = entry.nickname;
+  _myMedalCache = entry || null;
   shelf.replaceChildren(medalShelf(entry, { compact: true, max: 8 }));
 }
 
@@ -1093,15 +1097,24 @@ window.__stbShowVsMedals = async (peer) => {
       medalShelf(entry, { compact: true, max: 6 }));
     return d;
   };
+  const note = (t) => Object.assign(document.createElement('span'), { className: 'medal-none', textContent: t });
+  const sideN = (label, nick, text) => { const d = side(label, nick, null); d.replaceChild(note(text), d.lastChild); return d; };
+  const vs = () => Object.assign(document.createElement('div'), { className: 'vs-x', textContent: 'VS' });
+  // state: undefined = loading, null = offline, object = fetched map
   const draw = (m) => {
-    box.replaceChildren(side('あなた', me.nickname, m && m[me.id]), Object.assign(document.createElement('div'), { className: 'vs-x', textContent: 'VS' }), side('相手', (m && m[peer.pid] && m[peer.pid].nickname) || peer.nick, m && m[peer.pid]));
+    const mine = m ? m[me.id] : _myMedalCache;
+    const meSide = !me.id ? sideN('あなた', me.nickname, 'メダルなし') : (m || _myMedalCache !== undefined) ? side('あなた', (mine && mine.nickname) || me.nickname, mine) : sideN('あなた', me.nickname, m === null ? 'メダル（オフライン）' : '読み込み中…');
+    const op = m && m[peer.pid];
+    const opSide = !peer.pid ? sideN('相手', peer.nick, 'メダルなし') : m ? side('相手', (op && op.nickname) || peer.nick, op) : sideN('相手', peer.nick, m === null ? 'メダル（オフライン）' : '読み込み中…');
+    box.replaceChildren(meSide, vs(), opSide);
   };
-  draw(null);
+  draw(undefined);
   box.classList.remove('hidden');
   clearTimeout(_vsTimer);
-  _vsTimer = setTimeout(() => box.classList.add('hidden'), 6000);
-  const r = await fetchMedals([me.id, peer.pid]);
-  if (r.ok && box.dataset.key === key) draw(r.medals);
+  _vsTimer = setTimeout(() => box.classList.add('hidden'), 7000);
+  let r = await fetchMedals([me.id, peer.pid]).catch(() => ({ ok: false }));
+  if (!(r && r.ok)) { await new Promise((ok) => setTimeout(ok, 800)); r = await fetchMedals([me.id, peer.pid]).catch(() => ({ ok: false })); } // retry once
+  if (box.dataset.key === key) draw(r && r.ok ? (r.medals || {}) : null);
 };
 window.__stbRankHello = () => { const me = rankIdentity(); return { pid: me.id || '', nick: me.nickname || DEFAULT_NICK }; };
 
