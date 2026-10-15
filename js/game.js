@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261015193910';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261015213840';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, setGuardShip, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261015193910';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261015193910';
-import { sfx } from './audio.js?v=20261015193910';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261015193910';
-import { fxRate } from './entities.js?v=20261015193910';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261015193910';
-import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261015193910';
-import { hitBattleCounter } from './stats.js?v=20261015193910';
+} from './entities.js?v=20261015213840';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261015213840';
+import { sfx } from './audio.js?v=20261015213840';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261015213840';
+import { fxRate } from './entities.js?v=20261015213840';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261015213840';
+import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261015213840';
+import { hitBattleCounter } from './stats.js?v=20261015213840';
 // ===== DEBUG (temporary): 弾の雨 visual check — set to false to remove. While true, ranking submit is disabled. =====
 const DEBUG_RAIN_AT_START = false;
 // ===== DEBUG (temporary): 転送敵キャラ確認パレード — set to false to remove. =====
@@ -21,10 +21,10 @@ const DEBUG_RAIN_AT_START = false;
 // ship + COM invincible, no time limit (∞), ranking submit / PT / COM rank record disabled.
 const DEBUG_UNIT_PARADE = false;
 const PARADE_SEC = 10;
-import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261015193910';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261015193910';
-import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261015193910';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261015193910';
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261015213840';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261015213840';
+import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261015213840';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261015213840';
 
 const PT_MILESTONE = 500; // 10-15: 突破演出 every 500 PT earned in the match
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
@@ -1199,6 +1199,41 @@ export class Game {
     }
   }
 
+  /**
+   * 10-15 bug 「蛇の頭だけがのこっています あたり判定がありません」: a shot-down snake head stays in the list as an
+   * invisible body driver (_headDead) — but item weapons that lower e.hp directly (attack_items etc.) could push that
+   * driver to hp ≤ 0, so it was removed while its core was still alive. The body then froze with no driver and no
+   * hitbox (core ball's owner gone → shots pass) and never left. Safety net, every frame, both fields:
+   *  - a head driver keeps hp ≥ 1 while its core lives (only the core break ends it);
+   *  - a core that is gone without a chain (or whose orange ball is gone) → the whole snake chain-explodes;
+   *  - any snake part whose head is gone → explodes (chain pop) instead of lingering.
+   */
+  snakeSafety(list) {
+    for (const H of list) {
+      if (H.kind !== 'wave_snake_head' || H._chainT != null || H._snkSafe) continue;
+      const coreLive = H.core && H.core.hp > 0;
+      if (H._headDead && coreLive && H.hp <= 0) H.hp = 1; // root cause: keep the invisible driver until the core breaks
+      if (H._ph === 'portal' || H._portalOnly) continue;
+      const ball = H._coreSeg;
+      const ballGone = !ball || ball.hp <= 0 || !list.includes(ball);
+      if (coreLive && !ballGone) continue;
+      if (!coreLive && !H._headDead && H.hp > 0 && list.some((o) => o._chainSrc === H && o._chainT != null)) continue; // normal chain running
+      // core (or its ball) gone without a proper chain → blow the whole snake now (no reward: nobody broke it)
+      H._snkSafe = true;
+      if (H.core) H.core.hp = 0;
+      H._coreBreak = true;
+      markCoreChain(H, list);
+      if (H._headDead || H._chainT == null) { H.hp = 0; H._quietDeath = true; }
+    }
+    let k = 0;
+    for (const o of list) {
+      if (o.kind !== 'wave_snake_seg' || o.hp <= 0 || o._chainT != null) continue;
+      const H = o._chainOf;
+      if (H && list.includes(H) && (H.hp > 0 || H._chainT != null || (H.core && H.core.hp > 0))) continue; // (hp ≤ 0 with a live core = head just shot down → becomes the driver this frame)
+      o._chainT = 0.05 + 0.05 * k++; o._chainSrc = null; // orphan part: pops like the chain (explosion), never lingers
+    }
+  }
+
   placeSentEnemy(e, fw, fh, field) {
     const bobOf = (u) => { const t = resolveEnemyTier(u.kind); return (t === 'swarm' || t === 'drone') ? 28 : 18; };
     const hwOf = (u) => (u.w || 40) * 0.5 + 4;
@@ -2153,6 +2188,7 @@ export class Game {
       }
     }
 
+    this.snakeSafety(S.enemies); // 10-15: no snake part may linger without a hitbox / driver
     // Enemy death -> items
     const remain = [];
     for (const e of S.enemies) {
@@ -2885,6 +2921,7 @@ export class Game {
         }
       }
     }
+    this.snakeSafety(B.enemies); // same safety on the COM field
     const kept = [];
     for (const e of B.enemies) {
       if (tickChain(e, dt)) B.fx.push(spawnChainBoom(e));
