@@ -1,15 +1,15 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261018011657';
-import { Net } from './net.js?v=20261018011657';
-import { Game } from './game.js?v=20261018011657';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261018011657';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261018011657';
-import { resetDeckToDefault } from './meta.js?v=20261018011657';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261018011657';
-import { loadBattleCount } from './stats.js?v=20261018011657';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261018011657';
-import { ALL_KIND_IDS } from './catalog.js?v=20261018011657';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261018011657';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261018011657';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261018012427';
+import { Net } from './net.js?v=20261018012427';
+import { Game } from './game.js?v=20261018012427';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261018012427';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261018012427';
+import { resetDeckToDefault } from './meta.js?v=20261018012427';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261018012427';
+import { loadBattleCount } from './stats.js?v=20261018012427';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261018012427';
+import { ALL_KIND_IDS } from './catalog.js?v=20261018012427';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261018012427';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261018012427';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -153,7 +153,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261018011657`;
+  return `assets/enemies/${id}/0.png?v=20261018012427`;
 }
 
 function unitName(id) {

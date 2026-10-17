@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-18 01:16:57';
+export const VERSION_LABEL = '2026-10-18 01:24:27';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1792253817000;
-export const BUILD_NOTE = 'アイテムの出現頻度を2割ダウン（21%→16.8%、COMも同じ）';
+export const BUILD_TIME = 1792254267000;
+export const BUILD_NOTE = 'デッキの初期化確認を「装備中デッキを初期装備に戻しますか」に変更';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
