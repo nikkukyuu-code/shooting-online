@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-17 16:49:35';
+export const VERSION_LABEL = '2026-10-17 16:52:25';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1792223375000;
-export const BUILD_NOTE = 'コア配下のライフをさらに3割減（38→27）';
+export const BUILD_TIME = 1792223545000;
+export const BUILD_NOTE = 'コア配下も撃ち落とすとアイテムが出るように（連鎖爆発では出ない）・COMとドロップ率を統一';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

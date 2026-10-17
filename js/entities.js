@@ -90,8 +90,8 @@ export const PLAYER_MAX_HP = 150;
 
 /** Non-boss item drop chance on kill (slightly lowered from 0.25). Boss stays guaranteed. */
 export const ITEM_DROP_CHANCE = 0.20;
-/** COM non-boss drop chance (slightly lowered from 0.28). */
-export const BOT_ITEM_DROP_CHANCE = 0.22;
+/** COM non-boss drop chance (= ITEM_DROP_CHANCE). */
+export const BOT_ITEM_DROP_CHANCE = 0.20; // 10-17: same as the player (COM and player share the rules)
 
 export function createPlayer(side = 'self') {
   return {
@@ -454,7 +454,7 @@ export function spawnCoreEscorts(lead, fw, fh) {
   const mkEsc = (fdx, fdy, c) => {
     const e = spawnEnemy(fw, fh, 'wave_escort');
     e.w = 38; e.h = 28; e.hp = GUARD_HP.escort; e.maxHp = GUARD_HP.escort; e.score = 15; e.speed = 150;
-    e.noFire = true; e.noDrop = true;
+    e.noFire = true; // 10-17: guards can drop items when shot down (not when chained)
     e._lead = lead; e.fdx = fdx; e.fdy = fdy;
     e.x = lead.x + fdx; e.y = Math.max(16, Math.min(fh - 16, lead.y + fdy));
     e.phase = (lead.phase || 0) + c * 0.35;
@@ -630,6 +630,9 @@ export function tickCoreExtras(e, dt) {
  * Returns { hit:'core'|'drone'|'body'|'none', killed:boolean }.
  * fxList receives sparks / deflect / core-break FX entries (plain objects).
  */
+/** 10-17 「全てアイテムを出す」: a guard drone (eye claw / ring pod / swarm satellite) shot down queues a
+ *  normal-chance item roll at its spot; the field loop (player and COM alike) rolls it. Chain debris never does. */
+function droneDown(e, x, y) { (e._droneDrops || (e._droneDrops = [])).push([x, y]); }
 export function applyCoreAwareHit(e, dmg, bx, by, fxList) {
   if (!e || e.hp <= 0) return { hit: 'none', killed: false };
   if (e._coreBall) { // snake core ball: hits land on the head's shared core HP
@@ -687,7 +690,7 @@ export function applyCoreAwareHit(e, dmg, bx, by, fxList) {
       if (Math.hypot(bx - dx, by - dy) < d.r + 4) {
         d.hp -= dmg;
         if (fxList) fxList.push(spawnHitSpark(dx, dy));
-        if (d.hp <= 0 && fxList) fxList.push(spawnExplosion(dx, dy, false));
+        if (d.hp <= 0) { if (fxList) fxList.push(spawnExplosion(dx, dy, false)); droneDown(e, dx, dy); }
         return { hit: 'drone', killed: false };
       }
     }
@@ -746,8 +749,10 @@ export function applyCoreAwareArea(e, dmg, ox, oy, fxList) {
     for (const d of e.drones) {
       if (d.hp <= 0) continue;
       d.hp -= dmg * 0.5;
-      if (d.hp <= 0 && fxList) {
-        fxList.push(spawnExplosion(e.x + Math.cos(d.ang) * d.dist, e.y + Math.sin(d.ang) * d.dist * (d.ky || 1), false));
+      if (d.hp <= 0) {
+        const dx = e.x + Math.cos(d.ang) * d.dist, dy = e.y + Math.sin(d.ang) * d.dist * (d.ky || 1);
+        if (fxList) fxList.push(spawnExplosion(dx, dy, false));
+        droneDown(e, dx, dy);
       }
     }
   }

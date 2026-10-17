@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261017164935';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261017165225';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, setGuardShip, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261017164935';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261017164935';
-import { sfx } from './audio.js?v=20261017164935';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261017164935';
-import { fxRate } from './entities.js?v=20261017164935';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261017164935';
-import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261017164935';
-import { hitBattleCounter } from './stats.js?v=20261017164935';
+} from './entities.js?v=20261017165225';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261017165225';
+import { sfx } from './audio.js?v=20261017165225';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261017165225';
+import { fxRate } from './entities.js?v=20261017165225';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261017165225';
+import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261017165225';
+import { hitBattleCounter } from './stats.js?v=20261017165225';
 // ===== DEBUG (temporary): 弾の雨 visual check — set to false to remove. While true, ranking submit is disabled. =====
 const DEBUG_RAIN_AT_START = false;
 // ===== DEBUG (temporary): 転送敵キャラ確認パレード — set to false to remove. =====
@@ -21,10 +21,10 @@ const DEBUG_RAIN_AT_START = false;
 // ship + COM invincible, no time limit (∞), ranking submit / PT / COM rank record disabled.
 const DEBUG_UNIT_PARADE = false;
 const PARADE_SEC = 10;
-import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261017164935';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261017164935';
-import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261017164935';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261017164935';
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261017165225';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261017165225';
+import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261017165225';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261017165225';
 
 const PT_MILESTONE = 500; // 10-15: 突破演出 every 500 PT earned in the match
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
@@ -2192,6 +2192,7 @@ export class Game {
     // Enemy death -> items
     const remain = [];
     for (const e of S.enemies) {
+      if (e._droneDrops) { for (const [x, y] of e._droneDrops) if (Math.random() < ITEM_DROP_CHANCE * RAM_DROP_CHANCE_MUL) S.items.push(spawnItem(x, y)); e._droneDrops = null; } // 10-17: guard drones shot down
       // Core enemies only die when the core breaks (items / rams / ex-weapons can't finish them)
       if (tickChain(e, dt)) {
         S.fx.push(spawnChainBoom(e));
@@ -2224,7 +2225,7 @@ export class Game {
           // デカギャラ撃破: 回復確定（ボス級は大回復）
           const healId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';
           if (Math.random() < HEAL_GUARANTEE_P) S.items.push(spawnItemWithId(e.x, e.y, healId));
-        } else if (!e.noDrop && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : (ITEM_DROP_CHANCE * RAM_DROP_CHANCE_MUL) * (e.dropMul ?? 1))) {
+        } else if (!e.noDrop && e._chainT == null && !e._chainKill && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : (ITEM_DROP_CHANCE * RAM_DROP_CHANCE_MUL) * (e.dropMul ?? 1))) { // chain pops: no item each
           S.items.push(spawnItem(e.x, e.y));
         }
         // Damage bot passively a bit when scoring? No — only via powers / race.
@@ -2924,6 +2925,7 @@ export class Game {
     this.snakeSafety(B.enemies); // same safety on the COM field
     const kept = [];
     for (const e of B.enemies) {
+      if (e._droneDrops) { for (const [x, y] of e._droneDrops) if (Math.random() < BOT_ITEM_DROP_CHANCE * RAM_DROP_CHANCE_MUL) B.orbs.push(spawnItem(x, y)); e._droneDrops = null; } // 10-17: guard drones shot down
       if (tickChain(e, dt)) B.fx.push(spawnChainBoom(e));
       if (((hasCore(e) && !e._coreBreak && !e._coreSeg) || coreOwnerOf(e)) && e.hp < 1) e.hp = 1; // snake core ball: only the core rules end it
       if (e.hp <= 0 && e._coreSeg && !e._coreBreak && !e._headDead && e._chainT == null && e.core && e.core.hp > 0) { // snake head shot down: normal kill
@@ -2941,7 +2943,7 @@ export class Game {
         } else if (isLargeEnemy(e) && !(e._chainOf || e._lead || e._chainT != null)) { // core-attached units: no guaranteed heal
           const healId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';
           if (Math.random() < HEAL_GUARANTEE_P) B.orbs.push(spawnItemWithId(e.x, e.y, healId));
-        } else if (!e.noDrop && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : (BOT_ITEM_DROP_CHANCE * RAM_DROP_CHANCE_MUL) * (e.dropMul ?? 1))) {
+        } else if (!e.noDrop && e._chainT == null && !e._chainKill && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : (BOT_ITEM_DROP_CHANCE * RAM_DROP_CHANCE_MUL) * (e.dropMul ?? 1))) { // chain pops: no item each
           B.orbs.push(spawnItem(e.x, e.y));
         }
       } else if (e.x > -40) {

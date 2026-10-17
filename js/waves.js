@@ -25,7 +25,7 @@
  *  2:11     trap zone: bobbing mines + caterpillars + snake returns
  *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
  */
-import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261017164935';
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261017165225';
 
 /** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
 const FIRE_CD_MUL = 0.6;
@@ -230,7 +230,7 @@ function gridCore(fw, fh, fy, fromTop = null) {
   let _gi = 0;
   const cage = form(fw, fh, 'wave_escort', pts.length, () => {
     const i = _gi++;
-    return T.wedge({ _chainOf: lead, noDrop: true, hp: GUARD_HP.cage, w: 22, h: 15,
+    return T.wedge({ _chainOf: lead, hp: GUARD_HP.cage, w: 22, h: 15,
       fire: i % 4 === 1 ? aimed(4, 140) : null, noFire: i % 4 !== 1 });
   }, G);
   lead.w = 44; lead.h = 36; if (lead.core) lead.core.ox = -lead.w * 0.3;
@@ -475,7 +475,7 @@ function coreBossPack(fw, fh, fy) {
   let gi = 0;
   const esc = form(fw, fh, 'wave_escort', pts.length, () => {
     const i = gi++;
-    return T.wedge({ _chainOf: e, noDrop: true, hp: GUARD_HP.cage, w: 22, h: 15,
+    return T.wedge({ _chainOf: e, hp: GUARD_HP.cage, w: 22, h: 15,
       fire: i % 4 === 1 ? aimed(4.5, 140) : null, noFire: i % 4 !== 1 });
   }, G);
   Object.assign(e, { mv: 'boss', boss: 'tri', hx: fw * 0.515, y0: e.y, stay: 40, mvT: 0,
