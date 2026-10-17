@@ -89,9 +89,9 @@ export function pickPowerupId() {
 export const PLAYER_MAX_HP = 150;
 
 /** Non-boss item drop chance on kill (slightly lowered from 0.25). Boss stays guaranteed. */
-export const ITEM_DROP_CHANCE = 0.14; // 10-17 「3割減らして」: 0.20 → 0.14
+export const ITEM_DROP_CHANCE = 0.21; // 10-18 「5割上げて」: 0.14 → 0.21 (10-17: 0.20 → 0.14)
 /** COM non-boss drop chance (= ITEM_DROP_CHANCE). */
-export const BOT_ITEM_DROP_CHANCE = 0.14; // 10-17: same as the player (COM and player share the rules)
+export const BOT_ITEM_DROP_CHANCE = 0.21; // 10-17: same as the player (COM and player share the rules)
 
 export function createPlayer(side = 'self') {
   return {
