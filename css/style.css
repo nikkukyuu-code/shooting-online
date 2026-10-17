@@ -2192,16 +2192,60 @@ html, body {
 .sub-panel:has(> .sub-footer) { padding-bottom: 0; }
 .sub-panel > .deck-reset-dialog { z-index: 9000; }
 
-/* ===== デッキ編集: 装備中デッキは常に表示、下の選択リストだけスクロール (user 10-18) =====
-   Panel = fixed height column: header + .deck-pinned (no scroll) → .deck-scroll (fills, scrolls) → footer. */
+/* ===== デッキ編集: 装備中デッキ＋ユニット詳細は常に表示、下の所持ユニットだけスクロール (user 10-18) =====
+   Panel = fixed height column: header + .deck-pinned (slots + compact detail + hint) → .deck-scroll → footer. */
 #screen-deck { overflow: hidden; }
 #screen-deck .sub-panel {
   height: calc(100% - max(44px, env(safe-area-inset-top)) - max(20px, env(safe-area-inset-bottom)));
   overflow: hidden;
   box-sizing: border-box;
+  gap: 6px;
+  padding-top: 10px;
 }
-#screen-deck .deck-pinned { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
-#screen-deck .deck-pinned .sub-hint { margin: 0; }
+@media (max-height: 760px), (max-width: 420px) {
+  #screen-deck .sub-panel { height: calc(100% - max(40px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom))); padding-top: 8px; }
+}
+/* tighter header */
+#screen-deck .sub-head h2 { font-size: 1.15rem; line-height: 1.2; margin: 0; }
+#screen-deck .sub-head .sub-desc { font-size: 0.62rem; margin: 1px 0 0; }
+#screen-deck .sub-head-glow { display: none; }
+#screen-deck .deck-equipped-heading { font-size: 0.72rem; margin: 0; padding-top: 0; padding-bottom: 0; }
+
+#screen-deck .deck-pinned { display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
+/* compact slot cards: label, art, name, tiny stat line */
+#screen-deck .deck-slots { gap: 4px; padding: 4px; }
+#screen-deck .deck-slot { min-height: 0; padding: 2px 1px 3px; gap: 1px; border-radius: 9px; }
+#screen-deck .deck-slot .slot-equipped { font-size: 0.5rem; padding: 0 2px; letter-spacing: 0; line-height: 1.3; }
+#screen-deck .deck-slot .slot-art { padding: 1px; border: none; background: none; }
+#screen-deck .deck-slot .slot-art img, #screen-deck .deck-slot img { width: 34px; max-width: 34px; }
+#screen-deck .deck-slot .slot-name { font-size: 0.56rem; line-height: 1.15; white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; display: block; width: 100%; -webkit-line-clamp: unset; }
+#screen-deck .deck-slot .slot-attack { display: none; }
+#screen-deck .deck-slot .unit-stats.compact { flex-wrap: nowrap; gap: 1px; justify-content: center; max-width: 100%; overflow: hidden; }
+#screen-deck .deck-slot .unit-stats.compact .st { font-size: 0.44rem; padding: 0 1px; line-height: 1.3; white-space: nowrap; letter-spacing: -0.03em; border-radius: 3px; }
+
+/* compact horizontal detail card */
+#screen-deck #deck-detail.deck-detail-compact {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 5px 8px; min-height: 0; max-height: none; overflow: visible; flex: 0 0 auto;
+  border-radius: 10px;
+}
+#screen-deck .deck-detail-compact .detail-empty { margin: 4px 0; font-size: 0.7rem; color: #a9c4e6; width: 100%; text-align: center; }
+#screen-deck .deck-detail-compact .dc-art { flex: 0 0 auto; width: 48px; height: 48px; border-radius: 8px; background: radial-gradient(circle at 50% 45%, rgba(80, 140, 255, 0.25), rgba(4, 10, 28, 0.6)); border: 1px solid rgba(100, 160, 255, 0.25); display: flex; align-items: center; justify-content: center; }
+#screen-deck .deck-detail-compact .dc-art img { width: 44px; height: 44px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.55)); }
+#screen-deck .deck-detail-compact .dc-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+#screen-deck .deck-detail-compact .dc-row1 { display: flex; align-items: baseline; gap: 6px; min-width: 0; white-space: nowrap; }
+#screen-deck .deck-detail-compact .dc-name { font-size: 0.86rem; font-weight: 900; color: #fff; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
+#screen-deck .deck-detail-compact .rarity { font-size: 0.62rem; font-weight: 800; flex: 0 0 auto; }
+#screen-deck .deck-detail-compact .dc-role { font-size: 0.58rem; font-weight: 800; color: #cfe6ff; background: rgba(40, 110, 230, 0.55); border-radius: 999px; padding: 0 6px; flex: 0 0 auto; }
+#screen-deck .deck-detail-compact .dc-row2 { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
+#screen-deck .deck-detail-compact .unit-stats { gap: 3px; flex-wrap: nowrap; }
+#screen-deck .deck-detail-compact .unit-stats .st { font-size: 0.58rem; padding: 0 4px; white-space: nowrap; }
+#screen-deck .deck-detail-compact .dc-chip { font-size: 0.58rem; font-weight: 700; color: #b8d4f0; background: rgba(40, 80, 140, 0.45); border: 1px solid rgba(100, 160, 255, 0.25); padding: 0 5px; border-radius: 4px; white-space: nowrap; }
+#screen-deck .deck-detail-compact .dc-desc { margin: 0; font-size: 0.66rem; line-height: 1.32; color: #d8e6f8; }
+#screen-deck .deck-detail-compact .dc-atk { margin-left: 6px; color: #ffd68a; font-weight: 700; white-space: nowrap; }
+
+#screen-deck .deck-pinned .sub-hint { margin: 0; font-size: 0.62rem; line-height: 1.25; padding: 3px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 #screen-deck .deck-scroll {
   flex: 1 1 auto !important;
   min-height: 0;
@@ -2212,29 +2256,21 @@ html, body {
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   margin: 0 calc(-1 * var(--sub-pad-x));
-  padding: 4px var(--sub-pad-x) 14px;
+  padding: 6px var(--sub-pad-x) 12px;
   border-top: 1px solid rgba(100, 170, 255, 0.25);
   box-shadow: inset 0 10px 10px -10px rgba(0, 0, 0, 0.6);
 }
 #screen-deck .deck-scroll > * { flex-shrink: 0; }
-#screen-deck .sub-panel > .sub-footer { margin-top: 0; }
-@media (max-height: 760px), (max-width: 420px) {
-  #screen-deck .sub-panel { height: calc(100% - max(40px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom))); }
-}
+#screen-deck .deck-scroll > .sub-section-title { margin: 0; }
+#screen-deck .sub-panel > .sub-footer { margin-top: 0; padding-top: 7px; padding-bottom: 8px; }
+#screen-deck .sub-footer > .menu-btn { padding-top: 10px; padding-bottom: 10px; }
 @media (max-height: 700px) {
   #screen-deck .sub-head .sub-desc { display: none; }
-  #screen-deck .deck-pinned { gap: 4px; }
-  #screen-deck .deck-pinned .sub-hint { font-size: 0.64rem; line-height: 1.25; padding: 4px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #screen-deck .deck-slots { padding: 5px; }
-  #screen-deck .deck-slot { min-height: 0; }
-  #screen-deck .deck-slot .slot-art { margin-top: 0; margin-bottom: 0; }
-  #screen-deck .deck-slot .slot-art img { max-width: 38px; }
-  #screen-deck .sub-head h2 { font-size: 1.2rem; line-height: 1.2; }
-  #screen-deck .deck-scroll { gap: 8px; }
-  #screen-deck .sub-panel > .sub-footer { padding-top: 7px; padding-bottom: 8px; }
-  #screen-deck .sub-footer > .menu-btn { padding-top: 10px; padding-bottom: 10px; }
+  /* each slot already carries its「装備中 · n」label */
+  #screen-deck .deck-equipped-heading { display: none; }
+  #screen-deck .deck-detail-compact .dc-desc { font-size: 0.64rem; line-height: 1.28; }
 }
 
 /* ===== 世界ランキング・メダル ===== */

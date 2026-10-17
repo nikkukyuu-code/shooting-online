@@ -1,15 +1,15 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261018013531';
-import { Net } from './net.js?v=20261018013531';
-import { Game } from './game.js?v=20261018013531';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261018013531';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261018013531';
-import { resetDeckToDefault } from './meta.js?v=20261018013531';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261018013531';
-import { loadBattleCount } from './stats.js?v=20261018013531';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261018013531';
-import { ALL_KIND_IDS } from './catalog.js?v=20261018013531';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261018013531';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261018013531';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261018014311';
+import { Net } from './net.js?v=20261018014311';
+import { Game } from './game.js?v=20261018014311';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261018014311';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261018014311';
+import { resetDeckToDefault } from './meta.js?v=20261018014311';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261018014311';
+import { loadBattleCount } from './stats.js?v=20261018014311';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261018014311';
+import { ALL_KIND_IDS } from './catalog.js?v=20261018014311';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261018014311';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261018014311';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -153,7 +153,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261018013531`;
+  return `assets/enemies/${id}/0.png?v=20261018014311`;
 }
 
 function unitName(id) {
@@ -202,6 +202,20 @@ function renderUnitDetail(container, unitId, opts = {}) {
     return;
   }
   const intro = unitIntro(unitId);
+  if (opts.compact) {
+    // Deck screen: compact horizontal card (pinned above the scrolling list)
+    const chip = personaChip(unitId);
+    const line = personaLine(unitId) || intro.blurb;
+    container.innerHTML = `
+      <div class="dc-art"><img src="${spriteUrl(unitId)}" alt="" width="48" height="48" /></div>
+      <div class="dc-body">
+        <div class="dc-row1"><span class="dc-name">${intro.name}</span><span class="rarity ${intro.rarity}">${rarityLabel(intro.rarity)}</span><span class="dc-role">${intro.role}</span></div>
+        <div class="dc-row2">${statsHtml(unitId)}${chip ? `<span class="dc-chip">${chip}</span>` : ''}</div>
+        <p class="dc-desc">${line}<span class="dc-atk">攻撃：${intro.attack}</span></p>
+      </div>
+    `;
+    return;
+  }
   const price = opts.showPrice && CATALOG_BY_ID[unitId]
     ? `<span class="detail-price">${CATALOG_BY_ID[unitId].price <= 0 ? '無料' : `${shopPrice(CATALOG_BY_ID[unitId])} PT`}</span>`
     : '';
@@ -264,7 +278,8 @@ function renderDeckScreen() {
 
   const selectedId = meta.deck[selectedDeckSlot];
   renderUnitDetail(els.deckDetail, selectedId, {
-    empty: 'スロットを選ぶと攻撃パターンを表示します',
+    empty: 'スロットかユニットをタップすると、ここに詳細を表示します',
+    compact: true,
   });
 
   els.deckSlots.innerHTML = '';
