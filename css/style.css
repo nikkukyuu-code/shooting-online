@@ -2273,6 +2273,16 @@ html, body {
   #screen-deck .deck-detail-compact .dc-desc { font-size: 0.64rem; line-height: 1.28; }
 }
 
+/* デッキ: 所持ユニットでタップ中（未装備のプレビュー）のカード */
+#screen-deck .unit-card.picked {
+  border-color: #6fe3ff !important;
+  box-shadow: 0 0 0 2px rgba(110, 227, 255, 0.75), 0 0 16px rgba(80, 200, 255, 0.55) !important;
+  transform: translateY(-1px);
+}
+.deck-change-dialog .deck-reset-msg { font-size: 1.05rem; }
+.deck-change-dialog .deck-reset-msg small { display: inline-block; margin-top: 6px; line-height: 1.45; }
+.deck-change-dialog .dcg-line { display: block; }
+
 /* ===== 世界ランキング・メダル ===== */
 .menu-medals {
   position: relative; z-index: 3;
