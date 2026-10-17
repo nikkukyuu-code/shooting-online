@@ -339,7 +339,11 @@ export const RING_R = 36;
 // User 09-29 21:19: every unit attached to a core has the SAME, fairly tough HP (≈4.8 s of normal
 // fire each: 2 dmg / 0.16 s) so breaking the core — and watching the chain blow them all — pays off.
 export const ATTACHED_HP = 60;
-export const GUARD_HP = { escort: ATTACHED_HP, cage: ATTACHED_HP, pod: ATTACHED_HP, claw: ATTACHED_HP, drone: ATTACHED_HP, seg: ATTACHED_HP };
+// User 10-17 「コア配下のライフを2割減らして」: every core minion/guard ×0.8 (60 → 48). Core HP unchanged.
+// Snake chain parts (seg: invisible-head driver + body links) keep ATTACHED_HP — they are the snake's body, not minions.
+export const MINION_HP_MUL = 0.8;
+export const MINION_HP = Math.max(1, Math.round(ATTACHED_HP * MINION_HP_MUL));
+export const GUARD_HP = { escort: MINION_HP, cage: MINION_HP, pod: MINION_HP, claw: MINION_HP, drone: MINION_HP, seg: ATTACHED_HP };
 /** Every core is a small glowing point (like the original): careful aim needed. Hit radius = r + pad. */
 export const CORE_R = 9, CORE_HIT_PAD = 2;
 // User 10-04: every core has the same toughness
