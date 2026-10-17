@@ -2192,6 +2192,51 @@ html, body {
 .sub-panel:has(> .sub-footer) { padding-bottom: 0; }
 .sub-panel > .deck-reset-dialog { z-index: 9000; }
 
+/* ===== デッキ編集: 装備中デッキは常に表示、下の選択リストだけスクロール (user 10-18) =====
+   Panel = fixed height column: header + .deck-pinned (no scroll) → .deck-scroll (fills, scrolls) → footer. */
+#screen-deck { overflow: hidden; }
+#screen-deck .sub-panel {
+  height: calc(100% - max(44px, env(safe-area-inset-top)) - max(20px, env(safe-area-inset-bottom)));
+  overflow: hidden;
+  box-sizing: border-box;
+}
+#screen-deck .deck-pinned { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+#screen-deck .deck-pinned .sub-hint { margin: 0; }
+#screen-deck .deck-scroll {
+  flex: 1 1 auto !important;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 calc(-1 * var(--sub-pad-x));
+  padding: 4px var(--sub-pad-x) 14px;
+  border-top: 1px solid rgba(100, 170, 255, 0.25);
+  box-shadow: inset 0 10px 10px -10px rgba(0, 0, 0, 0.6);
+}
+#screen-deck .deck-scroll > * { flex-shrink: 0; }
+#screen-deck .sub-panel > .sub-footer { margin-top: 0; }
+@media (max-height: 760px), (max-width: 420px) {
+  #screen-deck .sub-panel { height: calc(100% - max(40px, env(safe-area-inset-top)) - max(16px, env(safe-area-inset-bottom))); }
+}
+@media (max-height: 700px) {
+  #screen-deck .sub-head .sub-desc { display: none; }
+  #screen-deck .deck-pinned { gap: 4px; }
+  #screen-deck .deck-pinned .sub-hint { font-size: 0.64rem; line-height: 1.25; padding: 4px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #screen-deck .deck-slots { padding: 5px; }
+  #screen-deck .deck-slot { min-height: 0; }
+  #screen-deck .deck-slot .slot-art { margin-top: 0; margin-bottom: 0; }
+  #screen-deck .deck-slot .slot-art img { max-width: 38px; }
+  #screen-deck .sub-head h2 { font-size: 1.2rem; line-height: 1.2; }
+  #screen-deck .deck-scroll { gap: 8px; }
+  #screen-deck .sub-panel > .sub-footer { padding-top: 7px; padding-bottom: 8px; }
+  #screen-deck .sub-footer > .menu-btn { padding-top: 10px; padding-bottom: 10px; }
+}
+
 /* ===== 世界ランキング・メダル ===== */
 .menu-medals {
   position: relative; z-index: 3;
