@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261017165225';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261017192404';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, setGuardShip, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261017165225';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261017165225';
-import { sfx } from './audio.js?v=20261017165225';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261017165225';
-import { fxRate } from './entities.js?v=20261017165225';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261017165225';
-import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261017165225';
-import { hitBattleCounter } from './stats.js?v=20261017165225';
+} from './entities.js?v=20261017192404';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261017192404';
+import { sfx } from './audio.js?v=20261017192404';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261017192404';
+import { fxRate } from './entities.js?v=20261017192404';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261017192404';
+import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261017192404';
+import { hitBattleCounter } from './stats.js?v=20261017192404';
 // ===== DEBUG (temporary): 弾の雨 visual check — set to false to remove. While true, ranking submit is disabled. =====
 const DEBUG_RAIN_AT_START = false;
 // ===== DEBUG (temporary): 転送敵キャラ確認パレード — set to false to remove. =====
@@ -21,10 +21,10 @@ const DEBUG_RAIN_AT_START = false;
 // ship + COM invincible, no time limit (∞), ranking submit / PT / COM rank record disabled.
 const DEBUG_UNIT_PARADE = false;
 const PARADE_SEC = 10;
-import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261017165225';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261017165225';
-import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261017165225';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261017165225';
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261017192404';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261017192404';
+import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261017192404';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261017192404';
 
 const PT_MILESTONE = 500; // 10-15: 突破演出 every 500 PT earned in the match
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
@@ -331,6 +331,11 @@ function comSeesBubble(e, now, react) {
   const dt = now - e._rvC;
   return dt >= react && dt <= react + 0.6;
 }
+
+/** Timed weapons (one at a time; a new one replaces the running one). */
+const TIMED_POWERS = new Set(['homing', 'laser', 'rapid', 'direct', 'ram']);
+/** Heal orbs are instant (never stocked) → always pickable; others need a free slot. */
+function canTakeOrb(items, id) { return id === 'heal' || id === 'heal_big' || items.length < MAX_ITEM_SLOTS; }
 
 export class Game {
   constructor(canvas, ui) {
@@ -1114,10 +1119,9 @@ export class Game {
     // Only the tapped slot — never fall back to another item
     if (i < 0 || i >= p.items.length) return;
     const id = p.items[i];
-    // Timed powers (homing/laser/rapid/direct) can't stack on each other.
-    // Instant items — especially send_* — must always fire immediately.
-    const DURATION = new Set(['homing', 'laser', 'rapid', 'direct', 'ram']);
-    if (p.activeTimer > 0 && DURATION.has(id)) return;
+    // 10-17 「攻撃アイテムを即時切り替え」: a timed weapon (homing/laser/rapid/direct/ram) used while another
+    // is running replaces it at once with its full duration (was: the tap was silently ignored).
+    // Instant items never touch the running weapon.
     p.items.splice(i, 1);
     this._itemUseAt = now;
     this._powerFromItem = true;
@@ -1553,12 +1557,25 @@ export class Game {
     } catch (_) {}
   }
 
+  /** 10-17: end the running timed weapon of `ship` (player or COM) before switching to `nextId`. */
+  endTimedPower(ship, isBot, nextId) {
+    if (!(ship.activeTimer > 0) || !ship.activePower) return;
+    const prev = ship.activePower;
+    if (prev === 'ram' && nextId !== 'ram') { ship._ramStop = false; ship._ramBlockX = null; ship._ramKnockT = 0; ship._ramVx = 0; }
+    if (prev === 'direct' && nextId !== 'direct') {
+      if (isBot) { ship.directBeam = 0; this.state.incomingDirect = 0; } // COM's incoming-shot countdown on our HUD
+      else if (!this.useBot && this.net) { try { this.net.send({ type: 'directStop' }); } catch (_) {} }
+    }
+    ship.activePower = null; ship.activeTimer = 0;
+  }
+
   activatePower(id) {
     const p = this.state.player;
     const meta = powerupMeta(id);
     this.showItemBanner(meta);
     sfx.power();
 
+    if (TIMED_POWERS.has(id)) this.endTimedPower(p, false, id); // instant switch: tidy the previous weapon
     if (id === 'homing') {
       p.activePower = 'homing';
       p.activeTimer = 6;
@@ -1774,6 +1791,7 @@ export class Game {
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1400);
       return;
     }
+    if (msg.type === 'directStop') { this.state.incomingDirect = 0; return; }
     if (msg.type === 'directStart') {
       // Incoming only — do NOT set player.activePower (that made it look like WE fired)
       this.state.incomingDirect = DIRECT_DURATION;
@@ -2134,7 +2152,9 @@ export class Game {
     // Items float
     for (const it of S.items) {
       it.life -= dt;
-      if (magnetStep(it, P.x, P.y * fh, dt)) continue; // magnet: pulled to the ship
+      // 10-17: stock full → non-heal orbs are not attracted (and one already caught is let go)
+      if (!canTakeOrb(P.items, it.id)) it._mag = 0;
+      else if (magnetStep(it, P.x, P.y * fh, dt)) continue; // magnet: pulled to the ship
       it.y += Math.sin(S.time * 3 + it.x) * 10 * dt;
       it.x -= 30 * dt;
       it.y = Math.max(24, Math.min(fh - 24, it.y)); // bigger orb stays inside the pane
@@ -2295,7 +2315,11 @@ export class Game {
     const leftItems = [];
     for (const it of S.items) {
       const py = P.y * fh;
-      if (Math.abs(it.x - P.x) < 32 && Math.abs(it.y - py) < 32) { // v1.5.67: matches bigger orb
+      if (Math.abs(it.x - P.x) < 32 && Math.abs(it.y - py) < 32 && !canTakeOrb(P.items, it.id)) {
+        // 10-17 「ストックマックスで拾えない」: the ship passes through; the orb stays until its normal lifetime ends
+        if (!this._fullMsgT || S.time - this._fullMsgT > 2.5) { this._fullMsgT = S.time; this.setStatus(`アイテムがいっぱいです（最大${MAX_ITEM_SLOTS}つ）　使うと拾えます`); }
+        if (it.life > 0 && it.x > -20) leftItems.push(it);
+      } else if (Math.abs(it.x - P.x) < 32 && Math.abs(it.y - py) < 32) { // v1.5.67: matches bigger orb
         sfx.pickup();
         if (it.id === 'heal' || it.id === 'heal_big') {
           this.activatePower(it.id);
@@ -2958,12 +2982,14 @@ export class Game {
       const left = [];
       for (const it of B.orbs) {
         it.life -= dt;
-        if (!magnetStep(it, shipX, byP, dt)) { // same magnet rule as the player
+        const take = canTakeOrb(B.items, it.id); // 10-17: same stock-full rule as the player
+        if (!take) it._mag = 0;
+        if (!take || !magnetStep(it, shipX, byP, dt)) { // same magnet rule as the player
           it.y += Math.sin(B.time * 3 + it.x) * 10 * dt;
           it.x -= 30 * dt;
           it.y = Math.max(24, Math.min(fh - 24, it.y));
         }
-        if (Math.abs(it.x - shipX) < 32 && Math.abs(it.y - byP) < 32) {
+        if (take && Math.abs(it.x - shipX) < 32 && Math.abs(it.y - byP) < 32) {
           if (it.id === 'heal' || it.id === 'heal_big') {
             B.hp = Math.min(B.maxHp || PLAYER_MAX_HP, B.hp + (it.id === 'heal_big' ? 50 : 25));
             B.fx.unshift(spawnHealFx(shipX + 8, byP, it.id === 'heal_big'));
@@ -3090,9 +3116,9 @@ export class Game {
       B._forceIdx = null;
       if (idx == null || idx < 0) return;
       const id = B.items[idx];
-      // Player rule: timed powers can't stack on each other
-      if (B.activeTimer > 0 && (id === 'homing' || id === 'laser' || id === 'rapid' || id === 'direct' || id === 'ram')) return;
+      // Same rule as the player (10-17): a timed weapon replaces the running one at once
       B.items.splice(idx, 1);
+      if (TIMED_POWERS.has(id)) this.endTimedPower(B, true, id);
 
       if (id === 'homing') {
         B.activePower = 'homing';
@@ -3196,7 +3222,7 @@ export class Game {
       let pick = -1;
       if (AI.smart || Math.random() < (AI.smartP ?? 0)) {
         const want = (id) => {
-          if (timed(id) && B.activeTimer > 0) return -1;
+          if (timed(id) && B.activeTimer > 0) return full ? 0.8 : -1; // may switch weapons (same rule as the player) — mostly when the stock is full
           if (isSend(id)) return oppBusy || oppLow ? 6 : 5; // send promptly (pile on when they're busy / low)
           if (id === 'barrier') return (curDanger > 3 || nThreat >= 6) && !hasBarrierFx(B.fx) ? 6 : (full ? 1 : -1);
           if (id === 'ram') {

@@ -990,11 +990,15 @@ export function applyLaserTick(e, ly, fxList, shipX) {
 }
 
 /** Trim oldest FX down to n, never dropping coins (they carry PT). */
+// 10-17 fix 「攻撃アイテムがすぐ終了する」: active item effects (貫通ビーム・ビット・クラスター・黒穴・凍結・反射・バリア)
+// live in fx and are unshifted to the FRONT — the oldest-first trim deleted them first whenever a busy screen
+// (chain booms, kill booms, sparks) passed the cap, ending the weapon instantly. They are never trimmed now.
+const KEEP_FX = new Set(['coin', 'pbeam', 'option', 'cmis', 'cburst', 'bhole', 'freeze', 'disc', 'barrier']);
 export function trimFx(fx, n) {
   let drop = fx.length - n;
   if (drop <= 0) return;
   const out = [];
-  for (const f of fx) { if (drop > 0 && f.kind !== 'coin') { drop--; continue; } out.push(f); }
+  for (const f of fx) { if (drop > 0 && !KEEP_FX.has(f.kind)) { drop--; continue; } out.push(f); }
   fx.length = 0; fx.push(...out);
 }
 

@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-17 16:52:25';
+export const VERSION_LABEL = '2026-10-17 19:24:04';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1792223545000;
-export const BUILD_NOTE = 'コア配下も撃ち落とすとアイテムが出るように（連鎖爆発では出ない）・COMとドロップ率を統一';
+export const BUILD_TIME = 1792232644000;
+export const BUILD_NOTE = '攻撃アイテムを即時切り替え・ストック満タン時は拾わない・攻撃アイテムがすぐ消える不具合を修正';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
