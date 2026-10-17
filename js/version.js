@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-18 02:00:27';
+export const VERSION_LABEL = '2026-10-18 02:04:26';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1792256427000;
-export const BUILD_NOTE = 'デッキ編集: 詳細カード右の「変更」ボタンを押したときだけ装備（タップは詳細表示のみ）';
+export const BUILD_TIME = 1792256666000;
+export const BUILD_NOTE = 'デッキ編集: 変更先スロットをシアン太枠＋光＋「▼変更先」表示でわかりやすく';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

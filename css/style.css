@@ -2290,6 +2290,31 @@ html, body {
 #screen-deck .dc-change-btn.is-equipped { cursor: default; font-size: 0.72rem; border-color: rgba(255, 210, 100, 0.35); background: rgba(70, 56, 20, 0.7); color: #e8cf8a; box-shadow: none; text-shadow: none; }
 #screen-deck .dc-action-sub { font-size: 0.56rem; font-weight: 800; color: #9fd3ff; white-space: nowrap; }
 
+/* デッキ: 変更先（選択中）スロットをはっきり — シアン太枠＋光＋脈動、他スロットは少し暗く */
+#screen-deck .deck-slots { overflow: visible; }
+#screen-deck .deck-slot { transition: opacity 0.15s, filter 0.15s, transform 0.15s; }
+#screen-deck .deck-slots:has(.deck-slot.selected) .deck-slot:not(.selected) { opacity: 0.62; filter: saturate(0.6) brightness(0.8); }
+#screen-deck .deck-slot.selected {
+  position: relative; z-index: 2;
+  border: 3px solid #4ff0ff !important;
+  background: linear-gradient(180deg, rgba(20, 80, 110, 0.98), rgba(8, 30, 52, 1)) !important;
+  transform: translateY(-3px) scale(1.05);
+  animation: deckSlotPulse 1.3s ease-in-out infinite;
+}
+#screen-deck .deck-slot.selected .slot-equipped {
+  background: linear-gradient(180deg, #8ff6ff, #20c8f0) !important;
+  color: #002233; box-shadow: 0 0 8px rgba(80, 230, 255, 0.8) !important;
+}
+#screen-deck .deck-slot.selected .slot-name { color: #ffffff; }
+@keyframes deckSlotPulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(79, 240, 255, 0.55), 0 0 10px rgba(79, 240, 255, 0.55), 0 4px 10px rgba(0,0,0,0.45); }
+  50% { box-shadow: 0 0 0 3px rgba(79, 240, 255, 0.9), 0 0 20px rgba(79, 240, 255, 0.95), 0 4px 10px rgba(0,0,0,0.45); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #screen-deck .deck-slot.selected { animation: none; box-shadow: 0 0 0 3px rgba(79, 240, 255, 0.85), 0 0 16px rgba(79, 240, 255, 0.8); }
+}
+#screen-deck .dc-action-sub { color: #4ff0ff; text-shadow: 0 0 6px rgba(79, 240, 255, 0.6); }
+
 /* ===== 世界ランキング・メダル ===== */
 .menu-medals {
   position: relative; z-index: 3;

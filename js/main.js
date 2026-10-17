@@ -1,15 +1,15 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261018020027';
-import { Net } from './net.js?v=20261018020027';
-import { Game } from './game.js?v=20261018020027';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261018020027';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261018020027';
-import { resetDeckToDefault } from './meta.js?v=20261018020027';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261018020027';
-import { loadBattleCount } from './stats.js?v=20261018020027';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261018020027';
-import { ALL_KIND_IDS } from './catalog.js?v=20261018020027';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261018020027';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261018020027';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261018020426';
+import { Net } from './net.js?v=20261018020426';
+import { Game } from './game.js?v=20261018020426';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261018020426';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261018020426';
+import { resetDeckToDefault } from './meta.js?v=20261018020426';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261018020426';
+import { loadBattleCount } from './stats.js?v=20261018020426';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261018020426';
+import { ALL_KIND_IDS } from './catalog.js?v=20261018020426';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261018020426';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261018020426';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -155,7 +155,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261018020027`;
+  return `assets/enemies/${id}/0.png?v=20261018020426`;
 }
 
 function unitName(id) {
@@ -339,9 +339,10 @@ function renderDeckScreen() {
     btn.type = 'button';
     btn.className = 'deck-slot' + (i === selectedDeckSlot ? ' selected' : '');
     btn.dataset.slot = String(i);
-    btn.setAttribute('aria-label', `装備中 スロット${i + 1} ${unitName(id)}`);
+    btn.setAttribute('aria-label', `${i === selectedDeckSlot ? '変更先（選択中）' : '装備中'} スロット${i + 1} ${unitName(id)}`);
+    if (i === selectedDeckSlot) btn.setAttribute('aria-current', 'true');
     btn.innerHTML = `
-      <span class="slot-equipped">装備中 · ${i + 1}</span>
+      <span class="slot-equipped">${i === selectedDeckSlot ? `▼変更先・${i + 1}` : `装備中 · ${i + 1}`}</span>
       <div class="slot-art"><img src="${spriteUrl(id)}" alt="" width="56" height="56" loading="lazy" /></div>
       <span class="slot-name">${unitName(id)}</span>
       <span class="slot-attack">${personaChip(id) || intro.attack.split('／')[0]}</span>
