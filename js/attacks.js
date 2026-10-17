@@ -8,8 +8,8 @@
  *  - Player-hit damage per projectile: homing 3, everything else 5 (see game.js),
  *    × the firing unit's 攻撃力 multiplier (b.atk, catalog.js atkDamageMul).
  */
-import { spawnBullet, resolveEnemyTier, isLargeEnemy, isWaveKind } from './entities.js?v=20261018020426';
-import { unitAttackLoadout } from './catalog.js?v=20261018020426';
+import { spawnBullet, resolveEnemyTier, isLargeEnemy, isWaveKind } from './entities.js?v=20261018023943';
+import { unitAttackLoadout } from './catalog.js?v=20261018023943';
 
 const PI = Math.PI;
 const TAU = PI * 2;
@@ -80,6 +80,9 @@ function makeCtx(e, bullets, tx, ty) {
     },
     laser(spd, dy = 0, k) {
       // Always straight horizontal toward player side: vx < 0, vy === 0.
+      // 10-18: lasers start at the unit's own body (offset clamped to its height)
+      const lim = Math.max(16, (e.h || 30) * 0.7);
+      dy = Math.max(-lim, Math.min(lim, dy));
       const b = spawnBullet(ox, oy + dy, -Math.abs(spd), 0, 'enemy', false, 2,
         { laser: true, life: k === 'pulse' ? 1.4 : 2.0 });
       if (k) b.k = k;
@@ -210,7 +213,10 @@ export const PATTERNS = {
     c.laser(spd, g);
   },
   sweep(c, p) {
-    const offs = p.offs || [-60, -30, 0, 30, 60], gap = p.gap || 0.09, spd = p.spd || 520;
+    const offs0 = p.offs || [-60, -30, 0, 30, 60], gap = p.gap || 0.09, spd = p.spd || 520;
+    // 10-18: scale the sweep to the unit's height so every beam leaves its body
+    const mx = Math.max(1, ...offs0.map(Math.abs)), lim = Math.max(16, (c.e.h || 30) * 0.7);
+    const offs = offs0.map((v) => Math.round(v * Math.min(1, lim / mx)));
     // Top → bottom (alternating direction each volley); every beam stays horizontal.
     const e = c.e;
     e._swDir = e._swDir === 1 ? -1 : 1;
@@ -306,7 +312,39 @@ export function tickEnemyAttackQueue(e, bullets, tx, ty, dt) {
  * Call BEFORE the generic x += vx*dt step. Newly spawned bullets go to `out`.
  */
 export function updateEnemyBullet(b, dt, out, tx, ty) {
+  if (b.gv) b.vy += b.gv * dt; // 10-18 弾の雨: shells launched upward from the unit fall back down
+  if (b.bnc > 0 && b.fh) { // 10-18 はね返り弾: bounces off the top / bottom edge (limited times)
+    const r = b.r || 3;
+    if (b.y < r && b.vy < 0) { b.vy = -b.vy; b.bnc--; } else if (b.y > b.fh - r && b.vy > 0) { b.vy = -b.vy; b.bnc--; }
+  }
   switch (b.k) {
+    case 'flak': { // 10-18 花火弾: slows, stops, flashes, bursts into darts aimed at the ship
+      b.ft -= dt;
+      const f = Math.exp(-2.6 * dt); b.vx *= f; b.vy *= f;
+      if (b.ft <= 0 && b.life > 0) {
+        b.life = 0;
+        const n = b.fk || 4, a0 = tx != null ? Math.atan2(ty - b.y, tx - b.x) : PI;
+        for (let i = 0; i < n; i++) {
+          const a = a0 + (i - (n - 1) / 2) * 0.16;
+          const s = spawnBullet(b.x, b.y, Math.cos(a) * 210, Math.sin(a) * 210, 'enemy', false, 2, { life: 2.6 });
+          s.k = 'needle'; s.src = b.src; s.ch = 1; if (b.atk) s.atk = b.atk;
+          out.push(s);
+        }
+      }
+      break;
+    }
+    case 'sat': { // 10-18 衛星弾: circles its unit, then flies at the ship
+      if (b.ot > 0) {
+        b.ot -= dt; b.oa += 4.2 * dt;
+        b.x = b.ocx + Math.cos(b.oa) * b.or - b.vx * dt; b.y = b.ocy + Math.sin(b.oa) * b.or - b.vy * dt;
+        b.life = Math.max(b.life, 2.5);
+        if (b.ot <= 0) {
+          const a = tx != null ? Math.atan2(ty - b.y, tx - b.x) : PI;
+          b.vx = Math.cos(a) * 200; b.vy = Math.sin(a) * 200; b.life = 3;
+        }
+      }
+      break;
+    }
     case 'mini': { // sent-unit mini drone: flies out, brakes, hovers blinking (tell), then darts at the ship
       b.mt += dt;
       if (b.mt < b.mh) { const f = Math.exp(-3.2 * dt); b.vx *= f; b.vy *= f; }
@@ -352,7 +390,7 @@ export function updateEnemyBullet(b, dt, out, tx, ty) {
           const a = n >= 6 ? head + i * spread : head + (i - (n - 1) / 2) * spread;
           const s = spawnBullet(b.x, b.y, Math.cos(a) * b.ss, Math.sin(a) * b.ss, 'enemy', false, 2, { life: 2.6 });
           s.k = 'petal';
-          s.src = b.src;
+          s.src = b.src; s.ch = 1; // child shard (spawned from its parent shell, not the unit)
           if (b.atk) s.atk = b.atk;
           out.push(s);
         }

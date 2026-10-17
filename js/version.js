@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-18 02:04:26';
+export const VERSION_LABEL = '2026-10-18 02:39:43';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1792256666000;
-export const BUILD_NOTE = 'デッキ編集: 変更先スロットをシアン太枠＋光＋「▼変更先」表示でわかりやすく';
+export const BUILD_TIME = 1792258783000;
+export const BUILD_NOTE = '転送キャラの動き・必殺を大幅に増やして個性を強化';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

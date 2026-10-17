@@ -1,8 +1,8 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261018020426';
-import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261018020426';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261018023943';
+import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261018023943';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -371,7 +371,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261018020426`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261018023943`;
 }
 
 function loadKindSprite(kind) {
@@ -457,8 +457,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261018020426'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261018020426'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261018023943'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261018023943'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -1360,8 +1360,11 @@ function bubbleAlpha(e) {
   return kh > 0 ? 1 : 0;
 }
 /** Unit-attached charge aura before a strong attack (colour per attack type) — same style as 弾の雨. */
-const TELL_RGB = { snipe: '255,70,60', ring: '255,80,210', hatch: '255,170,50', rear: '255,200,60', beam: '120,220,255', beamw: '120,220,255', gate: '190,110,255', dash: '255,40,40', heal: '90,255,140', blink: '120,240,255', laser: '120,220,255' };
-const FIRE_RGB = { snipe: '255,90,70', ring: '255,100,220', mines: '255,170,50', drones: '255,170,50', bomb: '255,140,40', rear: '255,200,60', beam: '160,235,255', gate: '200,130,255', heal: '110,255,150' };
+const TELL_RGB = { snipe: '255,70,60', ring: '255,80,210', hatch: '255,170,50', rear: '255,200,60', beam: '120,220,255', beamw: '120,220,255', gate: '190,110,255', dash: '255,40,40', heal: '90,255,140', blink: '120,240,255', laser: '120,220,255',
+  // 10-18: every signature attack makes the unit's own body glow first
+  bomb: '255,140,40', shield: '120,220,255', spiral: '255,120,230', fan: '255,210,80', homing: '255,110,60', bounce: '90,255,230', cluster: '255,160,60', snake: '120,255,140', shotgun: '255,230,120', sweep: '150,200,255', boomf: '255,200,60', flak: '255,255,200', sat: '120,170,255' };
+const FIRE_RGB = { snipe: '255,90,70', ring: '255,100,220', mines: '255,170,50', drones: '255,170,50', bomb: '255,140,40', rear: '255,200,60', beam: '160,235,255', gate: '200,130,255', heal: '110,255,150',
+  spiral: '255,120,230', fan: '255,210,80', homing: '255,110,60', bounce: '90,255,230', cluster: '255,160,60', snake: '120,255,140', shotgun: '255,230,120', sweep: '160,210,255', boomf: '255,200,60', flak: '255,255,200', satellite: '120,170,255' };
 function drawChargeAura(ctx, e, rgb, u) {
   const t = performance.now() / 1000, pulse = 0.5 + 0.5 * Math.sin(t * (10 + u * 14));
   const ew = e.w || 40, R = ew * (0.6 + 0.6 * u) * (0.9 + 0.2 * pulse);
@@ -1381,7 +1384,7 @@ function drawChargeAura(ctx, e, rgb, u) {
 function drawFireFlash(ctx, e) {
   const rgb = FIRE_RGB[e._fk]; if (!rgb) return;
   const k = Math.max(0, Math.min(1, e._ff / 0.3)), ew = e.w || 40;
-  const back = e._fk === 'rear', ctr = e._fk === 'ring' || e._fk === 'heal';
+  const back = e._fk === 'rear', ctr = e._fk === 'ring' || e._fk === 'heal' || e._fk === 'spiral' || e._fk === 'satellite';
   const x = ctr ? e.x : back ? e.x + ew * 0.45 : e.x - ew * 0.45, y = e.y, R = ew * (ctr ? 0.9 : 0.55) * (1.3 - 0.3 * k);
   ctx.save();
   const g = ctx.createRadialGradient(x, y, 1, x, y, R);
@@ -1466,21 +1469,9 @@ function drawPersonaTell(ctx, e) {
       const fl = 14 + 26 * u * (0.8 + 0.4 * pulse), lg = ctx.createLinearGradient(0, top, 0, top - fl);
       lg.addColorStop(0, `rgba(255,200,90,${0.7 + 0.3 * u})`); lg.addColorStop(1, 'rgba(255,80,30,0)');
       ctx.fillStyle = lg; ctx.beginPath(); ctx.moveTo(e.x - 8, top); ctx.lineTo(e.x + 8, top); ctx.lineTo(e.x, top - fl); ctx.closePath(); ctx.fill();
-      // shells visibly launched UP from the unit toward each lane (arrive as the rain starts) → source is obvious
-      if (u > 0.35) { const k = (u - 0.35) / 0.65;
-        cols.forEach((x, i) => { const q = Math.max(0, Math.min(1, k * 1.15 - i * 0.04)), sx0 = e.x, sy0 = top, cxp = (e.x + x) / 2, cyp = -fh * 0.15;
-          const P = (v) => [(1 - v) * (1 - v) * sx0 + 2 * (1 - v) * v * cxp + v * v * x, (1 - v) * (1 - v) * sy0 + 2 * (1 - v) * v * cyp + v * v * -6];
-          const [px, py] = P(q), [qx, qy] = P(Math.max(0, q - 0.12));
-          ctx.strokeStyle = 'rgba(255,120,40,0.75)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(qx, qy); ctx.lineTo(px, py); ctx.stroke();
-          ctx.fillStyle = '#fff0c8'; ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI * 2); ctx.fill(); });
-      }
       break;
     }
-    case 'gate': { // 10-15: beams extend from the unit toward the rows (no row pre-warning)
-      if (u > 0.3) { const k2 = Math.min(1, (u - 0.3) / 0.5); ctx.strokeStyle = `rgba(210,140,255,${0.5 + 0.4 * k2})`; ctx.lineWidth = 2 + 2 * k2;
-        for (const y of e.zc || []) { ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(mx, my + (y - my) * k2); ctx.stroke(); ctx.fillStyle = '#f0d8ff'; ctx.beginPath(); ctx.arc(mx, my + (y - my) * k2, 3.5, 0, Math.PI * 2); ctx.fill(); } }
-      break;
-    }
+    case 'gate': break; // 10-18: body glow only — the lasers leave the unit itself
     case 'heal': { // green tether to the ally being repaired
       if (e.zx == null) break;
       ctx.strokeStyle = `rgba(90,255,140,${0.5 + 0.4 * (blink ? 1 : 0.4)})`; ctx.lineWidth = 3;
@@ -2044,6 +2035,25 @@ function drawEnemyShot(ctx, b, k, ux, uy, ang) {
       ctx.restore();
       break;
     }
+    case 'bnc': { // 10-18 はね返り弾 — cyan diamond
+      ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(now * 8);
+      ctx.fillStyle = '#7ffff0'; ctx.strokeStyle = '#0a8a80'; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(0, -r - 2); ctx.lineTo(r + 1, 0); ctx.lineTo(0, r + 2); ctx.lineTo(-r - 1, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.restore(); break;
+    }
+    case 'flak': { // 10-18 花火弾 — white shell, flashes just before it bursts
+      const hot = b.ft != null && b.ft < 0.3 && Math.floor(now * 14) % 2 === 0;
+      dot(b.x, b.y, r + 3, hot ? 'rgba(255,255,200,0.7)' : 'rgba(255,220,120,0.35)');
+      dot(b.x, b.y, r, hot ? '#ffffff' : '#ffe08a'); dot(b.x, b.y, 1.6, '#ff8030');
+      break;
+    }
+    case 'sat': { // 10-18 衛星弾 — blue orb with a ring
+      dot(b.x, b.y, r + 2.5, 'rgba(120,170,255,0.35)'); dot(b.x, b.y, r, '#8fb8ff'); dot(b.x, b.y, 1.6, '#fff');
+      break;
+    }
+    case 'pellet': // 10-18 散弾 — small hot pellet
+      streak(6, 3, 'rgba(255,200,90,0.9)'); dot(b.x, b.y, 1.4, '#fff');
+      break;
     default:
       dot(b.x, b.y, r, '#ff6644');
   }

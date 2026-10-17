@@ -245,26 +245,26 @@ export const TIER_INTRO = {
   tank: {
     lead: '頑丈な大型艦。',
     attack: 'レーザー／三方向弾／追尾ミサイル',
-    role: '大型・予告レーザー',
-    blurb: '頑丈な大型機。レーザー発射前に予告演出があり、弾幕も厚い。',
+    role: '大型・ためレーザー',
+    blurb: '頑丈な大型機。レーザー発射前に体が光り、弾幕も厚い。',
   },
   mech: {
     lead: '戦艦クラス。',
     attack: '双レーザー／追尾ミサイル／通常弾',
-    role: '大型・予告レーザー',
-    blurb: '戦艦クラス。双レーザーと追尾ミサイルを放ち、大型は発射予告あり。',
+    role: '大型・ためレーザー',
+    blurb: '戦艦クラス。双レーザーと追尾ミサイルを放ち、大型は発射前に体が光る。',
   },
   golem: {
     lead: '要塞級の重装甲。',
     attack: '扇状レーザー／追尾ミサイル',
-    role: '大型・予告レーザー',
-    blurb: '要塞級の重装甲。扇状レーザーが強く、大型は発射予告あり。',
+    role: '大型・ためレーザー',
+    blurb: '要塞級の重装甲。扇状レーザーが強く、大型は発射前に体が光る。',
   },
   boss: {
     lead: '最強クラスのボス機体。',
     attack: '強力レーザー／追尾ミサイル多数',
-    role: '大型ボス・予告レーザー',
-    blurb: '最強クラス。高火力レーザーと複数の追尾ミサイル。大型は発射予告あり。',
+    role: '大型ボス・ためレーザー',
+    blurb: '最強クラス。高火力レーザーと複数の追尾ミサイル。大型は発射前に体が光る。',
   },
 };
 
@@ -299,7 +299,7 @@ export const ATTACK_PATTERN_INFO = {
   boomerang:  { ja: 'ブーメラン弾',   power: 2, desc: '行って戻ってくる「ブーメラン弾」で背後も狙う。' },
   pulse:      { ja: 'パルスレーザー', power: 2, desc: '短いレーザーを小刻みに撃つ「パルスレーザー」が得意。' },
   laser:      { ja: 'レーザー',       power: 2, desc: 'まっすぐ横に走る「レーザー」を撃つ。' },
-  longlaser:  { ja: '長射程レーザー', power: 4, desc: '予告のあと太く長い「長射程レーザー」を撃ち抜く。' },
+  longlaser:  { ja: '長射程レーザー', power: 4, desc: '体が光ってから太く長い「長射程レーザー」を撃ち抜く。' },
   twinlaser:  { ja: '双レーザー',     power: 3, desc: '平行な2本の「双レーザー」を放つ。' },
   trilaser:   { ja: '三連レーザー',   power: 4, desc: '平行な3本の「三連レーザー」で横一列を焼く。' },
   sweep:      { ja: '掃射レーザー',   power: 5, desc: '高さを変えて横レーザーを連射する「掃射レーザー」が切り札。' },
@@ -450,7 +450,7 @@ export function unitIntro(id) {
   const rest = names.slice(1);
   const hasLaser = pids.some((p) => LASER_PATTERNS.has(p));
   // Large tiers only telegraph lasers — drop the note for units without any laser pattern.
-  const role = hasLaser ? base.role : base.role.replace('・予告レーザー', '');
+  const role = hasLaser ? base.role : base.role.replace('・ためレーザー', '');
   const blurb = `${ov.lead || base.lead}${sig ? sig.desc : ''}${rest.length ? `${rest.join('・')}も織り交ぜる。` : ''}`;
   return {
     id,
