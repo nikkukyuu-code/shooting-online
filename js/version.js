@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-17 16:45:54';
+export const VERSION_LABEL = '2026-10-17 16:49:35';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1792223154000;
-export const BUILD_NOTE = 'コア配下のライフをさらに2割減（48→38）';
+export const BUILD_TIME = 1792223375000;
+export const BUILD_NOTE = 'コア配下のライフをさらに3割減（38→27）';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
