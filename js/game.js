@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261017211854';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261018003940';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, setGuardShip, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261017211854';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261017211854';
-import { sfx } from './audio.js?v=20261017211854';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261017211854';
-import { fxRate } from './entities.js?v=20261017211854';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261017211854';
-import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261017211854';
-import { hitBattleCounter } from './stats.js?v=20261017211854';
+} from './entities.js?v=20261018003940';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261018003940';
+import { sfx } from './audio.js?v=20261018003940';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261018003940';
+import { fxRate } from './entities.js?v=20261018003940';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261018003940';
+import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261018003940';
+import { hitBattleCounter } from './stats.js?v=20261018003940';
 // ===== DEBUG (temporary): 弾の雨 visual check — set to false to remove. While true, ranking submit is disabled. =====
 const DEBUG_RAIN_AT_START = false;
 // ===== DEBUG (temporary): 転送敵キャラ確認パレード — set to false to remove. =====
@@ -21,10 +21,10 @@ const DEBUG_RAIN_AT_START = false;
 // ship + COM invincible, no time limit (∞), ranking submit / PT / COM rank record disabled.
 const DEBUG_UNIT_PARADE = false;
 const PARADE_SEC = 10;
-import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261017211854';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261017211854';
-import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261017211854';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261017211854';
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261018003940';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261018003940';
+import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261018003940';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261018003940';
 
 const PT_MILESTONE = 500; // 10-15: 突破演出 every 500 PT earned in the match
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
@@ -41,13 +41,15 @@ const TUTORIAL_STEP_SEC = 3.8;
 const WAIT = '対戦相手を待っています';
 
 /**
- * Warp-in for transferred (sent) units: 0–3s enters from off-screen right (ease-out) inside a
- * blinking ring, 3–5s steady ring + unit at the hold point.
- * During the whole 5s the unit is invulnerable (shots pass through), harmless
- * (no fire, no body damage). At 5s the ring pops and the unit starts attacking.
+ * Warp-in for transferred (sent) units: 0–2s enters from off-screen right (ease-out) inside a
+ * blinking ring, 2–3s steady ring + unit at the hold point.
+ * During the whole 3s the unit is invulnerable (shots pass through), harmless
+ * (no fire, no body damage). At 3s the ring pops and the unit starts attacking.
+ * User 10-18 「転送敵キャラのわっかが外れるのを2秒早くして」: 5s → 3s (glide 3→2s, steady 2→1s).
+ * render.js WARP_RING_TOTAL / WARP_STEADY_AT must match.
  */
-export const WARP_TOTAL = 5;
-export const WARP_BLINK = 3;
+export const WARP_TOTAL = 3;
+export const WARP_BLINK = 2;
 const WARP_POP = 0.35;
 const warping = (e) => e && (e.warpT > 0 || e._headDead); // _headDead: shot-down snake head kept as an invisible body driver
 /** Advance warp timers; returns true while the unit is still warping (skip move/fire). */

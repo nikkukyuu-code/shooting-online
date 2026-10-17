@@ -1,8 +1,8 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261017211854';
-import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261017211854';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261018003940';
+import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261018003940';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -371,7 +371,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261017211854`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261018003940`;
 }
 
 function loadKindSprite(kind) {
@@ -457,8 +457,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261017211854'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261017211854'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261018003940'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261018003940'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -1169,8 +1169,9 @@ function drawLaserTelegraph(ctx, e, t) {
   ctx.restore();
 }
 
-/** Seconds-left threshold where the warp blink stops (5s total − 3s blink = 2s steady). */
-const WARP_STEADY_AT = 2;
+/** Warp ring timing (must match game.js WARP_TOTAL / WARP_BLINK): 3s total − 2s blink = 1s steady. */
+const WARP_RING_TOTAL = 3;
+const WARP_STEADY_AT = 1;
 
 function drawWarpRing(ctx, w, h, t, warpT, warpPop) {
   // Ellipse hugging the unit (large units are wide and short)
@@ -1573,14 +1574,14 @@ function drawEnemy(ctx, e) {
   const w = e.w, h = e.h;
   if (e.za != null && !(e.warpT > 0)) ctx.globalAlpha *= Math.max(0.08, Math.min(1, e.za)); // stealth / blink fade
 
-  // Warp-in (transferred units): ring + blink 0–3s, steady 3–5s, ring pop at 5s
+  // Warp-in (transferred units): ring + blink 0–2s, steady 2–3s, ring pop at 3s
   const warpT = e.warpT > 0 ? e.warpT : 0;
   const warpPop = !warpT && e.warpPop > 0 ? e.warpPop : 0;
   if (warpT > 0 || warpPop > 0) drawWarpRing(ctx, w, h, t, warpT, warpPop);
   if (warpT > WARP_STEADY_AT) {
-    // Calm blink: 2 per second (0.5s cycle, 6 blinks over 3s), smooth fade 100% → 18% → 100%.
+    // Calm blink: 2 per second (0.5s cycle, 4 blinks over 2s), smooth fade 100% → 18% → 100%.
     // Phase follows warp elapsed time, so own pane / opponent pane / online snapshot match.
-    const el = Math.max(0, 5 - warpT);
+    const el = Math.max(0, WARP_RING_TOTAL - warpT);
     ctx.globalAlpha = 0.18 + 0.82 * (0.5 + 0.5 * Math.cos(el * Math.PI * 2 / 0.5));
   }
 
