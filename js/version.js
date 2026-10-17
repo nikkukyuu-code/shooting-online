@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-18 02:49:19';
+export const VERSION_LABEL = '2026-10-18 03:00:20';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1792259359000;
-export const BUILD_NOTE = '確認用: 転送キャラを安い順に冒頭から1体ずつ表示（動き×必殺つき）';
+export const BUILD_TIME = 1792260020000;
+export const BUILD_NOTE = '通常モードに戻しました（確認用パレード終了）';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
