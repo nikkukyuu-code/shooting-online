@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261018023943';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261018024919';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, setGuardShip, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,25 +6,25 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261018023943';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261018023943';
-import { sfx } from './audio.js?v=20261018023943';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261018023943';
-import { fxRate } from './entities.js?v=20261018023943';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261018023943';
-import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261018023943';
-import { hitBattleCounter } from './stats.js?v=20261018023943';
+} from './entities.js?v=20261018024919';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261018024919';
+import { sfx } from './audio.js?v=20261018024919';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261018024919';
+import { fxRate } from './entities.js?v=20261018024919';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261018024919';
+import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261018024919';
+import { hitBattleCounter } from './stats.js?v=20261018024919';
 // ===== DEBUG (temporary): 弾の雨 visual check — set to false to remove. While true, ranking submit is disabled. =====
 const DEBUG_RAIN_AT_START = false;
 // ===== DEBUG (temporary): 転送敵キャラ確認パレード — set to false to remove. =====
 // While true: every sendable unit appears one at a time from match start (own field + COM field), no other enemies,
 // ship + COM invincible, no time limit (∞), ranking submit / PT / COM rank record disabled.
-const DEBUG_UNIT_PARADE = false;
-const PARADE_SEC = 10;
-import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261018023943';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261018023943';
-import { tickPersona, personaIntangible, personaShieldBlocks } from './sentai.js?v=20261018023943';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261018023943';
+const DEBUG_UNIT_PARADE = true;
+const PARADE_SEC = 12; // per unit: ~3s glide in → body glow → signature attack → normal volleys
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261018024919';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261018024919';
+import { tickPersona, personaIntangible, personaShieldBlocks, PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261018024919';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261018024919';
 
 const PT_MILESTONE = 500; // 10-15: 突破演出 every 500 PT earned in the match
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
@@ -1297,7 +1297,8 @@ export class Game {
   /** DEBUG_UNIT_PARADE: one sendable unit at a time (own + COM field), nothing else, both ships invincible. */
   _paradeTick(dt) {
     const S = this.state, B = this.useBot ? this._bot : null, fw = this.L.own.w, fh = this.L.own.h;
-    const list = this._paradeList || (this._paradeList = ALL_KIND_IDS.slice());
+    const price = (id) => (CATALOG_BY_ID[id] && CATALOG_BY_ID[id].price) || 0;
+    const list = this._paradeList || (this._paradeList = ALL_KIND_IDS.slice().sort((a, b) => price(a) - price(b))); // cheap → expensive
     const R = this._parade || (this._parade = { i: -1, t: 1e9, cur: null, lbl: 0 });
     S.player.hp = S.player.maxHp; if (B) B.hp = B.maxHp || PLAYER_MAX_HP;
     const keep = (arr) => { for (let i = arr.length - 1; i >= 0; i--) if (!arr[i]._parade) arr.splice(i, 1); };
@@ -1310,8 +1311,21 @@ export class Game {
       const kind = list[R.i];
       const e = this.markSentEnemy(spawnEnemy(fw, fh, kind), fw, fh, S.enemies); e._parade = true; S.enemies.push(e); R.cur = e;
       if (B) { const b = this.markSentEnemy(spawnEnemy(fw, fh, kind), fw, fh, B.enemies); b._parade = true; B.enemies.push(b); }
+      const P = PERSONA[kind];
+      for (const [arr, u] of [[S.enemies, e], [B && B.enemies, B && B.enemies[B.enemies.length - 1]]]) {
+        if (!arr || !u) continue;
+        u._pm = { age: 0, spCd: 0.6 }; u._pFloor = 0.7; // personality starts after the ~3 s glide-in → signature attack right away (glow → attack)
+        if (P && P.sp === 'heal') { // a hurt escort so the heal is visible
+          u._pHurt = 0.7;
+          const a = this.markSentEnemy(spawnEnemy(fw, fh, 'tank'), fw, fh, arr); a._parade = true; a._pFloor = 0.4; a._pHurt = 0.4; arr.push(a);
+        }
+      }
     }
-    if (R.lbl <= 0) { R.lbl = 1; this.setStatus(`【確認用】${R.i + 1}/${list.length} ${UNIT_NAME_JA[list[R.i]] || list[R.i]}`); }
+    if (R.t > 3.2) for (const arr of [S.enemies, B && B.enemies]) if (arr) for (const u of arr) if (u._pHurt) { u.hp = Math.min(u.hp, Math.round(u.maxHp * u._pHurt)); u._pHurt = 0; } // after the glide-in
+    if (R.t < 7.5) { // can't be shot down before showing its special (after that, shooting it skips ahead)
+      for (const arr of [S.enemies, B && B.enemies]) if (arr) for (const u of arr) if (u._pFloor && u.hp > 0) u.hp = Math.max(u.hp, u.maxHp * u._pFloor);
+    }
+    if (R.lbl <= 0) { R.lbl = 1; const P = PERSONA[list[R.i]]; const pat = P ? `｜${MOVE_JA[P.mv] || P.mv}×${(P.sp && SPECIAL_JA[P.sp]) || '体当たり'}` : ''; this.setStatus(`【確認用】${R.i + 1}/${list.length} ${UNIT_NAME_JA[list[R.i]] || list[R.i]}${pat}`); }
   }
 
   markSentEnemy(e, fw, fh, field = null) {
