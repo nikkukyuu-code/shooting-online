@@ -1,15 +1,15 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261018015157';
-import { Net } from './net.js?v=20261018015157';
-import { Game } from './game.js?v=20261018015157';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261018015157';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261018015157';
-import { resetDeckToDefault } from './meta.js?v=20261018015157';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261018015157';
-import { loadBattleCount } from './stats.js?v=20261018015157';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261018015157';
-import { ALL_KIND_IDS } from './catalog.js?v=20261018015157';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261018015157';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261018015157';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261018020027';
+import { Net } from './net.js?v=20261018020027';
+import { Game } from './game.js?v=20261018020027';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261018020027';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261018020027';
+import { resetDeckToDefault } from './meta.js?v=20261018020027';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261018020027';
+import { loadBattleCount } from './stats.js?v=20261018020027';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261018020027';
+import { ALL_KIND_IDS } from './catalog.js?v=20261018020027';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261018020027';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261018020027';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -75,7 +75,6 @@ let busy = false;
 let selectedDeckSlot = 0;
 /** Deck screen: unit tapped in 所持ユニット (preview only — equipped only after「はい」). */
 let deckPreviewId = null;
-let deckPending = null;
 let selectedShopId = null;
 let selectedZukanId = null;
 
@@ -156,7 +155,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261018015157`;
+  return `assets/enemies/${id}/0.png?v=20261018020027`;
 }
 
 function unitName(id) {
@@ -274,6 +273,52 @@ function renderItemsIntro(container) {
   }
 }
 
+/** Deck detail card: inline「変更」button (right side). Only this button equips the shown unit. */
+function renderDeckChangeAction(meta, shownId) {
+  const card = els.deckDetail;
+  if (!card || !shownId) return;
+  const slot = selectedDeckSlot;
+  const inSlot = meta.deck[slot] === shownId;
+  const existing = meta.deck.indexOf(shownId);
+  const box = document.createElement('div');
+  box.className = 'dc-action';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.id = 'btn-deck-change';
+  const sub = document.createElement('span');
+  sub.className = 'dc-action-sub';
+  if (inSlot) {
+    btn.className = 'dc-change-btn is-equipped';
+    btn.textContent = '装備中';
+    btn.disabled = true;
+    sub.textContent = `スロット${slot + 1}`;
+  } else {
+    btn.className = 'dc-change-btn';
+    btn.textContent = '変更';
+    sub.textContent = existing >= 0 ? `⇄スロット${slot + 1}` : `→スロット${slot + 1}`;
+    btn.setAttribute('aria-label', `${unitName(shownId)} をスロット${slot + 1}に装備` + (existing >= 0 ? `（${unitName(meta.deck[slot])}はスロット${existing + 1}へ）` : ''));
+    btn.addEventListener('click', () => {
+      const name = unitName(shownId);
+      const prevName = unitName(meta.deck[slot]);
+      const res = setDeckSlot(loadMeta(), slot, shownId);
+      if (res.ok && els.deckHint) {
+        if (res.reason === 'swap') {
+          els.deckHint.textContent = `${name}をスロット${slot + 1}に装備しました（${prevName}はスロット${(res.swappedFrom ?? 0) + 1}へ）`;
+        } else if (res.reason === 'same') {
+          els.deckHint.textContent = `${name} はすでにスロット ${slot + 1} です`;
+        } else {
+          els.deckHint.textContent = `${name}をスロット${slot + 1}に装備しました`;
+        }
+      }
+      deckPreviewId = null;
+      renderDeckScreen();
+      if (res.ok) refreshPtDisplay(res.meta);
+    });
+  }
+  box.append(btn, sub);
+  card.appendChild(box);
+}
+
 function renderDeckScreen() {
   const meta = loadMeta();
   refreshPtDisplay(meta);
@@ -284,6 +329,7 @@ function renderDeckScreen() {
     empty: 'スロットかユニットをタップすると、ここに詳細を表示します',
     compact: true,
   });
+  renderDeckChangeAction(meta, selectedId);
 
   els.deckSlots.innerHTML = '';
   for (let i = 0; i < DECK_SIZE; i++) {
@@ -344,13 +390,12 @@ function renderDeckScreen() {
       const cur = loadMeta();
       const slot = selectedDeckSlot;
       const existing = cur.deck.indexOf(u.id);
-      if (existing === slot) {
-        if (els.deckHint) els.deckHint.textContent = `${u.name} はすでにスロット ${slot + 1} です`;
-        renderDeckScreen();
-        return;
+      if (els.deckHint) {
+        els.deckHint.textContent = existing === slot
+          ? `${u.name} はすでにスロット ${slot + 1} に装備中です`
+          : `${u.name} を表示中 —「変更」でスロット ${slot + 1} に装備`;
       }
       renderDeckScreen();
-      openDeckChangeDialog(u.id, slot, cur);
     });
     els.deckOwned.appendChild(btn);
   }
@@ -791,59 +836,6 @@ els.btnZukan?.addEventListener('click', () => {
   renderZukanScreen();
   show('zukan');
 });
-
-// 所持ユニットをタップ →「変更しますか？」→「はい」のときだけ装備中デッキに反映
-function openDeckChangeDialog(unitId, slot, meta) {
-  const dlg = document.getElementById('deck-change-dialog');
-  if (!dlg) return;
-  const prevId = meta.deck[slot];
-  const existing = meta.deck.indexOf(unitId);
-  const swapNote = existing >= 0
-    ? `（${unitName(prevId)}はスロット${existing + 1}へ入れ替え）`
-    : `（${unitName(prevId)}と入れ替え）`;
-  const det = document.getElementById('deck-change-detail');
-  if (det) {
-    det.textContent = '';
-    const a = document.createElement('span'); a.className = 'dcg-line'; a.textContent = `${unitName(unitId)} → スロット${slot + 1}`;
-    const b = document.createElement('span'); b.className = 'dcg-line'; b.textContent = swapNote;
-    det.append(a, b);
-  }
-  deckPending = { unitId, slot };
-  dlg.classList.remove('hidden');
-  document.getElementById('btn-deck-change-no')?.focus({ preventScroll: true });
-}
-{
-  const dlg = document.getElementById('deck-change-dialog');
-  const cancel = () => {
-    if (!dlg || dlg.classList.contains('hidden')) return;
-    dlg.classList.add('hidden');
-    deckPending = null;
-    if (els.deckHint) els.deckHint.textContent = '変更しませんでした';
-  };
-  document.getElementById('btn-deck-change-no')?.addEventListener('click', cancel);
-  dlg?.addEventListener('click', (ev) => { if (ev.target === dlg) cancel(); });
-  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') cancel(); });
-  document.getElementById('btn-deck-change-yes')?.addEventListener('click', () => {
-    const p = deckPending;
-    dlg?.classList.add('hidden');
-    deckPending = null;
-    if (!p) return;
-    const name = unitName(p.unitId);
-    const res = setDeckSlot(loadMeta(), p.slot, p.unitId);
-    if (res.ok && els.deckHint) {
-      if (res.reason === 'swap') {
-        els.deckHint.textContent = `${name} はスロット ${(res.swappedFrom ?? 0) + 1} にあったため入れ替えました`;
-      } else if (res.reason === 'same') {
-        els.deckHint.textContent = `${name} はすでにスロット ${p.slot + 1} です`;
-      } else {
-        els.deckHint.textContent = `スロット ${p.slot + 1} を ${name} に変更`;
-      }
-    }
-    deckPreviewId = null;
-    renderDeckScreen();
-    if (res.ok) refreshPtDisplay(res.meta);
-  });
-}
 
 // 初期デッキに戻す: confirm first; only the deck changes (PT / owned untouched)
 {

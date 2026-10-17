@@ -2233,10 +2233,10 @@ html, body {
 #screen-deck .deck-detail-compact .dc-art { flex: 0 0 auto; width: 48px; height: 48px; border-radius: 8px; background: radial-gradient(circle at 50% 45%, rgba(80, 140, 255, 0.25), rgba(4, 10, 28, 0.6)); border: 1px solid rgba(100, 160, 255, 0.25); display: flex; align-items: center; justify-content: center; }
 #screen-deck .deck-detail-compact .dc-art img { width: 44px; height: 44px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.55)); }
 #screen-deck .deck-detail-compact .dc-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-#screen-deck .deck-detail-compact .dc-row1 { display: flex; align-items: baseline; gap: 6px; min-width: 0; white-space: nowrap; }
-#screen-deck .deck-detail-compact .dc-name { font-size: 0.86rem; font-weight: 900; color: #fff; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
+#screen-deck .deck-detail-compact .dc-row1 { display: flex; align-items: baseline; gap: 6px; min-width: 0; white-space: nowrap; overflow: hidden; }
+#screen-deck .deck-detail-compact .dc-name { font-size: 0.86rem; font-weight: 900; color: #fff; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 0 auto; max-width: 100%; }
 #screen-deck .deck-detail-compact .rarity { font-size: 0.62rem; font-weight: 800; flex: 0 0 auto; }
-#screen-deck .deck-detail-compact .dc-role { font-size: 0.58rem; font-weight: 800; color: #cfe6ff; background: rgba(40, 110, 230, 0.55); border-radius: 999px; padding: 0 6px; flex: 0 0 auto; }
+#screen-deck .deck-detail-compact .dc-role { font-size: 0.58rem; font-weight: 800; color: #cfe6ff; background: rgba(40, 110, 230, 0.55); border-radius: 999px; padding: 0 6px; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 #screen-deck .deck-detail-compact .dc-row2 { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
 #screen-deck .deck-detail-compact .unit-stats { gap: 3px; flex-wrap: nowrap; }
 #screen-deck .deck-detail-compact .unit-stats .st { font-size: 0.58rem; padding: 0 4px; white-space: nowrap; }
@@ -2279,9 +2279,16 @@ html, body {
   box-shadow: 0 0 0 2px rgba(110, 227, 255, 0.75), 0 0 16px rgba(80, 200, 255, 0.55) !important;
   transform: translateY(-1px);
 }
-.deck-change-dialog .deck-reset-msg { font-size: 1.05rem; }
-.deck-change-dialog .deck-reset-msg small { display: inline-block; margin-top: 6px; line-height: 1.45; }
-.deck-change-dialog .dcg-line { display: block; }
+/* デッキ詳細カード右側の「変更」ボタン（押したときだけ装備） */
+#screen-deck .deck-detail-compact .dc-action { flex: 0 0 auto; align-self: center; display: flex; flex-direction: column; align-items: center; gap: 2px; width: 58px; }
+#screen-deck .dc-change-btn {
+  width: 100%; padding: 9px 0; border-radius: 10px; font-weight: 900; font-size: 0.86rem; letter-spacing: 0.04em; cursor: pointer;
+  border: 1px solid rgba(255, 200, 120, 0.8); background: linear-gradient(180deg, #f39a34, #b8601a); color: #fff;
+  box-shadow: 0 0 12px rgba(255, 160, 40, 0.45), 0 2px 6px rgba(0,0,0,0.4); text-shadow: 0 1px 2px rgba(0,0,0,0.45);
+}
+#screen-deck .dc-change-btn:active { transform: translateY(1px); }
+#screen-deck .dc-change-btn.is-equipped { cursor: default; font-size: 0.72rem; border-color: rgba(255, 210, 100, 0.35); background: rgba(70, 56, 20, 0.7); color: #e8cf8a; box-shadow: none; text-shadow: none; }
+#screen-deck .dc-action-sub { font-size: 0.56rem; font-weight: 800; color: #9fd3ff; white-space: nowrap; }
 
 /* ===== 世界ランキング・メダル ===== */
 .menu-medals {
