@@ -1,16 +1,16 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261019030117';
-import { Net } from './net.js?v=20261019030117';
-import { Game } from './game.js?v=20261019030117';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261019030117';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261019030117';
-import { resetDeckToDefault } from './meta.js?v=20261019030117';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261019030117';
-import { loadBattleCount } from './stats.js?v=20261019030117';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261019030117';
-import { ALL_KIND_IDS } from './catalog.js?v=20261019030117';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261019030117';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261019030117';
-import { seedStrongBest } from './record.js?v=20261019030117';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261019030349';
+import { Net } from './net.js?v=20261019030349';
+import { Game } from './game.js?v=20261019030349';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261019030349';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261019030349';
+import { resetDeckToDefault } from './meta.js?v=20261019030349';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261019030349';
+import { loadBattleCount } from './stats.js?v=20261019030349';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261019030349';
+import { ALL_KIND_IDS } from './catalog.js?v=20261019030349';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261019030349';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261019030349';
+import { seedStrongBest } from './record.js?v=20261019030349';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -156,7 +156,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261019030117`;
+  return `assets/enemies/${id}/0.png?v=20261019030349`;
 }
 
 function unitName(id) {
@@ -1008,6 +1008,7 @@ setTimeout(() => { prepareMatchAssets().catch(() => {}); }, 300);
 
 /* ================= 世界ランキング・メダル (ranking.js) ================= */
 const rk = { period: 'week', board: 'top3', key: null, seq: 0 };
+const rkCache = new Map(); // ranking responses (memory only, cleared for current periods on each open)
 
 function nickMsg(el, r, okText) {
   if (!el) return;
@@ -1053,7 +1054,11 @@ async function renderRanking() {
   const meBox = document.getElementById('rk-me');
   list.replaceChildren(Object.assign(document.createElement('li'), { className: 'rk-empty', textContent: '読み込み中…' }));
   const seq = ++rk.seq;
-  const r = await fetchRanking(rk.period, rk.board, rk.key);
+  // 通信量を抑える: 同じ期間・種類は画面を開いている間 60 秒（確定済みの過去期間はセッション中）再利用
+  const ck = `${rk.period}|${rk.board}|${rk.key}`, hit = rkCache.get(ck);
+  let r;
+  if (hit && (!isCur || performance.now() - hit.t < 60e3)) r = hit.r;
+  else { r = await fetchRanking(rk.period, rk.board, rk.key); if (r && r.ok) rkCache.set(ck, { t: performance.now(), r }); }
   if (seq !== rk.seq) return;
   if (!r.ok) {
     meBox.textContent = 'ランキングサーバーに接続できません（ゲームはそのまま遊べます）';
@@ -1120,6 +1125,8 @@ function openRanking() {
     }
   }
   rk.key = null;
+  const curKeys = periodKeys();
+  for (const k of [...rkCache.keys()]) { const [p, , key] = k.split('|'); if (key >= curKeys[p]) rkCache.delete(k); } // 集計中の期間は開くたびに最新を取得
   show('ranking');
   renderRanking();
 }
