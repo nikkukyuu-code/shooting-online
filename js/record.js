@@ -12,7 +12,7 @@
  * stored silently (no celebration); if the server answered “no record yet”, the first win is
  * celebrated as 「初記録！」.
  */
-import { fetchRanking, rankIdentity, periodKeys } from './ranking.js?v=20261018215726';
+import { fetchRanking, rankIdentity, periodKeys } from './ranking.js?v=20261019024658';
 
 export const BEST_STRONG_KEY = 'shootingOnline_bestStrongMatch';
 const BAK = BEST_STRONG_KEY + '_bak';

@@ -2463,3 +2463,57 @@ html, body {
   .rec-pt { font-size: 1.15rem; }
 }
 .rec-void { margin-top: 6px; font-size: 0.86rem; color: #ffe08a; }
+
+/* ---- 記録更新！ v2: cinematic stage + settled card ---- */
+.rec-new { display: flex; align-items: center; gap: 10px; text-align: left; }
+.rec-card-emb { flex: none; width: 46px; height: 46px; }
+.rec-card-emb .rec-star { width: 100%; height: 100%; filter: drop-shadow(0 0 6px rgba(255, 200, 40, 0.8)); animation: rec-star-spin 6s linear infinite; }
+.rec-card-body { min-width: 0; }
+.rec-new .rec-title { justify-content: flex-start; }
+.rec-diff { display: inline-block; margin-left: 4px; padding: 1px 7px; border-radius: 999px; font-size: 0.8rem; font-weight: 900; color: #04202a; background: linear-gradient(180deg, #b8f4ff, #4fd2f0); box-shadow: 0 0 10px rgba(80, 220, 255, 0.7); text-shadow: none; }
+.rec-new.rec-calm { animation: none; }
+@keyframes rec-star-spin { 0%, 70% { transform: rotate(0); } 85% { transform: rotate(-8deg) scale(1.06); } 100% { transform: rotate(0); } }
+.end-overlay.rec2-shake { animation: rec2-shake 0.45s linear; }
+@keyframes rec2-shake { 0%,100% { transform: translate(0,0); } 15% { transform: translate(-7px,4px); } 30% { transform: translate(6px,-5px); } 45% { transform: translate(-5px,-3px); } 60% { transform: translate(4px,4px); } 80% { transform: translate(-2px,1px); } }
+.rec2-stage { position: absolute; inset: 0; z-index: 20; display: flex; align-items: flex-start; justify-content: center; overflow: hidden; cursor: pointer; touch-action: manipulation; pointer-events: auto; transition: opacity 0.36s ease; }
+.rec2-stage.rec2-out { opacity: 0; pointer-events: none; }
+.rec2-cv { position: absolute; inset: 0; width: 100%; height: 100%; }
+.rec2-center { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; width: min(94vw, 560px); text-align: center; }
+.rec2-emb { width: clamp(64px, 18vw, 96px); height: clamp(64px, 18vw, 96px); margin-bottom: 4px; animation: rec2-emb 0.7s 0.4s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+.rec2-emb .rec-star { width: 100%; height: 100%; filter: drop-shadow(0 0 14px rgba(255, 200, 40, 0.9)); }
+@keyframes rec2-emb { 0% { transform: scale(0) rotate(-180deg); opacity: 0; } 70% { transform: scale(1.15) rotate(8deg); opacity: 1; } 100% { transform: scale(1) rotate(0); } }
+.rec2-en { position: relative; font-size: clamp(2.2rem, 13vw, 4.4rem); font-weight: 900; font-style: italic; letter-spacing: 0.04em; line-height: 1; white-space: nowrap;
+  background: linear-gradient(100deg, #b86a00 0%, #ffe680 22%, #fffbe8 30%, #ffc93a 38%, #a85d00 55%, #ffe680 75%, #fff6c8 82%, #c97a00 100%); background-size: 250% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-stroke: 1px rgba(60, 25, 0, 0.6);
+  filter: drop-shadow(-2px 0 0 rgba(0, 230, 255, 0.75)) drop-shadow(2px 0 0 rgba(255, 60, 160, 0.6)) drop-shadow(0 0 14px rgba(255, 190, 40, 0.75));
+  animation: rec2-slam 0.55s 0.15s cubic-bezier(0.2, 1.5, 0.35, 1) both, rec2-shine 1.6s 0.6s ease-in-out infinite; }
+@keyframes rec2-slam { 0% { transform: scale(3.2); opacity: 0; filter: blur(6px); } 55% { transform: scale(0.9); opacity: 1; filter: drop-shadow(-2px 0 0 rgba(0,230,255,.75)) drop-shadow(2px 0 0 rgba(255,60,160,.6)) drop-shadow(0 0 14px rgba(255,190,40,.75)); } 100% { transform: scale(1); } }
+@keyframes rec2-shine { 0% { background-position: 100% 0; } 100% { background-position: -50% 0; } }
+.rec2-jp { margin-top: 2px; font-size: clamp(1.5rem, 8vw, 2.6rem); font-weight: 900; letter-spacing: 0.12em; color: #fff; text-shadow: 0 0 12px rgba(127, 232, 255, 0.9), 0 2px 0 #0b3a55, 0 4px 14px #000; animation: rec2-up 0.45s 0.5s ease-out both; }
+.rec2-sub { margin-top: 10px; font-size: 0.9rem; font-weight: 800; letter-spacing: 0.2em; color: #bfefff; text-shadow: 0 1px 4px #000; animation: rec2-up 0.4s 0.85s ease-out both; }
+.rec2-num { display: flex; align-items: baseline; gap: 8px; margin-top: 2px; font-variant-numeric: tabular-nums; animation: rec2-up 0.4s 0.9s ease-out both; white-space: nowrap; }
+.rec2-old { font-size: clamp(1rem, 5vw, 1.4rem); font-weight: 800; color: #c9b892; text-shadow: 0 1px 3px #000; }
+.rec2-val { font-size: clamp(2.4rem, 14vw, 4.2rem); font-weight: 900; color: #ffe566; line-height: 1; text-shadow: 0 0 16px rgba(255, 200, 40, 0.95), 0 3px 0 #7a3a00, 0 6px 18px #000; }
+.rec2-u { font-size: 1.2rem; font-weight: 900; color: #ffe8a0; }
+.rec2-landed .rec2-val { animation: rec2-land 0.5s cubic-bezier(0.2, 1.8, 0.4, 1); }
+@keyframes rec2-land { 0% { transform: scale(1.45); } 100% { transform: scale(1); } }
+.rec2-diff { margin-top: 8px; padding: 4px 14px; border-radius: 999px; font-size: clamp(1rem, 5.2vw, 1.35rem); font-weight: 900; letter-spacing: 0.04em; color: #03202a; background: linear-gradient(180deg, #d8faff, #4fd2f0); box-shadow: 0 0 18px rgba(80, 220, 255, 0.85); opacity: 0; transform: scale(0.4); }
+.rec2-landed .rec2-diff { animation: rec2-emb2 0.5s 0.08s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+@keyframes rec2-emb2 { 0% { opacity: 0; transform: scale(0.4); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes rec2-up { 0% { opacity: 0; transform: translateY(14px); } 100% { opacity: 1; transform: none; } }
+.rec2-skip { position: absolute; bottom: max(14px, env(safe-area-inset-bottom)); left: 0; right: 0; text-align: center; font-size: 0.72rem; color: rgba(255, 255, 255, 0.55); letter-spacing: 0.1em; }
+@media (max-height: 680px) { .rec-card-emb { width: 36px; height: 36px; } .rec2-center { top: 40%; } .rec2-emb { width: 58px; height: 58px; } }
+.rec-new { box-sizing: border-box; max-width: min(94vw, 440px); }
+.rec-new .rec-vals { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 4px; row-gap: 2px; white-space: normal; }
+.rec-new .rec-vals > * { white-space: nowrap; }
+/* size the cinematic to the game field (PC: field is narrower than the window) */
+@supports (width: 1cqw) {
+  .rec2-stage { container-type: size; }
+  .rec2-center { width: 94cqw; }
+  .rec2-emb { width: clamp(56px, 18cqw, 96px); height: clamp(56px, 18cqw, 96px); }
+  .rec2-en { font-size: clamp(1.9rem, 12.5cqw, 4.4rem); }
+  .rec2-jp { font-size: clamp(1.4rem, 8cqw, 2.6rem); }
+  .rec2-old { font-size: clamp(1rem, 5cqw, 1.4rem); }
+  .rec2-val { font-size: clamp(2.2rem, 14cqw, 4.2rem); }
+  .rec2-diff { font-size: clamp(1rem, 5.2cqw, 1.35rem); }
+}

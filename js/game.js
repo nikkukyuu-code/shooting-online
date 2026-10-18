@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261018215726';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261019024658';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, setGuardShip, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261018215726';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261018215726';
-import { sfx } from './audio.js?v=20261018215726';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261018215726';
-import { fxRate } from './entities.js?v=20261018215726';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261018215726';
-import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261018215726';
-import { hitBattleCounter } from './stats.js?v=20261018215726';
+} from './entities.js?v=20261019024658';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261019024658';
+import { sfx } from './audio.js?v=20261019024658';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261019024658';
+import { fxRate } from './entities.js?v=20261019024658';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261019024658';
+import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261019024658';
+import { hitBattleCounter } from './stats.js?v=20261019024658';
 // ===== DEBUG (temporary): 弾の雨 visual check — set to false to remove. While true, ranking submit is disabled. =====
 const DEBUG_RAIN_AT_START = false;
 // ===== DEBUG (temporary): 転送敵キャラ確認パレード — set to false to remove. =====
@@ -23,11 +23,11 @@ const DEBUG_UNIT_PARADE = false;
 const PARADE_SEC = 12; // per unit: ~3s glide in → body glow → signature attack → normal volleys
 /** 自機の攻撃力倍率 (10-18: ×1.3 → 10-18 夜: 2割減 ×1.04). Applies to the ship's own shots (normal / rapid / homing / spread), player and COM alike. */
 const SHIP_ATK_MUL = 1.04;
-import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261018215726';
-import { recordStrongBest, loadStrongBest } from './record.js?v=20261018215726';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261018215726';
-import { tickPersona, personaIntangible, personaShieldBlocks, PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261018215726';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261018215726';
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261019024658';
+import { recordStrongBest, loadStrongBest } from './record.js?v=20261019024658';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261019024658';
+import { tickPersona, personaIntangible, personaShieldBlocks, PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261019024658';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261019024658';
 
 const PT_MILESTONE = 500; // 10-15: 突破演出 every 500 PT earned in the match
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
@@ -3607,34 +3607,125 @@ export class Game {
     return isLargeEnemy(e) || resolveEnemyTier(e.kind) === 'boss';
   }
 
-  /** 「記録更新！」 / 「初記録！」 banner (old → new) + gold confetti + fanfare on the result overlay. */
+  /**
+   * 記録更新！ v2 (COM「強い」 win): ~3.6 s cinematic stage over the result, then it settles into the compact card.
+   *  0.00 flash + shake + shockwave, rotating light rays · 0.15 「NEW RECORD」 slams in (metallic gold, shine sweep,
+   *  cyan/magenta split) · 0.45 star emblem + 「記録更新！」 · 1.0–2.1 old → new PT ticker · 2.1 burst + second ring,
+   *  「+差分PT」 · 3.4 stage fades, card stays (readable). Tap = skip to the settled card.
+   *  Canvas (rays / rings / ≤90 particles) + CSS transforms only. prefers-reduced-motion → card only.
+   */
   showRecordFx(r, anchor) {
     const ov = this.ui.endOverlay;
     if (!ov || ov.querySelector('.rec-new')) return;
     const fmt = (n) => Math.round(n).toLocaleString('ja-JP');
-    const el = document.createElement('div');
-    el.className = 'rec-new' + (r.first ? ' rec-first' : '');
-    el.setAttribute('role', 'status');
-    el.innerHTML = `<div class="rec-title"><span class="rec-jp">${r.first ? '初記録！' : '記録更新！'}</span><span class="rec-en">NEW RECORD</span></div>`
-      + `<div class="rec-vals">強い・1試合最高 ${r.first ? '' : `<s class="rec-old">${fmt(r.prev)}</s><span class="rec-arrow">→</span>`}<b class="rec-pt">${fmt(r.pt)}</b> PT</div>`;
-    if (anchor && anchor.parentNode === ov) ov.insertBefore(el, anchor); else ov.insertBefore(el, ov.querySelector('#btn-again'));
-    const cf = document.createElement('div');
-    cf.className = 'rec-confetti';
-    cf.setAttribute('aria-hidden', 'true');
-    const cols = ['#ffd21e', '#fff3a0', '#ff9a1e', '#ffffff', '#7fe0ff', '#ff6fa8'];
-    for (let i = 0; i < 46; i++) {
-      const p = document.createElement('i');
-      p.style.left = `${(i * 37) % 100}%`;
-      p.style.setProperty('--d', `${(i % 12) * 0.07}s`);
-      p.style.setProperty('--x', `${((i * 53) % 61) - 30}px`);
-      p.style.setProperty('--r', `${(i * 97) % 720 - 360}deg`);
-      p.style.setProperty('--t', `${1.6 + (i % 5) * 0.22}s`);
-      p.style.background = cols[i % cols.length];
-      cf.appendChild(p);
-    }
-    ov.appendChild(cf);
-    setTimeout(() => cf.remove(), 3600);
-    try { sfx.record(); } catch (_) {}
+    const diff = r.first ? 0 : Math.max(0, r.pt - r.prev);
+    const title = r.first ? '初記録！' : '記録更新！';
+    const STAR = '<svg class="rec-star" viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="recStarG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fffbe0"/><stop offset=".45" stop-color="#ffd84a"/><stop offset="1" stop-color="#d9780a"/></linearGradient></defs>'
+      + '<circle cx="50" cy="50" r="46" fill="none" stroke="#7fe8ff" stroke-width="3" stroke-dasharray="6 5" opacity=".85"/>'
+      + '<circle cx="50" cy="50" r="38" fill="rgba(40,18,0,.85)" stroke="url(#recStarG)" stroke-width="5"/>'
+      + '<path d="M50 20 L58.8 39.6 L80 41.8 L64 56 L68.6 77 L50 66.2 L31.4 77 L36 56 L20 41.8 L41.2 39.6 Z" fill="url(#recStarG)" stroke="#5a2600" stroke-width="2.5" stroke-linejoin="round"/></svg>';
+    // settled card (stays in the flow above the PT box)
+    const card = document.createElement('div');
+    card.className = 'rec-new' + (r.first ? ' rec-first' : '');
+    card.setAttribute('role', 'status');
+    card.innerHTML = `<div class="rec-card-emb">${STAR}</div><div class="rec-card-body"><div class="rec-title"><span class="rec-jp">${title}</span><span class="rec-en">NEW RECORD</span></div>`
+      + `<div class="rec-vals">強い・1試合最高 ${r.first ? '' : `<s class="rec-old">${fmt(r.prev)}</s><span class="rec-arrow">→</span>`}<b class="rec-pt">${fmt(r.pt)}</b> PT${diff ? ` <span class="rec-diff">+${fmt(diff)}PT</span>` : ''}</div></div>`;
+    const placeCard = () => {
+      if (card.isConnected) return;
+      if (anchor && anchor.parentNode === ov) ov.insertBefore(card, anchor); else ov.insertBefore(card, ov.querySelector('#btn-again'));
+    };
+    const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) { card.classList.add('rec-calm'); placeCard(); try { sfx.recLand(); } catch (_) {} return; }
+
+    // cinematic stage
+    const st = document.createElement('div');
+    st.className = 'rec2-stage';
+    st.innerHTML = `<canvas class="rec2-cv" aria-hidden="true"></canvas><div class="rec2-center">`
+      + `<div class="rec2-emb">${STAR}</div>`
+      + `<div class="rec2-en" data-t="NEW RECORD">NEW RECORD</div>`
+      + `<div class="rec2-jp">${title}</div>`
+      + `<div class="rec2-sub">強い・1試合最高</div>`
+      + `<div class="rec2-num"><span class="rec2-old">${r.first ? '' : fmt(r.prev) + ' →'}</span><b class="rec2-val">0</b><span class="rec2-u">PT</span></div>`
+      + `<div class="rec2-diff">${diff ? `+${fmt(diff)}PT` : 'FIRST RECORD'}</div>`
+      + `</div><div class="rec2-skip">タップでスキップ</div>`;
+    ov.appendChild(st);
+    ov.classList.add('rec2-shake');
+    setTimeout(() => ov.classList.remove('rec2-shake'), 460);
+    try { sfx.recImpact(); } catch (_) {}
+
+    const cv = st.querySelector('.rec2-cv'), g = cv.getContext('2d');
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const rect = st.getBoundingClientRect(); const W = Math.max(1, rect.width), H = Math.max(1, rect.height);
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); g.scale(dpr, dpr);
+    const cx = W / 2, cy = H * 0.42, R = Math.hypot(W, H) * 0.6;
+    const parts = [];
+    const burst = (n, sp, t0) => { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, v = sp * (0.45 + Math.random() * 0.75); parts.push({ x: cx, y: cy, vx: Math.cos(a) * v, vy: Math.sin(a) * v - sp * 0.15, t0, life: 0.9 + Math.random() * 0.8, c: i % 3 === 0 ? '127,232,255' : i % 3 === 1 ? '255,214,60' : '255,250,220', r: 1.6 + Math.random() * 2.2 }); } };
+    burst(40, Math.min(W, H) * 0.9, 0);
+    const valEl = st.querySelector('.rec2-val'); const base = r.first ? 0 : r.prev; valEl.textContent = fmt(base);
+    const T_ROLL0 = 1.0, T_LAND = 2.1, T_FADE = 3.4, T_END = 3.9;
+    let landed = false, done = false, lastTick = -1, raf = 0;
+    const t0 = performance.now();
+    const finish = () => {
+      if (done) return; done = true;
+      cancelAnimationFrame(raf);
+      placeCard();
+      st.classList.add('rec2-out');
+      setTimeout(() => st.remove(), 380);
+    };
+    st.addEventListener('pointerdown', (ev) => { ev.preventDefault(); ev.stopPropagation(); finish(); });
+    const frame = (now) => {
+      if (done) return;
+      if (!st.isConnected || ov.classList.contains('hidden')) { done = true; st.remove(); return; }
+      const t = (now - t0) / 1000;
+      g.clearRect(0, 0, W, H);
+      // vignette darkening
+      const dark = Math.min(0.84, t * 2.8) * (t > T_FADE ? Math.max(0, 1 - (t - T_FADE) / 0.4) : 1);
+      g.fillStyle = `rgba(2,4,14,${dark})`; g.fillRect(0, 0, W, H);
+      g.save(); g.globalCompositeOperation = 'lighter';
+      // rotating light rays (gold / cyan alternating)
+      const ra = Math.min(1, t / 0.35) * (t > T_FADE ? Math.max(0, 1 - (t - T_FADE) / 0.4) : 1) * (landed && t < T_LAND + 0.5 ? 1.35 : 1);
+      if (ra > 0) {
+        const n = 14, rot = t * 0.35;
+        for (let i = 0; i < n; i++) {
+          const a = rot + (i / n) * Math.PI * 2, w = 0.07 + (i % 2) * 0.03;
+          const grd = g.createRadialGradient(cx, cy, 0, cx, cy, R);
+          const col = i % 2 ? '127,232,255' : '255,200,60';
+          grd.addColorStop(0, `rgba(${col},${0.26 * ra})`); grd.addColorStop(0.6, `rgba(${col},${0.08 * ra})`); grd.addColorStop(1, `rgba(${col},0)`);
+          g.fillStyle = grd; g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, R, a - w, a + w); g.closePath(); g.fill();
+        }
+      }
+      // shockwave rings: at 0 and at the landing
+      for (const [ts, col] of [[0, '255,240,190'], [0.08, '127,232,255'], [T_LAND, '255,230,120'], [T_LAND + 0.07, '127,232,255']]) {
+        const u = (t - ts) / 0.7;
+        if (u < 0 || u > 1) continue;
+        g.strokeStyle = `rgba(${col},${0.9 * (1 - u)})`; g.lineWidth = Math.max(1.5, 10 * (1 - u));
+        g.beginPath(); g.ellipse(cx, cy, 20 + u * W * 0.75, 12 + u * W * 0.42, 0, 0, Math.PI * 2); g.stroke();
+      }
+      // particles (gravity, fade)
+      for (const p of parts) {
+        const a = t - p.t0; if (a < 0 || a > p.life) continue;
+        const x = p.x + p.vx * a, y = p.y + p.vy * a + 260 * a * a, al = 1 - a / p.life;
+        g.fillStyle = `rgba(${p.c},${al})`; g.beginPath(); g.arc(x, y, p.r * (1 - a / p.life * 0.4), 0, Math.PI * 2); g.fill();
+      }
+      g.restore();
+      // white flash
+      if (t < 0.22) { g.fillStyle = `rgba(255,255,240,${0.75 * (1 - t / 0.22)})`; g.fillRect(0, 0, W, H); }
+      // ticker
+      if (t >= T_ROLL0 && !landed) {
+        const u = Math.min(1, (t - T_ROLL0) / (T_LAND - T_ROLL0)), e = 1 - Math.pow(1 - u, 3);
+        valEl.textContent = fmt(base + (r.pt - base) * e);
+        const tick = Math.floor(u * 18); if (tick !== lastTick) { lastTick = tick; try { sfx.recTick(); } catch (_) {} }
+      }
+      if (!landed && t >= T_LAND) {
+        landed = true; valEl.textContent = fmt(r.pt);
+        st.classList.add('rec2-landed'); burst(46, Math.min(W, H) * 1.05, T_LAND);
+        try { sfx.recLand(); } catch (_) {}
+      }
+      if (t >= T_FADE) placeCard();
+      if (t >= T_END) { finish(); return; }
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
   }
 
   showEndCelebration(won) {
@@ -3643,7 +3734,7 @@ export class Game {
     if (!ov || !msgEl) return;
 
     // Clear prior celebration nodes
-    ov.querySelectorAll('.vic-fx, .pt-reward, .vic-banner, .end-reason, .com-rank, .rec-new, .rec-confetti').forEach((el) => el.remove());
+    ov.querySelectorAll('.vic-fx, .pt-reward, .vic-banner, .end-reason, .com-rank, .rec-new, .rec-confetti, .rec2-stage').forEach((el) => el.remove());
     // Time-limit / sudden-death reason line (above the menu button)
     const info = this._endInfo;
     if (info && (info.reason === 'time' || info.reason === 'sudden')) {
