@@ -28,5 +28,7 @@ export const sfx = {
   win: () => { beep({ f: 523, t: 0.12, g: 0.05, type: 'triangle' }); setTimeout(() => beep({ f: 659, t: 0.12, g: 0.05, type: 'triangle' }), 100); setTimeout(() => beep({ f: 784, t: 0.2, g: 0.05, type: 'triangle' }), 200); },
   lose: () => beep({ f: 300, t: 0.25, g: 0.05, type: 'sawtooth', slide: -160 }),
   milestone: () => { [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep({ f, t: i === 3 ? 0.28 : 0.1, g: 0.05, type: 'triangle' }), i * 75)); setTimeout(() => beep({ f: 1568, t: 0.22, g: 0.03, type: 'square', slide: 300 }), 320); },
+  // 記録更新！ fanfare (short, a little bigger than the 500PT milestone)
+  record: () => { [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => setTimeout(() => beep({ f, t: i === 6 ? 0.42 : 0.11, g: 0.05, type: 'triangle' }), i * 95)); setTimeout(() => beep({ f: 2093, t: 0.3, g: 0.025, type: 'square', slide: 400 }), 700); },
   ui: () => beep({ f: 480, t: 0.05, g: 0.03, type: 'triangle' }),
 };

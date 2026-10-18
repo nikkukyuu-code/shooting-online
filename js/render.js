@@ -1,8 +1,8 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261018194113';
-import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261018194113';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261018215726';
+import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261018215726';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -371,7 +371,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261018194113`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261018215726`;
 }
 
 function loadKindSprite(kind) {
@@ -457,8 +457,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261018194113'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261018194113'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261018215726'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261018215726'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -3227,6 +3227,51 @@ function drawPtMilestone(ctx, L, m) {
   ctx.restore();
 }
 
+/** 記録更新中！ (COM「強い」): small gold ribbon near the TOP of the own pane (the 500PT banner sits at 40 %), ≈2.2 s,
+ *  canvas-drawn → never blocks touches. Shows 「いま勝てば自己ベスト」 + best → current pace. */
+const REC_PACE_T = 2.2;
+function drawRecPace(ctx, L, m) {
+  const age = performance.now() / 1000 - m.t;
+  if (!(age >= 0 && age < REC_PACE_T)) return;
+  const A = L.own, cx = A.x + A.w / 2, cy = A.y + A.h * 0.17;
+  const fs = Math.max(15, Math.min(A.w * 0.075, A.h * 0.105));
+  const pop = age < 0.14 ? 0.5 + 0.7 * (age / 0.14) : age < 0.28 ? 1.2 - 0.2 * ((age - 0.14) / 0.14) : 1;
+  const fade = age > REC_PACE_T - 0.4 ? Math.max(0, (REC_PACE_T - age) / 0.4) : 1;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(A.x, A.y, A.w, A.h); ctx.clip();
+  ctx.globalAlpha = fade;
+  // ribbon
+  const w = Math.min(A.w * 0.92, fs * 10.5), h = fs * 2.25;
+  ctx.translate(cx, cy); ctx.scale(pop, pop);
+  const g0 = ctx.createLinearGradient(-w / 2, 0, w / 2, 0);
+  g0.addColorStop(0, 'rgba(110,50,0,0)'); g0.addColorStop(0.15, 'rgba(110,50,0,0.78)'); g0.addColorStop(0.85, 'rgba(110,50,0,0.78)'); g0.addColorStop(1, 'rgba(110,50,0,0)');
+  ctx.fillStyle = g0; ctx.fillRect(-w / 2, -h / 2, w, h);
+  ctx.strokeStyle = `rgba(255,214,60,${0.9})`; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-w * 0.4, -h / 2); ctx.lineTo(w * 0.4, -h / 2); ctx.moveTo(-w * 0.4, h / 2); ctx.lineTo(w * 0.4, h / 2); ctx.stroke();
+  // sparkles twinkling around
+  for (let i = 0; i < 10; i++) {
+    const a = i * 2.39 + age * 2.2, rx = w * 0.46 * ((i % 5) / 5 + 0.2), ry = h * 0.75;
+    const x = Math.cos(a) * rx, y = Math.sin(a * 1.3) * ry, tw = 0.5 + 0.5 * Math.sin(age * 14 + i);
+    ctx.fillStyle = `rgba(255,${230 + (i % 2) * 25},150,${0.9 * tw})`;
+    const r = fs * 0.14 * (0.6 + tw * 0.6);
+    ctx.beginPath(); ctx.moveTo(x, y - r * 2); ctx.lineTo(x + r * 0.5, y); ctx.lineTo(x, y + r * 2); ctx.lineTo(x - r * 0.5, y); ctx.closePath(); ctx.fill();
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+  const t1 = '記録更新中！';
+  ctx.font = `900 ${Math.round(fs)}px sans-serif`;
+  ctx.lineWidth = Math.max(3, fs * 0.2); ctx.strokeStyle = 'rgba(70,25,0,0.95)'; ctx.strokeText(t1, 0, -fs * 0.32);
+  ctx.shadowColor = '#ffd21e'; ctx.shadowBlur = fs * 0.6 * (0.6 + 0.4 * Math.sin(age * 16));
+  const g = ctx.createLinearGradient(0, -fs * 0.8, 0, fs * 0.2);
+  g.addColorStop(0, '#fffbe0'); g.addColorStop(0.5, '#ffe066'); g.addColorStop(1, '#ff9a1e');
+  ctx.fillStyle = g; ctx.fillText(t1, 0, -fs * 0.32);
+  ctx.shadowBlur = 0;
+  const t2 = `いま勝てば自己ベスト！（${m.best.toLocaleString('ja-JP')}PT超え）`;
+  ctx.font = `800 ${Math.round(fs * 0.5)}px sans-serif`;
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(40,15,0,0.9)'; ctx.strokeText(t2, 0, fs * 0.62);
+  ctx.fillStyle = '#fff4d6'; ctx.fillText(t2, 0, fs * 0.62);
+  ctx.restore();
+}
+
 function drawFx(ctx, f) {
   if (drawExFx(ctx, f)) return; // v1.5.67 extra attack items (attack_items.js)
   if (f.kind === 'shock') { drawShockFx(ctx, f); return; }
@@ -4311,6 +4356,7 @@ export function renderFrame(ctx, L, localState, remoteSnap, waiting) {
   if (!localState.koHp) drawLowHpWarning(ctx, L, localState.player.hp, playerMaxHp);
   drawDamageNumbers(ctx, L, localState.damageNumbers);
   if (localState.ptMilestone) drawPtMilestone(ctx, L, localState.ptMilestone);
+  if (localState.recPace) drawRecPace(ctx, L, localState.recPace);
 
   // Divider between opp and own
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
