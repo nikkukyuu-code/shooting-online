@@ -215,7 +215,7 @@ export default {
         ctx.waitUntil(closePeriods(env, now).catch(() => {}));
         const { results } = await env.DB.prepare(BOARD_SQL[board](type) + ' LIMIT 1000').bind(key).all();
         let mine = null;
-        const top = results.slice(0, 50).map((r, i) => ({ rank: i + 1, id: r.player_id, nickname: r.nickname, score: r.score, n: r.n }));
+        const top = results.slice(0, 100).map((r, i) => ({ rank: i + 1, id: r.player_id, nickname: r.nickname, score: r.score, n: r.n }));
         if (me) { const i = results.findIndex((r) => r.player_id === me); if (i >= 0) mine = { rank: i + 1, score: results[i].score, n: results[i].n }; }
         const ids = top.map((t) => t.id);
         return json(req, { ok: true, period: type, board, key, current: key === cur, total: results.length, top, me: mine });

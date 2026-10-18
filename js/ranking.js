@@ -7,7 +7,7 @@
  *   shootingOnline_rankSecret / _bak   secret key proving ownership of the id
  *   shootingOnline_nickname / _bak     nickname (server-confirmed, unique)
  */
-import { sealScore } from './seal.js?v=20261019024658';
+import { sealScore } from './seal.js?v=20261019030117';
 export const RANK_API = 'https://stb-ranking.nikkukyuu.workers.dev';
 const K_ID = 'shootingOnline_rankId';
 const K_SECRET = 'shootingOnline_rankSecret';

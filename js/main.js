@@ -1,16 +1,16 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261019024658';
-import { Net } from './net.js?v=20261019024658';
-import { Game } from './game.js?v=20261019024658';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261019024658';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261019024658';
-import { resetDeckToDefault } from './meta.js?v=20261019024658';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261019024658';
-import { loadBattleCount } from './stats.js?v=20261019024658';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261019024658';
-import { ALL_KIND_IDS } from './catalog.js?v=20261019024658';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261019024658';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261019024658';
-import { seedStrongBest } from './record.js?v=20261019024658';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261019030117';
+import { Net } from './net.js?v=20261019030117';
+import { Game } from './game.js?v=20261019030117';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261019030117';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261019030117';
+import { resetDeckToDefault } from './meta.js?v=20261019030117';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261019030117';
+import { loadBattleCount } from './stats.js?v=20261019030117';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261019030117';
+import { ALL_KIND_IDS } from './catalog.js?v=20261019030117';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261019030117';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261019030117';
+import { seedStrongBest } from './record.js?v=20261019030117';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -156,7 +156,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261019024658`;
+  return `assets/enemies/${id}/0.png?v=20261019030117`;
 }
 
 function unitName(id) {
@@ -1071,8 +1071,10 @@ async function renderRanking() {
     list.replaceChildren(Object.assign(document.createElement('li'), { className: 'rk-empty', textContent: 'まだ記録がありません' }));
     return;
   }
+  const RK_MAX = 100; // ベスト100までスクロールで表示
+  const rows = r.top.slice(0, RK_MAX);
   const frag = document.createDocumentFragment();
-  for (const row of r.top) {
+  for (const row of rows) {
     const li = document.createElement('li');
     li.className = 'rk-row' + (row.id === me.id ? ' me' : '') + (row.rank <= 3 ? ' top' + row.rank : '');
     const rankEl = document.createElement('span'); rankEl.className = 'rk-rank';
@@ -1083,7 +1085,22 @@ async function renderRanking() {
     li.append(rankEl, nm, sc);
     frag.appendChild(li);
   }
+  const shown = rows.length;
+  const foot = document.createElement('li'); foot.className = 'rk-count';
+  foot.textContent = r.total > shown ? `1〜${shown}位を表示（全${r.total}人）` : `全${r.total}人`;
+  frag.appendChild(foot);
+  // 自分が表示範囲（ベスト100）の外なら、リスト下に自分の順位を固定表示
+  if (r.me && !rows.some((row) => row.id === me.id)) {
+    const li = document.createElement('li'); li.className = 'rk-row me rk-me-pin';
+    const rankEl = document.createElement('span'); rankEl.className = 'rk-rank'; rankEl.textContent = r.me.rank;
+    const nm = document.createElement('span'); nm.className = 'rk-name'; nm.textContent = (me.nickname || DEFAULT_NICK) + '（あなた）';
+    const sc = document.createElement('span'); sc.className = 'rk-score'; sc.textContent = r.me.score.toLocaleString('ja-JP') + 'PT';
+    if (rk.board === 'top3') { const n = document.createElement('small'); n.textContent = `${Math.min(3, r.me.n)}試合`; sc.appendChild(n); }
+    li.append(rankEl, nm, sc);
+    frag.appendChild(li);
+  }
   list.replaceChildren(frag);
+  const sc = document.getElementById('rk-scroll'); if (sc) sc.scrollTop = 0;
 }
 
 function openRanking() {
