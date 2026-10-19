@@ -6,13 +6,16 @@
  * localStorage (NEW key, never rename; _bak copy; value never decreases):
  *   shootingOnline_bestStrongMatch / _bak   {v:1, pt, at, src:'server'|'local'}
  *
- * Seeding: once per session (app start / start of a 強い match) the player's own best on the ranking
- * server (年間「1試合最高」, this year + last year) is read (GET only) and merged (higher wins), so the
- * first match after this update — or on a new device — does not celebrate falsely. If the server could not be read, a win is
- * stored silently (no celebration); if the server answered “no record yet”, the first win is
- * celebrated as 「初記録！」.
+ * The effect fires ONLY when a match beats the ALL-TIME best (user 10-19「過去最高ptのみ」):
+ *   all-time base = max( local key (+_bak),
+ *                        the player's own 年間「1試合最高」 for EVERY year since the ranking began
+ *                        (RANK_FIRST_YEAR = 2026 … this year; GET only — the Worker has no all-time board) )
+ * Seeding runs once per session (app start / start of a 強い match). The base counts as KNOWN only
+ * when every year was read OK (or the player never registered → no server record can exist).
+ * Unknown base (offline / partial read) → wins are saved silently, no effect.
+ * No previous record (base 0) → the first win is saved silently (no 「初記録！」).
  */
-import { fetchRanking, rankIdentity, periodKeys } from './ranking.js?v=20261019030349';
+import { fetchRanking, rankIdentity, periodKeys } from './ranking.js?v=20261019165352';
 
 export const BEST_STRONG_KEY = 'shootingOnline_bestStrongMatch';
 const BAK = BEST_STRONG_KEY + '_bak';
@@ -40,32 +43,46 @@ function saveStrongBest(pt, src) {
   return true;
 }
 
+const RANK_FIRST_YEAR = 2026; // ranking server started 2026-10 → no older yearly boards exist
+
 let _seed = null; // Promise<{known:boolean}>
 let _seedState = null; // resolved value
-/** Read the pre-match best from the server once (only when nothing is stored locally). Never throws. */
+/** Read the player's all-time best from the server once per session (all yearly boards). Never throws. */
 export function seedStrongBest() {
   if (_seed) return _seed;
-  if (_seedState && _seedState.known && _seedState.server) return Promise.resolve(_seedState); // once per session
+  if (_seedState && _seedState.known) return Promise.resolve(_seedState); // once per session
   const me = rankIdentity();
-  if (!me.id) { _seedState = { known: true, none: true }; return Promise.resolve(_seedState); } // never registered → no ranked win yet
+  if (!me.id) { _seedState = { known: true, none: true }; return Promise.resolve(_seedState); } // never registered → no server record
   _seedState = null;
-  const y = Number(periodKeys().year);
-  _seed = Promise.all([String(y), String(y - 1)].map((k) => fetchRanking('year', 'best', k).catch(() => null)))
+  const y = Math.max(RANK_FIRST_YEAR, Number(periodKeys().year));
+  const years = []; for (let k = RANK_FIRST_YEAR; k <= y; k++) years.push(String(k));
+  const fail = () => { _seed = null; _seedState = { known: false }; return _seedState; };
+  _seed = Promise.all(years.map((k) => fetchRanking('year', 'best', k).catch(() => null)))
     .then((rs) => {
-      const ok = rs.filter((r) => r && r.ok);
-      if (!ok.length) { _seed = null; _seedState = { known: !!loadStrongBest() }; return _seedState; }
-      const best = Math.max(0, ...ok.map((r) => (r.me && Number(r.me.score)) || 0));
+      if (!rs.every((r) => r && r.ok)) return fail(); // any year unreadable → the all-time base is unknown
+      const best = Math.max(0, ...rs.map((r) => (r.me && Number(r.me.score)) || 0));
       if (best > 0) saveStrongBest(best, 'server'); // merge: keeps the higher of local / server
       _seed = null; _seedState = { known: true, server: true };
       return _seedState;
     })
-    .catch(() => { _seed = null; _seedState = { known: !!loadStrongBest() }; return _seedState; });
+    .catch(fail);
   return _seed;
 }
 
 /**
+ * All-time base for the mid-match 「記録更新中！」 check:
+ *   undefined = still loading, null = unknown (stay silent), number = best PT (0 = no record → silent).
+ */
+export function strongBestBase() {
+  if (!_seedState) return _seed ? undefined : null;
+  if (!_seedState.known) return null;
+  const b = loadStrongBest();
+  return b ? b.pt : 0;
+}
+
+/**
  * Call once per finished COM「強い」 WIN with the submitted PT (before/without waiting for the submit).
- * Resolves {improved, first, prev, pt} — improved=true → show 「記録更新！」.
+ * Resolves {improved, prev, pt} — improved=true → show 「記録更新！」 (only above a known all-time best).
  * Only the seed started BEFORE the match is used (a seed started now could already include this match).
  */
 export async function recordStrongBest(pt) {
@@ -73,12 +90,10 @@ export async function recordStrongBest(pt) {
   if (!(pt > 0)) return null;
   let s = _seedState;
   if (!s && _seed) s = await Promise.race([_seed, new Promise((r) => setTimeout(() => r({ known: false }), 3000))]);
-  if (!s && loadStrongBest()) s = { known: true };
+  const known = !!(s && s.known);
   const prev = loadStrongBest();
-  if (prev) {
-    if (pt > prev.pt) { saveStrongBest(pt, 'local'); return { improved: true, first: false, prev: prev.pt, pt }; }
-    return { improved: false, first: false, prev: prev.pt, pt };
-  }
-  saveStrongBest(pt, 'local');
-  return s && s.known ? { improved: true, first: true, prev: 0, pt } : { improved: false, first: false, prev: 0, pt, unknown: true };
+  if (prev && pt <= prev.pt) return { improved: false, first: false, prev: prev.pt, pt };
+  saveStrongBest(pt, 'local'); // always keep the local best up to date (never decreases)
+  if (!prev) return { improved: false, first: true, prev: 0, pt, silent: true }; // no previous record → silent
+  return known ? { improved: true, first: false, prev: prev.pt, pt } : { improved: false, first: false, prev: prev.pt, pt, unknown: true };
 }
