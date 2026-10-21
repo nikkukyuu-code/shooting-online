@@ -1,8 +1,8 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261021192334';
-import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261021192334';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261021192432';
+import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261021192432';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -371,7 +371,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261021192334`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261021192432`;
 }
 
 function loadKindSprite(kind) {
@@ -457,8 +457,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261021192334'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261021192334'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261021192432'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261021192432'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -3787,10 +3787,25 @@ function drawInfoPanel(ctx, area, localState) {
     ctx.shadowColor = '#000';
     ctx.shadowBlur = 3 * u;
     ctx.fillText(ellipsize(ctx, head, textW), area.w * 0.5, boxY + boxH * 0.28);
-    const fsBody = fitFontSize(ctx, [body], textW, Math.min(baseFs, boxH * 0.32), minFs, fontStack, 700);
+    const fsBody = fitFontSize(ctx, [body], tut.icon ? textW - 30 * u : textW, Math.min(baseFs, boxH * 0.32), minFs, fontStack, 700);
     ctx.font = `700 ${fsBody}px ${fontStack}`;
     ctx.fillStyle = '#ffffff';
-    ctx.fillText(ellipsize(ctx, body, textW), area.w * 0.5, boxY + boxH * 0.58);
+    if (tut.icon === 'heal') {
+      // heal orb icon (same look as the HP回復 item: green orb with +)
+      const ir = Math.max(8 * u, Math.min(14 * u, boxH * 0.13));
+      const bw = Math.min(ctx.measureText(body).width, textW - ir * 2.6);
+      const bodyCx = area.w * 0.5 + ir * 1.3;
+      const ix = bodyCx - bw * 0.5 - ir * 1.4, iy = boxY + boxH * 0.58;
+      ctx.save();
+      ctx.shadowColor = '#44ff88'; ctx.shadowBlur = 8 * u;
+      ctx.fillStyle = 'rgba(20, 90, 50, 0.95)';
+      ctx.beginPath(); ctx.arc(ix, iy, ir, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0; ctx.strokeStyle = '#44ff88'; ctx.lineWidth = Math.max(1.5, 2 * u); ctx.stroke();
+      ctx.font = `900 ${ir * 1.5}px ${fontStack}`; ctx.fillStyle = '#eafff1';
+      ctx.fillText('+', ix, iy + ir * 0.05);
+      ctx.restore();
+      ctx.fillText(ellipsize(ctx, body, textW - ir * 2.6), bodyCx, iy);
+    } else ctx.fillText(ellipsize(ctx, body, textW), area.w * 0.5, boxY + boxH * 0.58);
     const fsFoot = Math.max(9 * u, Math.min(12 * u, boxH * 0.18));
     ctx.font = `600 ${fsFoot}px ${fontStack}`;
     ctx.fillStyle = 'rgba(200, 230, 255, 0.85)';
