@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-19 16:53:52';
+export const VERSION_LABEL = '2026-10-21 19:10:47';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1792396432000;
-export const BUILD_NOTE = '記録更新の演出は過去最高PTを超えたときだけ';
+export const BUILD_TIME = 1792577447000;
+export const BUILD_NOTE = '大型の敵の回復アイテム出現率を表示';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

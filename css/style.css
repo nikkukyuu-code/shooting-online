@@ -2559,3 +2559,18 @@ html, body {
   #screen-ranking .sub-panel > .sub-footer { padding-top: 7px; padding-bottom: 8px; }
   #screen-ranking .sub-footer > .menu-btn { padding-top: 10px; padding-bottom: 10px; }
 }
+
+.heal-rate {
+  margin: 6px auto 0;
+  max-width: 34em;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(20, 60, 40, 0.6);
+  border: 1px solid rgba(68, 255, 136, 0.45);
+  color: #d8ffe6;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  text-align: center;
+}
+.heal-rate b { color: #44ff88; font-size: 1.05rem; }
+.heal-rate small { display: block; font-size: 0.7rem; color: rgba(200, 240, 215, 0.85); }
