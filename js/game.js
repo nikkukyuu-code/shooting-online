@@ -2273,11 +2273,11 @@ export class Game {
         sfx.explode();
         P.score += e.score;
         if (e._coreBreak) {
-          // コア撃破: 大回復確定 + アイテム確定 (swarm: 回復 + アイテム)
+          // コア撃破: 75%で回復(大型コアは大回復) + アイテム確定
           if (Math.random() < HEAL_GUARANTEE_P) S.items.push(spawnItemWithId(e.x, e.y, bigCoreKind(e.kind) ? 'heal_big' : 'heal'));
           S.items.push(spawnItem(e.x + 26, e.y));
         } else if (isLargeEnemy(e) && !(e._chainOf || e._lead || e._chainT != null)) { // core-attached units: no guaranteed heal
-          // デカギャラ撃破: 回復確定（ボス級は大回復）
+          // デカギャラ撃破: 75%で回復（ボス級は大回復）
           const healId = resolveEnemyTier(e.kind) === 'boss' ? 'heal_big' : 'heal';
           if (Math.random() < HEAL_GUARANTEE_P) S.items.push(spawnItemWithId(e.x, e.y, healId));
         } else if (!e.noDrop && e._chainT == null && !e._chainKill && Math.random() < (resolveEnemyTier(e.kind) === 'boss' ? 1 : (ITEM_DROP_CHANCE * RAM_DROP_CHANCE_MUL) * (e.dropMul ?? 1))) { // chain pops: no item each
