@@ -2560,4 +2560,26 @@ html, body {
   #screen-ranking .sub-footer > .menu-btn { padding-top: 10px; padding-bottom: 10px; }
 }
 
-.mugen-link { margin-left: 6px; }
+/* footer link pills: one compact row */
+.menu-footer .hub-row { display: flex; justify-content: center; align-items: center; gap: 6px; flex-wrap: nowrap; pointer-events: auto; }
+.menu-footer .hub-row .hub-link { margin: 0; padding: 2px 10px; font-size: 0.72rem; line-height: 1.35; white-space: nowrap; }
+/* keep whole menu on one screen (footer link row added) */
+@media (max-height: 860px) {
+  .menu-footer { gap: 2px; padding-top: 2px; }
+  #screen-menu .menu-hint { font-size: 0.6rem; line-height: 1.2; margin: 0; }
+  #screen-menu .menu-btn { padding-top: 6px; padding-bottom: 6px; }
+  #screen-menu .menu-btn.transfer-btn { padding-top: 6px; padding-bottom: 6px; }
+  .transfer-note.dl-note { line-height: 1.25; }
+}
+@media (max-height: 700px) {
+  #screen-menu .menu-btn, #screen-menu .menu-btn-sub { padding-top: 4px; padding-bottom: 4px; }
+  #screen-menu .menu-btn.transfer-btn { padding-top: 4px; padding-bottom: 4px; }
+  .transfer-note.dl-note { font-size: 0.6rem; line-height: 1.18; margin-top: 1px; }
+  .menu-panel { gap: 2px; }
+  .menu-footer .hub-row .hub-link { padding: 1px 9px; font-size: 0.68rem; }
+}
+@media (max-height: 660px) {
+  .menu-hero { height: 72px; min-height: 72px; }
+  .com-rank-panel { padding-top: 1px; padding-bottom: 1px; }
+  .menu-medals { min-height: 34px; padding-top: 1px; padding-bottom: 1px; }
+}

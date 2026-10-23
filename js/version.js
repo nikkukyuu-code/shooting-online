@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-23 19:15:19';
+export const VERSION_LABEL = '2026-10-23 19:21:12';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1792750519000;
-export const BUILD_NOTE = 'フリーゲーム夢現へのリンク追加';
+export const BUILD_TIME = 1792750872000;
+export const BUILD_NOTE = 'メニュー下部の収まりを修正';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
