@@ -2589,3 +2589,5 @@ html, body {
   .menu-hero { padding-top: 30px; height: 78px; min-height: 78px; }
   .menu-hero-art { height: 46%; }
 }
+.menu-footer .hub-row .share-btn { font-family: inherit; cursor: pointer; }
+@media (max-width: 380px) { .menu-footer .hub-row { gap: 4px; } .menu-footer .hub-row .hub-link { padding-left: 8px; padding-right: 8px; } }

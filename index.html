@@ -9,7 +9,7 @@
   <meta name="theme-color" content="#1a0a08" />
   <script>
   (function () {
-    var PAGE_LABEL = '2026-10-23 19:28:58';
+    var PAGE_LABEL = '2026-10-24 01:22:54';
     var busy = false;
     function check() {
       if (busy || window.__stbScreen === 'game' || document.visibilityState === 'hidden') return;
@@ -139,9 +139,9 @@
       </div>
       <div class="menu-footer">
         <p class="menu-hint">部屋名→入室（ゲスト）／部屋を作る（ホスト）</p>
-        <div class="hub-row"><a class="hub-link" href="https://nikkukyuu-code.github.io/">トップページへ</a><a class="hub-link mugen-link" href="https://freegame-mugen.jp/cms/mt-cp.cgi?__mode=view&amp;blog_id=1&amp;id=13413" target="_blank" rel="noopener">フリーゲーム夢現</a></div>
+        <div class="hub-row"><a class="hub-link" href="https://nikkukyuu-code.github.io/">トップページへ</a><a class="hub-link mugen-link" href="https://freegame-mugen.jp/cms/mt-cp.cgi?__mode=view&amp;blog_id=1&amp;id=13413" target="_blank" rel="noopener">フリーゲーム夢現</a><button type="button" class="hub-link share-btn" data-share-btn data-share-title="スペーストリックバトル" data-share-text="ブラウザゲーム「スペーストリックバトル」 ほかのゲームもこちらから遊べます">共有</button></div>
         <div id="app-meta" class="app-meta">
-          <span id="app-version">2026-10-23 19:28:58</span>
+          <span id="app-version">2026-10-24 01:22:54</span>
           <span class="meta-sep">·</span>
           <span id="app-visits">アクセス …</span>
           <span class="meta-sep" hidden>·</span>
@@ -278,7 +278,7 @@
       <div id="ui-overlay">
         <button type="button" id="btn-stop" class="stop-btn">対戦終了</button>
         <div id="match-timer" class="match-timer" hidden aria-live="polite"><span class="mt-main"></span><span class="mt-sub" hidden></span></div>
-        <div id="game-version" class="game-version">2026-10-23 19:28:58</div>
+        <div id="game-version" class="game-version">2026-10-24 01:22:54</div>
         <div id="status-bar" class="status-bar">対戦相手を待っています</div>
         <div id="vs-medals" class="vs-medals hidden" aria-live="polite"></div>
       </div>
@@ -302,5 +302,38 @@
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script type="module" src="js/main.js?v=20261021192537"></script>
+<script>
+/* 共有ボタン: navigator.share → fallback copy + toast (X / LINE) */
+(function () {
+  var URL_TOP = 'https://nikkukyuu-code.github.io/';
+  function toast(msg, title, text) {
+    var old = document.getElementById('share-toast'); if (old) old.remove();
+    var t = document.createElement('div'); t.id = 'share-toast'; t.setAttribute('role', 'status');
+    t.style.cssText = 'position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:2147483000;max-width:min(92vw,360px);padding:10px 14px;border-radius:12px;background:rgba(10,12,24,.94);color:#fff;font:700 14px/1.5 system-ui,sans-serif;text-align:center;box-shadow:0 4px 18px rgba(0,0,0,.5)';
+    var q = encodeURIComponent(text + ' ' + URL_TOP);
+    t.innerHTML = '<div></div><div style="margin-top:6px;display:flex;gap:10px;justify-content:center;font-size:13px">' +
+      '<a target="_blank" rel="noopener" style="color:#9ad4ff" href="https://twitter.com/intent/tweet?text=' + q + '">Xで共有</a>' +
+      '<a target="_blank" rel="noopener" style="color:#7be08f" href="https://social-plugins.line.me/lineit/share?url=' + encodeURIComponent(URL_TOP) + '">LINEで共有</a></div>';
+    t.firstChild.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(function () { if (t.parentNode) t.remove(); }, 4500);
+  }
+  function copy(s) {
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(s);
+    return new Promise(function (ok, ng) {
+      try { var a = document.createElement('textarea'); a.value = s; a.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(a); a.select(); var r = document.execCommand('copy'); a.remove(); r ? ok() : ng(); } catch (e) { ng(e); }
+    });
+  }
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('[data-share-btn]'); if (!b) return;
+    ev.preventDefault();
+    var title = b.getAttribute('data-share-title') || document.title;
+    var text = b.getAttribute('data-share-text') || title;
+    var fb = function () { copy(URL_TOP).then(function () { toast('リンクをコピーしました', title, text); }, function () { toast(URL_TOP, title, text); }); };
+    if (navigator.share) navigator.share({ title: title, text: text, url: URL_TOP }).catch(function (e) { if (!e || e.name !== 'AbortError') fb(); });
+    else fb();
+  });
+})();
+</script>
 </body>
 </html>
