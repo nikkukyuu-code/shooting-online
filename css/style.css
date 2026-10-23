@@ -2559,3 +2559,5 @@ html, body {
   #screen-ranking .sub-panel > .sub-footer { padding-top: 7px; padding-bottom: 8px; }
   #screen-ranking .sub-footer > .menu-btn { padding-top: 10px; padding-bottom: 10px; }
 }
+
+.mugen-link { margin-left: 6px; }
