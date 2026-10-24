@@ -2642,7 +2642,7 @@ html, body {
 #screen-shop .sub-head .sub-desc, #screen-zukan .sub-head .sub-desc { font-size: 0.62rem; margin: 1px 0 0; }
 #screen-shop .sub-head-glow, #screen-zukan .sub-head-glow { display: none; }
 #screen-shop .shop-pt-pill { margin-top: 4px; padding: 3px 14px; font-size: 0.9rem; }
-#screen-shop #shop-detail, #screen-zukan #zukan-unit-detail { flex: 0 0 auto !important; min-height: 0 !important; max-height: min(30vh, 210px) !important; overflow-x: hidden !important; overflow-y: auto !important; overscroll-behavior: contain; }
+#screen-shop #shop-detail, #screen-zukan #zukan-unit-detail { flex: 0 0 auto !important; min-height: 0 !important; max-height: none !important; overflow: hidden !important; padding: 7px 10px; gap: 9px; }
 #screen-shop .shop-buy-row { flex-shrink: 0; }
 #screen-shop .pane-scroll, #screen-zukan .pane-scroll {
   flex: 1 1 auto !important; min-height: 90px; overflow-x: hidden; overflow-y: auto;
@@ -2656,5 +2656,28 @@ html, body {
 #screen-shop .sub-footer > .menu-btn, #screen-zukan .sub-footer > .menu-btn { padding-top: 10px; padding-bottom: 10px; }
 @media (max-height: 700px) {
   #screen-shop .sub-head .sub-desc, #screen-zukan .sub-head .sub-desc { display: none; }
-  #screen-shop #shop-detail, #screen-zukan #zukan-unit-detail { max-height: 26vh !important; }
 }
+
+/* ===== ショップ・図鑑の説明: 見切れず・内部スクロールなしで全文表示（コンパクト配置） (user 10-25) ===== */
+#screen-shop #shop-detail, #screen-zukan #zukan-unit-detail { display: block; position: relative; padding: 6px 9px 7px; }
+#shop-detail .detail-sprite, #zukan-unit-detail .detail-sprite { position: absolute; left: 8px; top: 6px; width: 42px; height: 42px; min-width: 0; padding: 0; margin: 0; }
+#shop-detail .detail-sprite img, #zukan-unit-detail .detail-sprite img { width: 42px; height: 42px; object-fit: contain; }
+#shop-detail .detail-body, #zukan-unit-detail .detail-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+#shop-detail .detail-name, #zukan-unit-detail .detail-name,
+#shop-detail .detail-meta, #zukan-unit-detail .detail-meta { margin-left: 50px; }
+#shop-detail .detail-name, #zukan-unit-detail .detail-name { font-size: 0.98rem; line-height: 1.2; }
+#shop-detail .detail-meta, #zukan-unit-detail .detail-meta { gap: 3px 5px; min-height: 20px; }
+#shop-detail .detail-stats, #zukan-unit-detail .detail-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 8px; margin-top: 3px; }
+#shop-detail .stat-row, #zukan-unit-detail .stat-row { min-width: 0; gap: 3px; }
+#shop-detail .stat-row .stat-name, #zukan-unit-detail .stat-row .stat-name { font-size: 0.7rem; white-space: nowrap; }
+#shop-detail .detail-attack, #zukan-unit-detail .detail-attack { font-size: 0.74rem; line-height: 1.3; margin: 1px 0 0; }
+#shop-detail .detail-blurb, #zukan-unit-detail .detail-blurb { font-size: 0.72rem; line-height: 1.36; margin: 0; }
+#screen-shop .shop-buy-row .menu-btn { padding-top: 8px; padding-bottom: 8px; }
+#screen-deck .deck-detail-compact .dc-desc { font-size: 0.7rem; line-height: 1.32; }
+@media (max-height: 600px) {
+  #screen-shop .sub-head { min-height: 30px; }
+  #screen-shop .shop-pt-pill { position: absolute; right: 0; top: 3px; margin: 0; padding: 3px 8px; min-width: 0; font-size: 0.72rem; letter-spacing: 0; }
+  #screen-shop .sub-head > h2 { text-align: left; padding-left: 70px; padding-right: 100px; }
+}
+#screen-deck .deck-detail-compact .dc-row1 { flex-wrap: wrap; row-gap: 2px; overflow: visible; }
+#screen-deck .deck-detail-compact .dc-role { overflow: visible; text-overflow: clip; }
