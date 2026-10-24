@@ -2,7 +2,7 @@
  * localStorage key: shootingOnline_meta (NEVER rename — would wipe player PT).
  * Backup key: shootingOnline_meta_bak. On every update, preserve pt; never clear storage.
  */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20261025080655';
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20261025081601';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;

@@ -1,8 +1,8 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261025080655';
-import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261025080655';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261025081601';
+import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261025081601';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -371,7 +371,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261025080655`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261025081601`;
 }
 
 function loadKindSprite(kind) {
@@ -457,8 +457,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261025080655'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261025080655'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261025081601'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261025081601'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -856,7 +856,7 @@ function drawCoreEnemy(ctx, e, kind, w, h, t) {
     ctx.font = `bold ${Math.max(9, Math.round(r * 0.62))}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.globalAlpha = 0.95;
-    ctx.fillText('CORE', c.ox, c.oy - b - 3);
+    // 10-25: 敵キャラに文字は出さない（「CORE」ラベル削除）
     ctx.globalAlpha = 1;
     // Hit flash
     if ((e._coreFlash || 0) > 0) {
@@ -945,12 +945,7 @@ function drawDeflectSpark(ctx, f) {
   ctx.moveTo(f.x, f.y);
   ctx.lineTo(f.x - 10 - t * 14, f.y + 6 + t * 10);
   ctx.stroke();
-  if (t < 0.5) {
-    ctx.fillStyle = '#e8f4ff';
-    ctx.font = 'bold 9px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('カン', f.x + 2, f.y - 10 - t * 10);
-  }
+  // 10-25: 「カン」文字は出さない（火花のみ）
   ctx.restore();
 }
 
@@ -4169,8 +4164,7 @@ function drawFieldInner(ctx, area, snap, opts = {}) {
       ctx.strokeStyle = 'rgba(140,230,255,0.95)'; ctx.lineWidth = 3 * k;
       for (let i = 0; i < 6; i++) { const a0 = i * 1.047 + now * 4; ctx.beginPath(); ctx.arc(x, y, R, a0, a0 + 0.7); ctx.stroke(); }
       ctx.fillStyle = 'rgba(140,230,255,0.18)'; ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
-      ctx.font = `bold ${Math.round(13 * k + 3)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,30,60,0.9)'; ctx.strokeText('ガード', x, y - R - 2); ctx.fillStyle = '#bff3ff'; ctx.fillText('ガード', x, y - R - 2);
+      // 10-25: 「ガード」文字は出さない（リングのみ）
       ctx.restore(); }
   }
   // User 10-04d: core life gauge above every core unit (attached guard units stay bar-less)
