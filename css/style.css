@@ -2591,3 +2591,24 @@ html, body {
 }
 .menu-footer .hub-row .share-btn { font-family: inherit; cursor: pointer; }
 @media (max-width: 380px) { .menu-footer .hub-row { gap: 4px; } .menu-footer .hub-row .hub-link { padding-left: 8px; padding-right: 8px; } }
+
+/* ===== 上位ほど派手に (1位: 金の輝き+王冠 / 2位: 銀 / 3位: 銅 / 4〜10位: 控えめ) ===== */
+.rk-row { position: relative; overflow: hidden; }
+.rk-row.top1 { background: linear-gradient(100deg, rgba(255,214,70,0.55), rgba(150,95,0,0.45) 45%, rgba(14,24,50,0.9)); border: 1.5px solid #ffe07a; min-height: 52px; animation: rkGlow 1.8s ease-in-out infinite alternate; }
+.rk-row.top1 .rk-name { color: #fff3b8; font-weight: 900; font-size: 1.05em; text-shadow: 0 0 8px rgba(255,210,60,0.85); }
+.rk-row.top1 .rk-score { color: #fff1a0; font-size: 1.08em; text-shadow: 0 0 8px rgba(255,200,40,0.8); }
+.rk-row.top2 { background: linear-gradient(100deg, rgba(225,235,250,0.4), rgba(120,135,160,0.3) 45%, rgba(14,24,50,0.9)); border: 1.5px solid #dfe8f5; min-height: 48px; box-shadow: 0 0 10px rgba(210,225,245,0.35); }
+.rk-row.top2 .rk-name { color: #f2f6ff; font-weight: 900; text-shadow: 0 0 6px rgba(220,235,255,0.6); }
+.rk-row.top3 { background: linear-gradient(100deg, rgba(225,140,70,0.42), rgba(120,60,20,0.3) 45%, rgba(14,24,50,0.9)); border: 1.5px solid #e9a066; min-height: 46px; box-shadow: 0 0 8px rgba(230,140,70,0.3); }
+.rk-row.top3 .rk-name { color: #ffe0c4; font-weight: 900; }
+.rk-row.top1::after, .rk-row.top2::after, .rk-row.top3::after { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 40%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.45), transparent); transform: translateX(-120%) skewX(-18deg); will-change: transform; animation: rkShine 2.6s ease-in-out infinite; }
+.rk-row.top2::after { animation-duration: 3.6s; opacity: 0.7; }
+.rk-row.top3::after { animation-duration: 4.6s; opacity: 0.5; }
+.rk-row.top10 { background: linear-gradient(90deg, rgba(90,160,255,0.18), rgba(14,24,50,0.85)); border-color: rgba(120,190,255,0.45); box-shadow: inset 3px 0 0 rgba(120,200,255,0.8); }
+.rk-row.top10 .rk-rank { color: #9fe0ff; text-shadow: 0 0 6px rgba(100,190,255,0.6); }
+.rk-crown { font-style: normal; display: inline-block; margin-right: 3px; animation: rkCrown 1.6s ease-in-out infinite; }
+@keyframes rkShine { 0% { transform: translateX(-120%) skewX(-18deg); } 60%, 100% { transform: translateX(320%) skewX(-18deg); } }
+@keyframes rkGlow { from { box-shadow: 0 0 6px rgba(255,200,40,0.45); } to { box-shadow: 0 0 18px rgba(255,215,60,0.85); } }
+@keyframes rkCrown { 0%, 100% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-2px) rotate(6deg); } }
+@media (prefers-reduced-motion: reduce) { .rk-row::after, .rk-row.top1, .rk-crown { animation: none !important; } }
