@@ -2622,3 +2622,12 @@ html, body {
 .rk-medals .medal-item { flex-shrink: 0; position: relative; display: inline-flex; align-items: flex-end; }
 .rk-medals .medal-n { font-size: 0.55rem; line-height: 1; color: #ffe39a; margin-left: -2px; }
 .rk-medals .medal-more { font-size: 0.55rem; padding: 2px 3px; }
+
+/* ===== サブ画面の見出し左端「◀ 戻る」(デッキ編集・ショップ・図鑑・ランキング共通位置) ===== */
+.sub-head > h2 { padding-left: 66px; padding-right: 66px; }
+.sub-back { position: absolute; left: 0; top: 0; z-index: 3; appearance: none; height: 30px; padding: 0 9px; border-radius: 9px;
+  border: 1px solid rgba(140, 200, 255, 0.6); background: linear-gradient(180deg, rgba(40, 80, 150, 0.95), rgba(18, 36, 80, 0.95));
+  color: #e8f4ff; font: 800 0.8rem/1 inherit; font-family: inherit; white-space: nowrap; cursor: pointer;
+  box-shadow: 0 0 10px rgba(80, 160, 255, 0.35); -webkit-tap-highlight-color: transparent; }
+.sub-back:active { transform: translateY(1px); }
+.sub-back:focus-visible { outline: 2px solid #5fe0ff; outline-offset: 1px; }
