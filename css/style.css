@@ -2631,3 +2631,30 @@ html, body {
   box-shadow: 0 0 10px rgba(80, 160, 255, 0.35); -webkit-tap-highlight-color: transparent; }
 .sub-back:active { transform: translateY(1px); }
 .sub-back:focus-visible { outline: 2px solid #5fe0ff; outline-offset: 1px; }
+
+/* ===== ショップ・図鑑: 見出し＋説明（詳細）は固定、下の一覧だけスクロール (user 10-25) ===== */
+#screen-shop, #screen-zukan { overflow: hidden; }
+#screen-shop .sub-panel, #screen-zukan .sub-panel {
+  height: calc(100% - max(44px, env(safe-area-inset-top)) - max(20px, env(safe-area-inset-bottom)));
+  overflow: hidden; box-sizing: border-box; gap: 6px; padding-top: 10px;
+}
+#screen-shop .sub-head h2, #screen-zukan .sub-head h2 { font-size: 1.15rem; line-height: 30px; margin: 0; }
+#screen-shop .sub-head .sub-desc, #screen-zukan .sub-head .sub-desc { font-size: 0.62rem; margin: 1px 0 0; }
+#screen-shop .sub-head-glow, #screen-zukan .sub-head-glow { display: none; }
+#screen-shop .shop-pt-pill { margin-top: 4px; padding: 3px 14px; font-size: 0.9rem; }
+#screen-shop #shop-detail, #screen-zukan #zukan-unit-detail { flex: 0 0 auto !important; min-height: 0 !important; max-height: min(30vh, 210px) !important; overflow-x: hidden !important; overflow-y: auto !important; overscroll-behavior: contain; }
+#screen-shop .shop-buy-row { flex-shrink: 0; }
+#screen-shop .pane-scroll, #screen-zukan .pane-scroll {
+  flex: 1 1 auto !important; min-height: 90px; overflow-x: hidden; overflow-y: auto;
+  -webkit-overflow-scrolling: touch; touch-action: pan-y; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 8px;
+  margin: 0 calc(-1 * var(--sub-pad-x)); padding: 6px var(--sub-pad-x) 12px;
+  border-top: 1px solid rgba(100, 170, 255, 0.25); box-shadow: inset 0 10px 10px -10px rgba(0, 0, 0, 0.6);
+}
+#screen-shop .pane-scroll > *, #screen-zukan .pane-scroll > * { flex-shrink: 0; }
+#screen-shop .sub-panel > .sub-footer, #screen-zukan .sub-panel > .sub-footer { margin-top: 0; padding-top: 7px; padding-bottom: 8px; }
+#screen-shop .sub-footer > .menu-btn, #screen-zukan .sub-footer > .menu-btn { padding-top: 10px; padding-bottom: 10px; }
+@media (max-height: 700px) {
+  #screen-shop .sub-head .sub-desc, #screen-zukan .sub-head .sub-desc { display: none; }
+  #screen-shop #shop-detail, #screen-zukan #zukan-unit-detail { max-height: 26vh !important; }
+}
