@@ -1,8 +1,8 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261025070702';
-import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261025070702';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261025080655';
+import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261025080655';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -371,7 +371,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261025070702`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261025080655`;
 }
 
 function loadKindSprite(kind) {
@@ -457,8 +457,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261025070702'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261025070702'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261025080655'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261025080655'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -1628,14 +1628,7 @@ function drawEnemy(ctx, e) {
     || (e.w && e.w <= 70 && e.h && e.h <= 60);
   if (!tiny && !CORE_DRAW_KINDS.has(kind) && kind !== 'wave_snake_seg' && kind !== 'wave_cater' && kind !== 'wave_mine' && kind !== 'wave_pod' && !e.att) drawHpPip(ctx, e); // core-attached units: no life bar
 
-  if (sent) {
-    const labelA = appearT > 0 ? (0.55 + 0.45 * (0.5 + 0.5 * Math.sin(t * 18))) : 0.9;
-    ctx.globalAlpha = labelA;
-    ctx.fillStyle = appearT > 0 ? 'rgba(180,255,255,1)' : 'rgba(100,230,255,0.9)';
-    ctx.font = appearT > 0 ? 'bold 11px sans-serif' : 'bold 9px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('SEND', 0, e.h * 0.78);
-  }
+  // 10-25: 送り込み敵の下の「SEND」文字は表示しない（ユーザー要望）。色・出現演出はそのまま。
   if (e.zs > 0 || e.hx) { ctx.globalAlpha = 1; drawPersonaLocal(ctx, e, t); }
   // Laser telegraph (large sent units) — drawn in local space after body
   if (e.laserTeleT > 0 && !e.sent) { // 10-15: sent units show only the unit charge glow
