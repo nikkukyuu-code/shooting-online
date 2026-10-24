@@ -2612,3 +2612,13 @@ html, body {
 @keyframes rkGlow { from { box-shadow: 0 0 6px rgba(255,200,40,0.45); } to { box-shadow: 0 0 18px rgba(255,215,60,0.85); } }
 @keyframes rkCrown { 0%, 100% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-2px) rotate(6deg); } }
 @media (prefers-reduced-motion: reduce) { .rk-row::after, .rk-row.top1, .rk-crown { animation: none !important; } }
+
+/* ===== ランキング: 各プレイヤーのメダル（名前の下に小さく1行、はみ出す分は +n） ===== */
+.rk-name { display: flex; flex-direction: column; justify-content: center; gap: 1px; }
+.rk-nm-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rk-medals { display: block; min-width: 0; overflow: hidden; line-height: 0; }
+.rk-medals:empty { display: none; }
+.rk-medals .medal-shelf { display: flex; flex-wrap: nowrap; align-items: flex-end; gap: 1px; min-width: 0; overflow: hidden; }
+.rk-medals .medal-item { flex-shrink: 0; position: relative; display: inline-flex; align-items: flex-end; }
+.rk-medals .medal-n { font-size: 0.55rem; line-height: 1; color: #ffe39a; margin-left: -2px; }
+.rk-medals .medal-more { font-size: 0.55rem; padding: 2px 3px; }

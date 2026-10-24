@@ -7,7 +7,7 @@
  *   shootingOnline_rankSecret / _bak   secret key proving ownership of the id
  *   shootingOnline_nickname / _bak     nickname (server-confirmed, unique)
  */
-import { sealScore } from './seal.js?v=20261024190644';
+import { sealScore } from './seal.js?v=20261025062311';
 export const RANK_API = 'https://stb-ranking.nikkukyuu.workers.dev';
 const K_ID = 'shootingOnline_rankId';
 const K_SECRET = 'shootingOnline_rankSecret';
@@ -418,7 +418,7 @@ export function medalCanvas(type, rank, cssSize, opts = {}) {
 
 const ORDER = ['year', 'month', 'week', 'day'];
 /** Build a medal shelf element from server medals ({list:[{type,board,rank}], counts:{'week_1':n,...}}). */
-export function medalShelf(entry, { compact = false, max = 12, scale } = {}) {
+export function medalShelf(entry, { compact = false, max = 12, scale, anim = true, none = 'メダルなし' } = {}) {
   const box = document.createElement('div');
   box.className = 'medal-shelf' + (compact ? ' compact' : '');
   // count per period × rank × board from the list (falls back to the server counts without board)
@@ -445,13 +445,13 @@ export function medalShelf(entry, { compact = false, max = 12, scale } = {}) {
         it.className = 'medal-item';
         it.title = `${PERIOD_JA[t]}${r}位${b ? '（' + BOARD_JA[b] + '）' : ''} ×${n}`;
         const size = Math.round(MEDAL_SIZE[t] * (scale || (compact ? 0.74 : 1)));
-        it.appendChild(medalCanvas(t, r, size, { board: b || undefined }));
+        it.appendChild(medalCanvas(t, r, size, { board: b || undefined, anim }));
         if (n > 1) { const c = document.createElement('b'); c.className = 'medal-n'; c.textContent = '×' + n; it.appendChild(c); }
         box.appendChild(it);
       }
     }
   }
-  if (!shown) { const e = document.createElement('span'); e.className = 'medal-none'; e.textContent = 'メダルなし'; box.appendChild(e); }
+  if (!shown && none) { const e = document.createElement('span'); e.className = 'medal-none'; e.textContent = none; box.appendChild(e); }
   return box;
 }
 

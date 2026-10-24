@@ -1,16 +1,16 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261024190644';
-import { Net } from './net.js?v=20261024190644';
-import { Game } from './game.js?v=20261024190644';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261024190644';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261024190644';
-import { resetDeckToDefault } from './meta.js?v=20261024190644';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261024190644';
-import { loadBattleCount } from './stats.js?v=20261024190644';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261024190644';
-import { ALL_KIND_IDS } from './catalog.js?v=20261024190644';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261024190644';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261024190644';
-import { seedStrongBest } from './record.js?v=20261024190644';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261025062311';
+import { Net } from './net.js?v=20261025062311';
+import { Game } from './game.js?v=20261025062311';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261025062311';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261025062311';
+import { resetDeckToDefault } from './meta.js?v=20261025062311';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261025062311';
+import { loadBattleCount } from './stats.js?v=20261025062311';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261025062311';
+import { ALL_KIND_IDS } from './catalog.js?v=20261025062311';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261025062311';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261025062311';
+import { seedStrongBest } from './record.js?v=20261025062311';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -156,7 +156,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261024190644`;
+  return `assets/enemies/${id}/0.png?v=20261025062311`;
 }
 
 function unitName(id) {
@@ -1084,8 +1084,11 @@ async function renderRanking() {
     li.className = 'rk-row' + (row.id === me.id ? ' me' : '') + (row.rank <= 3 ? ' top' + row.rank : row.rank <= 10 ? ' top10' : '');
     const rankEl = document.createElement('span'); rankEl.className = 'rk-rank';
     if (row.rank <= 3) rankEl.appendChild(medalCanvas(rk.period, row.rank, 30, { board: rk.board })); else rankEl.textContent = row.rank;
-    const nm = document.createElement('span'); nm.className = 'rk-name'; nm.textContent = row.nickname + (row.id === me.id ? '（あなた）' : '');
-    if (row.rank === 1) nm.prepend(Object.assign(document.createElement('i'), { className: 'rk-crown', textContent: '👑', ariaHidden: 'true' }));
+    const nm = document.createElement('span'); nm.className = 'rk-name';
+    const nt = document.createElement('span'); nt.className = 'rk-nm-t'; nt.textContent = row.nickname + (row.id === me.id ? '（あなた）' : '');
+    if (row.rank === 1) nt.prepend(Object.assign(document.createElement('i'), { className: 'rk-crown', textContent: '👑', ariaHidden: 'true' }));
+    const md = document.createElement('span'); md.className = 'rk-medals'; md.dataset.pid = row.id;
+    nm.append(nt, md);
     const sc = document.createElement('span'); sc.className = 'rk-score'; sc.textContent = row.score.toLocaleString('ja-JP') + 'PT';
     if (rk.board === 'top3') { const n = document.createElement('small'); n.textContent = `${Math.min(3, row.n)}試合`; sc.appendChild(n); }
     li.append(rankEl, nm, sc);
@@ -1107,6 +1110,46 @@ async function renderRanking() {
   }
   list.replaceChildren(frag);
   const sc = document.getElementById('rk-scroll'); if (sc) sc.scrollTop = 0;
+  rkWatchMedals(list, sc);
+}
+
+/* 各プレイヤーのメダル: 画面に入った行だけ /medals?ids= (最大4人ずつ) で遅延取得し、セッション中はキャッシュ */
+const rkMedalCache = new Map(); // pid -> entry
+const rkMedalWait = new Set();
+let rkMedalIO = null, rkMedalBusy = 0;
+function rkPaintMedals(el) {
+  const e = rkMedalCache.get(el.dataset.pid);
+  if (!e || el.dataset.done) return;
+  el.dataset.done = '1';
+  const shelf = medalShelf(e, { compact: true, max: 6, scale: 0.5, anim: false, none: '' });
+  if (!shelf.querySelector('.medal-item')) { el.remove(); return; }
+  el.replaceChildren(shelf);
+  requestAnimationFrame(() => fitShelf(el));
+}
+function rkPumpMedals() {
+  while (rkMedalBusy < 2 && rkMedalWait.size) {
+    const ids = [...rkMedalWait].slice(0, 4);
+    ids.forEach((id) => rkMedalWait.delete(id));
+    rkMedalBusy++;
+    fetchMedals(ids).then((r) => {
+      if (r && r.ok) for (const id of ids) rkMedalCache.set(id, (r.medals && r.medals[id]) || { list: [], counts: {} });
+    }).catch(() => {}).finally(() => {
+      rkMedalBusy--;
+      document.querySelectorAll('#rk-list .rk-medals[data-pid]:not([data-done])').forEach(rkPaintMedals);
+      rkPumpMedals();
+    });
+  }
+}
+function rkWatchMedals(list, root) {
+  if (rkMedalIO) rkMedalIO.disconnect();
+  const els = [...list.querySelectorAll('.rk-medals[data-pid]')];
+  const want = (el) => { const id = el.dataset.pid; if (rkMedalCache.has(id)) rkPaintMedals(el); else if (/^p[0-9a-f]{24}$/.test(id)) { rkMedalWait.add(id); } };
+  if (typeof IntersectionObserver === 'undefined') { els.forEach(want); rkPumpMedals(); return; }
+  rkMedalIO = new IntersectionObserver((ents) => {
+    for (const en of ents) if (en.isIntersecting) { rkMedalIO.unobserve(en.target); const m = en.target.querySelector('.rk-medals[data-pid]'); if (m) want(m); }
+    rkPumpMedals();
+  }, { root: root || null, rootMargin: '200px 0px' });
+  els.forEach((el) => rkMedalIO.observe(el.closest('li') || el));
 }
 
 function openRanking() {
