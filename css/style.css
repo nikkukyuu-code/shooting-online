@@ -2688,3 +2688,8 @@ html, body {
 .menu-footer:has(.bc-breakdown) { padding-bottom: max(1px, env(safe-area-inset-bottom, 0px)); padding-top: 0; }
 .menu-footer .app-meta:has(.bc-breakdown) { padding-top: 1px; padding-bottom: 1px; line-height: 1.15; }
 .app-meta #app-battles .bc-breakdown { font-size: 0.82em; line-height: 1.05; }
+/* PC / wide: breakdown stays on the same line (no extra height, never clipped) */
+@media (min-width: 600px) { .app-meta #app-battles .bc-breakdown { display: inline; line-height: inherit; font-size: 0.9em; } }
+.app-meta #app-battles .bc-breakdown { padding-bottom: 1px; }
+.menu-footer .app-meta:has(.bc-breakdown) .ver-note { display: none; }
+@media (min-width: 600px) { .menu-footer .app-meta:has(.bc-breakdown) { white-space: normal; } .app-meta #app-battles { white-space: normal; } .app-meta #app-battles .bc-breakdown { white-space: nowrap; } }
