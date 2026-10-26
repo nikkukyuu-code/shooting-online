@@ -1558,6 +1558,7 @@ html, body {
 /* ---- v2026-09-27: bc counter / NEW badge / 攻撃力・防御力 ---- */
 .app-meta [hidden] { display: none !important; }
 #app-battles { white-space: nowrap; color: #ffd68a; }
+
 #app-visits { white-space: nowrap; }
 
 .shop-msg.ok { color: #7dffb0; }
@@ -2681,3 +2682,9 @@ html, body {
 }
 #screen-deck .deck-detail-compact .dc-row1 { flex-wrap: wrap; row-gap: 2px; overflow: visible; }
 #screen-deck .deck-detail-compact .dc-role { overflow: visible; text-overflow: clip; }
+
+/* bc mode breakdown: its own small line under the version/access/bc line */
+.app-meta #app-battles .bc-breakdown { display: block; font-size: 0.86em; opacity: 0.9; white-space: nowrap; line-height: 1.2; }
+.menu-footer:has(.bc-breakdown) { padding-bottom: max(1px, env(safe-area-inset-bottom, 0px)); padding-top: 0; }
+.menu-footer .app-meta:has(.bc-breakdown) { padding-top: 1px; padding-bottom: 1px; line-height: 1.15; }
+.app-meta #app-battles .bc-breakdown { font-size: 0.82em; line-height: 1.05; }
