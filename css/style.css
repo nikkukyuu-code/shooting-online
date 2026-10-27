@@ -2723,3 +2723,8 @@ html, body {
   50% { transform: translateX(-5px) scale(1.06); opacity: 0.8; }
 }
 @media (prefers-reduced-motion: reduce) { .first-hint-arrow { animation: none; } }
+/* weekly strip: never clip text (wrap instead of ellipsis) */
+.mm-rank { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; font-size: clamp(0.7rem, 3.3vw, 0.82rem); }
+.medal-none { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; font-size: clamp(0.62rem, 3vw, 0.72rem); line-height: 1.2; }
+.mm-shelf:has(.medal-none) { overflow: visible; }
+@media (max-width: 420px) { .mm-rank { font-size: 0.7rem; } .medal-none { font-size: 0.58rem; letter-spacing: -0.02em; } }
