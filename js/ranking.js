@@ -6,12 +6,17 @@
  *   shootingOnline_rankId / _bak       server player id
  *   shootingOnline_rankSecret / _bak   secret key proving ownership of the id
  *   shootingOnline_nickname / _bak     nickname (server-confirmed, unique)
+ *   shootingOnline_rankPending / _bak  JSON list of sealed results whose submit failed (network/timeout/5xx/429);
+ *                                      retried automatically when the ランキング screen is opened (server accepts
+ *                                      `late` resubmits of an unused token for 48 h). Token is single-use → no double count.
  */
-import { sealScore } from './seal.js?v=20261028020016';
+import { sealScore } from './seal.js?v=20261028082421';
 export const RANK_API = 'https://stb-ranking.nikkukyuu.workers.dev';
 const K_ID = 'shootingOnline_rankId';
 const K_SECRET = 'shootingOnline_rankSecret';
 const K_NICK = 'shootingOnline_nickname';
+const K_PENDING = 'shootingOnline_rankPending';
+export const FAIL_MSG = '登録に失敗しました。今は混み合っているのですみませんが24時間後ランキングを押して登録し直してください。';
 export const DEFAULT_NICK = '名無し';
 export const DUP_MSG = '重複していますので数字を付加しました';
 
@@ -100,7 +105,18 @@ export function beginStrongMatch() {
 }
 export function cancelStrongMatch() { _match = null; }
 
-/** Submit a finished COM「強い」 win. Resolves {ok, message}. Never throws. */
+/* ---------- pending (unsent) results ---------- */
+const PENDING_MAX = 30;
+export function pendingList() {
+  try { const a = JSON.parse(lsGet(K_PENDING) || '[]'); return Array.isArray(a) ? a.filter((x) => x && typeof x.token === 'string') : []; } catch (_) { return []; }
+}
+function pendingSave(list) { lsSet(K_PENDING, JSON.stringify(list.slice(-PENDING_MAX))); }
+function pendingAdd(item) { const l = pendingList().filter((x) => x.token !== item.token); l.push(item); pendingSave(l); }
+function pendingRemove(token) { pendingSave(pendingList().filter((x) => x.token !== token)); }
+/** Temporary failure (keep for retry) vs. a definite server answer (drop). */
+function isTransient(r) { return !!(r.offline || !r.status || r.status === 408 || r.status === 429 || r.status >= 500); }
+
+/** Submit a finished COM「強い」 win. Resolves {ok, message, pending}. Never throws. */
 export async function submitStrongResult(pt) {
   const m = _match; _match = null;
   if (!m) return { ok: false, message: '' };
@@ -110,18 +126,43 @@ export async function submitStrongResult(pt) {
     const me = rankIdentity();
     // Score is encrypted + signed (key derived from the single-use token); server rejects tampering.
     const sealed = await sealScore(token, { s: Math.max(0, Math.floor(pt) || 0), d: Math.round(performance.now() - m.t0) });
-    const r = await api('/match/submit', { method: 'POST', body: { id: me.id, secret: me.secret, token, ...sealed } });
+    const item = { id: me.id, token, sealed, pt: Math.max(0, Math.floor(pt) || 0), at: Date.now() };
+    if (item.pt > 0) pendingAdd(item); // saved BEFORE sending: a crash / closed tab cannot lose it
+    const r = await api('/match/submit', { method: 'POST', body: { id: me.id, secret: me.secret, token, ...sealed }, timeout: 10000 });
     if (r.ok) {
+      pendingRemove(token);
       if (!r.recorded) return { ok: true, message: '' };
       let msg = `ランキングに記録しました（${r.pt.toLocaleString('ja-JP')}PT）`;
       const w = await fetchRanking('week', 'top3').catch(() => null);
       if (w && w.ok) msg += '\n' + rankText(w, '今週');
       return { ok: true, message: msg };
     }
+    if (item.pt > 0 && isTransient(r)) return { ok: false, pending: true, message: FAIL_MSG };
+    pendingRemove(token);
     return { ok: false, message: 'ランキング未登録：' + (r.message || '') };
   } catch (_) {
-    return { ok: false, message: 'ランキング未登録（通信エラー）' };
+    return pendingList().length ? { ok: false, pending: true, message: FAIL_MSG } : { ok: false, message: 'ランキング未登録（通信エラー）' };
   }
+}
+
+let _retrying = null;
+/** Resend saved results (called when the ランキング screen opens). Resolves {sent, pt, left, failed}. */
+export function retryPending() {
+  if (_retrying) return _retrying;
+  _retrying = (async () => {
+    const out = { sent: 0, pt: 0, left: 0, failed: false };
+    const me = rankIdentity();
+    for (const it of pendingList()) {
+      if (!me.id || it.id !== me.id) { pendingRemove(it.token); continue; } // other account: cannot authenticate
+      const r = await api('/match/submit', { method: 'POST', body: { id: me.id, secret: me.secret, token: it.token, ...it.sealed, late: true }, timeout: 10000 });
+      if (r.ok) { pendingRemove(it.token); if (r.recorded) { out.sent++; out.pt += r.pt || 0; } continue; }
+      if (isTransient(r)) { out.failed = true; break; } // still busy: keep everything, try next time
+      pendingRemove(it.token); // 409 = token already used (an earlier send reached the server) / expired / invalid
+    }
+    out.left = pendingList().length;
+    return out;
+  })();
+  return _retrying.finally(() => { _retrying = null; });
 }
 
 /** 「今週 3人中1位」 / 「今週 未参加（3人参加中）」 */

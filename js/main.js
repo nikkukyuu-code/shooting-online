@@ -1,16 +1,16 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261028020016';
-import { Net } from './net.js?v=20261028020016';
-import { Game } from './game.js?v=20261028020016';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261028020016';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261028020016';
-import { resetDeckToDefault } from './meta.js?v=20261028020016';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261028020016';
-import { loadBattleCount } from './stats.js?v=20261028020016';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261028020016';
-import { ALL_KIND_IDS } from './catalog.js?v=20261028020016';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261028020016';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261028020016';
-import { seedStrongBest } from './record.js?v=20261028020016';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261028082421';
+import { Net } from './net.js?v=20261028082421';
+import { Game } from './game.js?v=20261028082421';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261028082421';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261028082421';
+import { resetDeckToDefault } from './meta.js?v=20261028082421';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261028082421';
+import { loadBattleCount } from './stats.js?v=20261028082421';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261028082421';
+import { ALL_KIND_IDS } from './catalog.js?v=20261028082421';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261028082421';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261028082421';
+import { seedStrongBest } from './record.js?v=20261028082421';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -157,7 +157,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261028020016`;
+  return `assets/enemies/${id}/0.png?v=20261028082421`;
 }
 
 function unitName(id) {
@@ -1174,6 +1174,24 @@ function openRanking() {
   for (const k of [...rkCache.keys()]) { const [p, , key] = k.split('|'); if (key >= curKeys[p]) rkCache.delete(k); } // 集計中の期間は開くたびに最新を取得
   show('ranking');
   renderRanking();
+  rkRetryPending();
+}
+
+/** 未送信の記録（通信失敗で保存したもの）をランキングを開いたときに自動で再送 */
+function rkRetryPending() {
+  const box = document.getElementById('rk-pending-msg');
+  if (!box) return;
+  box.hidden = true; box.classList.remove('ok');
+  if (!pendingList().length) return;
+  box.textContent = '未登録の記録を登録しています…'; box.hidden = false;
+  retryPending().then((r) => {
+    if (r.sent) {
+      box.textContent = `未登録だった記録をランキングに登録しました（${r.pt.toLocaleString('ja-JP')}PT）`; box.classList.add('ok');
+      rkCache.clear(); renderRanking();
+      setTimeout(() => { if (box.classList.contains('ok')) box.hidden = true; }, 6000);
+    } else if (r.failed) { box.textContent = FAIL_MSG; }
+    else box.hidden = true;
+  }).catch(() => { box.textContent = FAIL_MSG; });
 }
 
 document.getElementById('btn-ranking')?.addEventListener('click', openRanking);

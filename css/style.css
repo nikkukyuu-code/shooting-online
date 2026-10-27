@@ -2762,3 +2762,8 @@ html, body {
 /* 初回（記録なし）の間は「消えることがあります」の箇条書き3行を省略して高さを相殺 */
 #screen-menu:has(.first-bonus-note:not([hidden])) .transfer-note .dl-li { display: none; }
 @media (min-height: 820px) { #screen-menu .first-bonus-note { font-size: 0.74rem; white-space: normal; padding: 3px 10px; border-radius: 10px; } }
+
+/* 未送信記録の再送メッセージ（見切れ防止: 折り返し） */
+.rk-pending-msg { margin: 6px 0; padding: 8px 10px; border-radius: 8px; background: rgba(60,30,0,0.55); border: 1px solid #ffb84d; color: #ffd36a; font-size: 0.85rem; line-height: 1.5; text-align: center; white-space: normal; overflow-wrap: anywhere; word-break: normal; line-break: strict; max-width: 100%; box-sizing: border-box; }
+.rk-pending-msg.ok { border-color: #6fd08a; color: #9fe8a8; background: rgba(0,50,20,0.55); }
+.end-rank-msg { overflow-wrap: anywhere; line-break: strict; max-width: 100%; box-sizing: border-box; }

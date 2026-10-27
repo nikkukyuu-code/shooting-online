@@ -4,6 +4,7 @@ const ORIGINS = ['https://nikkukyuu-code.github.io'];
 const LOCAL_RE = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 const MIN_MATCH_SEC = 20;          // server-measured token age before a submit is accepted
 const MAX_TOKEN_AGE_SEC = 20 * 60; // token expires
+const LATE_MAX_AGE_SEC = 48 * 3600; // saved (failed) results may be resent with late:true for 48 h
 const SEAL_SECRET = 'SET_AT_DEPLOY'; // real value only in the deployed Worker (also embedded obfuscated in the client)
 const TOKENS_PER_HOUR_PLAYER = 30;
 const TOKENS_PER_HOUR_IP = 60;
@@ -197,7 +198,9 @@ export default {
         if (!used) return err(req, 'token', 'トークンが無効か使用済みです', 409);
         const age = (now - used.issued_at) / 1000;
         if (age < MIN_MATCH_SEC) return err(req, 'fast', '試合時間が短すぎます', 422);
-        if (age > MAX_TOKEN_AGE_SEC) return err(req, 'expired', 'トークンの期限切れです', 422);
+        // late: client resend of a result saved after a failed submit (match itself still ≤ 20 min, token unused, ≤ 48 h).
+        const lateOk = b.late === true && age <= LATE_MAX_AGE_SEC && Number.isFinite(Number(o.d)) && Number(o.d) <= MAX_TOKEN_AGE_SEC * 1000;
+        if (age > MAX_TOKEN_AGE_SEC && !lateOk) return err(req, 'expired', 'トークンの期限切れです', 422);
         if (Number.isFinite(Number(o.d)) && Number(o.d) / 1000 > age + 5) return err(req, 'time', '試合時間が一致しません', 422);
         await closePeriods(env, now);
         if (pt === 0) return json(req, { ok: true, recorded: false });
