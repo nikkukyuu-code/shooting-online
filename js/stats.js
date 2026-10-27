@@ -60,6 +60,7 @@ function hitKey(key, lastKey) {
 export function hitBattleCounter(mode) {
   hitKey(NS_KEY, BATTLE_LAST_KEY);
   if (BATTLE_MODES.some((m) => m.id === mode)) hitKey(modeKey(mode), modeLastKey(mode));
+  try { if (window.__nkVisitBattle) window.__nkVisitBattle(); } catch (_) { /* ignore */ }
   // YouTube visitors (?src=yt, this tab): separate key, no display, not for bots
   try {
     if (sessionStorage.getItem('nkSrcYt') === '1' && !navigator.webdriver) {
