@@ -205,6 +205,16 @@ html, body {
   white-space: nowrap;
   text-shadow: 0 0 10px rgba(60, 180, 255, 0.6), 0 1px 3px #000;
 }
+.game-esports {
+  margin-top: 2px;
+  font-size: clamp(0.56rem, 2.9vw, 0.72rem);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  color: #ffe08a;
+  white-space: nowrap;
+  text-shadow: 0 0 8px rgba(255, 190, 60, 0.55), 0 1px 3px #000;
+}
 .game-intro {
   /* SEO copy — keep in DOM, don't crowd the title art */
   position: absolute;
