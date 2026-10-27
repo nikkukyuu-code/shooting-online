@@ -1,16 +1,16 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261027111112';
-import { Net } from './net.js?v=20261027111112';
-import { Game } from './game.js?v=20261027111112';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261027111112';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261027111112';
-import { resetDeckToDefault } from './meta.js?v=20261027111112';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261027111112';
-import { loadBattleCount } from './stats.js?v=20261027111112';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261027111112';
-import { ALL_KIND_IDS } from './catalog.js?v=20261027111112';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261027111112';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261027111112';
-import { seedStrongBest } from './record.js?v=20261027111112';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261027192725';
+import { Net } from './net.js?v=20261027192725';
+import { Game } from './game.js?v=20261027192725';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261027192725';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261027192725';
+import { resetDeckToDefault } from './meta.js?v=20261027192725';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261027192725';
+import { loadBattleCount } from './stats.js?v=20261027192725';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261027192725';
+import { ALL_KIND_IDS } from './catalog.js?v=20261027192725';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261027192725';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261027192725';
+import { seedStrongBest } from './record.js?v=20261027192725';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -156,7 +156,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261027111112`;
+  return `assets/enemies/${id}/0.png?v=20261027192725`;
 }
 
 function unitName(id) {
@@ -1257,3 +1257,46 @@ refreshMenuMedals();
 
 /* 各サブ画面の見出し左端「◀ 戻る」: 下の「メニューへ」と同じ動作 */
 document.querySelectorAll('.sub-back[data-back]').forEach((b) => b.addEventListener('click', () => document.getElementById(b.dataset.back)?.click()));
+
+/* ---- First-visit hint: animated arrow pointing at COM対戦「普通」 ---- */
+(() => {
+  const KEY = 'stb_firstHintDone';
+  let done = false;
+  try { done = localStorage.getItem(KEY) === '1'; } catch (_) {}
+  if (done) return;
+  const btn = document.getElementById('btn-cpu-normal');
+  if (!btn) return;
+  const arrow = document.createElement('div');
+  arrow.className = 'first-hint-arrow';
+  arrow.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(arrow);
+  let raf = 0;
+  const place = () => {
+    raf = 0;
+    const menu = document.getElementById('screen-menu');
+    const r = btn.getBoundingClientRect();
+    const visible = r.width > 0 && r.height > 0 && (!menu || !menu.classList.contains('hidden')) && btn.offsetParent !== null;
+    if (!visible) { arrow.style.display = 'none'; return; }
+    arrow.style.display = '';
+    const s = Math.max(16, Math.min(30, r.height * 0.75, r.left - 10));
+    arrow.style.setProperty('--fh-s', s + 'px');
+    // sit in the gap just left of the button (outside it), pointing right at it
+    arrow.style.left = Math.max(6, r.left + window.scrollX - s - 8) + 'px';
+    arrow.style.top = (r.top + window.scrollY + r.height / 2 - s / 2) + 'px';
+  };
+  const sched = () => { if (!raf) raf = requestAnimationFrame(place); };
+  const finish = () => {
+    try { localStorage.setItem(KEY, '1'); } catch (_) {}
+    arrow.remove();
+    window.removeEventListener('resize', sched);
+    window.removeEventListener('scroll', sched, true);
+    clearInterval(iv);
+  };
+  window.addEventListener('resize', sched);
+  window.addEventListener('scroll', sched, true);
+  const iv = setInterval(place, 500);
+  ['btn-cpu-normal', 'btn-cpu-strong', 'btn-find', 'btn-create', 'btn-start', 'btn-tutorial'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('click', finish, { once: true });
+  });
+  place();
+})();

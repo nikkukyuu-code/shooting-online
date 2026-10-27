@@ -2693,3 +2693,27 @@ html, body {
 .app-meta #app-battles .bc-breakdown { padding-bottom: 1px; }
 .menu-footer .app-meta:has(.bc-breakdown) .ver-note { display: none; }
 @media (min-width: 600px) { .menu-footer .app-meta:has(.bc-breakdown) { white-space: normal; } .app-meta #app-battles { white-space: normal; } .app-meta #app-battles .bc-breakdown { white-space: nowrap; } }
+
+/* ---- First-visit hint arrow (COM対戦「普通」) ---- */
+.first-hint-arrow {
+  --fh-s: 24px;
+  position: absolute;
+  z-index: 50;
+  width: var(--fh-s);
+  height: var(--fh-s);
+  pointer-events: none;
+  animation: fh-bounce 0.8s ease-in-out infinite;
+  filter: drop-shadow(0 0 4px rgba(255, 220, 60, 0.9));
+}
+.first-hint-arrow::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: #ffd83a;
+  clip-path: polygon(0 32%, 52% 32%, 52% 6%, 100% 50%, 52% 94%, 52% 68%, 0 68%);
+}
+@keyframes fh-bounce {
+  0%, 100% { transform: translateX(0) scale(1); opacity: 1; }
+  50% { transform: translateX(-5px) scale(1.06); opacity: 0.8; }
+}
+@media (prefers-reduced-motion: reduce) { .first-hint-arrow { animation: none; } }
