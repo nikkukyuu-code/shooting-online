@@ -60,6 +60,12 @@ function hitKey(key, lastKey) {
 export function hitBattleCounter(mode) {
   hitKey(NS_KEY, BATTLE_LAST_KEY);
   if (BATTLE_MODES.some((m) => m.id === mode)) hitKey(modeKey(mode), modeLastKey(mode));
+  // YouTube visitors (?src=yt, this tab): separate key, no display, not for bots
+  try {
+    if (sessionStorage.getItem('nkSrcYt') === '1' && !navigator.webdriver) {
+      fetch(`${BASE}/hit/${NS_KEY.replace('-battles', '-yt-battles')}?_=${Date.now()}`, { cache: 'no-store' }).catch(() => {});
+    }
+  } catch (_) { /* ignore */ }
 }
 
 async function getCount(key) {
