@@ -2,6 +2,31 @@
 <html lang="ja">
 <head>
 <script>
+/* 人らしい訪問 (nikkukyuu/shooting-online-human): 1タブ1回だけ・記録のみ（表示なし）。ボット除外、表示中に5秒滞在 or 操作で記録。 */
+(function () {
+  try {
+    if (navigator.webdriver || /bot|crawl|spider|slurp|headless|lighthouse|pagespeed|preview|facebookexternalhit|bingpreview|phantom|puppeteer|playwright|selenium/i.test(navigator.userAgent || '')) return;
+    var SK = 'nkHuman:shooting-online';
+    if (sessionStorage.getItem(SK)) return;
+    var done = false, t = null, EV = ['pointerdown', 'touchstart', 'keydown', 'scroll', 'wheel'];
+    function hit(k) { fetch('https://abacus.jasoncameron.dev/hit/nikkukyuu/' + k + '?_=' + Date.now(), { cache: 'no-store', mode: 'cors' }).catch(function () {}); }
+    function fire() {
+      if (done || document.visibilityState !== 'visible') return;
+      done = true; clearTimeout(t);
+      EV.forEach(function (e) { removeEventListener(e, onAct, true); });
+      try { if (sessionStorage.getItem(SK)) return; sessionStorage.setItem(SK, '1'); } catch (e) { return; }
+      hit('shooting-online-human');
+      if (sessionStorage.getItem('nkSrcYt') === '1') hit('shooting-online-yt-human');
+    }
+    function onAct(e) { if (e.isTrusted !== false) fire(); }
+    function arm() { clearTimeout(t); if (!done && document.visibilityState === 'visible') t = setTimeout(fire, 5000); }
+    EV.forEach(function (e) { addEventListener(e, onAct, { capture: true, passive: true }); });
+    document.addEventListener('visibilitychange', arm);
+    arm();
+  } catch (e) {}
+})();
+</script>
+<script>
 /* YouTube流入の目印 (?src=yt): 別キー nikkukyuu/shooting-online-yt に1タブ1回だけ記録。表示なし。通常カウンタは変更なし。 */
 (function () {
   try {
@@ -28,7 +53,7 @@
   <meta name="theme-color" content="#1a0a08" />
   <script>
   (function () {
-    var PAGE_LABEL = '2026-10-27 10:38:37';
+    var PAGE_LABEL = '2026-10-27 10:54:07';
     var busy = false;
     function check() {
       if (busy || window.__stbScreen === 'game' || document.visibilityState === 'hidden') return;
@@ -93,7 +118,7 @@
   }
   </script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=20261027103837" />
+  <link rel="stylesheet" href="css/style.css?v=20261027105407" />
 <link rel="apple-touch-icon" href="/shooting-online/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-title" content="スペトリ" />
 </head>
@@ -110,7 +135,7 @@
       <div class="sky sky-space" aria-hidden="true"></div>
       <div class="menu-pt" id="menu-pt" aria-live="polite">いまの持ちPT 0</div>
       <div class="menu-hero">
-        <img class="menu-hero-art" src="assets/title-hero.svg?v=20261027103837" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
+        <img class="menu-hero-art" src="assets/title-hero.svg?v=20261027105407" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
         <header class="menu-brand">
           <h1 class="game-title">スペーストリックバトル</h1>
           <p class="game-subtitle">オンライン対戦</p>
@@ -326,7 +351,7 @@
   </div>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script type="module" src="js/main.js?v=20261027103837"></script>
+  <script type="module" src="js/main.js?v=20261027105407"></script>
 <script>
 /* 共有ボタン: navigator.share → fallback copy + toast (X / LINE) */
 (function () {
