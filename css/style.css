@@ -2735,3 +2735,30 @@ html, body {
 #screen-menu .cpu-diff-title .com-title-sub { font-size: 0.56rem; }
 @media (max-width: 380px) { #screen-menu .cpu-diff-title .com-title-main { font-size: 0.86rem; } #screen-menu .cpu-diff-title .com-title-sub { font-size: 0.58rem; } #screen-menu .cpu-diff-title { gap: 0 4px; } }
 @media (min-width: 700px) { #screen-menu .cpu-diff-title .com-title-main { font-size: 0.76rem; } #screen-menu .cpu-diff-title .com-title-sub { font-size: 0.54rem; } }
+/* ランキング: タイトル行は戻るボタンと同じ高さ、説明は必ずその下に全幅で */
+#screen-ranking .sub-head { position: relative; }
+#screen-ranking .sub-head > h2 { min-height: 30px; line-height: 30px; margin: 0; white-space: nowrap; padding-left: 70px; padding-right: 70px; box-sizing: border-box; }
+#screen-ranking .sub-head > .sub-desc { display: block; clear: both; margin: 4px 0 0; padding: 0; width: 100%; box-sizing: border-box; }
+@media (max-width: 380px) { #screen-ranking .sub-head > h2 { font-size: 1rem; padding-left: 64px; padding-right: 8px; } }
+/* 見切れ防止: 320px幅でデッキのヒント、ランキングの長いニックネーム */
+#screen-deck #deck-hint { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.rk-nm-t { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
+/* 初回特典 */
+#screen-menu .first-bonus-note { margin: 2px 0 3px; padding: 2px 6px; font-size: 0.66rem; font-weight: 800; line-height: 1.25; text-align: center; color: #fff6c8; background: linear-gradient(90deg, rgba(255,90,160,0.35), rgba(255,200,60,0.35)); border: 1px solid rgba(255,220,120,0.7); border-radius: 999px; overflow-wrap: anywhere; animation: fbPulse 1.8s ease-in-out infinite; }
+#screen-menu .first-bonus-note b { color: #ffe066; font-size: 1.1em; }
+#screen-menu .first-bonus-note[hidden] { display: none; }
+@keyframes fbPulse { 0%,100% { box-shadow: 0 0 0 rgba(255,210,80,0); } 50% { box-shadow: 0 0 10px rgba(255,210,80,0.7); } }
+@media (prefers-reduced-motion: reduce) { #screen-menu .first-bonus-note { animation: none; } }
+@media (max-width: 380px) { #screen-menu .first-bonus-note { font-size: 0.6rem; } }
+.first-bonus { margin: 6px auto; padding: 4px 12px; font-weight: 900; font-size: 1rem; color: #ffe066; background: rgba(120,40,0,0.55); border: 1px solid #ffd060; border-radius: 10px; text-shadow: 0 0 6px rgba(255,200,40,0.9); width: max-content; max-width: 92%; }
+#screen-menu .first-bonus-note { white-space: nowrap; margin: 1px auto 2px; padding: 1px 8px; width: max-content; max-width: 100%; box-sizing: border-box; line-height: 1.3; letter-spacing: 0; }
+@media (max-width: 340px) { #screen-menu .first-bonus-note { font-size: 0.55rem; padding: 1px 5px; } }
+/* 特典表示中は高さを相殺: 部屋名ヒント行を隠す（スクロール・見切れ防止） */
+#screen-menu:has(.first-bonus-note:not([hidden])) .menu-footer .menu-hint { display: none; }
+@media (max-width: 380px) { #screen-menu .first-bonus-note { font-size: 0.56rem; padding: 1px 6px; } }
+@media (max-width: 340px) { #screen-menu .first-bonus-note { font-size: 0.5rem; padding: 1px 4px; } }
+@media (min-width: 381px) { #screen-menu .first-bonus-note { font-size: 0.53rem; } }
+@media (min-width: 700px) { #screen-menu .first-bonus-note { font-size: 0.5rem; padding: 1px 5px; } }
+/* 初回（記録なし）の間は「消えることがあります」の箇条書き3行を省略して高さを相殺 */
+#screen-menu:has(.first-bonus-note:not([hidden])) .transfer-note .dl-li { display: none; }
+@media (min-height: 820px) { #screen-menu .first-bonus-note { font-size: 0.74rem; white-space: normal; padding: 3px 10px; border-radius: 10px; } }

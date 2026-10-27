@@ -1,16 +1,16 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261028013939';
-import { Net } from './net.js?v=20261028013939';
-import { Game } from './game.js?v=20261028013939';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261028013939';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261028013939';
-import { resetDeckToDefault } from './meta.js?v=20261028013939';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261028013939';
-import { loadBattleCount } from './stats.js?v=20261028013939';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261028013939';
-import { ALL_KIND_IDS } from './catalog.js?v=20261028013939';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261028013939';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261028013939';
-import { seedStrongBest } from './record.js?v=20261028013939';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261028020016';
+import { Net } from './net.js?v=20261028020016';
+import { Game } from './game.js?v=20261028020016';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261028020016';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261028020016';
+import { resetDeckToDefault } from './meta.js?v=20261028020016';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261028020016';
+import { loadBattleCount } from './stats.js?v=20261028020016';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261028020016';
+import { ALL_KIND_IDS } from './catalog.js?v=20261028020016';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261028020016';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261028020016';
+import { seedStrongBest } from './record.js?v=20261028020016';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -139,6 +139,7 @@ function refreshPtDisplay(meta) {
 /** Title: COM win rate + enemy level per difficulty (COM matches only). */
 function refreshComRank() {
   try {
+    { const fb = document.getElementById('first-bonus-note'); if (fb) fb.hidden = !firstBonusPending(); }
     for (const d of ['normal', 'strong']) {
       const r = comRankInfo(d);
       const row = document.getElementById(`cr-${d}`);
@@ -156,7 +157,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261028013939`;
+  return `assets/enemies/${id}/0.png?v=20261028020016`;
 }
 
 function unitName(id) {

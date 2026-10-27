@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261028013939';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261028020016';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, setGuardShip, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261028013939';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261028013939';
-import { sfx } from './audio.js?v=20261028013939';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261028013939';
-import { fxRate } from './entities.js?v=20261028013939';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261028013939';
-import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261028013939';
-import { hitBattleCounter } from './stats.js?v=20261028013939';
+} from './entities.js?v=20261028020016';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261028020016';
+import { sfx } from './audio.js?v=20261028020016';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261028020016';
+import { fxRate } from './entities.js?v=20261028020016';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261028020016';
+import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261028020016';
+import { hitBattleCounter } from './stats.js?v=20261028020016';
 // ===== DEBUG (temporary): 弾の雨 visual check — set to false to remove. While true, ranking submit is disabled. =====
 const DEBUG_RAIN_AT_START = false;
 // ===== DEBUG (temporary): 転送敵キャラ確認パレード — set to false to remove. =====
@@ -23,11 +23,11 @@ const DEBUG_UNIT_PARADE = false;
 const PARADE_SEC = 12; // per unit: ~3s glide in → body glow → signature attack → normal volleys
 /** 自機の攻撃力倍率 (10-18: ×1.3 → 10-18 夜: 2割減 ×1.04). Applies to the ship's own shots (normal / rapid / homing / spread), player and COM alike. */
 const SHIP_ATK_MUL = 1.04;
-import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261028013939';
-import { recordStrongBest, strongBestBase } from './record.js?v=20261028013939';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult } from './meta.js?v=20261028013939';
-import { tickPersona, personaIntangible, personaShieldBlocks, PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261028013939';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261028013939';
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261028020016';
+import { recordStrongBest, strongBestBase } from './record.js?v=20261028020016';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult, firstBonusPending, grantFirstBonus } from './meta.js?v=20261028020016';
+import { tickPersona, personaIntangible, personaShieldBlocks, PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261028020016';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261028020016';
 
 const PT_MILESTONE = 500; // 10-15: 突破演出 every 500 PT earned in the match
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
@@ -3350,6 +3350,8 @@ export class Game {
 
     // COM win-rate record → enemy level (COM matches only; online / room PvP never counted)
     this._comRankChange = null;
+    this._firstBonus = null;
+    const firstBonusEligible = !DEBUG_UNIT_PARADE && this.useBot && !this.isOnline() && !this._tutorialMatch && firstBonusPending();
     if (!DEBUG_UNIT_PARADE && this.useBot && !this.isOnline() && !this._tutorialMatch) {
       try { this._comRankChange = recordComResult(this.comDifficulty, !!won); } catch (_) { this._comRankChange = null; }
     }
@@ -3381,6 +3383,9 @@ export class Game {
         this._ptReward = { gain: hp, total: hp, remainingHp: hp, mult: 1, label: '普通', base: hp };
       }
     }
+
+    // 初回特典 +1000PT (after victory PT so the fresh-meta grant is not overwritten)
+    if (firstBonusEligible) { this._firstBonus = grantFirstBonus(); if (this._firstBonus && this._ptReward) this._ptReward.total = this._firstBonus.total; }
 
     // World ranking: COM「強い」 wins only (PvP / 普通 / tutorial never submitted). Best-effort, async.
     if ((DEBUG_RAIN_AT_START || DEBUG_UNIT_PARADE) && this.useBot && this.comDifficulty === 'strong') { try { cancelStrongMatch(); } catch (_) {} const el = document.getElementById('end-rank-msg'); if (el) { el.textContent = '確認用ビルドのためランキング送信は停止中です'; el.hidden = false; } }
@@ -3735,7 +3740,7 @@ export class Game {
     if (!ov || !msgEl) return;
 
     // Clear prior celebration nodes
-    ov.querySelectorAll('.vic-fx, .pt-reward, .vic-banner, .end-reason, .com-rank, .rec-new, .rec-confetti, .rec2-stage').forEach((el) => el.remove());
+    ov.querySelectorAll('.first-bonus, .vic-fx, .pt-reward, .vic-banner, .end-reason, .com-rank, .rec-new, .rec-confetti, .rec2-stage').forEach((el) => el.remove());
     // Time-limit / sudden-death reason line (above the menu button)
     const info = this._endInfo;
     if (info && (info.reason === 'time' || info.reason === 'sudden')) {
@@ -3762,6 +3767,13 @@ export class Game {
         + `<div class="cr-line cr-lv cr-${arrow}">敵Lv ${b.level} → <b>${a.level}</b>${arrow === 'up' ? ' ▲' : arrow === 'down' ? ' ▼' : ''}</div>`;
       const btn1 = ov.querySelector('#btn-again');
       if (btn1) ov.insertBefore(r, btn1); else ov.appendChild(r);
+    }
+    if (this._firstBonus && this.useBot && !this.isOnline()) {
+      const fbEl = document.createElement('div');
+      fbEl.className = 'first-bonus';
+      fbEl.textContent = '🎁 初回特典 +' + this._firstBonus.gain.toLocaleString('ja-JP') + 'PT';
+      const btnF = ov.querySelector('#btn-again');
+      if (btnF) ov.insertBefore(fbEl, btnF); else ov.appendChild(fbEl);
     }
     ov.classList.remove('victory', 'defeat', 'pt-show', 'hidden');
     ov.classList.add(won ? 'victory' : 'defeat');

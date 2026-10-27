@@ -2,7 +2,7 @@
  * localStorage key: shootingOnline_meta (NEVER rename — would wipe player PT).
  * Backup key: shootingOnline_meta_bak. On every update, preserve pt; never clear storage.
  */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20261028013939';
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20261028020016';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;
@@ -658,4 +658,30 @@ export function comAiForLevel(level) {
     // below Lv30 a growing share (smartP) of item decisions use 強い judgement; the rest are 普通-style
     ai: { ...ai, smart, pickSafe: m.smartP >= 0.5, lazySend: m.smartP < 0.5 },
   };
+}
+
+/* ── 初回特典: first finished COM match (普通/強い, win or lose) grants +1000 PT once ── */
+export const FIRST_BONUS_KEY = 'stb_firstBonusDone';
+export const FIRST_BONUS_PT = 1000;
+/** true = not yet received. Existing players with any COM history are treated as already received. */
+export function firstBonusPending() {
+  try {
+    if (localStorage.getItem(FIRST_BONUS_KEY)) return false;
+    const rec = loadComRecord();
+    if ((rec.normal.w + rec.normal.l + rec.strong.w + rec.strong.l) > 0) {
+      localStorage.setItem(FIRST_BONUS_KEY, 'legacy');
+      return false;
+    }
+    return true;
+  } catch (_) { return false; }
+}
+/** Grant once. Call BEFORE recordComResult of the first match is checked elsewhere; uses fresh meta. */
+export function grantFirstBonus() {
+  try {
+    if (localStorage.getItem(FIRST_BONUS_KEY)) return null;
+    localStorage.setItem(FIRST_BONUS_KEY, String(Date.now()));
+    const m = loadMeta();
+    const next = saveMeta({ ...m, pt: m.pt + FIRST_BONUS_PT });
+    return { gain: FIRST_BONUS_PT, total: next.pt };
+  } catch (_) { return null; }
 }
