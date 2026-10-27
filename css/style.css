@@ -490,9 +490,6 @@ html, body {
   font-weight: 600;
   color: #c8fff0;
   opacity: 0.9;
-  max-width: 14em;
-  overflow: hidden;
-  text-overflow: ellipsis;
   text-shadow: none;
 }
 .game-version.ver-latest {
@@ -2024,7 +2021,6 @@ html, body {
 /* version · access · battles: one compact line on phones */
 @media (max-height: 760px), (max-width: 420px) {
   .menu-footer .app-meta { font-size: 0.64rem; padding: 2px 8px; white-space: nowrap; line-height: 1.3; }
-  .menu-footer .ver-note { display: none; }
   .menu-footer { padding-bottom: max(6px, calc(env(safe-area-inset-bottom, 0px) + 4px)); }
 }
 @media (max-height: 700px) {
@@ -2048,8 +2044,8 @@ html, body {
 }
 /* build note next to 最新: always one short line (full text in the tooltip) */
 .menu-footer .app-meta { white-space: nowrap; }
-.menu-footer .ver-note { white-space: nowrap; max-width: 9em; display: inline-block; vertical-align: bottom; }
-@media (max-height: 760px), (max-width: 420px) { .menu-footer .ver-note { display: none; } }
+.menu-footer .ver-note { white-space: nowrap; display: inline-block; vertical-align: bottom; }
+@media (max-height: 760px), (max-width: 420px) { .menu-footer .ver-note { font-size: 0.9em; } }
 @media (min-height: 761px) and (max-height: 860px) { .transfer-note.dl-note { line-height: 1.25; } }
 @media (max-width: 360px) { .menu-footer .app-meta { font-size: 0.58rem; letter-spacing: 0; white-space: normal; padding: 2px 6px; } .menu-footer .app-meta .meta-sep { margin: 0 0.25em; } }
 
