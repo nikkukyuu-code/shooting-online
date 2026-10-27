@@ -2729,3 +2729,9 @@ html, body {
 .mm-shelf:has(.medal-none) { overflow: visible; }
 @media (max-width: 420px) { .mm-rank { font-size: 0.7rem; } .medal-none { font-size: 0.58rem; letter-spacing: -0.02em; } }
 @media (max-height: 700px) { #screen-menu .menu-footer .app-meta { padding-top: 1px; padding-bottom: 1px; } }
+/* 「コンピューターと対戦」: keep heading on one line */
+#screen-menu .cpu-diff-title { flex-wrap: nowrap; white-space: nowrap; letter-spacing: 0; gap: 0 6px; }
+#screen-menu .cpu-diff-title .com-title-main { font-size: 0.8rem; }
+#screen-menu .cpu-diff-title .com-title-sub { font-size: 0.56rem; }
+@media (max-width: 380px) { #screen-menu .cpu-diff-title .com-title-main { font-size: 0.86rem; } #screen-menu .cpu-diff-title .com-title-sub { font-size: 0.58rem; } #screen-menu .cpu-diff-title { gap: 0 4px; } }
+@media (min-width: 700px) { #screen-menu .cpu-diff-title .com-title-main { font-size: 0.76rem; } #screen-menu .cpu-diff-title .com-title-sub { font-size: 0.54rem; } }

@@ -100,7 +100,7 @@
     "name": "スペーストリックバトル",
     "alternateName": "Space Trick Battle",
     "url": "https://nikkukyuu-code.github.io/shooting-online/",
-    "description": "スペーストリックバトルは、インストール不要・無料で遊べるブラウザのオンライン対戦シューティング。敵を倒してアイテムを使い、デッキの敵キャラを相手側へ転送して勝負します。COM対戦にも対応。",
+    "description": "スペーストリックバトルは、インストール不要・無料で遊べるブラウザのオンライン対戦シューティング。敵を倒してアイテムを使い、デッキの敵キャラを相手側へ転送して勝負します。コンピューターと対戦にも対応。",
     "inLanguage": "ja",
     "isAccessibleForFree": true,
     "genre": ["シューティング", "Shooter", "オンライン対戦"],
@@ -118,7 +118,7 @@
   }
   </script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=20261028013731" />
+  <link rel="stylesheet" href="css/style.css?v=20261028013939" />
 <link rel="apple-touch-icon" href="/shooting-online/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-title" content="スペトリ" />
 <script>
@@ -161,7 +161,7 @@
   <noscript>
     <div style="padding:16px;color:#fff;background:#07061a;font-family:sans-serif;line-height:1.6">
       <h1>スペーストリックバトル（Space Trick Battle）</h1>
-      <p>スペーストリックバトルは、スマホやPCのブラウザで無料で遊べるオンライン対戦シューティングゲームです。インストール不要。画面が上下に分かれて相手と撃ち合い、敵を倒してアイテムを使い、デッキの敵キャラを相手側へ転送して攻めます。COM対戦（普通・強い）、ランキング、メダルにも対応しています。</p>
+      <p>スペーストリックバトルは、スマホやPCのブラウザで無料で遊べるオンライン対戦シューティングゲームです。インストール不要。画面が上下に分かれて相手と撃ち合い、敵を倒してアイテムを使い、デッキの敵キャラを相手側へ転送して攻めます。コンピューターと対戦（普通・強い）、ランキング、メダルにも対応しています。</p>
       <p>遊ぶにはJavaScriptを有効にしてください。</p>
     </div>
   </noscript>
@@ -170,7 +170,7 @@
       <div class="sky sky-space" aria-hidden="true"></div>
       <div class="menu-pt" id="menu-pt" aria-live="polite">いまの持ちPT 0</div>
       <div class="menu-hero">
-        <img class="menu-hero-art" src="assets/title-hero.svg?v=20261028013731" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
+        <img class="menu-hero-art" src="assets/title-hero.svg?v=20261028013939" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
         <header class="menu-brand">
           <h1 class="game-title">スペーストリックバトル</h1>
           <p class="game-subtitle">オンライン対戦</p>
@@ -178,7 +178,7 @@
           <p class="game-intro">無料のブラウザゲーム。オンライン対戦シューティング（Space Trick Battle）で敵を倒し、アイテムを使って勝負しよう。</p>
         </header>
       </div>
-      <div class="com-rank-panel" id="com-rank-panel" aria-label="COM対戦の勝率と敵レベル">
+      <div class="com-rank-panel" id="com-rank-panel" aria-label="コンピューターと対戦の勝率と敵レベル">
         <div class="cr-row" id="cr-normal"><span class="cr-diff">普通</span><span class="cr-rate">勝率 ―</span><span class="cr-rec">（0勝0敗）</span><span class="cr-lv">敵Lv <b class="cr-lv-n">1</b></span></div>
         <div class="cr-row" id="cr-strong"><span class="cr-diff cr-strong">強い</span><span class="cr-rate">勝率 ―</span><span class="cr-rec">（0勝0敗）</span><span class="cr-lv">敵Lv <b class="cr-lv-n">30</b></span></div>
         <p class="cr-note">勝率が上がるほど、敵が強くなります（敵Lv 最高<span id="cr-max">100</span>）</p>
@@ -191,7 +191,7 @@
       <div class="menu-center">
       <div class="menu-panel">
         <div class="cpu-diff-block">
-          <p class="cpu-diff-title"><span class="com-title-main">🎮 COM対戦</span><span class="com-title-sub">はじめての人はここから！</span></p>
+          <p class="cpu-diff-title"><span class="com-title-main">🎮 コンピューターと対戦</span><span class="com-title-sub">はじめての人はここから！</span></p>
           <div class="menu-row cpu-diff-row">
             <button type="button" id="btn-cpu-normal" class="menu-btn menu-btn-sub"><span class="cpu-diff-name">普通</span><span class="cpu-pt-tag">ライフPT×3</span><span class="cpu-lv-tag" id="cpu-lv-normal">敵Lv1</span></button>
             <button type="button" id="btn-cpu-strong" class="menu-btn primary"><span class="cpu-diff-name">強い</span><span class="cpu-pt-tag">ライフPT×10</span><span class="cpu-lv-tag" id="cpu-lv-strong">敵Lv30</span></button>
@@ -219,7 +219,7 @@
         <p class="menu-hint">部屋名→入室（ゲスト）／部屋を作る（ホスト）</p>
         <div class="hub-row"><a class="hub-link" href="https://nikkukyuu-code.github.io/">トップページへ</a><a class="hub-link mugen-link" href="https://freegame-mugen.jp/cms/mt-cp.cgi?__mode=view&amp;blog_id=1&amp;id=13413" target="_blank" rel="noopener">フリーゲーム夢現</a><button type="button" class="hub-link share-btn" data-share-btn data-share-title="スペーストリックバトル" data-share-text="ブラウザゲーム「スペーストリックバトル」 ほかのゲームもこちらから遊べます">共有</button></div>
         <div id="app-meta" class="app-meta">
-          <span class="ver-pre" style="white-space:nowrap">バージョン <span id="app-version">2026-10-28 01:37:31</span></span>
+          <span class="ver-pre" style="white-space:nowrap">バージョン <span id="app-version">2026-10-28 01:39:39</span></span>
           <span class="meta-sep">·</span>
           <span id="app-visits">アクセス …</span>
           <span class="meta-sep" hidden>·</span>
@@ -319,7 +319,7 @@
         <header class="sub-head">
           <button type="button" class="sub-back" data-back="btn-ranking-back" aria-label="メニューへ戻る">◀ 戻る</button>
           <h2>🏆 ランキング</h2>
-          <p class="sub-desc">COM対戦「強い」の勝利PTだけが記録されます（対人戦・普通は対象外）</p>
+          <p class="sub-desc">コンピューターと対戦「強い」の勝利PTだけが記録されます（対人戦・普通は対象外）</p>
         </header>
         <div class="rk-nick">
           <label for="rk-nick-input">ニックネーム</label>
@@ -366,7 +366,7 @@
       <div id="ui-overlay">
         <button type="button" id="btn-stop" class="stop-btn">対戦終了</button>
         <div id="match-timer" class="match-timer" hidden aria-live="polite"><span class="mt-main"></span><span class="mt-sub" hidden></span></div>
-        <div id="game-version" class="game-version">2026-10-28 01:37:31</div>
+        <div id="game-version" class="game-version">2026-10-28 01:39:39</div>
         <div id="status-bar" class="status-bar">対戦相手を待っています</div>
         <div id="vs-medals" class="vs-medals hidden" aria-live="polite"></div>
       </div>
@@ -389,7 +389,7 @@
   </div>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script type="module" src="js/main.js?v=20261028013731"></script>
+  <script type="module" src="js/main.js?v=20261028013939"></script>
 <script>
 /* 共有ボタン: navigator.share → fallback copy + toast (X / LINE) */
 (function () {

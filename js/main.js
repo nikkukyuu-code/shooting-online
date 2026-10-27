@@ -1,16 +1,16 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261028013731';
-import { Net } from './net.js?v=20261028013731';
-import { Game } from './game.js?v=20261028013731';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261028013731';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261028013731';
-import { resetDeckToDefault } from './meta.js?v=20261028013731';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261028013731';
-import { loadBattleCount } from './stats.js?v=20261028013731';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261028013731';
-import { ALL_KIND_IDS } from './catalog.js?v=20261028013731';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261028013731';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261028013731';
-import { seedStrongBest } from './record.js?v=20261028013731';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261028013939';
+import { Net } from './net.js?v=20261028013939';
+import { Game } from './game.js?v=20261028013939';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261028013939';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261028013939';
+import { resetDeckToDefault } from './meta.js?v=20261028013939';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice } from './meta.js?v=20261028013939';
+import { loadBattleCount } from './stats.js?v=20261028013939';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261028013939';
+import { ALL_KIND_IDS } from './catalog.js?v=20261028013939';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK } from './ranking.js?v=20261028013939';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261028013939';
+import { seedStrongBest } from './record.js?v=20261028013939';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -156,7 +156,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261028013731`;
+  return `assets/enemies/${id}/0.png?v=20261028013939`;
 }
 
 function unitName(id) {
@@ -637,7 +637,7 @@ function startCpuMatchNow(comDifficulty) {
   cleanupGame();
   net = new Net();
   net.usingBot = true;
-  const label = comDifficulty === 'normal' ? 'COM対戦（普通・ライフPT×3）' : 'COM対戦（強い・ライフPT×10）';
+  const label = comDifficulty === 'normal' ? 'コンピューターと対戦（普通・ライフPT×3）' : 'コンピューターと対戦（強い・ライフPT×10）';
   els.fieldFind.value = label;
   try {
     // World ranking: only COM「強い」 gets a single-use server match token (best-effort, never blocks)
