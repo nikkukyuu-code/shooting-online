@@ -118,7 +118,7 @@
   }
   </script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=20261028082421" />
+  <link rel="stylesheet" href="css/style.css?v=20261028083130" />
 <link rel="apple-touch-icon" href="/shooting-online/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-title" content="スペトリ" />
 <script>
@@ -140,6 +140,7 @@
     var yt = ''; try { yt = sessionStorage.getItem('nkSrcYt') === '1' || /[?&]src=yt(&|$)/.test(location.search) ? 'yt' : ''; } catch (e) {}
     setTimeout(function () { once('nkVL:' + P, { ev: 'load', s: yt, r: ref, wd: navigator.webdriver ? 1 : 0 }); }, 0);
     window.__nkVisitBattle = function () { once('nkVLb:' + P, { ev: 'battle' }); };
+    window.__nkVisitRank = function () { send({ ev: 'rank' }); }; /* ランキングを押した回数（毎回・待たない） */
     var done = false, t = null, EV = ['pointerdown', 'touchstart', 'keydown', 'scroll', 'wheel'];
     function fire() {
       if (done || document.visibilityState !== 'visible') return;
@@ -170,7 +171,7 @@
       <div class="sky sky-space" aria-hidden="true"></div>
       <div class="menu-pt" id="menu-pt" aria-live="polite">いまの持ちPT 0</div>
       <div class="menu-hero">
-        <img class="menu-hero-art" src="assets/title-hero.svg?v=20261028082421" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
+        <img class="menu-hero-art" src="assets/title-hero.svg?v=20261028083130" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
         <header class="menu-brand">
           <h1 class="game-title">スペーストリックバトル</h1>
           <p class="game-subtitle">オンライン対戦</p>
@@ -186,7 +187,6 @@
       <div class="menu-medals" id="menu-medals">
         <button type="button" class="mm-who" id="btn-nick-edit" aria-label="ニックネームを変更"><span class="mm-nick" id="mm-nick">名無し</span><span class="mm-edit">✎</span></button>
         <div class="mm-mid"><span class="mm-rank" id="mm-rank">今週 ―</span><div class="mm-shelf" id="mm-shelf"></div></div>
-        <button type="button" class="mm-rank-btn" id="btn-ranking">🏆<span>ランキング</span></button>
       </div>
       <div class="menu-center">
       <div class="menu-panel">
@@ -207,6 +207,7 @@
         <div class="menu-row">
           <button type="button" id="btn-deck" class="menu-btn menu-btn-sub">デッキ</button>
           <button type="button" id="btn-shop" class="menu-btn menu-btn-sub">ショップ</button>
+          <button type="button" id="btn-ranking" class="menu-btn menu-btn-sub menu-btn-rank">🏆ランキング</button>
         </div>
         <div class="menu-row">
           <button type="button" id="btn-zukan" class="menu-btn menu-btn-sub">図鑑</button>
@@ -220,7 +221,7 @@
         <p class="menu-hint">部屋名→入室（ゲスト）／部屋を作る（ホスト）</p>
         <div class="hub-row"><a class="hub-link" href="https://nikkukyuu-code.github.io/">トップページへ</a><a class="hub-link mugen-link" href="https://freegame-mugen.jp/cms/mt-cp.cgi?__mode=view&amp;blog_id=1&amp;id=13413" target="_blank" rel="noopener">フリーゲーム夢現</a><button type="button" class="hub-link share-btn" data-share-btn data-share-title="スペーストリックバトル" data-share-text="ブラウザゲーム「スペーストリックバトル」 ほかのゲームもこちらから遊べます">共有</button></div>
         <div id="app-meta" class="app-meta">
-          <span class="ver-pre" style="white-space:nowrap">バージョン <span id="app-version">2026-10-28 08:24:21</span></span>
+          <span class="ver-pre" style="white-space:nowrap">バージョン <span id="app-version">2026-10-28 08:31:30</span></span>
           <span class="meta-sep">·</span>
           <span id="app-visits">アクセス …</span>
           <span class="meta-sep" hidden>·</span>
@@ -368,7 +369,7 @@
       <div id="ui-overlay">
         <button type="button" id="btn-stop" class="stop-btn">対戦終了</button>
         <div id="match-timer" class="match-timer" hidden aria-live="polite"><span class="mt-main"></span><span class="mt-sub" hidden></span></div>
-        <div id="game-version" class="game-version">2026-10-28 08:24:21</div>
+        <div id="game-version" class="game-version">2026-10-28 08:31:30</div>
         <div id="status-bar" class="status-bar">対戦相手を待っています</div>
         <div id="vs-medals" class="vs-medals hidden" aria-live="polite"></div>
       </div>
@@ -391,7 +392,7 @@
   </div>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script type="module" src="js/main.js?v=20261028082421"></script>
+  <script type="module" src="js/main.js?v=20261028083130"></script>
 <script>
 /* 共有ボタン: navigator.share → fallback copy + toast (X / LINE) */
 (function () {

@@ -1,16 +1,16 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261028082421';
-import { Net } from './net.js?v=20261028082421';
-import { Game } from './game.js?v=20261028082421';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261028082421';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261028082421';
-import { resetDeckToDefault } from './meta.js?v=20261028082421';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261028082421';
-import { loadBattleCount } from './stats.js?v=20261028082421';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261028082421';
-import { ALL_KIND_IDS } from './catalog.js?v=20261028082421';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261028082421';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261028082421';
-import { seedStrongBest } from './record.js?v=20261028082421';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261028083130';
+import { Net } from './net.js?v=20261028083130';
+import { Game } from './game.js?v=20261028083130';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261028083130';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261028083130';
+import { resetDeckToDefault } from './meta.js?v=20261028083130';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261028083130';
+import { loadBattleCount } from './stats.js?v=20261028083130';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261028083130';
+import { ALL_KIND_IDS } from './catalog.js?v=20261028083130';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261028083130';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261028083130';
+import { seedStrongBest } from './record.js?v=20261028083130';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -157,7 +157,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261028082421`;
+  return `assets/enemies/${id}/0.png?v=20261028083130`;
 }
 
 function unitName(id) {
@@ -1018,24 +1018,50 @@ function nickMsg(el, r, okText) {
   el.classList.toggle('warn', !!(r && (!r.ok || r.adjusted)));
 }
 
-let _myMedalCache; // own medals from the last title refresh (memory only) → VS panel shows them instantly
-async function refreshMenuMedals() {
+let _myMedalCache; // own medals (memory) → VS panel shows them instantly
+/* User 10-28「タイトルのランキングをアクセスが増えるので…」: the title makes NO ranking requests any more.
+ * 今週の順位とメダルは「ランキング」を押した時に取得し、結果を localStorage（新キー）に保存して表示するだけ。 */
+const K_MENU_RANK = 'shootingOnline_menuRankCache';
+function loadMenuRank() {
+  try { const t = localStorage.getItem(K_MENU_RANK) || localStorage.getItem(K_MENU_RANK + '_bak'); return t ? JSON.parse(t) : null; } catch (_) { return null; }
+}
+function saveMenuRank(o) {
+  try { const t = JSON.stringify(o); localStorage.setItem(K_MENU_RANK, t); localStorage.setItem(K_MENU_RANK + '_bak', t); } catch (_) {}
+}
+function refreshMenuMedals() {
   const me = rankIdentity();
   const nickEl = document.getElementById('mm-nick');
   if (nickEl) nickEl.textContent = me.nickname || DEFAULT_NICK;
   const shelf = document.getElementById('mm-shelf');
   if (!shelf) return;
   const rkEl = document.getElementById('mm-rank');
-  try { seedStrongBest(); } catch (_) {} // 自己ベスト（強い・1試合）: read once per session before any match
-  if (rkEl) fetchRanking('week', 'top3').then((w) => { rkEl.textContent = w && w.ok ? rankText(w, '今週') : '今週 ―'; rkEl.classList.toggle('in', !!(w && w.me)); }).catch(() => {});
+  const c = loadMenuRank();
+  const valid = c && (!c.pid || c.pid === (me.id || ''));
+  const weekNow = periodKeys().week;
+  if (rkEl) {
+    const cur = valid && c.week === weekNow && c.rankText;
+    rkEl.textContent = cur || '今週 ―';
+    rkEl.classList.toggle('in', !!(cur && c.inRank));
+  }
   if (!me.id) { shelf.replaceChildren(Object.assign(document.createElement('span'), { className: 'medal-none', textContent: 'COM「強い」でランキング参加' })); return; }
-  const r = await fetchMedals([me.id]);
-  if (!r.ok) { shelf.replaceChildren(Object.assign(document.createElement('span'), { className: 'medal-none', textContent: 'メダル（オフライン）' })); return; }
-  const entry = r.medals && r.medals[me.id];
-  if (entry && entry.nickname && nickEl) nickEl.textContent = entry.nickname;
-  _myMedalCache = entry || null;
-  shelf.replaceChildren(medalShelf(entry, { compact: true, max: 8, scale: 0.64 }));
+  if (!valid || c.medals === undefined) { shelf.replaceChildren(Object.assign(document.createElement('span'), { className: 'medal-none', textContent: 'メダルはランキングで確認' })); return; }
+  if (_myMedalCache === undefined) _myMedalCache = c.medals || null;
+  shelf.replaceChildren(medalShelf(c.medals, { compact: true, max: 8, scale: 0.64 }));
   requestAnimationFrame(() => fitShelf(shelf));
+}
+/** ランキングを押した時だけ: 今週の順位と自分のメダルを取得してキャッシュ → タイトル表示に反映 */
+function updateMenuRankFromServer(shown) {
+  const me = rankIdentity();
+  const prev = loadMenuRank() || {};
+  const out = { t: Date.now(), pid: me.id || '', week: periodKeys().week };
+  if (prev.pid === out.pid) { if (prev.medals !== undefined) out.medals = prev.medals; if (prev.week === out.week) { out.rankText = prev.rankText; out.inRank = prev.inRank; } }
+  // 開いた画面が「週間・ベスト3合計・今週」なら同じ応答を使い回す（リクエストを増やさない）
+  const ck = `week|top3|${out.week}`;
+  const pw = Promise.resolve(shown).catch(() => {}).then(() => { const h = rkCache.get(ck); return h ? h.r : fetchRanking('week', 'top3'); }).then((w) => { if (w && w.ok) { out.rankText = rankText(w, '今週'); out.inRank = !!w.me; } }).catch(() => {});
+  const pm = me.id ? fetchMedals([me.id]).then((r) => {
+    if (r && r.ok) { const e = r.medals && r.medals[me.id]; out.medals = e || null; _myMedalCache = e || null; }
+  }).catch(() => {}) : Promise.resolve();
+  return Promise.all([pw, pm]).then(() => { saveMenuRank(out); if (window.__stbScreen === 'menu') refreshMenuMedals(); });
 }
 
 function rkSetTabs() {
@@ -1169,12 +1195,14 @@ function openRanking() {
       sample.appendChild(col);
     }
   }
+  try { window.__nkVisitRank && window.__nkVisitRank(); } catch (_) {} // 訪問ログ: ランキングを押した（個人情報なし・待たない）
   rk.key = null;
   const curKeys = periodKeys();
   for (const k of [...rkCache.keys()]) { const [p, , key] = k.split('|'); if (key >= curKeys[p]) rkCache.delete(k); } // 集計中の期間は開くたびに最新を取得
   show('ranking');
-  renderRanking();
+  const shown = renderRanking();
   rkRetryPending();
+  updateMenuRankFromServer(shown);
 }
 
 /** 未送信の記録（通信失敗で保存したもの）をランキングを開いたときに自動で再送 */
@@ -1271,7 +1299,7 @@ window.__stbShowVsMedals = async (peer) => {
 };
 window.__stbRankHello = () => { const me = rankIdentity(); return { pid: me.id || '', nick: me.nickname || DEFAULT_NICK }; };
 
-// Title medals: the server player is created lazily (ranking / COM強い / nickname), so first visit costs nothing.
+// Title medals: cache only (no network on title).
 refreshMenuMedals();
 
 /* 各サブ画面の見出し左端「◀ 戻る」: 下の「メニューへ」と同じ動作 */

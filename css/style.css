@@ -2767,3 +2767,7 @@ html, body {
 .rk-pending-msg { margin: 6px 0; padding: 8px 10px; border-radius: 8px; background: rgba(60,30,0,0.55); border: 1px solid #ffb84d; color: #ffd36a; font-size: 0.85rem; line-height: 1.5; text-align: center; white-space: normal; overflow-wrap: anywhere; word-break: normal; line-break: strict; max-width: 100%; box-sizing: border-box; }
 .rk-pending-msg.ok { border-color: #6fd08a; color: #9fe8a8; background: rgba(0,50,20,0.55); }
 .end-rank-msg { overflow-wrap: anywhere; line-break: strict; max-width: 100%; box-sizing: border-box; }
+/* 10-28: ランキングはタイトル下段メニューへ（タイトル表示時の通信なし） */
+.menu-row .menu-btn-rank { flex: 1.25; white-space: nowrap; padding-left: 2px; padding-right: 2px; letter-spacing: -0.02em;
+  background: linear-gradient(180deg, #ffcf3a, #c98a06); color: #3a2200; border-color: #ffd76a; }
+@media (max-width: 360px) { .menu-row .menu-btn-rank { font-size: 0.8em; } }
