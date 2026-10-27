@@ -6,7 +6,7 @@
  * Each field is simulated by its owner and streamed (online), so Math.random is consistent with the
  * rest of the enemy randomness (which also uses Math.random on the owning client).
  */
-import { spawnBullet, coreWorld, coreOwnerOf } from './entities.js?v=20261027213612';
+import { spawnBullet, coreWorld, coreOwnerOf } from './entities.js?v=20261028013731';
 
 export const COUNTER_RANGE = 1 / 3, COUNTER_DMIN = 1.0, COUNTER_DMAX = 2.0, COUNTER_TELE = 0.5, COUNTER_CD = 1.0;
 /** id, colour, volleys [[delay s, fn]] */

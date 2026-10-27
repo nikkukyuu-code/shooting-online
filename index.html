@@ -118,7 +118,7 @@
   }
   </script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=20261027213612" />
+  <link rel="stylesheet" href="css/style.css?v=20261028013731" />
 <link rel="apple-touch-icon" href="/shooting-online/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-title" content="スペトリ" />
 <script>
@@ -170,7 +170,7 @@
       <div class="sky sky-space" aria-hidden="true"></div>
       <div class="menu-pt" id="menu-pt" aria-live="polite">いまの持ちPT 0</div>
       <div class="menu-hero">
-        <img class="menu-hero-art" src="assets/title-hero.svg?v=20261027213612" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
+        <img class="menu-hero-art" src="assets/title-hero.svg?v=20261028013731" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
         <header class="menu-brand">
           <h1 class="game-title">スペーストリックバトル</h1>
           <p class="game-subtitle">オンライン対戦</p>
@@ -219,12 +219,14 @@
         <p class="menu-hint">部屋名→入室（ゲスト）／部屋を作る（ホスト）</p>
         <div class="hub-row"><a class="hub-link" href="https://nikkukyuu-code.github.io/">トップページへ</a><a class="hub-link mugen-link" href="https://freegame-mugen.jp/cms/mt-cp.cgi?__mode=view&amp;blog_id=1&amp;id=13413" target="_blank" rel="noopener">フリーゲーム夢現</a><button type="button" class="hub-link share-btn" data-share-btn data-share-title="スペーストリックバトル" data-share-text="ブラウザゲーム「スペーストリックバトル」 ほかのゲームもこちらから遊べます">共有</button></div>
         <div id="app-meta" class="app-meta">
-          <span class="ver-pre" style="white-space:nowrap">バージョン <span id="app-version">2026-10-27 21:36:12</span></span>
+          <span class="ver-pre" style="white-space:nowrap">バージョン <span id="app-version">2026-10-28 01:37:31</span></span>
           <span class="meta-sep">·</span>
           <span id="app-visits">アクセス …</span>
           <span class="meta-sep" hidden>·</span>
           <span id="app-battles" hidden></span>
+          <span id="app-pagetime" class="app-pagetime" style="display:block;white-space:nowrap;font-size:0.88em;line-height:1.1;opacity:0.85">ページ表示 <span id="app-pagetime-v">…</span></span>
         </div>
+        <script>(function(){try{var p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).formatToParts(new Date());var g=function(t){return((p.filter(function(x){return x.type===t})[0])||{}).value||'00'};var h=g('hour');if(h==='24')h='00';document.getElementById('app-pagetime-v').textContent=g('year')+'-'+g('month')+'-'+g('day')+' '+h+':'+g('minute')+':'+g('second');}catch(e){}})();</script>
       </div>
     </section>
 
@@ -364,7 +366,7 @@
       <div id="ui-overlay">
         <button type="button" id="btn-stop" class="stop-btn">対戦終了</button>
         <div id="match-timer" class="match-timer" hidden aria-live="polite"><span class="mt-main"></span><span class="mt-sub" hidden></span></div>
-        <div id="game-version" class="game-version">2026-10-27 21:36:12</div>
+        <div id="game-version" class="game-version">2026-10-28 01:37:31</div>
         <div id="status-bar" class="status-bar">対戦相手を待っています</div>
         <div id="vs-medals" class="vs-medals hidden" aria-live="polite"></div>
       </div>
@@ -387,7 +389,7 @@
   </div>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script type="module" src="js/main.js?v=20261027213612"></script>
+  <script type="module" src="js/main.js?v=20261028013731"></script>
 <script>
 /* 共有ボタン: navigator.share → fallback copy + toast (X / LINE) */
 (function () {
