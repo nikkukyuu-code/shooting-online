@@ -44,29 +44,85 @@ function readN(k) {
 function writeN(k, n) {
   try { if (Number.isFinite(n) && n > readN(k)) localStorage.setItem(k, String(Math.floor(n))); } catch (_) { /* ignore */ }
 }
-function hitKey(key, lastKey) {
+/*
+ * Pending-hit queue (NEW localStorage key; existing keys untouched). abacus is sometimes very slow
+ * or errors; a lost fire-and-forget hit used to be lost forever. Each hit is queued, sent in the
+ * background (never awaited by gameplay) with a timeout, and retried with backoff on later
+ * flushes / page loads until the server answers OK.
+ */
+const PENDING_KEY = 'shootingOnline_battlePendingHits';
+const HIT_TIMEOUT_MS = 30000;
+const MAX_PENDING = 50;
+let flushing = false;
+let flushTimer = 0;
+function readPending() {
+  try { const a = JSON.parse(localStorage.getItem(PENDING_KEY) || '[]'); return Array.isArray(a) ? a.filter((x) => x && typeof x.k === 'string') : []; } catch (_) { return []; }
+}
+function writePending(a) {
+  try { if (a.length) localStorage.setItem(PENDING_KEY, JSON.stringify(a.slice(-MAX_PENDING))); else localStorage.removeItem(PENDING_KEY); } catch (_) { /* ignore */ }
+}
+function enqueueHit(key, lastKey) {
+  const a = readPending();
+  a.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), k: key, l: lastKey || '', n: 0, t: 0 });
+  writePending(a);
+}
+function removePending(id) { writePending(readPending().filter((x) => x.id !== id)); }
+function markFailed(id) {
+  const a = readPending();
+  const it = a.find((x) => x.id === id);
+  if (it) { it.n = (it.n || 0) + 1; it.t = Date.now() + Math.min(10 * 60000, 5000 * 2 ** Math.min(it.n, 7)); }
+  writePending(a);
+}
+function scheduleFlush(ms) {
+  try { clearTimeout(flushTimer); flushTimer = setTimeout(flushPendingHits, ms); } catch (_) { /* ignore */ }
+}
+async function sendHit(it) {
+  let ctl = null; let to = 0;
   try {
-    fetch(`${BASE}/hit/${key}?_=${Date.now()}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { const n = parseValue(d); if (n != null) writeN(lastKey, n); })
-      .catch(() => {});
-  } catch (_) { /* ignore */ }
+    ctl = typeof AbortController === 'function' ? new AbortController() : null;
+    if (ctl) to = setTimeout(() => ctl.abort(), HIT_TIMEOUT_MS);
+    const r = await fetch(`${BASE}/hit/${it.k}?_=${Date.now()}`, { cache: 'no-store', signal: ctl ? ctl.signal : undefined });
+    if (!r.ok) return false;
+    const d = await r.json().catch(() => null);
+    const n = parseValue(d);
+    if (n == null) return false;
+    if (it.l) writeN(it.l, n);
+    return true;
+  } catch (_) {
+    return false;
+  } finally { if (to) clearTimeout(to); }
+}
+/** Send queued hits (background, sequential, one pass). Safe to call any time. */
+export async function flushPendingHits() {
+  if (flushing) return;
+  flushing = true;
+  try {
+    const now = Date.now();
+    for (const it of readPending()) {
+      if (it.t && it.t > now) continue;
+      if (await sendHit(it)) removePending(it.id); else markFailed(it.id);
+    }
+  } finally { flushing = false; }
+  const rest = readPending();
+  if (rest.length) {
+    const next = Math.min(...rest.map((x) => x.t || 0));
+    scheduleFlush(Math.max(5000, next - Date.now()));
+  }
 }
 
 /**
  * +1 for an ESTABLISHED battle (call only once gameplay has really started).
- * mode: 'pvp' | 'normal' | 'strong'. Hits the total key and the mode key. Never throws.
+ * mode: 'pvp' | 'normal' | 'strong'. Hits the total key and the mode key. Never throws / blocks.
  */
 export function hitBattleCounter(mode) {
-  hitKey(NS_KEY, BATTLE_LAST_KEY);
-  if (BATTLE_MODES.some((m) => m.id === mode)) hitKey(modeKey(mode), modeLastKey(mode));
-  try { if (window.__nkVisitBattle) window.__nkVisitBattle(); } catch (_) { /* ignore */ }
-  // YouTube visitors (?src=yt, this tab): separate key, no display, not for bots
   try {
-    if (sessionStorage.getItem('nkSrcYt') === '1' && !navigator.webdriver) {
-      fetch(`${BASE}/hit/${NS_KEY.replace('-battles', '-yt-battles')}?_=${Date.now()}`, { cache: 'no-store' }).catch(() => {});
-    }
+    enqueueHit(NS_KEY, BATTLE_LAST_KEY);
+    if (BATTLE_MODES.some((m) => m.id === mode)) enqueueHit(modeKey(mode), modeLastKey(mode));
+    // YouTube visitors (?src=yt, this tab): separate key, no display, not for bots
+    if (sessionStorage.getItem('nkSrcYt') === '1' && !navigator.webdriver) enqueueHit(NS_KEY.replace('-battles', '-yt-battles'), '');
   } catch (_) { /* ignore */ }
+  try { if (window.__nkVisitBattle) window.__nkVisitBattle(); } catch (_) { /* ignore */ }
+  flushPendingHits();
 }
 
 async function getCount(key) {
@@ -80,6 +136,7 @@ async function getCount(key) {
 
 /** Show "bc N（対人 a / 普通 b / 強い c）" in `el` (hidden until a value is known). Never decreases. */
 export async function loadBattleCount(el) {
+  setTimeout(() => { flushPendingHits(); }, 1500); // retry hits lost on earlier visits
   if (!el) return;
   const sep = el.previousElementSibling && el.previousElementSibling.classList.contains('meta-sep')
     ? el.previousElementSibling : null;
