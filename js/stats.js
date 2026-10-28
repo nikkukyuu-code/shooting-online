@@ -38,6 +38,28 @@ export const BATTLE_MODES = [
 ];
 const modeKey = (id) => `${NS_KEY}-${id}`;
 const modeLastKey = (id) => `${BATTLE_LAST_KEY}_${id}`;
+/*
+ * Display correction (approved): a retry-queue bug double-counted 16 normal battles on abacus.
+ * Server values stay untouched; display = server - offset (total and normal only).
+ * localStorage max keys are kept in CORRECTED terms; legacy (raw) values migrated once via FIX_FLAG_KEY.
+ */
+const BC_OFFSET = 16;
+const OFFSETS = { [BATTLE_LAST_KEY]: BC_OFFSET, [`${BATTLE_LAST_KEY}_normal`]: BC_OFFSET };
+export const FIX_FLAG_KEY = 'shootingOnline_bcFix16';
+const corrected = (lastKey, raw) => (raw == null ? null : Math.max(0, raw - (OFFSETS[lastKey] || 0)));
+export function migrateBcFix16() {
+  try {
+    if (localStorage.getItem(FIX_FLAG_KEY) === '1') return;
+    Object.keys(OFFSETS).forEach((k) => {
+      const v = localStorage.getItem(k);
+      if (v == null) return;
+      const n = Number(v);
+      if (Number.isFinite(n)) localStorage.setItem(k, String(Math.max(0, Math.floor(n) - OFFSETS[k])));
+    });
+    localStorage.setItem(FIX_FLAG_KEY, '1');
+  } catch (_) { /* ignore */ }
+}
+migrateBcFix16();
 function readN(k) {
   try { const n = Number(localStorage.getItem(k)); return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0; } catch (_) { return 0; }
 }
@@ -59,7 +81,7 @@ function hitOnce(key, lastKey) {
   try {
     fetch(`${BASE}/hit/${key}?_=${Date.now()}`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { const n = parseValue(d); if (n != null && lastKey) writeN(lastKey, n); })
+      .then((d) => { const n = parseValue(d); if (n != null && lastKey) writeN(lastKey, corrected(lastKey, n)); })
       .catch(() => { /* silent, never retried */ });
   } catch (_) { /* ignore */ }
 }
@@ -91,6 +113,7 @@ async function getCount(key) {
 /** Show "bc N（対人 a / 普通 b / 強い c）" in `el` (hidden until a value is known). Never decreases. */
 export async function loadBattleCount(el) {
   purgeLegacyPendingHits();
+  migrateBcFix16();
   if (!el) return;
   const sep = el.previousElementSibling && el.previousElementSibling.classList.contains('meta-sep')
     ? el.previousElementSibling : null;
@@ -113,10 +136,10 @@ export async function loadBattleCount(el) {
   };
   paint();
   const [n, ...ms] = await Promise.all([getCount(NS_KEY), ...BATTLE_MODES.map((m) => getCount(modeKey(m.id)))]);
-  if (n != null) { total = Math.max(n, readLast()); writeLast(total); }
+  if (n != null) { total = Math.max(corrected(BATTLE_LAST_KEY, n), readLast()); writeLast(total); }
   BATTLE_MODES.forEach((m, i) => {
     if (ms[i] == null) return;
-    const best = Math.max(ms[i], readN(modeLastKey(m.id)));
+    const best = Math.max(corrected(modeLastKey(m.id), ms[i]), readN(modeLastKey(m.id)));
     writeN(modeLastKey(m.id), best);
     vals[m.id] = best;
   });

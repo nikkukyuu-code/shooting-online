@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-28 23:16:45';
+export const VERSION_LABEL = '2026-10-28 23:20:06';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1793197005000;
-export const BUILD_NOTE = '対戦数の重複カウントを修正';
+export const BUILD_TIME = 1793197206000;
+export const BUILD_NOTE = '対戦数の表示を補正（重複分-16）';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
