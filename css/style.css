@@ -2773,3 +2773,4 @@ html, body {
 .menu-row .menu-btn-rank { flex: 1.25; white-space: nowrap; padding-left: 2px; padding-right: 2px; letter-spacing: -0.02em;
   background: linear-gradient(180deg, #ffcf3a, #c98a06); color: #3a2200; border-color: #ffd76a; }
 @media (max-width: 360px) { .menu-row .menu-btn-rank { font-size: 0.8em; } }
+.menu-row .menu-btn-sub { white-space: nowrap; min-width: 0; padding-left: 2px; padding-right: 2px; }
