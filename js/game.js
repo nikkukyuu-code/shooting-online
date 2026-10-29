@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261029123950';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261029130505';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, setGuardShip, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261029123950';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261029123950';
-import { sfx } from './audio.js?v=20261029123950';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261029123950';
-import { fxRate } from './entities.js?v=20261029123950';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261029123950';
-import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261029123950';
-import { hitBattleCounter } from './stats.js?v=20261029123950';
+} from './entities.js?v=20261029130505';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261029130505';
+import { sfx } from './audio.js?v=20261029130505';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261029130505';
+import { fxRate } from './entities.js?v=20261029130505';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261029130505';
+import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261029130505';
+import { hitBattleCounter } from './stats.js?v=20261029130505';
 // ===== DEBUG (temporary): 弾の雨 visual check — set to false to remove. While true, ranking submit is disabled. =====
 const DEBUG_RAIN_AT_START = false;
 // ===== DEBUG (temporary): 転送敵キャラ確認パレード — set to false to remove. =====
@@ -23,11 +23,11 @@ const DEBUG_UNIT_PARADE = false;
 const PARADE_SEC = 12; // per unit: ~3s glide in → body glow → signature attack → normal volleys
 /** 自機の攻撃力倍率 (10-18: ×1.3 → 10-18 夜: 2割減 ×1.04). Applies to the ship's own shots (normal / rapid / homing / spread), player and COM alike. */
 const SHIP_ATK_MUL = 1.04;
-import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261029123950';
-import { recordStrongBest, strongBestBase } from './record.js?v=20261029123950';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult, firstBonusPending, grantFirstBonus } from './meta.js?v=20261029123950';
-import { tickPersona, personaIntangible, personaShieldBlocks, PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261029123950';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261029123950';
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261029130505';
+import { recordStrongBest, strongBestBase } from './record.js?v=20261029130505';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult, firstBonusPending, grantFirstBonus } from './meta.js?v=20261029130505';
+import { tickPersona, personaIntangible, personaShieldBlocks, PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261029130505';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261029130505';
 
 const PT_MILESTONE = 500; // 10-15: 突破演出 every 500 PT earned in the match
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
@@ -3356,14 +3356,15 @@ export class Game {
       try { this._comRankChange = recordComResult(this.comDifficulty, !!won); } catch (_) { this._comRankChange = null; }
     }
 
-    // PT only on COM (CPU) victory: remaining HP scaled to 0–100 → PT
+    // PT only on COM (CPU) victory: remaining HP (as shown on the HUD) → PT
     this._ptReward = null; this._recordP = null; // 自己ベスト更新判定 (強い wins only)
     // Human-vs-human (online room / matchmaking) never grants PT — any end reason (KO, time-up,
     // 延長戦, disconnect / opponent left). COM matches only.
     if (!DEBUG_UNIT_PARADE && won && this.useBot && !this.isOnline()) {
       const rawHp = Math.max(0, this.state.player?.hp ?? 0);
-      const maxHp = this.state.player?.maxHp || PLAYER_MAX_HP;
-      const hp = Math.max(0, Math.floor((rawHp / maxHp) * 100)); // keep PT on 0–100 scale
+      // 10-29: use the real remaining life exactly as the HUD shows it (Math.round, same as 自分 HP);
+      // the old 0–100 rescale (hp/150*100) showed e.g. ライフ 80 while the HUD said 120.
+      const hp = Math.max(0, Math.round(rawHp));
       try {
         const prof = this.comProfile();
         const result = grantComVictoryPt(loadMeta(), hp, { mult: prof.ptMult });
