@@ -1,7 +1,7 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-10-29 13:05:05';
+export const VERSION_LABEL = '2026-10-29 21:22:39';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1793246705000;
+export const BUILD_TIME = 1793276559000;
 export const BUILD_NOTE = '勝利PTの残りライフをHUDのHPと一致';
 
 export function formatVersionTime(ms = BUILD_TIME) {
