@@ -452,6 +452,11 @@ export function unitIntro(id) {
   // Large tiers only telegraph lasers — drop the note for units without any laser pattern.
   const role = hasLaser ? base.role : base.role.replace('・ためレーザー', '');
   const blurb = `${ov.lead || base.lead}${sig ? sig.desc : ''}${rest.length ? `${rest.join('・')}も織り交ぜる。` : ''}`;
+  // localized: translate each sentence on its own (the joined Japanese sentence has no dictionary entry)
+  const nk = typeof window !== 'undefined' && window.NKI18N;
+  const lx = nk && nk.lang && nk.lang !== 'ja' && nk.t;
+  const zh = lx && /^zh/.test(nk.lang);
+  const blurbLx = lx ? [nk.t(ov.lead || base.lead), sig ? nk.t(sig.desc) : '', rest.length ? nk.t('{0}も織り交ぜる。').replace('{0}', rest.map((r) => nk.t(r)).join(zh ? '、' : ', ')) : ''].filter(Boolean).join(zh ? '' : ' ') : null;
   return {
     id,
     name: (u && u.name) || id,
@@ -459,7 +464,7 @@ export function unitIntro(id) {
     rarity: (u && u.rarity) || 'common',
     attack: ov.attack || names.join('／') || base.attack,
     role: ov.role || role,
-    blurb: ov.blurb || blurb,
+    blurb: ov.blurb || blurbLx || blurb,
   };
 }
 
