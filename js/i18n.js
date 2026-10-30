@@ -144,6 +144,27 @@
     var body = s.slice(lead.length, s.length - trail.length);
     var lines = body.split('\n');
     var out = lead + lines.map(function (ln) { if (!JP.test(ln)) return ln; var a = /^\s*/.exec(ln)[0], b = /\s*$/.exec(ln)[0]; return a + core(ln.slice(a.length, ln.length - b.length)) + b; }).join('\n') + trail;
+    var LEFT = (lang === 'zh-Hans' || lang === 'zh-Hant') ? /[\u3040-\u30fa\u30fc-\u30ff\uff66-\uff9f]/ : JP; // zh output is CJK by nature: only kana means untranslated
+    if (LEFT.test(out) && !tr._in) {
+      // composite line (e.g. 「◎ ボム：…（敵4体）」 or a tutorial line): translate bracketed / spaced chunks on their own
+      var ch = body.split(/(（[^（）]*）|【[^【】]*】|〔[^〔〕]*〕|　|：)/);
+      if (ch.length > 1) {
+        tr._in = true;
+        try {
+          var o2 = lead + ch.map(function (c) { var zh = (lang === 'zh-Hans' || lang === 'zh-Hant'); if (c === '　') return ' '; if (c === '：') return zh ? '：' : ': '; if (!c || !JP.test(c)) return c; var t = tr(c); if (!zh) t = t.replace(/^【/, ' [').replace(/】$/, '] ').replace(/^（/, ' (').replace(/）$/, ')').replace(/^\s*\(/, ' ('); return t; }).join('').replace(/ {2,}/g, ' ').replace(/^ /, '') + trail;
+          var KN = LEFT === JP ? /[\u3040-\u30ff\u3400-\u9fff]/g : /[\u3040-\u30ff]/g; if (!LEFT.test(o2) || o2.replace(KN, '').length > o2.length - (out.length - out.replace(KN, '').length)) out = o2;
+        } finally { tr._in = false; }
+      }
+    }
+    if (!tr._in) {
+      tr._in = true;
+      try {
+        // bracketed numeric details (e.g. （敵4体）) left verbatim inside an otherwise translated line
+        (body.match(/（[^（）]*）/g) || []).forEach(function (c) { if (out.indexOf(c) < 0) return; var t = tr(c); if (t !== c) out = out.replace(c, (lang === 'zh-Hans' || lang === 'zh-Hant') ? t : ' ' + t.trim()).replace(/ {2,}/g, ' '); });
+        // standalone kanji item icons (艦/塞/…): use the dictionary's neutral symbol
+        out = out.replace(/(^|\s)([艦塞砲群裂氷盾突])(?=\s|$)/g, function (m0, sp, ic) { var v = look(ic); return v != null ? sp + v : m0; });
+      } finally { tr._in = false; }
+    }
     if (JP.test(out)) NK.miss.add(s);
     if (cache.size > 5000) cache.clear();
     cache.set(s, out);
@@ -340,7 +361,7 @@
     var lbl = document.createElement('span'); lbl.className = 'nk-lang-lbl'; lbl.setAttribute('aria-hidden', 'true'); lbl.setAttribute('translate', 'no'); lbl.textContent = 'Language'; wrap.appendChild(lbl);
     var b = document.createElement('button');
     b.type = 'button'; b.className = 'nk-lang-btn'; b.setAttribute('aria-haspopup', 'listbox');
-    b.setAttribute('aria-label', 'Language / 言語');
+    b.setAttribute('aria-label', 'Language');
     b.innerHTML = '<span class="nk-g">🌐</span><span class="nk-n"></span><span class="nk-s"></span>';
     b.querySelector('.nk-n').textContent = nameOf(lang);
     b.querySelector('.nk-s').textContent = SHORT[lang] || lang;

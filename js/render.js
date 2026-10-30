@@ -1,8 +1,8 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261031013139';
-import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261031013139';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261031015236';
+import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261031015236';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -10,7 +10,7 @@ export const OWN_RATIO = 0.8 / 3;
 // i18n: translate BEFORE measuring/wrapping so fit/wrap use the real (localized) width.
 function _nk() { return (typeof window !== 'undefined' && window.NKI18N) || null; }
 function LX() { const n = _nk(); return !!(n && n.lang && n.lang !== 'ja' && n.t); }
-// Kanji item icons (艦/塞/砲/群/裂/氷/盾/突) are symbols: keep them as-is, translate only the words around them.
+// Kanji item icons (艦/塞/砲/群/裂/氷/盾/突) are symbols: translated separately (to a neutral symbol), never merged into the words around them.
 const ICON_RE = /(^|\s)([艦塞砲群裂氷盾突])(?=\s|$)/g;
 function T(s) {
   const n = _nk();
@@ -18,7 +18,7 @@ function T(s) {
   const keep = [];
   const prot = s.replace(ICON_RE, (m, sp, ic) => { keep.push(ic); return sp + String.fromCharCode(0xE100 + keep.length - 1); });
   let out = n.t(prot);
-  if (keep.length) out = out.replace(/[\uE100-\uE1FF]/g, (c) => keep[c.charCodeAt(0) - 0xE100] || '');
+  if (keep.length) out = out.replace(/[\uE100-\uE1FF]/g, (c) => { const ic = keep[c.charCodeAt(0) - 0xE100] || ''; return (ic && n.t(ic)) || ic; }); // icon kanji → language-neutral symbol from the dictionary
   return out;
 }
 /** Draw already-localized text without a second translation pass. */
@@ -441,7 +441,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261031013139`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261031015236`;
 }
 
 function loadKindSprite(kind) {
@@ -527,8 +527,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261031013139'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261031013139'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261031015236'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261031015236'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -2276,7 +2276,7 @@ function drawItem(ctx, it) {
 
   // Icon — large, dark, fitted inside the orb (2-char icons shrink to fit)
   // Bomb / heal: bigger, higher-contrast so they read at a glance
-  const icon = String(st.icon || '★');
+  const icon = LX() ? T(String(st.icon || '★')) : String(st.icon || '★'); // localized: kanji icons → neutral symbol
   let fs = Math.round(R * (isBomb ? 1.22 : (isHeal ? 1.18 : 1.05)));
   ctx.font = `900 ${fs}px "Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif`;
   const maxW = R * 1.5;
