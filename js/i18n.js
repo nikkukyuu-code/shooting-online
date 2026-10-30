@@ -280,6 +280,9 @@
   try {
     var CP = CanvasRenderingContext2D.prototype;
     var oFill = CP.fillText, oStroke = CP.strokeText, oMeasure = CP.measureText;
+    // untranslated draw (glyph icons such as 艦/群 are symbols, not words)
+    NK.rawFill = function (ctx, s, x, y, mw) { return mw === undefined ? oFill.call(ctx, s, x, y) : oFill.call(ctx, s, x, y, mw); };
+    NK.rawStroke = function (ctx, s, x, y) { return oStroke.call(ctx, s, x, y); };
     function fit(ctx, s, t, mw) {
       if (t === s) return mw;
       var w0 = oMeasure.call(ctx, s).width, w1 = oMeasure.call(ctx, t).width;

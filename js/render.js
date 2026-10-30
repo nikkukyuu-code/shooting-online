@@ -1,12 +1,79 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261030211733';
-import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261030211733';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261030225059';
+import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261030225059';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
 export const OWN_RATIO = 0.8 / 3;
+// i18n: translate BEFORE measuring/wrapping so fit/wrap use the real (localized) width.
+function _nk() { return (typeof window !== 'undefined' && window.NKI18N) || null; }
+function LX() { const n = _nk(); return !!(n && n.lang && n.lang !== 'ja' && n.t); }
+// Kanji item icons (艦/塞/砲/群/裂/氷/盾/突) are symbols: keep them as-is, translate only the words around them.
+const ICON_RE = /(^|\s)([艦塞砲群裂氷盾突])(?=\s|$)/g;
+function T(s) {
+  const n = _nk();
+  if (!(n && n.lang && n.lang !== 'ja' && n.t && typeof s === 'string')) return s;
+  const keep = [];
+  const prot = s.replace(ICON_RE, (m, sp, ic) => { keep.push(ic); return sp + String.fromCharCode(0xE100 + keep.length - 1); });
+  let out = n.t(prot);
+  if (keep.length) out = out.replace(/[\uE100-\uE1FF]/g, (c) => keep[c.charCodeAt(0) - 0xE100] || '');
+  return out;
+}
+/** Draw already-localized text without a second translation pass. */
+function FT(ctx, s, x, y, mw) { const n = _nk(); if (n && n.rawFill && n.lang !== 'ja') n.rawFill(ctx, s, x, y, mw); else if (mw === undefined) ctx.fillText(s, x, y); else ctx.fillText(s, x, y, mw); }
+const _boxMemo = new Map();
+/** Non-ja: largest font (maxFs→minFs) where text fits maxW×maxH on one line or wrapped to ≤maxLines lines. Never ellipsizes. */
+function fitBox(ctx, text, maxW, maxH, maxFs, minFs, weight, fontStack, maxLines = 2, lhMul = 1.12) {
+  const key = `${text}|${maxW | 0}|${maxH | 0}|${maxFs}|${minFs}|${weight}|${maxLines}|${lhMul}`;
+  let r = _boxMemo.get(key);
+  if (!r) {
+    r = fitBoxRaw(ctx, text, maxW, maxH, maxFs, minFs, weight, fontStack, maxLines, lhMul);
+    if (_boxMemo.size > 400) _boxMemo.clear();
+    _boxMemo.set(key, r);
+  }
+  ctx.font = `${weight} ${r.fs}px ${fontStack}`;
+  return r;
+}
+function fitBoxRaw(ctx, text, maxW, maxH, maxFs, minFs, weight, fontStack, maxLines, lhMul) {
+  for (let fs = maxFs; fs >= minFs; fs -= 0.5) {
+    ctx.font = `${weight} ${fs}px ${fontStack}`;
+    if (text.indexOf('\n') < 0 && ctx.measureText(text).width <= maxW && fs * lhMul <= maxH + 0.01) return { lines: [text], fs, lh: fs * lhMul };
+    if (maxLines > 1) {
+      const lines = wrapLinesN(ctx, text, maxW, maxLines);
+      if (lines && lines.length * fs * lhMul <= maxH + 0.01) return { lines, fs, lh: fs * lhMul };
+    }
+  }
+  ctx.font = `${weight} ${minFs}px ${fontStack}`;
+  return { lines: wrapLinesN(ctx, text, maxW, 9) || [text], fs: minFs, lh: minFs * lhMul };
+}
+/** Greedy wrap at spaces (char-level for CJK/Thai or overlong words); null if it needs more than maxLines. */
+function wrapLinesN(ctx, text, maxW, maxLines) {
+  if (text.indexOf('\n') >= 0) {
+    const out = [];
+    for (const para of text.split('\n')) { const l = wrapLinesN(ctx, para, maxW, maxLines); if (!l) return null; out.push(...l); }
+    return out.length <= maxLines ? out : null;
+  }
+  const toks = text.match(/\S+\s*|\s+/g) || [text];
+  const lines = []; let cur = '';
+  const fits = (t) => ctx.measureText(t.trimEnd()).width <= maxW;
+  for (let tk of toks) {
+    if (fits(cur + tk)) { cur += tk; continue; }
+    if (cur.trim()) { lines.push(cur.trimEnd()); cur = ''; tk = tk.trimStart(); }
+    if (fits(tk)) { cur = tk; continue; }
+    for (const ch of Array.from(tk)) {
+      if (fits(cur + ch)) cur += ch;
+      else { if (cur.trim()) lines.push(cur.trimEnd()); cur = ch.trimStart(); }
+    }
+  }
+  if (cur.trim()) lines.push(cur.trimEnd());
+  return lines.length <= maxLines ? lines : null;
+}
+function fillLines(ctx, lines, cx, cy, lh) {
+  for (let i = 0; i < lines.length; i++) FT(ctx, lines[i], cx, cy + (i - (lines.length - 1) / 2) * lh);
+}
+
 const ITEM_STYLE = {
   homing:     { color: '#ff66ff', icon: '◆',  label: '追尾',   effect: '追尾弾を連射' },
   laser:      { color: '#66ccff', icon: '═',  label: 'レーザー', effect: '小刻み前方レーザー' },
@@ -371,7 +438,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261030211733`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261030225059`;
 }
 
 function loadKindSprite(kind) {
@@ -457,8 +524,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261030211733'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261030211733'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261030225059'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261030225059'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -2219,9 +2286,10 @@ function drawItem(ctx, it) {
   ctx.textBaseline = 'middle';
   ctx.lineWidth = isBomb || isHeal ? 4 : 3;
   ctx.strokeStyle = isBomb ? 'rgba(255,255,200,0.95)' : (isHeal ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.75)');
-  ctx.strokeText(icon, 0, 1);
+  const nkI = _nk();
+  if (nkI && nkI.rawFill) nkI.rawStroke(ctx, icon, 0, 1); else ctx.strokeText(icon, 0, 1);
   ctx.fillStyle = isBomb ? '#2a0800' : (isHeal ? '#063318' : '#111');
-  ctx.fillText(icon, 0, 1);
+  if (nkI && nkI.rawFill) nkI.rawFill(ctx, icon, 0, 1); else ctx.fillText(icon, 0, 1);
 
   // Tiny rising sparkles for heal orbs (cheap, few particles)
   if (isHeal) {
@@ -3144,7 +3212,8 @@ function drawCoinHud(ctx, L, pt, lastGold, pop) {
   ctx.shadowBlur = 0;
   ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
   ctx.font = 'bold 13px sans-serif'; ctx.fillStyle = '#f2f2f2';
-  ctx.fillText('今回のコイン', x0 + 8, y0 + 12);
+  if (LX()) { const v = T('今回のコイン'); fitBox(ctx, v, bw - 14, 16, 13, 7, 'bold', 'sans-serif', 1); FT(ctx, v, x0 + 8, y0 + 12); }
+  else ctx.fillText('今回のコイン', x0 + 8, y0 + 12);
   drawCoin(ctx, { x: x0 + 20, y: y0 + 34, r: 11 * (1 + bump * 0.6), g: lastGold ? 1 : 0, ph: performance.now() / 1000 * 4 });
   ctx.save();
   ctx.translate(x1 - 8, y0 + 34); ctx.scale(1 + bump, 1 + bump);
@@ -3153,7 +3222,8 @@ function drawCoinHud(ctx, L, pt, lastGold, pop) {
   ctx.fillText(`${Math.round(_coinShown)} PT`, 0, 0);
   ctx.restore();
   ctx.font = 'bold 11px sans-serif'; ctx.fillStyle = '#cfe3ff'; ctx.textAlign = 'right';
-  ctx.fillText('勝つともらえます', x1 - 8, y0 + 53);
+  if (LX()) { const v = T('勝つともらえます'); fitBox(ctx, v, bw - 14, 14, 11, 6.5, 'bold', 'sans-serif', 1); FT(ctx, v, x1 - 8, y0 + 53); }
+  else ctx.fillText('勝つともらえます', x1 - 8, y0 + 53);
   if (pop && age < 1.1) { // +1PT / +30PT pops out under the counter
     const u = age / 1.1;
     ctx.globalAlpha = u < 0.7 ? 1 : 1 - (u - 0.7) / 0.3;
@@ -3400,7 +3470,8 @@ function drawHpBarsAtBoundary(ctx, L, selfHp, oppHp, maxHp, fx = {}) {
   ctx.fillStyle = 'rgba(220,255,220,0.9)';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillText('あいて', x + 4, y + barH * 0.5);
+  if (LX()) { const f0 = Math.max(8, barH - 1); const v = T('あいて'); fitBox(ctx, v, barW * 0.62, barH + 4, f0, 6, 600, 'sans-serif', 1); FT(ctx, v, x + 4, y + barH * 0.5); ctx.font = `600 ${f0}px sans-serif`; }
+  else ctx.fillText('あいて', x + 4, y + barH * 0.5);
   ctx.textAlign = 'right';
   ctx.fillStyle = '#fff';
   ctx.fillText(`${Math.max(0, Math.ceil(oppHp))}`, x + barW - 4, y + barH * 0.5);
@@ -3448,12 +3519,14 @@ function drawHpBarsAtBoundary(ctx, L, selfHp, oppHp, maxHp, fx = {}) {
   ctx.fillText(`${Math.max(0, Math.ceil(display))}`, x - 6, ySelf + barH * 0.5);
   ctx.textAlign = 'left';
   ctx.fillStyle = selfLow ? `rgba(255,160,160,${0.75 + 0.25 * pulse})` : 'rgba(255,255,200,0.9)';
-  ctx.fillText('じぶん', x + 4, ySelf + barH * 0.5);
+  if (LX()) { const f0 = Math.max(9, barH); const v = T('じぶん'); fitBox(ctx, v, barW * (selfLow ? 0.48 : 0.62), barH + 4, f0, 6, 700, 'sans-serif', 1); FT(ctx, v, x + 4, ySelf + barH * 0.5); ctx.font = `700 ${f0}px sans-serif`; }
+  else ctx.fillText('じぶん', x + 4, ySelf + barH * 0.5);
   if (selfLow) {
     ctx.textAlign = 'right';
     ctx.fillStyle = `rgba(255,90,90,${0.7 + 0.3 * pulse})`;
     ctx.font = `800 ${Math.max(8, barH - 1)}px sans-serif`;
-    ctx.fillText('危険', x + barW - 4, ySelf + barH * 0.5);
+    if (LX()) { const v = T('危険'); fitBox(ctx, v, barW * 0.4, barH + 4, Math.max(8, barH - 1), 6, 800, 'sans-serif', 1); FT(ctx, v, x + barW - 4, ySelf + barH * 0.5); }
+    else ctx.fillText('危険', x + barW - 4, ySelf + barH * 0.5);
   }
   drawLifeNum(ctx, x + barW + 30, y + barH * 0.5 - barH * 0.8, barH, lfO);
   drawLifeNum(ctx, x + barW + 30, ySelf + barH * 0.5 + barH * 0.8, barH, lfS);
@@ -3754,9 +3827,9 @@ function drawInfoPanel(ctx, area, localState) {
   ctx.textBaseline = 'middle';
   if (tutOn) {
     // In-battle tutorial card (info pane only — never on the stage)
-    const head = `チュートリアル ${tut.i + 1}/${tut.total}　【${tut.title || '案内'}】`;
-    const body = tut.text || '';
-    const foot = '左タップ：次へ　　右タップ：とばす';
+    const head = T(`チュートリアル ${tut.i + 1}/${tut.total}　【${tut.title || '案内'}】`);
+    const body = T(tut.text || '');
+    const foot = T('左タップ：次へ　　右タップ：とばす');
     ctx.save();
     ctx.fillStyle = 'rgba(8, 24, 48, 0.78)';
     roundRect(ctx, boxX, boxY, boxW, boxH, 8 * u);
@@ -3769,6 +3842,26 @@ function drawInfoPanel(ctx, area, localState) {
     const prog = (tut.i + Math.max(0, Math.min(1, 1 - tut.life / 3.8))) / tut.total;
     ctx.fillStyle = 'rgba(108, 240, 255, 0.35)';
     ctx.fillRect(boxX + 4 * u, boxY + boxH - 5 * u, (boxW - 8 * u) * prog, 3 * u);
+    const jaCut = !LX() && (() => {
+      fitFontSize(ctx, [head], textW, Math.min(baseFs, boxH * 0.28), minFs, fontStack, 800);
+      if (ctx.measureText(head).width > textW) return true;
+      fitFontSize(ctx, [body], tut.icon ? textW - 30 * u : textW, Math.min(baseFs, boxH * 0.32), minFs, fontStack, 700);
+      return ctx.measureText(body).width > (tut.icon ? textW - 30 * u : textW);
+    })();
+    if (LX() || jaCut) {
+      // localized: every line fully visible — shrink-to-fit + wrap, never ellipsize
+      const mf = Math.max(7 * u, minFs * 0.62);
+      const hb = fitBox(ctx, head, textW, boxH * 0.24, Math.min(baseFs, boxH * 0.24), mf, 800, fontStack, 1);
+      ctx.fillStyle = '#9ef6ff'; ctx.shadowColor = '#000'; ctx.shadowBlur = 3 * u;
+      fillLines(ctx, hb.lines, area.w * 0.5, boxY + boxH * 0.15, hb.lh);
+      const bb = fitBox(ctx, body, textW, boxH * 0.54, Math.min(baseFs, boxH * 0.3), mf, 700, fontStack, 3, 1.08);
+      ctx.fillStyle = '#ffffff';
+      fillLines(ctx, bb.lines, area.w * 0.5, boxY + boxH * 0.54, bb.lh);
+      const fb = fitBox(ctx, foot, textW, boxH * 0.16, Math.max(9 * u, Math.min(12 * u, boxH * 0.16)), Math.max(6 * u, mf * 0.8), 600, fontStack, 1);
+      ctx.fillStyle = 'rgba(200, 230, 255, 0.85)';
+      fillLines(ctx, fb.lines, area.w * 0.5, boxY + boxH * 0.89, fb.lh);
+      ctx.restore();
+    } else {
     const fsHead = fitFontSize(ctx, [head], textW, Math.min(baseFs, boxH * 0.28), minFs, fontStack, 800);
     ctx.font = `800 ${fsHead}px ${fontStack}`;
     ctx.fillStyle = '#9ef6ff';
@@ -3799,6 +3892,7 @@ function drawInfoPanel(ctx, area, localState) {
     ctx.fillStyle = 'rgba(200, 230, 255, 0.85)';
     ctx.fillText(foot, area.w * 0.5, boxY + boxH * 0.84);
     ctx.restore();
+    }
   } else if (banOn) {
     const a = Math.max(0, Math.min(1, ban.life / 0.35));
     ctx.save();
@@ -3814,33 +3908,41 @@ function drawInfoPanel(ctx, area, localState) {
     const extra = (status && status !== ban.text && !/^敵を倒して/.test(status)) ? status : '';
     let lines;
     let fs;
-    if (extra) {
+    const lx = LX();
+    if (lx) {
+      const txt = T(ban.text), ex2 = extra ? T(extra) : '';
+      ({ lines, fs } = fitBox(ctx, ex2 ? txt + '\n' + ex2 : txt, textW, boxH * 0.94, baseFs, Math.max(7 * u, minFs * 0.62), 800, fontStack, 3, 1.1));
+    } else if (extra) {
       fs = fitFontSize(ctx, [ban.text, extra], textW, Math.min(baseFs, boxH * 0.34), minFs, fontStack, 800);
       lines = [ellipsize(ctx, ban.text, textW), ellipsize(ctx, extra, textW)];
     } else {
       ({ lines, fs } = wrapToFit(ctx, ban.text, textW, baseFs, minFs, fontStack, 800, Math.min(baseFs, boxH * 0.36)));
+      if (lines.some((l) => l.endsWith('…'))) ({ lines, fs } = fitBox(ctx, ban.text, textW, boxH * 0.94, baseFs, Math.max(7 * u, minFs * 0.62), 800, fontStack, 3, 1.1));
     }
     ctx.font = `800 ${fs}px ${fontStack}`;
-    const lh = fs * 1.2;
+    const lh = fs * (lx || lines.length > 2 ? 1.1 : 1.2);
     const cy = boxY + boxH * 0.5;
     ctx.shadowColor = '#000';
     ctx.shadowBlur = 3 * u;
     for (let i = 0; i < lines.length; i++) {
       const y = cy + (i - (lines.length - 1) / 2) * lh;
       ctx.fillStyle = i === 0 ? '#ffffff' : '#ffe9a8';
-      ctx.fillText(lines[i], area.w * 0.5, y);
+      FT(ctx, lines[i], area.w * 0.5, y);
     }
     ctx.restore();
   } else if (status) {
-    const { lines, fs } = wrapToFit(ctx, status, textW, baseFs, minFs, fontStack, 700, Math.min(baseFs, boxH * 0.36));
+    const lx = LX();
+    let { lines, fs } = lx ? fitBox(ctx, T(status), textW, boxH * 0.94, baseFs, Math.max(7 * u, minFs * 0.62), 700, fontStack, 3, 1.1)
+      : wrapToFit(ctx, status, textW, baseFs, minFs, fontStack, 700, Math.min(baseFs, boxH * 0.36));
+    if (!lx && lines.some((l) => l.endsWith('…'))) ({ lines, fs } = fitBox(ctx, status, textW, boxH * 0.94, baseFs, Math.max(7 * u, minFs * 0.62), 700, fontStack, 3, 1.1));
     ctx.font = `700 ${fs}px ${fontStack}`;
     ctx.fillStyle = '#ffffff';
     ctx.shadowColor = '#000';
     ctx.shadowBlur = 5;
-    const lh = fs * 1.2;
+    const lh = fs * (lx || lines.length > 2 ? 1.1 : 1.2);
     const cy = boxY + boxH * 0.5;
     for (let i = 0; i < lines.length; i++) {
-      ctx.fillText(lines[i], area.w * 0.5, cy + (i - (lines.length - 1) / 2) * lh);
+      FT(ctx, lines[i], area.w * 0.5, cy + (i - (lines.length - 1) / 2) * lh);
     }
     ctx.shadowBlur = 0;
   }
@@ -3853,17 +3955,24 @@ function drawInfoPanel(ctx, area, localState) {
   const oppLow = oppHp < 30;
   const pulse = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(performance.now() / 200));
   ctx.fillStyle = selfLow ? `rgba(255,70,70,${0.75 + 0.25 * pulse})` : '#88ffaa';
-  ctx.fillText(selfLow ? `自分 HP ${selfHp} 危険` : `自分 HP ${selfHp}`, area.w * 0.04, area.h * 0.62, area.w * 0.44);
+  const hpLx = LX();
+  const hpTxt = (t, fsMax) => { if (!hpLx) return t; const v = T(t); fitBox(ctx, v, area.w * 0.44, area.h, fsMax, Math.max(8, fsMax * 0.6), 600, fontStack, 1); return v; };
+  FT(ctx, hpTxt(selfLow ? `自分 HP ${selfHp} 危険` : `自分 HP ${selfHp}`, hpFs), area.w * 0.04, area.h * 0.62, area.w * 0.44);
+  if (hpLx) ctx.font = `600 ${hpFs}px ${fontStack}`;
   ctx.textAlign = 'right';
   ctx.fillStyle = oppLow ? `rgba(255,100,120,${0.75 + 0.25 * pulse})` : '#ff8899';
-  ctx.fillText(oppLow ? `相手 HP ${oppHp} 危険` : `相手 HP ${oppHp}`, area.w * 0.96, area.h * 0.62, area.w * 0.44);
+  FT(ctx, hpTxt(oppLow ? `相手 HP ${oppHp} 危険` : `相手 HP ${oppHp}`, hpFs), area.w * 0.96, area.h * 0.62, area.w * 0.44);
 
   // Compact layout labels
   const labFs = Math.max(10, Math.min(14, area.h * 0.14));
   ctx.font = `500 ${labFs}px ${fontStack}`;
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(210, 220, 255, 0.75)';
-  ctx.fillText('上:相手｜中:自分｜下:操作', area.w * 0.5, area.h * 0.86, area.w * 0.94);
+  if (LX()) {
+    const v = T('上:相手｜中:自分｜下:操作');
+    fitBox(ctx, v, area.w * 0.94, area.h, labFs, Math.max(7, labFs * 0.55), 500, fontStack, 1);
+    FT(ctx, v, area.w * 0.5, area.h * 0.86);
+  } else ctx.fillText('上:相手｜中:自分｜下:操作', area.w * 0.5, area.h * 0.86, area.w * 0.94);
 
   ctx.restore();
 }
@@ -3906,7 +4015,18 @@ function drawControlPanel(ctx, area, localState) {
   ctx.fillStyle = 'rgba(230,240,255,0.75)';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.fillText(touch.active ? 'ドラッグ中（他の指で発動可）' : '自機をドラッグ', sx, sy + shipH * 0.7);
+  const slotsL = itemSlotRects({ x: 0, y: 0, w: area.w, h: area.h }, MAX_ITEM_SLOTS);
+  if (LX()) {
+    // localized: keep the hint inside the pad left of the item column (wrap ≤2 lines, shrink)
+    const v = T(touch.active ? 'ドラッグ中（他の指で発動可）' : '自機をドラッグ');
+    const right = (slotsL.length ? slotsL[0].btnX : area.w) - 6;
+    const mw = Math.max(40, right - 4);
+    const fs0 = Math.max(10, area.h * 0.07);
+    const r = fitBox(ctx, v, mw, fs0 * 2.4, fs0, Math.max(8, fs0 * 0.7), 600, '"Hiragino Sans","Noto Sans JP",sans-serif', 2, 1.1);
+    const widest = Math.max(...r.lines.map((l) => ctx.measureText(l).width));
+    const cx = Math.min(Math.max(sx, 4 + widest / 2), right - widest / 2);
+    for (let i = 0; i < r.lines.length; i++) FT(ctx, r.lines[i], cx, sy + shipH * 0.7 + i * r.lh);
+  } else ctx.fillText(touch.active ? 'ドラッグ中（他の指で発動可）' : '自機をドラッグ', sx, sy + shipH * 0.7);
 
   // Vertical item slots (max 3) on the right — button + description under each
   const items = (localState.player && localState.player.items) || [];
@@ -3920,7 +4040,11 @@ function drawControlPanel(ctx, area, localState) {
     ctx.textBaseline = 'bottom';
     ctx.shadowColor = '#000';
     ctx.shadowBlur = 3;
-    ctx.fillText(`アイテム 最大${MAX_ITEM_SLOTS}`, head.x + head.w * 0.5, head.y - 3);
+    if (LX()) {
+      const v = T(`アイテム 最大${MAX_ITEM_SLOTS}`);
+      fitBox(ctx, v, head.w * 0.98, hFs * 1.2, hFs, Math.max(7, hFs * 0.6), 700, '"Hiragino Sans","Noto Sans JP",sans-serif', 1);
+      FT(ctx, v, head.x + head.w * 0.5, head.y - 3);
+    } else ctx.fillText(`アイテム 最大${MAX_ITEM_SLOTS}`, head.x + head.w * 0.5, head.y - 3);
     ctx.shadowBlur = 0;
   }
   for (let i = 0; i < slots.length; i++) {
@@ -3945,11 +4069,19 @@ function drawControlPanel(ctx, area, localState) {
       const iconFs = Math.max(16, Math.min(26, r.btnH * 0.42));
       ctx.font = `700 ${iconFs}px "Hiragino Sans","Noto Sans JP",sans-serif`;
       ctx.fillStyle = '#fff8e0';
-      ctx.fillText(`${st.icon} ${st.label || ''}`, r.btnX + r.btnW * 0.5, r.btnY + r.btnH * 0.45);
+      if (LX()) {
+        const v = T(`${st.icon} ${st.label || ''}`);
+        const b = fitBox(ctx, v, r.btnW * 0.9, r.btnH * 0.82, iconFs, Math.max(8, iconFs * 0.45), 700, '"Hiragino Sans","Noto Sans JP",sans-serif', 2, 1.05);
+        fillLines(ctx, b.lines, r.btnX + r.btnW * 0.5, r.btnY + r.btnH * 0.47, b.lh);
+      } else ctx.fillText(`${st.icon} ${st.label || ''}`, r.btnX + r.btnW * 0.5, r.btnY + r.btnH * 0.45);
     } else {
       ctx.font = `600 ${Math.max(11, r.btnH * 0.28)}px "Hiragino Sans","Noto Sans JP",sans-serif`;
       ctx.fillStyle = 'rgba(200,210,240,0.55)';
-      ctx.fillText(`空 ${i + 1}/${MAX_ITEM_SLOTS}`, r.btnX + r.btnW * 0.5, r.btnY + r.btnH * 0.5);
+      if (LX()) {
+        const v = T(`空 ${i + 1}/${MAX_ITEM_SLOTS}`); const f0 = Math.max(11, r.btnH * 0.28);
+        fitBox(ctx, v, r.btnW * 0.9, r.btnH * 0.8, f0, Math.max(7, f0 * 0.5), 600, '"Hiragino Sans","Noto Sans JP",sans-serif', 1);
+        FT(ctx, v, r.btnX + r.btnW * 0.5, r.btnY + r.btnH * 0.5);
+      } else ctx.fillText(`空 ${i + 1}/${MAX_ITEM_SLOTS}`, r.btnX + r.btnW * 0.5, r.btnY + r.btnH * 0.5);
     }
     ctx.shadowBlur = 0;
 
@@ -3964,7 +4096,13 @@ function drawControlPanel(ctx, area, localState) {
     ctx.textBaseline = 'middle';
     ctx.shadowColor = '#000';
     ctx.shadowBlur = 2;
-    ctx.fillText(filled ? (st.effect || '') : '空', r.btnX + r.btnW * 0.5, r.descY - 2 + descH * 0.5, r.btnW * 0.94);
+    const jaSq = !LX() && filled && ctx.measureText(st.effect || '').width * 0.86 > r.btnW * 0.94;
+    if (LX() || jaSq) {
+      // localized description: full text, shrink + wrap inside its box (no squash, no cut)
+      const v = T(filled ? (st.effect || '') : '空');
+      const b = fitBox(ctx, v, r.btnW * 0.92, descH - 4, descFs, Math.max(7, descFs * 0.42), 700, '"Hiragino Sans","Noto Sans JP",sans-serif', 3, 1.04);
+      fillLines(ctx, b.lines, r.btnX + r.btnW * 0.5, r.descY - 2 + descH * 0.5, b.lh);
+    } else ctx.fillText(filled ? (st.effect || '') : '空', r.btnX + r.btnW * 0.5, r.descY - 2 + descH * 0.5, r.btnW * 0.94);
     ctx.shadowBlur = 0;
   }
 
