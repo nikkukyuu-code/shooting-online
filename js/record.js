@@ -15,7 +15,7 @@
  * Unknown base (offline / partial read) → wins are saved silently, no effect.
  * No previous record (base 0) → the first win is saved silently (no 「初記録！」).
  */
-import { fetchRanking, rankIdentity, periodKeys } from './ranking.js?v=20261030195902';
+import { fetchRanking, rankIdentity, periodKeys } from './ranking.js?v=20261030201257';
 
 export const BEST_STRONG_KEY = 'shootingOnline_bestStrongMatch';
 const BAK = BEST_STRONG_KEY + '_bak';

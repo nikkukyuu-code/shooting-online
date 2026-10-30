@@ -2,17 +2,19 @@
 (function () {
   'use strict';
   var LS_KEY = 'nkUiLang';
-  var LANGS = [
+  var LANGS0 = [
     ['ja', '日本語'], ['en', 'English'], ['zh-Hans', '简体中文'], ['zh-Hant', '繁體中文'], ['ko', '한국어'],
     ['es', 'Español'], ['pt', 'Português'], ['fr', 'Français'], ['de', 'Deutsch'], ['it', 'Italiano'],
     ['ru', 'Русский'], ['id', 'Bahasa Indonesia'], ['th', 'ไทย'], ['vi', 'Tiếng Việt'], ['tr', 'Türkçe'],
     ['ar', 'العربية'], ['hi', 'हिन्दी']
   ];
   var SHORT = { ja: '日本語', en: 'EN', 'zh-Hans': '简中', 'zh-Hant': '繁中', ko: '한국어', es: 'ES', pt: 'PT', fr: 'FR', de: 'DE', it: 'IT', ru: 'RU', id: 'ID', th: 'ไทย', vi: 'VI', tr: 'TR', ar: 'عربي', hi: 'हिन्दी' };
-  var CODES = LANGS.map(function (l) { return l[0]; });
+  var LANGS = LANGS0;
+  var CODES = LANGS0.map(function (l) { return l[0]; });
   var cfg = window.NK_I18N_CFG || {};
   var base = cfg.base || '';
   var ver = cfg.v || '';
+  try { var cs0 = document.currentScript; var mv = cs0 && /[?&]v=([^&]+)/.exec(cs0.src); if (mv) ver = mv[1]; } catch (e) {}
   function norm(c) {
     c = String(c || '').toLowerCase();
     if (!c) return '';
@@ -29,6 +31,8 @@
   var lang = '';
   try { lang = localStorage.getItem(LS_KEY) || ''; } catch (e) {}
   if (CODES.indexOf(lang) < 0) lang = detect();
+  if (cfg.langs && cfg.langs.indexOf(lang) < 0) lang = cfg.langs.indexOf('en') >= 0 && lang !== 'ja' ? 'en' : cfg.langs[0];
+  if (cfg.langs) LANGS = LANGS.filter(function (l) { return cfg.langs.indexOf(l[0]) >= 0; });
   var NK = window.NKI18N = { miss: new Set(), lang: lang, langs: LANGS, dicts: {}, key: LS_KEY };
   document.documentElement.setAttribute('lang', lang);
   document.documentElement.setAttribute('data-nk-lang', lang);
@@ -65,8 +69,8 @@
     compiled = { pats: pats, fre: fre };
   }
   function look(k) {
-    var d = NK.dicts[lang]; if (d && d[k] != null && d[k] !== '') return d[k];
-    d = NK.dicts.en; if (d && d[k] != null && d[k] !== '') return d[k];
+    var d = NK.dicts[lang]; if (d && d[k] != null && d[k] !== '') return d[k] === '\u200b' ? '' : d[k];
+    d = NK.dicts.en; if (d && d[k] != null && d[k] !== '') return d[k] === '\u200b' ? '' : d[k];
     return null;
   }
   function core2(s) {
@@ -91,7 +95,9 @@
         var ok = true;
         out = out.replace(/\{(\d+)\}/g, function (_, n) {
           var j = P[i].idx.indexOf(+n); if (j < 0) return '';
-          var g = m[j + 1]; return JP.test(g) ? tr(g) : g;
+          var g = m[j + 1]; if (!JP.test(g)) return g;
+          if (/[・　、。：]/.test(g)) { ok = false; return g; }
+          return tr(g);
         });
         if (ok) return out;
       }
@@ -137,7 +143,7 @@
     var lead = /^\s*/.exec(s)[0], trail = /\s*$/.exec(s)[0];
     var body = s.slice(lead.length, s.length - trail.length);
     var lines = body.split('\n');
-    var out = lead + lines.map(function (ln) { return core(ln); }).join('\n') + trail;
+    var out = lead + lines.map(function (ln) { if (!JP.test(ln)) return ln; var a = /^\s*/.exec(ln)[0], b = /\s*$/.exec(ln)[0]; return a + core(ln.slice(a.length, ln.length - b.length)) + b; }).join('\n') + trail;
     if (JP.test(out)) NK.miss.add(s);
     if (cache.size > 5000) cache.clear();
     cache.set(s, out);
@@ -147,15 +153,33 @@
 
   // ---- DOM ----
   var ORIG = '__nkOrig', LAST = '__nkLast';
-  var ATTRS = ['title', 'placeholder', 'aria-label', 'alt'];
-  function skip(el) { return el && el.closest && el.closest('[data-nk-noi18n],script,style,noscript,textarea'); }
+  var ATTRS = ['title', 'placeholder', 'aria-label', 'alt', 'data-text'];
+  var SKIPSEL = '[data-nk-noi18n],script,style,noscript,textarea' + (cfg.skip ? ',' + cfg.skip : '');
+  function skip(el) { return el && el.closest && el.closest(SKIPSEL); }
   function doText(n) {
     var cur = n.nodeValue;
     if (n[LAST] !== cur) n[ORIG] = cur;
     if (n[ORIG] == null) return;
     var want = lang === 'ja' ? n[ORIG] : tr(n[ORIG]);
+    if (want !== n[ORIG] && SPACED) want = spaceOut(n, want);
     if (want !== cur) { n.nodeValue = want; qfit(n.parentNode); }
     n[LAST] = want;
+  }
+  var SPACED = !/^(ja|zh-Hans|zh-Hant|th)$/.test(lang);
+  function nbText(n, dir) {
+    var x = n;
+    for (var k = 0; k < 3 && x; k++) {
+      var sib = dir < 0 ? x.previousSibling : x.nextSibling;
+      if (sib) { var t = sib.textContent || ''; return t; }
+      x = x.parentNode; if (!x || x.nodeType !== 1 || !/^(B|STRONG|EM|I|A|SPAN|SMALL|U|MARK|CODE)$/.test(x.tagName)) return '';
+    }
+    return '';
+  }
+  function spaceOut(n, w) {
+    var a = nbText(n, -1), b = nbText(n, 1);
+    if (a && /[A-Za-z0-9.,:;!?)\]"%]$/.test(a) && /^[A-Za-z0-9("#]/.test(w)) w = ' ' + w;
+    if (b && /[A-Za-z0-9.,:;!?)\]"%]$/.test(w) && /^[A-Za-z0-9("#]/.test(b)) w = w + ' ';
+    return w;
   }
   function doAttrs(el) {
     var store = el.__nkA || (el.__nkA = {});
@@ -183,7 +207,7 @@
     if (root.nodeType === 1) { if (skip(root)) return; doAttrs(root); }
     var tw = document.createTreeWalker(root, 5, null), n;
     while ((n = tw.nextNode())) {
-      if (n.nodeType === 1) { if (n.closest('[data-nk-noi18n],script,style,noscript,textarea')) continue; doAttrs(n); }
+      if (n.nodeType === 1) { if (n.closest(SKIPSEL)) continue; doAttrs(n); }
       else if (!skip(n.parentNode)) doText(n);
     }
   }
@@ -337,13 +361,28 @@
     wrap.appendChild(b);
     return wrap;
   }
+  // Adding the button must not push the title onto an extra line: shrink the title a little if needed.
+  function keepLines(host, h0, pk) {
+    if (!h0) return;
+    var run = function () {
+      host.style.fontSize = '';
+      var base = parseFloat(getComputedStyle(host).fontSize), f = base, n = 0;
+      var lim = Math.max(h0 * 1.25, pk.getBoundingClientRect().height + 8);
+      while (host.getBoundingClientRect().height > lim && f > base * 0.6 && n++ < 12) { f *= 0.94; host.style.fontSize = f + 'px'; }
+    };
+    run();
+    if (lang !== 'ja') setTimeout(run, 50);
+  }
   NK.mount = function (anchor, where) {
     css();
     var el = typeof anchor === 'string' ? document.querySelector(anchor) : anchor;
     if (!el) return null;
     var p = makePicker();
+    var host = where === 'prepend' ? el : el.parentNode;
+    var h0 = host.getBoundingClientRect().height;
     if (where === 'prepend') el.insertBefore(p, el.firstChild);
     else el.parentNode.insertBefore(p, el);
+    keepLines(host, h0, p);
     return p;
   };
   function init() {
