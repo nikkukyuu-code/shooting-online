@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261031010050';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261031013139';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, setGuardShip, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261031010050';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261031010050';
-import { sfx } from './audio.js?v=20261031010050';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261031010050';
-import { fxRate } from './entities.js?v=20261031010050';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261031010050';
-import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261031010050';
-import { hitBattleCounter } from './stats.js?v=20261031010050';
+} from './entities.js?v=20261031013139';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261031013139';
+import { sfx } from './audio.js?v=20261031013139';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261031013139';
+import { fxRate } from './entities.js?v=20261031013139';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261031013139';
+import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261031013139';
+import { hitBattleCounter } from './stats.js?v=20261031013139';
 // ===== DEBUG (temporary): 弾の雨 visual check — set to false to remove. While true, ranking submit is disabled. =====
 const DEBUG_RAIN_AT_START = false;
 // ===== DEBUG (temporary): 転送敵キャラ確認パレード — set to false to remove. =====
@@ -23,11 +23,11 @@ const DEBUG_UNIT_PARADE = false;
 const PARADE_SEC = 12; // per unit: ~3s glide in → body glow → signature attack → normal volleys
 /** 自機の攻撃力倍率 (10-18: ×1.3 → 10-18 夜: 2割減 ×1.04). Applies to the ship's own shots (normal / rapid / homing / spread), player and COM alike. */
 const SHIP_ATK_MUL = 1.04;
-import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261031010050';
-import { recordStrongBest, strongBestBase } from './record.js?v=20261031010050';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult, firstBonusPending, grantFirstBonus } from './meta.js?v=20261031010050';
-import { tickPersona, personaIntangible, personaShieldBlocks, PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261031010050';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261031010050';
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261031013139';
+import { recordStrongBest, strongBestBase } from './record.js?v=20261031013139';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult, firstBonusPending, grantFirstBonus } from './meta.js?v=20261031013139';
+import { tickPersona, personaIntangible, personaShieldBlocks, PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261031013139';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261031013139';
 
 const PT_MILESTONE = 500; // 10-15: 突破演出 every 500 PT earned in the match
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
@@ -443,6 +443,14 @@ export class Game {
     this.setStatus(WAIT);
   }
 
+  /** 「自機をドラッグ」 hint: hide for the rest of the match after the player's first real press in a live battle
+   *  (tutorial-card taps and presses before the battle runs do not count). */
+  noteBattlePress(trusted = true) {
+    const S = this.state;
+    if (!S || S.dragHintOff || !trusted || this.waiting || this.ended) return;
+    S.dragHintOff = true;
+  }
+
   setStatus(text) {
     this.state.statusText = text;
     this.ui.statusBar.textContent = text;
@@ -801,14 +809,14 @@ export class Game {
 
     // Pointer events (mouse / pen / one finger with pointer events)
     this._onPointerDown = (e) => {
-      if (this.state) this.state.dragHintOff = true; // 「自機をドラッグ」 hint: hide for the rest of the match after the first press
       e.preventDefault();
       const p = mapPoint(e.clientX, e.clientY);
       // Tutorial lives in the top info pane — tap to advance / skip (not on stage)
       if (p.relY < INFO_RATIO && this.handleTutorialTap(p.relX)) return;
-      if (pressItemSlot(p.canvasX, p.canvasY)) return;
+      if (pressItemSlot(p.canvasX, p.canvasY)) { this.noteBattlePress(e.isTrusted); return; }
       // Allow a thin strip past ctrl bottom (info) so overhanging ship stays grabbable
       if (p.relY < OPP_RATIO || p.relY >= ctrlBot() + 0.02) return;
+      this.noteBattlePress(e.isTrusted);
       tryGrabOrMoveShip(e.pointerId, p.relX, p.relY, true);
     };
     this._onPointerMove = (e) => {
@@ -823,14 +831,14 @@ export class Game {
 
     // Multi-touch: ship finger + item finger at once
     this._onTouchStart = (e) => {
-      if (this.state) this.state.dragHintOff = true; // 「自機をドラッグ」 hint: hide for the rest of the match after the first press
       e.preventDefault();
       for (const touch of e.changedTouches) {
         const p = mapPoint(touch.clientX, touch.clientY);
         if (p.relY < INFO_RATIO && this.handleTutorialTap(p.relX)) continue;
         // tryUsePower debounce ignores duplicate within 90ms after pointerdown
-        if (pressItemSlot(p.canvasX, p.canvasY)) continue;
+        if (pressItemSlot(p.canvasX, p.canvasY)) { this.noteBattlePress(e.isTrusted); continue; }
         if (p.relY < OPP_RATIO || p.relY >= ctrlBot() + 0.02) continue;
+        this.noteBattlePress(e.isTrusted);
         tryGrabOrMoveShip(touch.identifier, p.relX, p.relY, true);
       }
     };
