@@ -1957,7 +1957,7 @@ html, body {
 /* ホーム画面に追加 line: always one line inside the notice (shrinks with notice width) */
 .dl-note { container-type: inline-size; }
 .dl-note .dl-home { font-size: 0.8em; }
-@supports (width: 1cqi) { .dl-note .dl-home { font-size: min(0.92em, 3.25cqi); } }
+@supports (width: 1cqi) { .dl-note .dl-home { font-size: min(0.92em, 3.1cqi); } }
 
 /* ---- Title: COM win rate + enemy level panel (top) ---- */
 .com-rank-panel {
@@ -2785,3 +2785,21 @@ html, body {
 .sumaho-badge > span { display: block; text-align: center; }
 @media (max-width: 899px) { .sumaho-corner { left: max(6px, env(safe-area-inset-left, 0px)); } .sumaho-badge { font-size: 0.68rem; line-height: 1.15; padding: 3px 6px; border-radius: 10px; } }
 @media (min-width: 900px) { .sumaho-corner { position: fixed; top: max(16px, calc(env(safe-area-inset-top, 0px) + 10px)); left: auto; right: calc(50% + 254px); align-items: flex-end; } .sumaho-badge { font-size: 1rem; padding: 5px 16px; } .sumaho-qr { display: block; } .sumaho-badge > span { display: inline; } .sumaho-badge .sb-l1::after { content: " "; } }
+
+/* ===== 全文表示ルール (all languages): names, stats and descriptions are never cut off with "…" or clipped ===== */
+.deck-slot .slot-name,
+.unit-card .unit-name,
+#screen-deck .deck-slot .slot-name {
+  display: block; -webkit-line-clamp: unset; line-clamp: unset;
+  overflow: visible; text-overflow: clip; white-space: normal !important; overflow-wrap: anywhere;
+}
+.deck-slot .slot-equipped,
+#screen-deck .deck-slot .slot-equipped { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.unit-stats,
+#screen-deck .deck-slot .unit-stats.compact,
+#screen-deck .deck-detail-compact .unit-stats { flex-wrap: wrap; overflow: visible; row-gap: 1px; }
+#screen-deck .deck-detail-compact .dc-atk { white-space: normal; overflow-wrap: anywhere; }
+.item-intro-icon { width: auto; min-width: 36px; padding: 0 3px; font-size: 0.7rem; line-height: 1.05; text-align: center; overflow-wrap: anywhere; }
+.rk-tab { white-space: normal; line-height: 1.15; overflow-wrap: anywhere; }
+#screen-deck .deck-detail-compact .dc-chip { white-space: normal; overflow-wrap: anywhere; }
+@media (min-width: 900px) { .menu-brand .game-title { width: max-content; max-width: none; position: relative; left: 50%; transform: translateX(-50%); } }
