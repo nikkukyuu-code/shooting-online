@@ -10,7 +10,7 @@
  *                                      retried automatically when the ランキング screen is opened (server accepts
  *                                      `late` resubmits of an unused token for 48 h). Token is single-use → no double count.
  */
-import { sealScore } from './seal.js?v=20261030203811';
+import { sealScore } from './seal.js?v=20261030211733';
 export const RANK_API = 'https://stb-ranking.nikkukyuu.workers.dev';
 const K_ID = 'shootingOnline_rankId';
 const K_SECRET = 'shootingOnline_rankSecret';
@@ -201,14 +201,22 @@ export function shiftKey(type, key, n) {
   return `${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}-${p2(d.getUTCDate())}`;
 }
 const WD = '日月火水木金土';
+// Weekday letter: Japanese by default; other UI languages (NKI18N) use the browser's localized short weekday.
+function wdName(date) {
+  const lang = (typeof window !== 'undefined' && window.NKI18N && window.NKI18N.lang) || 'ja';
+  if (lang !== 'ja') {
+    try { return new Intl.DateTimeFormat(lang, { weekday: 'short', timeZone: 'UTC' }).format(date); } catch (e) { /* fall through */ }
+  }
+  return WD[date.getUTCDay()];
+}
 export function periodLabel(type, key) {
   if (type === 'year') return `${key}年`;
   if (type === 'month') { const [y, m] = key.split('-'); return `${y}年${Number(m)}月`; }
   const [y, m, d] = key.split('-').map(Number);
   const a = new Date(Date.UTC(y, m - 1, d));
-  if (type === 'day') return `${y}年${m}月${d}日(${WD[a.getUTCDay()]})`;
+  if (type === 'day') return `${y}年${m}月${d}日(${wdName(a)})`;
   const b = new Date(Date.UTC(y, m - 1, d + 6));
-  return `${m}/${d}(日)〜${b.getUTCMonth() + 1}/${b.getUTCDate()}(土)`;
+  return `${m}/${d}(${wdName(a)})〜${b.getUTCMonth() + 1}/${b.getUTCDate()}(${wdName(b)})`;
 }
 export const PERIOD_JA = { day: '日間', week: '週間', month: '月間', year: '年間' };
 export const BOARD_JA = { top3: 'ベスト3合計', best: '1試合最高' };
