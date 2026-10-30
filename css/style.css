@@ -2784,4 +2784,4 @@ html, body {
 .sumaho-qr figcaption { font-size: 0.62rem; font-weight: 800; color: #222; margin-top: 3px; white-space: nowrap; }
 .sumaho-badge > span { display: block; text-align: center; }
 @media (max-width: 899px) { .sumaho-corner { left: max(6px, env(safe-area-inset-left, 0px)); } .sumaho-badge { font-size: 0.68rem; line-height: 1.15; padding: 3px 6px; border-radius: 10px; } }
-@media (min-width: 900px) { .sumaho-corner { position: fixed; top: 16px; left: 20px; } .sumaho-badge { font-size: 1rem; padding: 5px 16px; } .sumaho-qr { display: block; } .sumaho-badge > span { display: inline; } .sumaho-badge .sb-l1::after { content: " "; } }
+@media (min-width: 900px) { .sumaho-corner { position: fixed; top: 16px; left: auto; right: calc(50% + 254px); align-items: flex-end; } .sumaho-badge { font-size: 1rem; padding: 5px 16px; } .sumaho-qr { display: block; } .sumaho-badge > span { display: inline; } .sumaho-badge .sb-l1::after { content: " "; } }
