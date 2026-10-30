@@ -1,8 +1,8 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261030235005';
-import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261030235005';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261030235830';
+import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261030235830';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -139,8 +139,8 @@ export function itemSlotRects(ctrl, count = MAX_ITEM_SLOTS) {
   const colW = Math.max(100, Math.min(168, ctrl.w * 0.38));
   const availH = ctrl.h - padTop - padBot - gap * (n - 1);
   let slotH = Math.max(52, availH / n);
-  // localized: never let the last slot's description run past the control pane (ja layout unchanged)
-  const fitIn = LX() && slotH > availH / n;
+  // never let the last slot's description run past the control pane
+  const fitIn = slotH > availH / n;
   if (fitIn) slotH = Math.max(36, availH / n);
   const x = ctrl.x + ctrl.w - colW - padX;
   const rects = [];
@@ -441,7 +441,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261030235005`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261030235830`;
 }
 
 function loadKindSprite(kind) {
@@ -527,8 +527,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261030235005'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261030235005'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261030235830'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261030235830'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -4090,7 +4090,7 @@ function drawControlPanel(ctx, area, localState) {
 
     // Description under button — large + high-contrast
     const descFs = Math.max(14, Math.min(20, r.w * 0.125));
-    const descH = LX() ? Math.max(12, r.h - r.btnH - 2) : Math.max(descFs + 10, r.h - r.btnH - 4);
+    const descH = Math.max(12, r.h - r.btnH - 2);
     ctx.fillStyle = filled ? 'rgba(0, 0, 0, 0.55)' : 'rgba(0, 0, 0, 0.28)';
     roundRect(ctx, r.btnX, r.descY - 2, r.btnW, descH, 8);
     ctx.fill();
@@ -4100,7 +4100,7 @@ function drawControlPanel(ctx, area, localState) {
     ctx.shadowColor = '#000';
     ctx.shadowBlur = 2;
     const jaSq = !LX() && filled && ctx.measureText(st.effect || '').width * 0.86 > r.btnW * 0.94;
-    if (LX() || jaSq) {
+    if (LX() || jaSq || descH < descFs * 1.2) {
       // localized description: full text, shrink + wrap inside its box (no squash, no cut)
       const v = T(filled ? (st.effect || '') : '空');
       const b = fitBox(ctx, v, r.btnW * 0.92, descH - 3, descFs, 8, 700, '"Hiragino Sans","Noto Sans JP",sans-serif', 3, 1.04);
