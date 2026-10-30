@@ -10,7 +10,7 @@
  *                                      retried automatically when the ランキング screen is opened (server accepts
  *                                      `late` resubmits of an unused token for 48 h). Token is single-use → no double count.
  */
-import { sealScore } from './seal.js?v=20261029212239';
+import { sealScore } from './seal.js?v=20261030163435';
 export const RANK_API = 'https://stb-ranking.nikkukyuu.workers.dev';
 const K_ID = 'shootingOnline_rankId';
 const K_SECRET = 'shootingOnline_rankSecret';
