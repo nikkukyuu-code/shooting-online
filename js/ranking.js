@@ -10,7 +10,7 @@
  *                                      retried automatically when the ランキング screen is opened (server accepts
  *                                      `late` resubmits of an unused token for 48 h). Token is single-use → no double count.
  */
-import { sealScore } from './seal.js?v=20261031032014';
+import { sealScore } from './seal.js?v=20261031140319';
 export const RANK_API = 'https://stb-ranking.nikkukyuu.workers.dev';
 const K_ID = 'shootingOnline_rankId';
 const K_SECRET = 'shootingOnline_rankSecret';
@@ -389,7 +389,24 @@ function paintMedal(cv, type, rank, S, board) {
   g.fillStyle = 'rgba(255,255,255,0.95)'; star(g, cx + R * 0.5, cy - R * 0.5, R * 0.17, 4, 0.3); g.fill();
 
   // --- period label (日/週/月/年) on the bottom of the medal + board badge ---
-  const lb = Math.max(9, S * (type === 'day' ? 0.4 : 0.36)), ly = H - labH / 2 - 0.5;
+  // Translated labels (Weekly, Daily…) are wider than one kanji: widen the pill within the medal, shrink the font,
+  // and if the word still cannot be read, abbreviate it to its first letter (W / D / M / Y …).
+  const LFONT = (px) => `900 ${px}px "Hiragino Sans","Noto Sans JP",sans-serif`;
+  const NKI = typeof window !== 'undefined' ? window.NKI18N : null;
+  const trans = !!(NKI && NKI.t && NKI.rawFill && NKI.lang && NKI.lang !== 'ja');
+  let lb = Math.max(9, S * (type === 'day' ? 0.4 : 0.36)), ly = H - labH / 2 - 0.5;
+  let txt = K.label, lfs = labH * 0.82;
+  if (trans) {
+    const maxLb = BOARD_MARK[board] ? W - 2 * (labH * 0.46 * 1.55 + 0.5) : W - 1;
+    const fitIn = (t) => { g.font = LFONT(labH * 0.82); const tw = g.measureText(t).width; const fs = Math.min(labH * 0.82, labH * 0.82 * (maxLb - labH * 0.5) / tw); return { fs, w: Math.max(lb, Math.min(maxLb, tw * fs / (labH * 0.82) + labH * 0.5)) }; };
+    let t = String(NKI.t(K.label) || K.label), r = fitIn(t);
+    if (r.fs < labH * 0.62) {
+      let first = '';
+      try { first = typeof Intl !== 'undefined' && Intl.Segmenter ? [...new Intl.Segmenter(NKI.lang, { granularity: 'grapheme' }).segment(t)][0].segment : Array.from(t)[0]; } catch (_) { first = Array.from(t)[0]; }
+      t = first.toLocaleUpperCase(NKI.lang); r = fitIn(t);
+    }
+    txt = t; lfs = r.fs; lb = r.w;
+  }
   g.save();
   const lgr = g.createLinearGradient(0, ly - labH / 2, 0, ly + labH / 2);
   lgr.addColorStop(0, K.lab[1]); lgr.addColorStop(0.45, K.lab[0]); lgr.addColorStop(1, K.lab[0]);
@@ -397,9 +414,15 @@ function paintMedal(cv, type, rank, S, board) {
   g.beginPath();
   if (g.roundRect) g.roundRect(cx - lb / 2, ly - labH / 2, lb, labH, labH / 2); else g.rect(cx - lb / 2, ly - labH / 2, lb, labH);
   g.fill(); g.stroke();
-  g.fillStyle = '#fff'; g.font = `900 ${labH * 0.82}px "Hiragino Sans","Noto Sans JP",sans-serif`;
+  g.fillStyle = '#fff'; g.font = LFONT(lfs);
   g.shadowColor = 'rgba(0,0,0,0.6)'; g.shadowBlur = 1.5;
-  g.fillText(K.label, cx, ly + labH * 0.04);
+  if (trans) {
+    const room = lb - labH * 0.3, tw = g.measureText(txt).width;
+    NKI.rawFill(g, txt, cx, ly + labH * 0.04, room);
+    if (cv.dataset) cv.dataset.labFit = Math.min(tw, room).toFixed(1) + '/' + room.toFixed(1) + '/' + txt + '/' + lfs.toFixed(1) + '/' + (cx + lb / 2).toFixed(1) + '/' + W;
+  } else {
+    g.fillText(K.label, cx, ly + labH * 0.04);
+  }
   g.restore();
   const mk = BOARD_MARK[board];
   if (mk) {

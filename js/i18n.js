@@ -400,6 +400,51 @@
     run();
     if (lang !== 'ja') setTimeout(run, 50);
   }
+  // Shrink the host's font until its text (beside the picker) fits on one line inside the host and viewport.
+  function fitWidth(host, pk) {
+    var run = function () {
+      host.style.fontSize = '';
+      var f = parseFloat(getComputedStyle(host).fontSize), min = f * 0.45, n = 0;
+      var over = function () {
+        if (host.scrollWidth > host.clientWidth) return true;
+        var cs = getComputedStyle(host), hr = host.getBoundingClientRect();
+        var pr = host.parentElement ? host.parentElement.getBoundingClientRect().right : hr.right;
+        var right = Math.min(hr.right - (parseFloat(cs.paddingRight) || 0), pr, document.documentElement.clientWidth) + 0.5;
+        var rg = document.createRange(), b = pk.getBoundingClientRect();
+        for (var i = 0; i < host.childNodes.length; i++) {
+          var c = host.childNodes[i]; if (c === pk) continue;
+          if (c.nodeType === 3) { if (!c.textContent.trim()) continue; rg.selectNodeContents(c); } else if (c.nodeType === 1) rg.selectNode(c); else continue;
+          var rs = rg.getClientRects();
+          if (rs.length > 1 && Math.abs(rs[0].top - rs[rs.length - 1].top) > 2) return true;
+          var r = rg.getBoundingClientRect();
+          if (r.right > right || r.left < b.right - 0.5) return true;
+        }
+        return false;
+      };
+      while (over() && f > min && n++ < 40) { f *= 0.96; host.style.fontSize = f + 'px'; }
+    };
+    run();
+    setTimeout(run, 60); setTimeout(run, 400);
+    try { document.fonts && document.fonts.ready.then(run); } catch (e) {}
+    window.addEventListener('resize', run);
+    window.addEventListener('load', run);
+  }
+  // Shrink one-line elements whose text overflows their box (e.g. translated buttons).
+  NK.fitOverflow = function (sel) {
+    var run = function () {
+      document.querySelectorAll(sel).forEach(function (e) {
+        if (!e.clientWidth) return;
+        var els = [e].concat([].slice.call(e.querySelectorAll('*')));
+        els.forEach(function (x) { if (x.__nkF0 === undefined) x.__nkF0 = x.style.fontSize; else x.style.fontSize = x.__nkF0; });
+        if (e.scrollWidth <= e.clientWidth) return;
+        var fs = els.map(function (x) { return parseFloat(getComputedStyle(x).fontSize); }), k = 1, n = 0;
+        while (e.scrollWidth > e.clientWidth && k > 0.5 && n++ < 20) { k *= 0.95; els.forEach(function (x, i) { x.style.fontSize = (fs[i] * k) + 'px'; }); }
+      });
+    };
+    run(); setTimeout(run, 400); setTimeout(run, 1200);
+    try { document.fonts && document.fonts.ready.then(run); } catch (e) {}
+    window.addEventListener('resize', run);
+  };
   NK.mount = function (anchor, where) {
     css();
     var el = typeof anchor === 'string' ? document.querySelector(anchor) : anchor;
@@ -410,10 +455,12 @@
     if (where === 'prepend') el.insertBefore(p, el.firstChild);
     else el.parentNode.insertBefore(p, el);
     keepLines(host, h0, p);
+    fitWidth(host, p);
     return p;
   };
   function init() {
     if (cfg.anchors) cfg.anchors.forEach(function (a) { NK.mount(a[0], a[1]); });
+    if (cfg.fitSel) NK.fitOverflow(cfg.fitSel);
     if (lang !== 'ja') { walk(document.body); doTitle(); NK.fit(); window.addEventListener('resize', function () { NK.fit(); }); }
     startObserver();
   }
