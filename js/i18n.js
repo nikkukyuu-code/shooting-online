@@ -344,7 +344,7 @@
       '.nk-lang-wrap{position:relative;display:inline-flex;vertical-align:middle;margin-right:.4em;z-index:30;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans",sans-serif;letter-spacing:0;text-transform:none}' +
       '.nk-lang-btn{display:inline-flex;align-items:center;gap:.25em;font-size:13px;font-weight:900;line-height:1.1;padding:4px 9px;border-radius:999px;border:2px solid #fff;color:#1b1300;background:linear-gradient(180deg,#ffe95c,#ffb300);box-shadow:0 0 10px rgba(255,214,0,.9),0 2px 4px rgba(0,0,0,.45);cursor:pointer;white-space:nowrap;text-shadow:none;-webkit-text-fill-color:#1b1300;font-style:normal;animation:nkLangGlow 1.4s ease-in-out infinite alternate;pointer-events:auto;max-width:42vw;overflow:hidden;text-overflow:ellipsis}' +
       '.nk-lang-lbl{position:absolute;left:50%;bottom:100%;transform:translateX(-50%);margin-bottom:1px;font-size:9px;line-height:1;font-weight:800;letter-spacing:.03em;color:#fff;-webkit-text-fill-color:#fff;text-shadow:0 1px 2px #000,0 0 3px #000;white-space:nowrap;pointer-events:none;font-style:normal;text-transform:none}' +
-      '.nk-lang-btn .nk-g{font-size:15px}.nk-lang-btn .nk-s{display:none}' +
+      '.nk-lang-btn .nk-g{font-size:15px}.nk-lang-btn .nk-s{display:none}.nk-short .nk-lang-btn .nk-n{display:none}.nk-short .nk-lang-btn .nk-s{display:inline}' +
       '@media (max-width:599px){.nk-lang-btn{font-size:12px;padding:3px 7px}.nk-lang-btn .nk-n{display:none}.nk-lang-btn .nk-s{display:inline}}' +
       (cfg.css || '') +
       '@keyframes nkLangGlow{from{box-shadow:0 0 5px rgba(255,214,0,.6),0 2px 4px rgba(0,0,0,.45)}to{box-shadow:0 0 16px rgba(255,230,60,1),0 2px 4px rgba(0,0,0,.45)}}' +
@@ -400,31 +400,47 @@
     run();
     if (lang !== 'ja') setTimeout(run, 50);
   }
-  // Shrink the host's font until its text (beside the picker) fits on one line inside the host and viewport.
+  // Title layout: the title text is centred on its panel and the picker hangs just to its left.
+  // If the picker does not fit there, the picker+title group is centred instead; the font shrinks until it all fits.
   function fitWidth(host, pk) {
+    var GAP = 4;
     var run = function () {
-      host.style.fontSize = '';
+      host.style.fontSize = ''; host.style.paddingLeft = ''; pk.classList.remove('nk-short');
+      if (!host.getClientRects().length) return;
       var f = parseFloat(getComputedStyle(host).fontSize), min = f * 0.45, n = 0;
-      var over = function () {
-        if (host.scrollWidth > host.clientWidth) return true;
-        var cs = getComputedStyle(host), hr = host.getBoundingClientRect();
-        var pr = host.parentElement ? host.parentElement.getBoundingClientRect().right : hr.right;
-        var right = Math.min(hr.right - (parseFloat(cs.paddingRight) || 0), pr, document.documentElement.clientWidth) + 0.5;
-        var rg = document.createRange(), b = pk.getBoundingClientRect();
+      var cont = (host.closest && host.closest('.menu-hero')) || host.parentElement || host;
+      var textRect = function () {
+        var rg = document.createRange(), L = Infinity, R = -Infinity, T = Infinity, B = -Infinity, k = 0;
         for (var i = 0; i < host.childNodes.length; i++) {
-          var c = host.childNodes[i]; if (c === pk) continue;
-          if (c.nodeType === 3) { if (!c.textContent.trim()) continue; rg.selectNodeContents(c); } else if (c.nodeType === 1) rg.selectNode(c); else continue;
+          var c = host.childNodes[i]; if (c === pk || c.nodeType !== 3 || !c.textContent.trim()) continue;
+          rg.selectNodeContents(c);
           var rs = rg.getClientRects();
-          if (rs.length > 1 && Math.abs(rs[0].top - rs[rs.length - 1].top) > 2) return true;
-          var r = rg.getBoundingClientRect();
-          if (r.right > right || r.left < b.right - 0.5) return true;
+          for (var j = 0; j < rs.length; j++) { if (!rs[j].width) continue; k++; L = Math.min(L, rs[j].left); R = Math.max(R, rs[j].right); T = Math.min(T, rs[j].top); B = Math.max(B, rs[j].bottom); }
+          if (rs.length > 1 && Math.abs(rs[0].top - rs[rs.length - 1].top) > 2) return null;
         }
+        return k ? { left: L, right: R, top: T, bottom: B } : null;
+      };
+      var place = function () {
+        var cr = cont.getBoundingClientRect(), vw = document.documentElement.clientWidth;
+        var lo = Math.max(cr.left, 0) + 2, hi = Math.min(cr.right, vw) - 2, hr = host.getBoundingClientRect();
+        var bw = pk.getBoundingClientRect().width + GAP, t = textRect();
+        if (!t || host.scrollWidth > host.clientWidth + 0.5) return false;
+        if (t.left - bw >= lo && t.right <= hi) { pk.style.left = (t.left - bw - hr.left) + 'px'; host.removeAttribute('data-nk-group'); return true; }
+        if (!pk.classList.contains('nk-short') && pk.querySelector('.nk-n') && getComputedStyle(pk.querySelector('.nk-n')).display !== 'none') {
+          pk.classList.add('nk-short'); // long language name → short code (EN, ID…) so the title can stay centred
+          bw = pk.getBoundingClientRect().width + GAP;
+          if (t.left - bw >= lo && t.right <= hi) { pk.style.left = (t.left - bw - hr.left) + 'px'; host.removeAttribute('data-nk-group'); return true; }
+        }
+        host.style.paddingLeft = bw + 'px';
+        t = textRect();
+        if (t && t.left - bw >= lo && t.right <= hi && host.scrollWidth <= host.clientWidth + 0.5) { pk.style.left = (t.left - bw - hr.left) + 'px'; host.setAttribute('data-nk-group', ''); return true; }
+        host.style.paddingLeft = '';
         return false;
       };
-      while (over() && f > min && n++ < 40) { f *= 0.96; host.style.fontSize = f + 'px'; }
+      while (!place() && f > min && n++ < 40) { f *= 0.96; host.style.fontSize = f + 'px'; }
     };
     run();
-    setTimeout(run, 60); setTimeout(run, 400);
+    setTimeout(run, 60); setTimeout(run, 400); setTimeout(run, 1200);
     try { document.fonts && document.fonts.ready.then(run); } catch (e) {}
     window.addEventListener('resize', run);
     window.addEventListener('load', run);
