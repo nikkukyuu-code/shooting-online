@@ -46,8 +46,8 @@
 })();
 </script>
   <meta charset="UTF-8" />
-  <script>window.NK_I18N_CFG={v:"20261031144032",fitSel:"#screen-menu .menu-btn-sub",anchors:[[".game-title","prepend"]],css:"@media (max-width:899px){.menu-brand .game-title{font-size:min(1.45rem,calc((100vw - 150px) / 12.8));letter-spacing:0.02em;margin-top:16px}}.menu-brand .game-title{display:block;position:relative;text-align:center;white-space:nowrap;box-sizing:border-box;width:auto;max-width:none;left:auto;transform:none;padding-left:0;padding-right:0;overflow:visible}.menu-brand .game-title>.nk-lang-wrap{position:absolute;top:50%;left:0;margin:0;transform:translateY(-50%)}html:not([lang=ja]) .hub-row{flex-wrap:wrap;justify-content:center;row-gap:4px}html:not([lang=ja]) #screen-menu .first-bonus-note{white-space:normal;border-radius:10px}"};</script>
-  <script src="js/i18n.js?v=20261031144032"></script>
+  <script>window.NK_I18N_CFG={v:"20261031212724",fitSel:"#screen-menu .menu-btn-sub",anchors:[[".game-title","prepend"]],css:"@media (max-width:899px){.menu-brand .game-title{font-size:min(1.45rem,calc((100vw - 150px) / 12.8));letter-spacing:0.02em;margin-top:16px}}.menu-brand .game-title{display:block;position:relative;text-align:center;white-space:nowrap;box-sizing:border-box;width:auto;max-width:none;left:auto;transform:none;padding-left:0;padding-right:0;overflow:visible}.menu-brand .game-title>.nk-lang-wrap{position:absolute;top:50%;left:0;margin:0;transform:translateY(-50%)}html:not([lang=ja]) .hub-row{flex-wrap:wrap;justify-content:center;row-gap:4px}html:not([lang=ja]) #screen-menu .first-bonus-note{white-space:normal;border-radius:10px}"};</script>
+  <script src="js/i18n.js?v=20261031212724"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
@@ -55,7 +55,7 @@
   <meta name="theme-color" content="#1a0a08" />
   <script>
   (function () {
-    var PAGE_LABEL = '2026-10-31 14:40:32';
+    var PAGE_LABEL = '2026-10-31 21:27:24';
     var busy = false;
     function check() {
       if (busy || window.__stbScreen === 'game' || document.visibilityState === 'hidden') return;
@@ -120,7 +120,7 @@
   }
   </script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="css/style.css?v=20261031144032" />
+  <link rel="stylesheet" href="css/style.css?v=20261031212724" />
 <link rel="apple-touch-icon" href="/shooting-online/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-title" content="スペトリ" />
 <script>
@@ -140,7 +140,14 @@
     function once(k, o) { try { if (sessionStorage.getItem(k)) return; sessionStorage.setItem(k, '1'); } catch (e) { return; } send(o); }
     var ref = ''; try { if (document.referrer) { var u = new URL(document.referrer); ref = u.origin + u.pathname; } } catch (e) {}
     var yt = ''; try { yt = sessionStorage.getItem('nkSrcYt') === '1' || /[?&]src=yt(&|$)/.test(location.search) ? 'yt' : ''; } catch (e) {}
-    setTimeout(function () { once('nkVL:' + P, { ev: 'load', s: yt, r: ref, wd: navigator.webdriver ? 1 : 0 }); }, 0);
+    /* 入口の目印 (?ref=android → app:android / ?ref=itch → itch)。タブ内ではsessionStorageで保持 */
+    var src = yt; try {
+      var rf = new URLSearchParams(location.search).get('ref');
+      var RM = { android: 'app:android', itch: 'itch' };
+      if (RM[rf]) sessionStorage.setItem('nkSrcRef', RM[rf]);
+      src = sessionStorage.getItem('nkSrcRef') || yt;
+    } catch (e) {}
+    setTimeout(function () { once('nkVL:' + P, { ev: 'load', s: src, r: ref, wd: navigator.webdriver ? 1 : 0 }); }, 0);
     window.__nkVisitBattle = function () { send({ ev: 'battle' }) /* 対戦ごと */; };
     window.__nkVisitShare = function () { send({ ev: 'share' }); }; /* 共有ボタンを押した回数（毎回） */
     window.__nkVisitRank = function () { send({ ev: 'rank' }); }; /* ランキングを押した回数（毎回・待たない） */
@@ -174,11 +181,11 @@
       <div class="sky sky-space" aria-hidden="true"></div>
       <div class="sumaho-corner" id="sumaho-corner">
         <span class="sumaho-badge" id="sumaho-badge"><span class="sb-l1">📱スマホ</span><span class="sb-l2">推奨</span></span>
-        <figure class="sumaho-qr"><img src="assets/site-qr.svg?v=20261031144032" alt="スマホで開くQRコード https://nikkukyuu-code.github.io/shooting-online/" width="104" height="104" decoding="async" /><figcaption>スマホで読み取って遊ぼう</figcaption></figure>
+        <figure class="sumaho-qr"><img src="assets/site-qr.svg?v=20261031212724" alt="スマホで開くQRコード https://nikkukyuu-code.github.io/shooting-online/" width="104" height="104" decoding="async" /><figcaption>スマホで読み取って遊ぼう</figcaption></figure>
       </div>
       <div class="menu-pt" id="menu-pt" aria-live="polite">いまの持ちPT 0</div>
       <div class="menu-hero">
-        <img class="menu-hero-art" src="assets/title-hero.svg?v=20261031144032" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
+        <img class="menu-hero-art" src="assets/title-hero.svg?v=20261031212724" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
         <header class="menu-brand">
           <h1 class="game-title">スペーストリックバトル</h1>
           <p class="game-subtitle">オンライン対戦</p>
@@ -228,7 +235,7 @@
         <p class="menu-hint">部屋名→入室（ゲスト）／部屋を作る（ホスト）</p>
         <div class="hub-row"><a class="hub-link" href="https://nikkukyuu-code.github.io/">トップページへ</a><a class="hub-link mugen-link" href="https://freegame-mugen.jp/cms/mt-cp.cgi?__mode=view&amp;blog_id=1&amp;id=13413" target="_blank" rel="noopener">フリーゲーム夢現</a><button type="button" class="hub-link share-btn" data-share-btn data-share-title="スペーストリックバトル" data-share-text="ブラウザゲーム「スペーストリックバトル」 ほかのゲームもこちらから遊べます">共有</button></div>
         <div id="app-meta" class="app-meta">
-          <span class="ver-pre" style="white-space:nowrap">バージョン <span id="app-version">2026-10-31 14:40:32</span></span>
+          <span class="ver-pre" style="white-space:nowrap">バージョン <span id="app-version">2026-10-31 21:27:24</span></span>
           <span class="meta-sep">·</span>
           <span id="app-visits">アクセス …</span>
           <span class="meta-sep" hidden>·</span>
@@ -376,7 +383,7 @@
       <div id="ui-overlay">
         <button type="button" id="btn-stop" class="stop-btn">対戦終了</button>
         <div id="match-timer" class="match-timer" hidden aria-live="polite"><span class="mt-main"></span><span class="mt-sub" hidden></span></div>
-        <div id="game-version" class="game-version">2026-10-31 14:40:32</div>
+        <div id="game-version" class="game-version">2026-10-31 21:27:24</div>
         <div id="status-bar" class="status-bar">対戦相手を待っています</div>
         <div id="vs-medals" class="vs-medals hidden" aria-live="polite"></div>
       </div>
@@ -434,7 +441,7 @@
     try { new MutationObserver(sched).observe(document.getElementById('menu-pt'), { childList: true, characterData: true, subtree: true }); } catch (e) {}
   })();
   </script>
-  <script type="module" src="js/main.js?v=20261031144032"></script>
+  <script type="module" src="js/main.js?v=20261031212724"></script>
 <script>
 /* 共有ボタン: navigator.share → fallback copy + toast (X / LINE) */
 (function () {
