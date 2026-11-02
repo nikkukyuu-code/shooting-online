@@ -1,0 +1,1349 @@
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261102191200';
+import { Net } from './net.js?v=20261102191200';
+import { Game } from './game.js?v=20261102191200';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261102191200';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261102191200';
+import { resetDeckToDefault } from './meta.js?v=20261102191200';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261102191200';
+import { loadBattleCount } from './stats.js?v=20261102191200';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261102191200';
+import { ALL_KIND_IDS } from './catalog.js?v=20261102191200';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261102191200';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261102191200';
+import { seedStrongBest } from './record.js?v=20261102191200';
+
+registerEnemyKinds(ALL_KIND_IDS);
+setKindTier({
+  ...Object.fromEntries(ALL_KIND_IDS.map((id) => [id, (CATALOG_BY_ID[id] && CATALOG_BY_ID[id].tier) || id])),
+  ...WAVE_KIND_TIERS,
+});
+
+const $ = (sel) => document.querySelector(sel);
+
+const screens = {
+  menu: $('#screen-menu'),
+  game: $('#screen-game'),
+  deck: $('#screen-deck'),
+  shop: $('#screen-shop'),
+  zukan: $('#screen-zukan'),
+  ranking: $('#screen-ranking'),
+};
+
+const els = {
+  btnCpuNormal: $('#btn-cpu-normal'),
+  btnCpuStrong: $('#btn-cpu-strong'),
+  btnFind: $('#btn-find'),
+  btnCreate: $('#btn-create'),
+  btnStart: $('#btn-start'),
+  btnDeck: $('#btn-deck'),
+  btnShop: $('#btn-shop'),
+  btnZukan: $('#btn-zukan'),
+  btnTutorial: $('#btn-tutorial'),
+  btnDeckBack: $('#btn-deck-back'),
+  btnShopBack: $('#btn-shop-back'),
+  btnZukanBack: $('#btn-zukan-back'),
+  fieldFind: $('#field-find-status'),
+  fieldCode: $('#field-room-code'),
+  inputRoom: $('#input-room-name'),
+  btnStop: $('#btn-stop'),
+  statusBar: $('#status-bar'),
+  endOverlay: $('#end-overlay'),
+  endMessage: $('#end-message'),
+  btnAgain: $('#btn-again'),
+  canvas: $('#game'),
+  menuPt: $('#menu-pt'),
+  shopPt: $('#shop-pt'),
+  deckSlots: $('#deck-slots'),
+  deckOwned: $('#deck-owned'),
+  deckHint: $('#deck-hint'),
+  deckDetail: $('#deck-detail'),
+  deckItemsList: $('#deck-items-list'),
+  shopList: $('#shop-list'),
+  shopDetail: $('#shop-detail'),
+  btnShopBuy: $('#btn-shop-buy'),
+  shopMsg: $('#shop-msg'),
+  shopItemsList: $('#shop-items-list'),
+  zukanUnits: $('#zukan-units'),
+  zukanItems: $('#zukan-items'),
+  zukanUnitDetail: $('#zukan-unit-detail'),
+  zukanTabUnits: $('#zukan-tab-units'),
+  zukanTabItems: $('#zukan-tab-items'),
+};
+
+let net = null;
+let game = null;
+let busy = false;
+let selectedDeckSlot = 0;
+/** Deck screen: unit tapped in 所持ユニット (preview only — equipped only after「はい」). */
+let deckPreviewId = null;
+let selectedShopId = null;
+let selectedZukanId = null;
+
+function show(screen) {
+  Object.values(screens).forEach((s) => s && s.classList.remove('active'));
+  if (screens[screen]) screens[screen].classList.add('active');
+  window.__stbScreen = screen;
+  if (screen === 'menu' && typeof refreshMenuMedals === 'function') setTimeout(() => { try { refreshMenuMedals(); } catch (_) {} }, 0);
+  if (screen === 'menu' && window.__stbCheckUpdate) setTimeout(() => { if (window.__stbScreen === 'menu') window.__stbCheckUpdate(); }, 1500);
+}
+
+function isHostingWaiting() {
+  return !!(net && net.role === 'host' && !game);
+}
+
+function restoreStartButton() {
+  els.btnStart.textContent = '入室';
+  els.btnStart.disabled = false;
+}
+
+function setHostingWaitingUI(on) {
+  if (on) {
+    els.btnStart.textContent = '相手の入室待ち';
+    els.btnStart.disabled = true;
+  } else {
+    restoreStartButton();
+  }
+}
+
+function setBusy(v) {
+  busy = v;
+  if (els.btnCpuNormal) els.btnCpuNormal.disabled = v;
+  if (els.btnCpuStrong) els.btnCpuStrong.disabled = v;
+  els.btnFind.disabled = v;
+  els.btnCreate.disabled = v;
+  if (els.btnDeck) els.btnDeck.disabled = v;
+  if (els.btnShop) els.btnShop.disabled = v;
+  if (els.btnZukan) els.btnZukan.disabled = v;
+  els.btnStart.disabled = v || isHostingWaiting();
+}
+
+function cleanupGame() {
+  if (game) {
+    game.destroy();
+    game = null;
+  }
+  if (net) {
+    try { net.destroy(); } catch (_) {}
+    net = null;
+  }
+}
+
+function refreshPtDisplay(meta) {
+  const m = meta || loadMeta();
+  const label = `いまの持ちPT ${m.pt.toLocaleString('ja-JP')}`;
+  if (els.menuPt) els.menuPt.textContent = label;
+  if (els.shopPt) els.shopPt.textContent = label;
+  refreshComRank();
+}
+
+/** Title: COM win rate + enemy level per difficulty (COM matches only). */
+function refreshComRank() {
+  try {
+    { const fb = document.getElementById('first-bonus-note'); if (fb) fb.hidden = !firstBonusPending(); }
+    for (const d of ['normal', 'strong']) {
+      const r = comRankInfo(d);
+      const row = document.getElementById(`cr-${d}`);
+      if (row) {
+        row.querySelector('.cr-rate').textContent = r.n ? `勝率 ${r.pct}%` : '勝率 ―';
+        row.querySelector('.cr-rec').textContent = `（${r.w}勝${r.l}敗）`;
+        row.querySelector('.cr-lv-n').textContent = String(r.level);
+      }
+      const tag = document.getElementById(`cpu-lv-${d}`);
+      if (tag) tag.textContent = `敵Lv${r.level}`;
+    }
+    const mx = document.getElementById('cr-max');
+    if (mx) mx.textContent = String(COM_LEVEL_MAX);
+  } catch (_) { /* ignore */ }
+}
+
+function spriteUrl(id) {
+  return `assets/enemies/${id}/0.png?v=20261102191200`;
+}
+
+function unitName(id) {
+  return (CATALOG_BY_ID[id] && CATALOG_BY_ID[id].name) || id;
+}
+
+function rarityLabel(r) {
+  return RARITY_JA[r] || r || '';
+}
+
+/** 攻撃力 / 防御力 / ライフ (sent HP) chips. compact = short labels for the narrow deck slots. */
+function statsHtml(id, compact = false) {
+  const st = unitStats(id);
+  if (!st) return '';
+  const hp = sentUnitHp(id); // actual HP when this unit is sent (same for player / COM / online)
+  if (compact) {
+    return `<span class="unit-stats compact"><span class="st st-atk">攻${st.atk}</span><span class="st st-def">防${st.def}</span><span class="st st-hp" title="ライフ">♥${hp}</span></span>`;
+  }
+  return `<span class="unit-stats"><span class="st st-atk">攻撃力 ${st.atk}</span><span class="st st-def">防御力 ${st.def}</span><span class="st st-hp">ライフ ${hp}</span></span>`;
+}
+
+const NEW_BADGE = '<span class="unit-new-badge" aria-label="新しく購入">NEW</span>';
+
+/** Show a small NEW dot on the デッキ menu button while any purchased unit is still unseen. */
+function refreshDeckNewDot() {
+  if (!els.btnDeck) return;
+  const n = loadNewUnits().size;
+  els.btnDeck.classList.toggle('has-new', n > 0);
+}
+
+/** 転送キャラの個性: short chip「動き・必殺」 and the one-line description (js/sentai.js PERSONA). */
+function personaChip(id) {
+  const p = PERSONA[id];
+  if (!p) return '';
+  return `${MOVE_JA[p.mv] || ''}・${p.sp ? SPECIAL_JA[p.sp] : SPECIAL_JA.dash}`;
+}
+function personaLine(id) {
+  const p = PERSONA[id];
+  return p ? p.ja : '';
+}
+
+function renderUnitDetail(container, unitId, opts = {}) {
+  if (!container) return;
+  if (!unitId) {
+    container.innerHTML = `<p class="detail-empty">${opts.empty || 'ユニットを選択すると攻撃パターンを表示します'}</p>`;
+    return;
+  }
+  const intro = unitIntro(unitId);
+  if (opts.compact) {
+    // Deck screen: compact horizontal card (pinned above the scrolling list)
+    const chip = personaChip(unitId);
+    const line = personaLine(unitId) || intro.blurb;
+    container.innerHTML = `
+      <div class="dc-art"><img src="${spriteUrl(unitId)}" alt="" width="48" height="48" /></div>
+      <div class="dc-body">
+        <div class="dc-row1"><span class="dc-name">${intro.name}</span><span class="rarity ${intro.rarity}">${rarityLabel(intro.rarity)}</span><span class="dc-role">${intro.role}</span></div>
+        <div class="dc-row2">${statsHtml(unitId)}${chip ? `<span class="dc-chip">${chip}</span>` : ''}</div>
+        <p class="dc-desc">${line}<span class="dc-atk">攻撃：${intro.attack}</span></p>
+      </div>
+    `;
+    return;
+  }
+  const price = opts.showPrice && CATALOG_BY_ID[unitId]
+    ? `<span class="detail-price">${CATALOG_BY_ID[unitId].price <= 0 ? '無料' : `${shopPrice(CATALOG_BY_ID[unitId])} PT`}</span>`
+    : '';
+  container.innerHTML = `
+    <div class="detail-sprite">
+      <img src="${spriteUrl(unitId)}" alt="" width="72" height="72" />
+    </div>
+    <div class="detail-body">
+      <div class="detail-name">${intro.name}</div>
+      <div class="detail-meta">
+        <span class="rarity ${intro.rarity}">${rarityLabel(intro.rarity)}</span>
+        <span class="detail-role">${intro.role}</span>
+        ${price}
+      </div>
+      <div class="detail-stats">${detailStatsHtml(unitId)}</div>
+      ${personaChip(unitId) ? `<div class="detail-attack"><span class="detail-label">個性</span>${personaChip(unitId)}</div><p class="detail-blurb"><b>${personaLine(unitId)}</b></p>` : ''}
+      <div class="detail-attack"><span class="detail-label">攻撃</span>${intro.attack}</div>
+      <p class="detail-blurb">${intro.blurb}</p>
+    </div>
+  `;
+}
+
+function detailStatsHtml(id) {
+  const st = unitStats(id);
+  if (!st) return '';
+  const bar = (v) => Math.max(6, Math.min(100, Math.round(v / 150 * 100)));
+  return `
+    <div class="stat-row st-atk"><span class="stat-name">攻撃力</span><span class="stat-bar"><i style="width:${bar(st.atk)}%"></i></span><b>${st.atk}</b></div>
+    <div class="stat-row st-def"><span class="stat-name">防御力</span><span class="stat-bar"><i style="width:${bar(st.def)}%"></i></span><b>${st.def}</b></div>
+    <div class="stat-row st-hp"><span class="stat-name">ライフ</span><span class="stat-bar"><i style="width:${Math.max(6, Math.min(100, Math.round((sentUnitHp(id) || 0) / 160 * 100)))}%"></i></span><b>${sentUnitHp(id)}</b></div>
+  `;
+}
+
+function renderItemsIntro(container) {
+  if (!container) return;
+  container.innerHTML = '';
+  const note = document.createElement('p');
+  note.className = 'items-intro-note';
+  note.textContent = '戦闘中の所持は最大3つ。枠が埋まっているときに拾うと、そのアイテムは消えます（回復は即時なので枠を使いません）。';
+  container.appendChild(note);
+  for (const p of POWERUPS) {
+    const row = document.createElement('div');
+    row.className = 'item-intro-row';
+    row.innerHTML = `
+      <span class="item-intro-icon" style="background:${p.color}">${p.icon}</span>
+      <div class="item-intro-text">
+        <div class="item-intro-name">${p.label}</div>
+        <div class="item-intro-effect">${p.effect}</div>
+        <p class="item-intro-desc">${p.desc || p.effect}</p>
+      </div>
+    `;
+    container.appendChild(row);
+  }
+}
+
+/** Deck detail card: inline「変更」button (right side). Only this button equips the shown unit. */
+function renderDeckChangeAction(meta, shownId) {
+  const card = els.deckDetail;
+  if (!card || !shownId) return;
+  const slot = selectedDeckSlot;
+  const inSlot = meta.deck[slot] === shownId;
+  const existing = meta.deck.indexOf(shownId);
+  const box = document.createElement('div');
+  box.className = 'dc-action';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.id = 'btn-deck-change';
+  const sub = document.createElement('span');
+  sub.className = 'dc-action-sub';
+  if (inSlot) {
+    btn.className = 'dc-change-btn is-equipped';
+    btn.textContent = '装備中';
+    btn.disabled = true;
+    sub.textContent = `スロット${slot + 1}`;
+  } else {
+    btn.className = 'dc-change-btn';
+    btn.textContent = '変更';
+    sub.textContent = existing >= 0 ? `⇄スロット${slot + 1}` : `→スロット${slot + 1}`;
+    btn.setAttribute('aria-label', `${unitName(shownId)} をスロット${slot + 1}に装備` + (existing >= 0 ? `（${unitName(meta.deck[slot])}はスロット${existing + 1}へ）` : ''));
+    btn.addEventListener('click', () => {
+      const name = unitName(shownId);
+      const prevName = unitName(meta.deck[slot]);
+      const res = setDeckSlot(loadMeta(), slot, shownId);
+      if (res.ok && els.deckHint) {
+        if (res.reason === 'swap') {
+          els.deckHint.textContent = `${name}をスロット${slot + 1}に装備しました（${prevName}はスロット${(res.swappedFrom ?? 0) + 1}へ）`;
+        } else if (res.reason === 'same') {
+          els.deckHint.textContent = `${name} はすでにスロット ${slot + 1} です`;
+        } else {
+          els.deckHint.textContent = `${name}をスロット${slot + 1}に装備しました`;
+        }
+      }
+      deckPreviewId = null;
+      renderDeckScreen();
+      if (res.ok) refreshPtDisplay(res.meta);
+    });
+  }
+  box.append(btn, sub);
+  card.appendChild(box);
+}
+
+function renderDeckScreen() {
+  const meta = loadMeta();
+  refreshPtDisplay(meta);
+  if (!els.deckSlots || !els.deckOwned) return;
+
+  const selectedId = (deckPreviewId && meta.owned.includes(deckPreviewId)) ? deckPreviewId : meta.deck[selectedDeckSlot];
+  renderUnitDetail(els.deckDetail, selectedId, {
+    empty: 'スロットかユニットをタップすると、ここに詳細を表示します',
+    compact: true,
+  });
+  renderDeckChangeAction(meta, selectedId);
+
+  els.deckSlots.innerHTML = '';
+  for (let i = 0; i < DECK_SIZE; i++) {
+    const id = meta.deck[i];
+    const intro = unitIntro(id);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'deck-slot' + (i === selectedDeckSlot ? ' selected' : '');
+    btn.dataset.slot = String(i);
+    btn.setAttribute('aria-label', `${i === selectedDeckSlot ? '変更先（選択中）' : '装備中'} スロット${i + 1} ${unitName(id)}`);
+    if (i === selectedDeckSlot) btn.setAttribute('aria-current', 'true');
+    btn.innerHTML = `
+      <span class="slot-equipped">${i === selectedDeckSlot ? `▼変更先・${i + 1}` : `装備中 · ${i + 1}`}</span>
+      <div class="slot-art"><img src="${spriteUrl(id)}" alt="" width="56" height="56" loading="lazy" /></div>
+      <span class="slot-name">${unitName(id)}</span>
+      <span class="slot-attack">${personaChip(id) || intro.attack.split('／')[0]}</span>
+      ${statsHtml(id, true)}
+    `;
+    btn.addEventListener('click', () => {
+      selectedDeckSlot = i;
+      deckPreviewId = null;
+      renderDeckScreen();
+      if (els.deckHint) {
+        els.deckHint.textContent = `スロット ${i + 1} を選択中 — 下の所持ユニットをタップで入れ替え（重複不可）`;
+      }
+    });
+    els.deckSlots.appendChild(btn);
+  }
+
+  els.deckOwned.innerHTML = '';
+  const newSet = loadNewUnits();
+  // Freshly purchased (NEW) units first so they are easy to find
+  const ownedUnits = CATALOG.filter((u) => meta.owned.includes(u.id))
+    .sort((a, b) => (newSet.has(b.id) ? 1 : 0) - (newSet.has(a.id) ? 1 : 0));
+  for (const u of ownedUnits) {
+    const isNew = newSet.has(u.id) && !meta.deck.includes(u.id);
+    const inDeck = meta.deck.includes(u.id);
+    const deckSlot = meta.deck.indexOf(u.id);
+    const intro = unitIntro(u.id);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'unit-card' + (inDeck ? ' in-deck' : '') + (isNew ? ' is-new' : '') + (u.id === deckPreviewId ? ' picked' : '');
+    if (u.rarity) btn.dataset.rarity = u.rarity;
+    btn.innerHTML = `
+      ${inDeck ? `<span class="unit-badge equipped">装備中<span class="unit-badge-slot">スロット${deckSlot + 1}</span></span>` : ''}
+      ${isNew ? NEW_BADGE : ''}
+      <div class="unit-art"><img src="${spriteUrl(u.id)}" alt="" width="64" height="64" loading="lazy" /></div>
+      <span class="unit-name">${u.name}</span>
+      <span class="unit-attack-chip">${personaChip(u.id) || intro.attack.split('／')[0]}</span>
+      ${statsHtml(u.id)}
+      <span class="rarity ${u.rarity}">${rarityLabel(u.rarity)}</span>
+    `;
+    btn.addEventListener('click', () => {
+      // NEW rule: tapping the card in the deck screen (= view) clears its NEW mark
+      clearUnitNew(u.id);
+      refreshDeckNewDot();
+      // Tap = preview only. The deck changes only after「変更しますか？」→「はい」.
+      deckPreviewId = u.id;
+      const cur = loadMeta();
+      const slot = selectedDeckSlot;
+      const existing = cur.deck.indexOf(u.id);
+      if (els.deckHint) {
+        els.deckHint.textContent = existing === slot
+          ? `${u.name} はすでにスロット ${slot + 1} に装備中です`
+          : `${u.name} を表示中 —「変更」でスロット ${slot + 1} に装備`;
+      }
+      renderDeckScreen();
+    });
+    els.deckOwned.appendChild(btn);
+  }
+
+  renderItemsIntro(els.deckItemsList);
+}
+
+function clearShopMsg() {
+  if (!els.shopMsg) return;
+  els.shopMsg.textContent = '';
+  els.shopMsg.hidden = true;
+}
+
+function showShopMsg(text, ok = false) {
+  if (!els.shopMsg) return;
+  els.shopMsg.classList.toggle('ok', !!ok);
+  els.shopMsg.textContent = text;
+  els.shopMsg.hidden = false;
+}
+
+function updateShopBuyButton(meta) {
+  const btn = els.btnShopBuy;
+  if (!btn) return;
+  const u = selectedShopId ? CATALOG_BY_ID[selectedShopId] : null;
+  if (!u) {
+    btn.disabled = true;
+    btn.textContent = '購入';
+    return;
+  }
+  if (meta.owned.includes(u.id)) {
+    btn.disabled = true;
+    btn.textContent = '所持済';
+    return;
+  }
+  btn.disabled = false;
+  btn.textContent = u.price <= 0 ? '入手（無料）' : `購入（${shopPrice(u)} PT）`;
+}
+
+function buySelectedShopUnit() {
+  const u = selectedShopId ? CATALOG_BY_ID[selectedShopId] : null;
+  if (!u) return;
+  const cur = loadMeta();
+  if (cur.owned.includes(u.id)) return;
+  if (cur.pt < shopPrice(u)) {
+    showShopMsg(`ポイントが足りません（あと ${shopPrice(u) - cur.pt} PT）`);
+    return;
+  }
+  const res = buyUnit(cur, u.id);
+  clearShopMsg();
+  if (res.ok) {
+    refreshPtDisplay(res.meta);
+    refreshDeckNewDot();
+    showShopMsg(`${u.name} を購入しました！ デッキ編集で「NEW」表示されます`, true);
+  }
+  renderShopScreen();
+}
+
+function renderShopScreen() {
+  const meta = loadMeta();
+  refreshPtDisplay(meta);
+  if (!els.shopList) return;
+
+  if (!selectedShopId) {
+    const first = CATALOG.find((u) => !meta.owned.includes(u.id)) || CATALOG[0];
+    selectedShopId = first ? first.id : null;
+  }
+  renderUnitDetail(els.shopDetail, selectedShopId, { showPrice: true });
+  updateShopBuyButton(meta);
+
+  els.shopList.innerHTML = '';
+
+  const list = [...CATALOG].sort((a, b) => {
+    const ao = meta.owned.includes(a.id) ? 1 : 0;
+    const bo = meta.owned.includes(b.id) ? 1 : 0;
+    if (ao !== bo) return ao - bo;
+    return a.price - b.price;
+  });
+
+  const newSet = loadNewUnits();
+  for (const u of list) {
+    const owned = meta.owned.includes(u.id);
+    const isNew = owned && newSet.has(u.id);
+    const intro = unitIntro(u.id);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'unit-card' + (owned ? ' owned' : '') + (isNew ? ' is-new' : '') + (selectedShopId === u.id ? ' selected-card' : '');
+    if (u.rarity) btn.dataset.rarity = u.rarity;
+    const priceLabel = owned ? '所持済' : (u.price <= 0 ? '無料' : `${shopPrice(u)} PT`);
+    btn.innerHTML = `
+      ${owned ? '<span class="unit-badge">所持</span>' : ''}
+      ${isNew ? NEW_BADGE : ''}
+      <div class="unit-art"><img src="${spriteUrl(u.id)}" alt="" width="72" height="72" loading="lazy" /></div>
+      <span class="unit-name">${u.name}</span>
+      <span class="unit-attack-chip">${personaChip(u.id) || intro.attack.split('／')[0]}</span>
+      ${statsHtml(u.id)}
+      <span class="rarity ${u.rarity}">${rarityLabel(u.rarity)}</span>
+      <span class="unit-price">${priceLabel}</span>
+    `;
+    btn.addEventListener('click', () => {
+      // Selecting only shows details — purchase happens via the 購入 button.
+      selectedShopId = u.id;
+      clearShopMsg();
+      renderShopScreen();
+    });
+    btn.dataset.id = u.id;
+    els.shopList.appendChild(btn);
+  }
+
+  renderItemsIntro(els.shopItemsList);
+}
+
+function renderZukanScreen() {
+  if (!selectedZukanId) selectedZukanId = CATALOG[0]?.id || null;
+  renderUnitDetail(els.zukanUnitDetail, selectedZukanId);
+
+  if (els.zukanUnits) {
+    els.zukanUnits.innerHTML = '';
+    for (const u of CATALOG) {
+      const intro = unitIntro(u.id);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'unit-card' + (selectedZukanId === u.id ? ' selected-card' : '');
+      if (u.rarity) btn.dataset.rarity = u.rarity;
+      btn.innerHTML = `
+        <div class="unit-art"><img src="${spriteUrl(u.id)}" alt="" width="72" height="72" loading="lazy" /></div>
+        <span class="unit-name">${u.name}</span>
+        <span class="unit-attack-chip">${personaChip(u.id) || intro.attack.split('／')[0]}</span>
+        ${statsHtml(u.id)}
+        <span class="rarity ${u.rarity}">${rarityLabel(u.rarity)}</span>
+      `;
+      btn.addEventListener('click', () => {
+        selectedZukanId = u.id;
+        renderZukanScreen();
+      });
+      els.zukanUnits.appendChild(btn);
+    }
+  }
+  renderItemsIntro(els.zukanItems);
+}
+
+function setZukanTab(tab) {
+  const units = tab === 'units';
+  els.zukanTabUnits?.classList.toggle('active', units);
+  els.zukanTabItems?.classList.toggle('active', !units);
+  els.zukanUnits?.classList.toggle('hidden', !units);
+  els.zukanUnitDetail?.classList.toggle('hidden', !units);
+  els.zukanItems?.classList.toggle('hidden', units);
+}
+
+function goMenu() {
+  cleanupGame();
+  document.getElementById('peer-gone')?.remove(); // 10-15 fix: never leave the PvP notice on the menu
+  setBusy(false);
+  els.fieldFind.value = '';
+  els.fieldCode.value = '';
+  restoreStartButton();
+  refreshPtDisplay();
+  refreshDeckNewDot();
+  loadBattleCount(document.getElementById('app-battles'));
+  show('menu');
+}
+
+function startGameSession({ bot = false, comDifficulty = 'strong' } = {}) {
+  show('game');
+  els.endOverlay.classList.add('hidden');
+  { const m = document.getElementById('end-rank-msg'); if (m) { m.hidden = true; m.textContent = ''; } }
+  { const v = document.getElementById('vs-medals'); if (v) { v.classList.add('hidden'); v.dataset.key = ''; } }
+  game = new Game(els.canvas, {
+    statusBar: els.statusBar,
+    endOverlay: els.endOverlay,
+    endMessage: els.endMessage,
+  });
+  game.start({ net, bot, comDifficulty });
+}
+
+/**
+ * 10-04k: loading screen while match assets are prepared. Shown only if prep takes > 150 ms.
+ * 「準備中… N%」 + gauge + spinning pixel coin; work is split across frames so it never looks frozen.
+ */
+let _prepOv = null;
+function prepOverlay() {
+  if (_prepOv) return _prepOv;
+  const ov = document.createElement('div');
+  ov.id = 'prep-overlay';
+  ov.setAttribute('role', 'status');
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9999;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(6,6,16,0.92);color:#ffe27a;font:bold 18px sans-serif;';
+  ov.innerHTML = `<canvas width="12" height="12" style="width:48px;height:48px;image-rendering:pixelated;animation:prepSpin 0.8s linear infinite"></canvas>
+    <div class="prep-txt">準備中… 0%</div>
+    <div style="width:min(70vw,320px);height:12px;border:2px solid #ffe27a;border-radius:3px;background:#221a08;overflow:hidden"><div class="prep-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#f8b42c,#fff4a8)"></div></div>`;
+  const st = document.createElement('style');
+  st.textContent = '@keyframes prepSpin{0%{transform:scaleX(1)}50%{transform:scaleX(0.08)}100%{transform:scaleX(1)}}';
+  document.head.appendChild(st);
+  const g = ov.querySelector('canvas').getContext('2d');
+  for (let y = 0; y < 12; y++) for (let x = 0; x < 12; x++) {
+    const d = Math.hypot(x - 5.5, y - 5.5) / 6; if (d > 1) continue;
+    g.fillStyle = d > 0.8 ? '#8a5a00' : (d > 0.58 && d < 0.72) ? '#c89000' : (x < 5 && y < 5 && d < 0.5) ? '#fff8b0' : '#f8d828';
+    g.fillRect(x, y, 1, 1);
+  }
+  document.body.appendChild(ov);
+  _prepOv = ov;
+  return ov;
+}
+let _lastStartMs = 0; // how long the previous match start blocked (decides whether to show the screen)
+async function withMatchPrep(run) {
+  const ov = prepOverlay();
+  const txt = ov.querySelector('.prep-txt'), bar = ov.querySelector('.prep-bar');
+  const t0 = performance.now();
+  let shown = false;
+  const show = () => { if (!shown) { shown = true; ov.style.display = 'flex'; } };
+  const showT = setTimeout(show, 150);
+  if (!isMatchPrepDone()) {
+    try {
+      await prepareMatchAssets((u) => { const n = Math.round(u * 100); txt.textContent = `準備中… ${n}%`; bar.style.width = `${n}%`; });
+    } catch (e) { console.warn('prep failed', e); }
+  }
+  clearTimeout(showT);
+  // The match start itself (canvas set-up + first frames) can block ~0.1–0.5 s on phones:
+  // keep the loading screen (the coin spin runs on the compositor) up through it when it is slow.
+  if (shown || _lastStartMs > 150 || performance.now() - t0 > 150) {
+    show(); txt.textContent = '準備中… 100%'; bar.style.width = '100%';
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  }
+  const s0 = performance.now();
+  run();
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  _lastStartMs = performance.now() - s0;
+  ov.style.display = 'none';
+}
+
+function startCpuMatch(comDifficulty) {
+  if (busy) return;
+  withMatchPrep(() => startCpuMatchNow(comDifficulty));
+}
+function startCpuMatchNow(comDifficulty) {
+  if (busy) return;
+  setBusy(true);
+  cleanupGame();
+  net = new Net();
+  net.usingBot = true;
+  const label = comDifficulty === 'normal' ? 'コンピューターと対戦（普通・ライフPT×3）' : 'コンピューターと対戦（強い・ライフPT×10）';
+  els.fieldFind.value = label;
+  try {
+    // World ranking: only COM「強い」 gets a single-use server match token (best-effort, never blocks)
+    if (comDifficulty === 'strong') { try { beginStrongMatch(); seedStrongBest(); } catch (_) {} }
+    startGameSession({ bot: true, comDifficulty });
+    game.beginMatch();
+  } catch (e) {
+    console.error(e);
+    els.fieldFind.value = '開始失敗';
+    cleanupGame();
+    show('menu');
+  } finally {
+    setBusy(false);
+  }
+}
+
+els.btnCpuNormal?.addEventListener('click', () => startCpuMatch('normal'));
+els.btnCpuStrong?.addEventListener('click', () => startCpuMatch('strong'));
+
+
+els.btnTutorial?.addEventListener('click', () => {
+  try { localStorage.removeItem('shootingOnline_tutorialDone'); } catch (_) {}
+  if (busy) return;
+  setBusy(true);
+  cleanupGame();
+  net = new Net();
+  net.usingBot = true;
+  els.fieldFind.value = 'チュートリアル（COM）';
+  try {
+    startGameSession({ bot: true, comDifficulty: 'normal' });
+    if (game) {
+      game._forceTutorial = true;
+      // Tutorial: easiest COM, not counted in the win-rate record
+      game._tutorialMatch = true;
+      game.comLevel = 1;
+      game._comProf = null;
+      game.setStatus(game.comDeckStatusText());
+    }
+    game.beginMatch();
+    // bot path already schedules maybeStartTutorial; force flag ensures it shows
+    if (game) game.maybeStartTutorial(true);
+  } catch (e) {
+    console.error(e);
+    els.fieldFind.value = '開始失敗';
+    cleanupGame();
+    show('menu');
+  } finally {
+    setBusy(false);
+  }
+});
+
+els.btnFind.addEventListener('click', async () => {
+  if (busy) return;
+  setBusy(true);
+  els.fieldFind.value = '検索中…';
+  cleanupGame();
+  net = new Net();
+  net.on('status', (s) => {
+    els.fieldFind.value = s.msg || '';
+  });
+  net.on('error', (e) => {
+    els.fieldFind.value = 'エラー: ' + (e?.type || e?.message || '接続失敗');
+  });
+  try {
+    const result = await net.findOpponent({
+      waitMs: 15000,
+      onTick: (left) => {
+        els.fieldFind.value = `待機中 ${Math.ceil(left / 1000)}秒`;
+      },
+    });
+    if (result.mode === 'peer') {
+      els.fieldFind.value = 'マッチ成立';
+      net.on('connected', () => {
+        if (game && game.waiting) game.beginMatch();
+      });
+      startGameSession({ bot: false });
+      if (net.ready) game.beginMatch();
+    } else {
+      // No human opponent — stay on menu (do not start COM)
+      els.fieldFind.value = '今は対戦相手がいません';
+      cleanupGame();
+      show('menu');
+    }
+  } catch (e) {
+    console.error(e);
+    els.fieldFind.value = '対戦相手を見つけられませんでした';
+    cleanupGame();
+    show('menu');
+  } finally {
+    setBusy(false);
+  }
+});
+
+els.btnCreate.addEventListener('click', async () => {
+  if (busy) return;
+  setBusy(true);
+  cleanupGame();
+  net = new Net();
+  try {
+    const preferred = els.inputRoom.value.trim();
+    const room = await net.createRoom(preferred);
+    els.fieldCode.value = room;
+    els.inputRoom.value = room;
+    els.fieldFind.value = '相手の入室待ち';
+    setHostingWaitingUI(true);
+    show('menu');
+    net.on('connected', () => {
+      if (game) {
+        if (game.waiting) game.beginMatch();
+        return;
+      }
+      els.fieldFind.value = '相手が入室しました';
+      startGameSession({ bot: false });
+      if (net.ready) game.beginMatch();
+    });
+    if (net.ready) {
+      els.fieldFind.value = '相手が入室しました';
+      startGameSession({ bot: false });
+      game.beginMatch();
+    }
+  } catch (e) {
+    console.error(e);
+    els.fieldCode.value = '';
+    alert('部屋を作成できませんでした。別の部屋名を試すか、しばらくしてから再度お試しください。');
+    cleanupGame();
+    restoreStartButton();
+    show('menu');
+  } finally {
+    setBusy(false);
+  }
+});
+
+els.btnStart.addEventListener('click', async () => {
+  if (busy) return;
+  if (net && net.role === 'host' && !game) {
+    els.fieldFind.value = '相手の入室待ち（部屋コードを相手に伝えてください）';
+    return;
+  }
+  const name = els.inputRoom.value.trim();
+  if (!name) {
+    els.inputRoom.focus();
+    els.fieldFind.value = '部屋名を入力';
+    return;
+  }
+  setBusy(true);
+  cleanupGame();
+  net = new Net();
+  try {
+    els.fieldFind.value = '入室中…';
+    await net.joinRoom(name);
+    els.fieldCode.value = name;
+    els.fieldFind.value = '入室OK';
+    net.on('connected', () => {
+      if (game && game.waiting) game.beginMatch();
+    });
+    startGameSession({ bot: false });
+    if (net.ready) game.beginMatch();
+  } catch (e) {
+    console.error(e);
+    els.fieldFind.value = '入室失敗';
+    alert('部屋に入れませんでした。部屋名を確認するか、先に「部屋を作る」側を起動してください。');
+    cleanupGame();
+    show('menu');
+  } finally {
+    setBusy(false);
+  }
+});
+
+els.btnStop.addEventListener('click', () => {
+  goMenu();
+});
+window.__stbGoMenu = () => goMenu();
+
+els.btnAgain.addEventListener('click', () => {
+  goMenu();
+});
+
+els.btnDeck?.addEventListener('click', () => {
+  if (busy) return;
+  selectedDeckSlot = 0;
+  deckPreviewId = null;
+  renderDeckScreen();
+  show('deck');
+});
+
+els.btnShop?.addEventListener('click', () => {
+  if (busy) return;
+  selectedShopId = null;
+  clearShopMsg();
+  renderShopScreen();
+  show('shop');
+});
+
+els.btnZukan?.addEventListener('click', () => {
+  if (busy) return;
+  selectedZukanId = CATALOG[0]?.id || null;
+  setZukanTab('units');
+  renderZukanScreen();
+  show('zukan');
+});
+
+// 初期デッキに戻す: confirm first; only the deck changes (PT / owned untouched)
+{
+  const dlg = document.getElementById('deck-reset-dialog');
+  const close = () => dlg && dlg.classList.add('hidden');
+  document.getElementById('btn-deck-reset')?.addEventListener('click', () => { if (dlg) { dlg.classList.remove('hidden'); document.getElementById('btn-deck-reset-cancel')?.focus(); } });
+  document.getElementById('btn-deck-reset-cancel')?.addEventListener('click', close);
+  dlg?.addEventListener('click', (ev) => { if (ev.target === dlg) close(); });
+  document.getElementById('btn-deck-reset-ok')?.addEventListener('click', () => {
+    resetDeckToDefault(loadMeta());
+    close();
+    selectedDeckSlot = 0;
+    deckPreviewId = null;
+    renderDeckScreen();
+    if (els.deckHint) els.deckHint.textContent = 'デッキを初期の状態に戻しました';
+  });
+}
+els.btnDeckBack?.addEventListener('click', () => {
+  refreshPtDisplay();
+  refreshDeckNewDot();
+  show('menu');
+});
+
+els.btnShopBuy?.addEventListener('click', () => {
+  buySelectedShopUnit();
+});
+
+els.btnShopBack?.addEventListener('click', () => {
+  clearShopMsg();
+  refreshPtDisplay();
+  refreshDeckNewDot();
+  show('menu');
+});
+
+els.btnZukanBack?.addEventListener('click', () => {
+  show('menu');
+});
+
+els.zukanTabUnits?.addEventListener('click', () => {
+  setZukanTab('units');
+});
+els.zukanTabItems?.addEventListener('click', () => {
+  setZukanTab('items');
+});
+
+window.addEventListener('shooting-meta-updated', (ev) => {
+  refreshPtDisplay(ev.detail || loadMeta());
+});
+
+document.addEventListener('touchmove', (e) => {
+  if (screens.game.classList.contains('active')) e.preventDefault();
+}, { passive: false });
+
+window.addEventListener('load', () => {
+  // Ensure starters persisted + duplicate decks cleaned
+  saveMeta(loadMeta());
+  refreshPtDisplay();
+  refreshDeckNewDot();
+  show('menu');
+});
+
+/** 公開から5分以内は「最新」バッジ付きで目立たせる（30秒ごと／復帰時に再判定）。 */
+const LATEST_WINDOW_MS = 5 * 60 * 1000;
+let versionBadgeTimer = null;
+
+function isFreshBuild(now = Date.now()) {
+  const t = Number(BUILD_TIME);
+  return Number.isFinite(t) && t > 0 && now - t >= -60 * 1000 && now - t < LATEST_WINDOW_MS;
+}
+
+function renderVersionBadge() {
+  const fresh = isFreshBuild();
+  const verEl = document.getElementById('app-version');
+  const gameVer = document.getElementById('game-version');
+  if (verEl) {
+    verEl.classList.toggle('ver-latest', fresh);
+    if (fresh) {
+      verEl.innerHTML = '';
+      const label = document.createElement('span');
+      label.textContent = formatVersionTime();
+      const badge = document.createElement('span');
+      badge.className = 'ver-badge';
+      badge.textContent = '最新';
+      verEl.append(label, badge);
+      if (BUILD_NOTE) {
+        const note = document.createElement('span');
+        note.className = 'ver-note';
+        note.textContent = BUILD_NOTE;
+        verEl.append(note);
+      }
+      verEl.title = `${VERSION_LABEL} — 最新版（公開から5分以内）${BUILD_NOTE ? ' / ' + BUILD_NOTE : ''}`;
+    } else {
+      verEl.textContent = formatVersionTime();
+      verEl.title = BUILD_NOTE ? `${VERSION_LABEL} — ${BUILD_NOTE}` : VERSION_LABEL;
+    }
+  }
+  if (gameVer) {
+    gameVer.classList.toggle('ver-latest', fresh);
+    gameVer.textContent = fresh ? `${formatVersionTime()} · 最新` : formatVersionTime();
+  }
+  return fresh;
+}
+
+function startVersionBadge() {
+  const tick = () => {
+    const fresh = renderVersionBadge();
+    if (!fresh && versionBadgeTimer) {
+      clearInterval(versionBadgeTimer);
+      versionBadgeTimer = null;
+    }
+  };
+  if (renderVersionBadge() && !versionBadgeTimer) {
+    versionBadgeTimer = setInterval(tick, 30 * 1000);
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') tick();
+  });
+}
+
+async function loadVisits() {
+  startVersionBadge();
+  const el = document.getElementById('app-visits');
+  if (!el) return;
+  const LAST_KEY = 'shootingOnline_visitLast';
+  const readLast = () => {
+    try {
+      const n = Number(localStorage.getItem(LAST_KEY));
+      return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+    } catch (_) {
+      return 0;
+    }
+  };
+  const writeLast = (n) => {
+    try {
+      const prev = readLast();
+      if (n > prev) localStorage.setItem(LAST_KEY, String(n));
+    } catch (_) { /* ignore */ }
+  };
+  const show = (n, suffix = '') => {
+    el.textContent = 'アクセス' + suffix + ' ' + n.toLocaleString('ja-JP');
+  };
+  const last = readLast();
+  if (last > 0) show(last); // keep previous visible while fetching
+  try {
+    const url = 'https://abacus.jasoncameron.dev/hit/nikkukyuu/stbbeta-shooting-online?_=' + Date.now();
+    const r = await fetch(url, { cache: 'no-store' });
+    if (!r.ok) throw new Error('counter ' + r.status);
+    const d = await r.json();
+    const n = typeof d.value === 'number' ? d.value : Number(d.value);
+    if (!Number.isFinite(n)) throw new Error('bad counter value');
+    const best = Math.max(Math.floor(n), last);
+    writeLast(best);
+    show(best);
+  } catch (e) {
+    if (last > 0) {
+      show(last);
+    } else {
+      el.textContent = 'アクセス —';
+    }
+  }
+}
+loadVisits();
+loadBattleCount(document.getElementById('app-battles'));
+
+// 10-04k: warm up match assets in the background on the title screen
+setTimeout(() => { prepareMatchAssets().catch(() => {}); }, 300);
+
+
+/* ================= 世界ランキング・メダル (ranking.js) ================= */
+const rk = { period: 'week', board: 'top3', key: null, seq: 0 };
+const rkCache = new Map(); // ranking responses (memory only, cleared for current periods on each open)
+
+function nickMsg(el, r, okText) {
+  if (!el) return;
+  if (r && r.ok) el.textContent = r.adjusted ? `${DUP_MSG}（${r.nickname}）` : (okText || `「${r.nickname}」に決まりました`);
+  else el.textContent = (r && r.message) || 'ランキングサーバーに接続できません';
+  el.classList.toggle('warn', !!(r && (!r.ok || r.adjusted)));
+}
+
+let _myMedalCache; // own medals (memory) → VS panel shows them instantly
+/* User 10-28「タイトルのランキングをアクセスが増えるので…」: the title makes NO ranking requests any more.
+ * 今週の順位とメダルは「ランキング」を押した時に取得し、結果を localStorage（新キー）に保存して表示するだけ。 */
+const K_MENU_RANK = 'shootingOnline_menuRankCache';
+function loadMenuRank() {
+  try { const t = localStorage.getItem(K_MENU_RANK) || localStorage.getItem(K_MENU_RANK + '_bak'); return t ? JSON.parse(t) : null; } catch (_) { return null; }
+}
+function saveMenuRank(o) {
+  try { const t = JSON.stringify(o); localStorage.setItem(K_MENU_RANK, t); localStorage.setItem(K_MENU_RANK + '_bak', t); } catch (_) {}
+}
+function refreshMenuMedals() {
+  const me = rankIdentity();
+  const nickEl = document.getElementById('mm-nick');
+  if (nickEl) nickEl.textContent = me.nickname || DEFAULT_NICK;
+  const shelf = document.getElementById('mm-shelf');
+  if (!shelf) return;
+  const rkEl = document.getElementById('mm-rank');
+  const c = loadMenuRank();
+  const valid = c && (!c.pid || c.pid === (me.id || ''));
+  const weekNow = periodKeys().week;
+  if (rkEl) {
+    const cur = valid && c.week === weekNow && c.rankText;
+    rkEl.textContent = cur || '今週 ―';
+    rkEl.classList.toggle('in', !!(cur && c.inRank));
+  }
+  if (!me.id) { shelf.replaceChildren(Object.assign(document.createElement('span'), { className: 'medal-none', textContent: 'COM「強い」でランキング参加' })); return; }
+  if (!valid || c.medals === undefined) { shelf.replaceChildren(Object.assign(document.createElement('span'), { className: 'medal-none', textContent: 'メダルはランキングで確認' })); return; }
+  if (_myMedalCache === undefined) _myMedalCache = c.medals || null;
+  shelf.replaceChildren(medalShelf(c.medals, { compact: true, max: 8, scale: 0.64 }));
+  requestAnimationFrame(() => fitShelf(shelf));
+}
+/** ランキングを押した時だけ: 今週の順位と自分のメダルを取得してキャッシュ → タイトル表示に反映 */
+function updateMenuRankFromServer(shown) {
+  const me = rankIdentity();
+  const prev = loadMenuRank() || {};
+  const out = { t: Date.now(), pid: me.id || '', week: periodKeys().week };
+  if (prev.pid === out.pid) { if (prev.medals !== undefined) out.medals = prev.medals; if (prev.week === out.week) { out.rankText = prev.rankText; out.inRank = prev.inRank; } }
+  // 開いた画面が「週間・ベスト3合計・今週」なら同じ応答を使い回す（リクエストを増やさない）
+  const ck = `week|top3|${out.week}`;
+  const pw = Promise.resolve(shown).catch(() => {}).then(() => { const h = rkCache.get(ck); return h ? h.r : fetchRanking('week', 'top3'); }).then((w) => { if (w && w.ok) { out.rankText = rankText(w, '今週'); out.inRank = !!w.me; } }).catch(() => {});
+  const pm = me.id ? fetchMedals([me.id]).then((r) => {
+    if (r && r.ok) { const e = r.medals && r.medals[me.id]; out.medals = e || null; _myMedalCache = e || null; }
+  }).catch(() => {}) : Promise.resolve();
+  return Promise.all([pw, pm]).then(() => { saveMenuRank(out); if (window.__stbScreen === 'menu') refreshMenuMedals(); });
+}
+
+function rkSetTabs() {
+  document.querySelectorAll('#screen-ranking [data-period]').forEach((b) => b.classList.toggle('active', b.dataset.period === rk.period));
+  document.querySelectorAll('#screen-ranking [data-board]').forEach((b) => b.classList.toggle('active', b.dataset.board === rk.board));
+}
+
+async function renderRanking() {
+  rkSetTabs();
+  const cur = periodKeys()[rk.period];
+  if (!rk.key || rk.key > cur) rk.key = cur;
+  const isCur = rk.key === cur;
+  document.getElementById('rk-label').textContent = `${PERIOD_JA[rk.period]}・${periodLabel(rk.period, rk.key)}`;
+  document.getElementById('rk-sub').textContent = isCur ? `${BOARD_JA[rk.board]}・集計中（期間終了で1〜3位にメダル）` : `${BOARD_JA[rk.board]}・確定（1〜3位はメダル獲得）`;
+  document.getElementById('btn-rk-next').disabled = isCur;
+  const list = document.getElementById('rk-list');
+  const meBox = document.getElementById('rk-me');
+  list.replaceChildren(Object.assign(document.createElement('li'), { className: 'rk-empty', textContent: '読み込み中…' }));
+  const seq = ++rk.seq;
+  // 通信量を抑える: 同じ期間・種類は画面を開いている間 60 秒（確定済みの過去期間はセッション中）再利用
+  const ck = `${rk.period}|${rk.board}|${rk.key}`, hit = rkCache.get(ck);
+  let r;
+  if (hit && (!isCur || performance.now() - hit.t < 60e3)) r = hit.r;
+  else { r = await fetchRanking(rk.period, rk.board, rk.key); if (r && r.ok) rkCache.set(ck, { t: performance.now(), r }); }
+  if (seq !== rk.seq) return;
+  if (!r.ok) {
+    meBox.textContent = 'ランキングサーバーに接続できません（ゲームはそのまま遊べます）';
+    list.replaceChildren(Object.assign(document.createElement('li'), { className: 'rk-empty', textContent: r.message || '通信エラー' }));
+    return;
+  }
+  const me = rankIdentity();
+  meBox.replaceChildren();
+  if (r.me) {
+    meBox.innerHTML = `あなたは <b class="rk-me-rank">${r.total}人中${r.me.rank}位</b><b class="rk-me-pt">${r.me.score.toLocaleString('ja-JP')}PT</b>`;
+  } else {
+    meBox.innerHTML = `<b class="rk-me-rank">未参加（${r.total}人参加中）</b><span class="rk-me-of">COM「強い」で勝つと参加</span>`;
+  }
+  if (!r.top.length) {
+    list.replaceChildren(Object.assign(document.createElement('li'), { className: 'rk-empty', textContent: 'まだ記録がありません' }));
+    return;
+  }
+  const RK_MAX = 100; // ベスト100までスクロールで表示
+  const rows = r.top.slice(0, RK_MAX);
+  const frag = document.createDocumentFragment();
+  for (const row of rows) {
+    const li = document.createElement('li');
+    li.className = 'rk-row' + (row.id === me.id ? ' me' : '') + (row.rank <= 3 ? ' top' + row.rank : row.rank <= 10 ? ' top10' : '');
+    const rankEl = document.createElement('span'); rankEl.className = 'rk-rank';
+    if (row.rank <= 3) rankEl.appendChild(medalCanvas(rk.period, row.rank, 30, { board: rk.board })); else rankEl.textContent = row.rank;
+    const nm = document.createElement('span'); nm.className = 'rk-name';
+    const nt = document.createElement('span'); nt.className = 'rk-nm-t'; nt.textContent = row.nickname + (row.id === me.id ? '（あなた）' : '');
+    if (row.rank === 1) nt.prepend(Object.assign(document.createElement('i'), { className: 'rk-crown', textContent: '👑', ariaHidden: 'true' }));
+    const md = document.createElement('span'); md.className = 'rk-medals'; md.dataset.pid = row.id;
+    nm.append(nt, md);
+    const sc = document.createElement('span'); sc.className = 'rk-score'; sc.textContent = row.score.toLocaleString('ja-JP') + 'PT';
+    if (rk.board === 'top3') { const n = document.createElement('small'); n.textContent = `${Math.min(3, row.n)}試合`; sc.appendChild(n); }
+    li.append(rankEl, nm, sc);
+    frag.appendChild(li);
+  }
+  const shown = rows.length;
+  const foot = document.createElement('li'); foot.className = 'rk-count';
+  foot.textContent = r.total > shown ? `1〜${shown}位を表示（全${r.total}人）` : `全${r.total}人`;
+  frag.appendChild(foot);
+  // 自分が表示範囲（ベスト100）の外なら、リスト下に自分の順位を固定表示
+  if (r.me && !rows.some((row) => row.id === me.id)) {
+    const li = document.createElement('li'); li.className = 'rk-row me rk-me-pin';
+    const rankEl = document.createElement('span'); rankEl.className = 'rk-rank'; rankEl.textContent = r.me.rank;
+    const nm = document.createElement('span'); nm.className = 'rk-name'; nm.textContent = (me.nickname || DEFAULT_NICK) + '（あなた）';
+    const sc = document.createElement('span'); sc.className = 'rk-score'; sc.textContent = r.me.score.toLocaleString('ja-JP') + 'PT';
+    if (rk.board === 'top3') { const n = document.createElement('small'); n.textContent = `${Math.min(3, r.me.n)}試合`; sc.appendChild(n); }
+    li.append(rankEl, nm, sc);
+    frag.appendChild(li);
+  }
+  list.replaceChildren(frag);
+  const sc = document.getElementById('rk-scroll'); if (sc) sc.scrollTop = 0;
+  rkWatchMedals(list, sc);
+}
+
+/* 各プレイヤーのメダル: 画面に入った行だけ /medals?ids= (最大4人ずつ) で遅延取得し、セッション中はキャッシュ */
+const rkMedalCache = new Map(); // pid -> entry
+const rkMedalWait = new Set();
+let rkMedalIO = null, rkMedalBusy = 0;
+function rkPaintMedals(el) {
+  const e = rkMedalCache.get(el.dataset.pid);
+  if (!e || el.dataset.done) return;
+  el.dataset.done = '1';
+  const shelf = medalShelf(e, { compact: true, max: 6, scale: 0.5, anim: false, none: '' });
+  if (!shelf.querySelector('.medal-item')) { el.remove(); return; }
+  el.replaceChildren(shelf);
+  requestAnimationFrame(() => fitShelf(el));
+}
+function rkPumpMedals() {
+  while (rkMedalBusy < 2 && rkMedalWait.size) {
+    const ids = [...rkMedalWait].slice(0, 4);
+    ids.forEach((id) => rkMedalWait.delete(id));
+    rkMedalBusy++;
+    fetchMedals(ids).then((r) => {
+      if (r && r.ok) for (const id of ids) rkMedalCache.set(id, (r.medals && r.medals[id]) || { list: [], counts: {} });
+    }).catch(() => {}).finally(() => {
+      rkMedalBusy--;
+      document.querySelectorAll('#rk-list .rk-medals[data-pid]:not([data-done])').forEach(rkPaintMedals);
+      rkPumpMedals();
+    });
+  }
+}
+function rkWatchMedals(list, root) {
+  if (rkMedalIO) rkMedalIO.disconnect();
+  const els = [...list.querySelectorAll('.rk-medals[data-pid]')];
+  const want = (el) => { const id = el.dataset.pid; if (rkMedalCache.has(id)) rkPaintMedals(el); else if (/^p[0-9a-f]{24}$/.test(id)) { rkMedalWait.add(id); } };
+  if (typeof IntersectionObserver === 'undefined') { els.forEach(want); rkPumpMedals(); return; }
+  rkMedalIO = new IntersectionObserver((ents) => {
+    for (const en of ents) if (en.isIntersecting) { rkMedalIO.unobserve(en.target); const m = en.target.querySelector('.rk-medals[data-pid]'); if (m) want(m); }
+    rkPumpMedals();
+  }, { root: root || null, rootMargin: '200px 0px' });
+  els.forEach((el) => rkMedalIO.observe(el.closest('li') || el));
+}
+
+function openRanking() {
+  if (busy) return;
+  const me = rankIdentity();
+  const inp = document.getElementById('rk-nick-input');
+  if (inp) inp.value = me.nickname || DEFAULT_NICK;
+  const msg = document.getElementById('rk-nick-msg'); if (msg) { msg.textContent = ''; msg.classList.remove('warn'); }
+  const sample = document.getElementById('rk-medal-sample');
+  if (sample && !sample.childElementCount) {
+    for (const t of ['day', 'week', 'month', 'year']) {
+      const col = document.createElement('div'); col.className = 'rk-sample-col';
+      const row = document.createElement('div'); row.className = 'rk-sample-row';
+      for (const r of [1, 2, 3]) row.appendChild(medalCanvas(t, r));
+      col.append(row, Object.assign(document.createElement('span'), { textContent: PERIOD_JA[t] }));
+      sample.appendChild(col);
+    }
+  }
+  try { window.__nkVisitRank && window.__nkVisitRank(); } catch (_) {} // 訪問ログ: ランキングを押した（個人情報なし・待たない）
+  rk.key = null;
+  const curKeys = periodKeys();
+  for (const k of [...rkCache.keys()]) { const [p, , key] = k.split('|'); if (key >= curKeys[p]) rkCache.delete(k); } // 集計中の期間は開くたびに最新を取得
+  show('ranking');
+  const shown = renderRanking();
+  rkRetryPending();
+  updateMenuRankFromServer(shown);
+}
+
+/** 未送信の記録（通信失敗で保存したもの）をランキングを開いたときに自動で再送 */
+function rkRetryPending() {
+  const box = document.getElementById('rk-pending-msg');
+  if (!box) return;
+  box.hidden = true; box.classList.remove('ok');
+  if (!pendingList().length) return;
+  box.textContent = '未登録の記録を登録しています…'; box.hidden = false;
+  retryPending().then((r) => {
+    if (r.sent) {
+      box.textContent = `未登録だった記録をランキングに登録しました（${r.pt.toLocaleString('ja-JP')}PT）`; box.classList.add('ok');
+      rkCache.clear(); renderRanking();
+      setTimeout(() => { if (box.classList.contains('ok')) box.hidden = true; }, 6000);
+    } else if (r.failed) { box.textContent = FAIL_MSG; }
+    else box.hidden = true;
+  }).catch(() => { box.textContent = FAIL_MSG; });
+}
+
+document.getElementById('btn-ranking')?.addEventListener('click', openRanking);
+document.getElementById('mm-shelf')?.addEventListener('click', openRanking);
+document.getElementById('btn-ranking-back')?.addEventListener('click', () => { show('menu'); refreshMenuMedals(); });
+document.querySelectorAll('#screen-ranking [data-period]').forEach((b) => b.addEventListener('click', () => { rk.period = b.dataset.period; rk.key = null; renderRanking(); }));
+document.querySelectorAll('#screen-ranking [data-board]').forEach((b) => b.addEventListener('click', () => { rk.board = b.dataset.board; renderRanking(); }));
+document.getElementById('btn-rk-prev')?.addEventListener('click', () => { rk.key = shiftKey(rk.period, rk.key || periodKeys()[rk.period], -1); renderRanking(); });
+document.getElementById('btn-rk-next')?.addEventListener('click', () => { rk.key = shiftKey(rk.period, rk.key || periodKeys()[rk.period], 1); renderRanking(); });
+document.getElementById('btn-rk-nick-save')?.addEventListener('click', async (ev) => {
+  const btn = ev.currentTarget; const inp = document.getElementById('rk-nick-input'); const msg = document.getElementById('rk-nick-msg');
+  btn.disabled = true; if (msg) msg.textContent = '送信中…';
+  const r = await setNickname(inp.value);
+  btn.disabled = false;
+  nickMsg(msg, r);
+  if (r.ok) { inp.value = r.nickname; renderRanking(); }
+  refreshMenuMedals();
+});
+
+// Title nickname dialog
+{
+  const dlg = document.getElementById('nick-dialog');
+  const inp = document.getElementById('nick-dialog-input');
+  const msg = document.getElementById('nick-dialog-msg');
+  const close = () => dlg && dlg.classList.add('hidden');
+  document.getElementById('btn-nick-edit')?.addEventListener('click', () => {
+    if (!dlg) return;
+    inp.value = rankIdentity().nickname || DEFAULT_NICK; msg.textContent = ''; msg.classList.remove('warn');
+    dlg.classList.remove('hidden'); setTimeout(() => inp.focus(), 50);
+  });
+  document.getElementById('btn-nick-cancel')?.addEventListener('click', close);
+  dlg?.addEventListener('click', (ev) => { if (ev.target === dlg) close(); });
+  const save = async () => {
+    const b = document.getElementById('btn-nick-save'); b.disabled = true; msg.textContent = '送信中…';
+    const r = await setNickname(inp.value);
+    b.disabled = false; nickMsg(msg, r);
+    if (r.ok) { inp.value = r.nickname; refreshMenuMedals(); if (!r.adjusted) setTimeout(close, 900); }
+  };
+  document.getElementById('btn-nick-save')?.addEventListener('click', save);
+  inp?.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); });
+}
+
+/* PvP: both players' medals before the match (ids exchanged in the PeerJS hello) */
+let _vsTimer = 0;
+window.__stbShowVsMedals = async (peer) => {
+  const box = document.getElementById('vs-medals');
+  if (!box || !peer) return;
+  const me = rankIdentity();
+  const key = (peer.pid || '') + '|' + (peer.nick || '');
+  if (box.dataset.key === key && !box.classList.contains('hidden')) return;
+  box.dataset.key = key;
+  const side = (label, nick, entry) => {
+    const d = document.createElement('div'); d.className = 'vs-side';
+    d.append(Object.assign(document.createElement('span'), { className: 'vs-label', textContent: label }),
+      Object.assign(document.createElement('b'), { className: 'vs-nick', textContent: nick || DEFAULT_NICK }),
+      medalShelf(entry, { compact: true, max: 6 }));
+    return d;
+  };
+  const note = (t) => Object.assign(document.createElement('span'), { className: 'medal-none', textContent: t });
+  const sideN = (label, nick, text) => { const d = side(label, nick, null); d.replaceChild(note(text), d.lastChild); return d; };
+  const vs = () => Object.assign(document.createElement('div'), { className: 'vs-x', textContent: 'VS' });
+  // state: undefined = loading, null = offline, object = fetched map
+  const draw = (m) => {
+    const mine = m ? m[me.id] : _myMedalCache;
+    const meSide = !me.id ? sideN('あなた', me.nickname, 'メダルなし') : (m || _myMedalCache !== undefined) ? side('あなた', (mine && mine.nickname) || me.nickname, mine) : sideN('あなた', me.nickname, m === null ? 'メダル（オフライン）' : '読み込み中…');
+    const op = m && m[peer.pid];
+    const opSide = !peer.pid ? sideN('相手', peer.nick, 'メダルなし') : m ? side('相手', (op && op.nickname) || peer.nick, op) : sideN('相手', peer.nick, m === null ? 'メダル（オフライン）' : '読み込み中…');
+    box.replaceChildren(meSide, vs(), opSide);
+  };
+  draw(undefined);
+  box.classList.remove('hidden');
+  clearTimeout(_vsTimer);
+  _vsTimer = setTimeout(() => box.classList.add('hidden'), 7000);
+  let r = await fetchMedals([me.id, peer.pid]).catch(() => ({ ok: false }));
+  if (!(r && r.ok)) { await new Promise((ok) => setTimeout(ok, 800)); r = await fetchMedals([me.id, peer.pid]).catch(() => ({ ok: false })); } // retry once
+  if (box.dataset.key === key) draw(r && r.ok ? (r.medals || {}) : null);
+};
+window.__stbRankHello = () => { const me = rankIdentity(); return { pid: me.id || '', nick: me.nickname || DEFAULT_NICK }; };
+
+// Title medals: cache only (no network on title).
+refreshMenuMedals();
+
+/* 各サブ画面の見出し左端「◀ 戻る」: 下の「メニューへ」と同じ動作 */
+document.querySelectorAll('.sub-back[data-back]').forEach((b) => b.addEventListener('click', () => document.getElementById(b.dataset.back)?.click()));
+
+/* ---- First-visit hint: animated arrow pointing at COM対戦「普通」 ---- */
+(() => {
+  const KEY = 'stb_firstHintDone';
+  let done = false;
+  try { done = localStorage.getItem(KEY) === '1'; } catch (_) {}
+  if (done) return;
+  const btn = document.getElementById('btn-cpu-normal');
+  if (!btn) return;
+  const arrow = document.createElement('div');
+  arrow.className = 'first-hint-arrow';
+  arrow.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(arrow);
+  let raf = 0;
+  const place = () => {
+    raf = 0;
+    const menu = document.getElementById('screen-menu');
+    const r = btn.getBoundingClientRect();
+    const visible = r.width > 0 && r.height > 0 && (!menu || !menu.classList.contains('hidden')) && btn.offsetParent !== null;
+    if (!visible) { arrow.style.display = 'none'; return; }
+    arrow.style.display = '';
+    const s = Math.max(16, Math.min(30, r.height * 0.75, r.left - 10));
+    arrow.style.setProperty('--fh-s', s + 'px');
+    // sit in the gap just left of the button (outside it), pointing right at it
+    arrow.style.left = Math.max(6, r.left + window.scrollX - s - 8) + 'px';
+    arrow.style.top = (r.top + window.scrollY + r.height / 2 - s / 2) + 'px';
+  };
+  const sched = () => { if (!raf) raf = requestAnimationFrame(place); };
+  const finish = () => {
+    try { localStorage.setItem(KEY, '1'); } catch (_) {}
+    arrow.remove();
+    window.removeEventListener('resize', sched);
+    window.removeEventListener('scroll', sched, true);
+    clearInterval(iv);
+  };
+  window.addEventListener('resize', sched);
+  window.addEventListener('scroll', sched, true);
+  const iv = setInterval(place, 500);
+  ['btn-cpu-normal', 'btn-cpu-strong', 'btn-find', 'btn-create', 'btn-start', 'btn-tutorial'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('click', finish, { once: true });
+  });
+  place();
+})();

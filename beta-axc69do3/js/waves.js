@@ -1,0 +1,1540 @@
+/**
+ * Scripted wave director — recreation of スタートリックオンライン (2011) battle flow, compressed
+ * into the 5-minute match, with livelier motion than the original. Wave-only kinds (never shop /
+ * deck / PT / transfer). Both fields run the SAME script on their own clock (player: S.time,
+ * COM: B.time) — same rules. Borrowed user art (e.spr) is visual only.
+ *
+ * Motion vocabulary (all telegraphed / readable on 360×640):
+ *   plan steps  bezier arcs (edge / behind entries), hold (+ warn blink), dive at the player's row
+ *               then peel away, stop-and-shoot then dash, straight/sine exits
+ *   form        group formations whose centre follows a path while the shape morphs
+ *               (row → V → rotating circle, column → split → re-merge, box ↔ circle round a core)
+ *   snake       sharp weave with speed surges (segments follow the head's exact path)
+ *   zig / drift zig-zag lines, bobbing mines
+ *   boss        tri boss (fan / 3-burst / twin laser), eye boss (core laser when open + 3-way),
+ *               jet boss (laser sweep → dash → spiral)
+ *
+ *  0:02 W1  mechs arc in from the edges, stop-and-shoot walkers, zig-zag darts, split cluster
+ *  0:14 W2  morphing wedge formation, swoopers, behind-entry arc, split grid, core grids (box ↔ ring)
+ *  0:40     triangular core boss + escort pack (core groups linger: cages / rings ~12 s, bosses ~30 s)
+ *  0:37 W3  spiders on arcs / sines, stop-and-shoot gunships
+ *  0:53 W4  rotating rings (pods tighten + spin up)
+ *  1:04     midboss: giant red eye (figure-8, claws speed up at low core HP)
+ *  1:26     boss: segmented snake (sharp weave, speed surges; cores = head + orange body ball, one shared HP → body chain)
+ *  1:48     mixed reprise
+ *  2:11     trap zone: bobbing mines + caterpillars + snake returns
+ *  3:40 R2  loopers, jet boss (sweep / dash / spiral), saucer circles
+ */
+import { spawnEnemy, spawnCoreEscorts, spawnBullet, GUARD_HP } from './entities.js?v=20261102191200';
+
+/** Global fire-rate tune for scripted units (cooldowns × this; < 1 = denser). */
+const FIRE_CD_MUL = 0.6;
+const SCROLL = 55; // px/s — trap mines drift at background scroll speed
+const rnd = (a, b) => a + Math.random() * (b - a);
+
+// User 10-04: regular scripted enemies had become too soft (2–9 HP vs. 4–18 for the tier enemies).
+// Non-core, non-attached units get ×1.8 (≈ the v1.5.72 toughness the tier table still has).
+export const WAVE_HP_MUL = 1.0; // 10-04c: user asked normal enemies softer again (back to the pre-10-04 values)
+function mk(kind, fw, fh, x, y, o = {}) {
+  const e = spawnEnemy(fw, fh, kind);
+  e.x = x; e.y = y;
+  Object.assign(e, o);
+  if (o.hp != null && !o._chainOf && !e.core && o.hp < 50) e.hp = Math.round(o.hp * WAVE_HP_MUL);
+  if (o.hp != null) e.maxHp = e.hp;
+  e.mvT = 0;
+  e.y0 = e.y; e.x0 = e.x;
+  return e;
+}
+const vx = (fw, T) => (fw + 80) / T; // speed that crosses the pane in ~T s
+
+// ---------- bezier ----------
+function bz(p, u) {
+  const v = 1 - u, a = v * v * v, b = 3 * v * v * u, c = 3 * v * u * u, d = u * u * u;
+  return [a * p[0][0] + b * p[1][0] + c * p[2][0] + d * p[3][0], a * p[0][1] + b * p[1][1] + c * p[2][1] + d * p[3][1]];
+}
+const B = (p0, p1, p2, p3, d) => ({ k: 'bez', p: [p0, p1, p2, p3], d });
+
+// ---------- unit templates ----------
+const T = {
+  mech: (o) => ({ w: 40, h: 48, hp: 4, score: 10, ...o }),
+  wedge: (o) => ({ w: 38, h: 28, hp: 3, score: 10, fire: aimed(2.4, 140), ...o }),
+  dart: (o) => ({ spr: 'drone', w: 34, h: 30, hp: 2, score: 8, face: true, fire: aimed(2.8, 145), ...o }),
+  swooper: (o) => ({ spr: 'fighter_mk2', w: 42, h: 38, hp: 4, score: 15, face: true, ...o }),
+  gunship: (o) => ({ spr: 'gunship_alpha_b', w: 58, h: 52, hp: 9, score: 25, ...o }),
+  spider: (o) => ({ spr: 'gunship_alpha', w: 46, h: 44, hp: 6, score: 15, ...o }),
+};
+const aimed = (cd, spd = 150, noise = 0.3) => ({ type: 'aimed', spd, cd: cd * rnd(0.85, 1.25), noise });
+const straight = (cd, spd = 150) => ({ type: 'straight', spd, cd: cd * rnd(0.85, 1.25) });
+
+// ---------- W1 ----------
+/** Mechs arc in from the top (or bottom) edge, curve through the pane and leave left. */
+function mechArc(fw, fh, fromTop, n = 4, fire = false) {
+  const out = [], s = fromTop ? 1 : -1, ey = fromTop ? -40 : fh + 40;
+  for (let i = 0; i < n; i++) {
+    const d = rnd(3.6, 4.4), yy = fh * (fromTop ? 0.3 + i * 0.12 : 0.7 - i * 0.12);
+    out.push(mk('wave_mech', fw, fh, fw * 0.8, ey, T.mech({
+      mv: 'plan', dly: i * 0.38, tele: 0.8,
+      plan: [B([fw * (0.78 + i * 0.03), ey], [fw * 0.7, yy - s * 60], [fw * 0.62, yy], [fw * 0.4, yy], d * 0.6),
+        B([fw * 0.4, yy], [fw * 0.2, yy], [fw * 0.05, yy + s * 30], [-70, yy + s * 50], d * 0.5)],
+      fire: fire ? aimed(1.6, 155) : straight(2.0, 150), noFire: false,
+    })));
+  }
+  return out;
+}
+/** Walkers slide in, stop and fire an aimed 3-burst (telegraph blink), wind back and dash out. */
+function stopShoot(fw, fh, rows, spr = null, kind = 'wave_mech') {
+  return rows.map((fy, i) => {
+    const y = fh * fy, sx = fw * rnd(0.64, 0.76);
+    const tpl = kind === 'wave_mech' ? T.mech({ hp: 6 }) : T.gunship();
+    return mk(kind, fw, fh, fw + 40, y, {
+      ...tpl, ...(spr ? { spr } : {}),
+      mv: 'plan', dly: i * 0.5,
+      plan: [B([fw + 40, y], [fw * 0.9, y - 30], [sx + 40, y], [sx, y], 1.3),
+        { k: 'hold', d: 2.2, bob: 6, warn: 0.5 },
+        { k: 'bez', rel: true, p: [[0, 0], [10, 0], [20, 0], [24, 0]], d: 0.3 },
+        { k: 'bez', rel: true, p: [[0, 0], [-150, 0], [-380, (fy < 0.5 ? 1 : -1) * 40], [-fw, (fy < 0.5 ? 1 : -1) * 90]], d: 1.7 }],
+      fire: { type: 'burst', spd: 170, cd: 0.7, n: 3, gap: 0.12, holdOnly: true },
+    });
+  });
+}
+/** Zig-zag darts with staggered phase and speed. */
+function zig(fw, fh, fy, n = 6, amp = 0.16) {
+  const out = [], sp = vx(fw, 4.6);
+  for (let i = 0; i < n; i++) {
+    out.push(mk('wave_saucer', fw, fh, fw + 30 + i * 46, fh * fy, T.dart({
+      mv: 'zig', vx: sp * rnd(0.88, 1.15), amp: fh * amp, zf: rnd(0.8, 1.0), ph: i * 0.18,
+    })));
+  }
+  return out;
+}
+
+// ---------- formations ----------
+/**
+ * Shared-group formation. Centre follows `path` (bezier list, then exit velocity) or a leader;
+ * shape timeline morphs offsets: row / col / vee / circle (rotating) / split / box.
+ */
+function form(fw, fh, kind, n, tpl, G) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    out.push(mk(kind, fw, fh, fw + 100, fh * 0.5, { ...tpl(i), mv: 'form', G, fi: i, fn: n, jit: rnd(0, 6.28) }));
+  }
+  for (const e of out) { const p = formPos(e, 0); e.x = p[0]; e.y = p[1]; }
+  return out;
+}
+function shapeOff(sh, i, n, t, sp) {
+  const h = (n - 1) / 2, k = i - h;
+  switch (sh.s) {
+    case 'row': return [k * sp, 0];
+    case 'col': return [0, k * sp * 0.85];
+    case 'vee': return [Math.abs(k) * sp * 0.8, k * sp * 0.75];
+    case 'circle': { const a = (Math.PI * 2 * i) / n + (sh.w || 1.4) * t; const R = sh.R || sp * n / 5.5; return [Math.cos(a) * R, Math.sin(a) * R]; }
+    case 'split': { const m = Math.ceil(n / 2), g = i < m ? -1 : 1, j = i < m ? i : i - m; return [(j - (m - 1) / 2) * sp * 0.9, g * (sh.gap || 90)]; }
+    case 'box': {
+      // ring of slots on a square around the centre (grid-core cage); i walks the perimeter
+      const L = sh.L || 100, per = 8 * L, s = ((i / n) * per + (sh.w || 0) * t * L) % per;
+      const q = Math.floor(s / (2 * L)), r = s % (2 * L) - L;
+      return q === 0 ? [r, -L] : q === 1 ? [L, r] : q === 2 ? [-r, L] : [-L, -r];
+    }
+    case 'slots': return sh.pts[i % sh.pts.length];
+    case 'bounce': { // [x, lo, hi, s0]: slides between lo and hi at sh.v, turning back at the ends
+      const q = sh.pts[i % sh.pts.length], L = Math.max(1, q[2] - q[1]);
+      const u = (((q[3] + (sh.v || 40) * t) % (2 * L)) + 2 * L) % (2 * L);
+      return [q[0], q[1] + (u < L ? u : 2 * L - u)];
+    }
+    default: return [0, 0];
+  }
+}
+function formCentre(G, t) {
+  if (G.lead) return [G.lead.x + (G.lx || 0), G.lead.y + (G.ly || 0)];
+  let tt = t;
+  for (const s of G.path) {
+    if (tt <= s.d) return bz(s.p, tt / s.d);
+    tt -= s.d;
+  }
+  const last = G.path[G.path.length - 1];
+  const p = last.p[3];
+  return [p[0] - (G.exitV || 140) * tt, p[1]];
+}
+function formPos(e, t) {
+  const G = e.G, c = formCentre(G, t), sp = G.sp || 44;
+  let a = G.shapes[0], b = null, u = 0;
+  for (let j = 0; j < G.shapes.length; j++) {
+    if (G.shapes[j].t <= t) { a = G.shapes[j]; b = G.shapes[j + 1] || null; }
+  }
+  const o1 = shapeOff(a, e.fi, e.fn, t, sp);
+  let off = o1;
+  if (b) {
+    // morph into the next shape over the last `mt` s before it starts
+    const mt = b.mt || 0.9;
+    u = Math.max(0, Math.min(1, 1 - (b.t - t) / mt));
+    u = u * u * (3 - 2 * u);
+    const o2 = shapeOff(b, e.fi, e.fn, t, sp);
+    off = [o1[0] + (o2[0] - o1[0]) * u, o1[1] + (o2[1] - o1[1]) * u];
+  }
+  const wob = G.wob == null ? 5 : G.wob;
+  return [c[0] + off[0] + Math.sin(t * 2.3 + e.jit) * wob, c[1] + off[1] + Math.cos(t * 1.9 + e.jit) * wob];
+}
+/** 7 wedges: row → V → rotating circle → V, centre on an S-curve. */
+function morphWedges(fw, fh, fy, sprName = null) {
+  const y = fh * fy, s = fy < 0.5 ? 1 : -1;
+  const G = {
+    sp: 44, exitV: 190,
+    path: [B([fw + 160, y], [fw * 0.85, y], [fw * 0.8, y + s * 70], [fw * 0.62, y + s * 50], 2.2),
+      B([fw * 0.62, y + s * 50], [fw * 0.5, y + s * 30], [fw * 0.5, y - s * 40], [fw * 0.42, y - s * 30], 3.2)],
+    shapes: [{ t: 0, s: 'row' }, { t: 1.8, s: 'vee' }, { t: 3.4, s: 'circle', R: 62, w: 1.8 }, { t: 5.6, s: 'vee' }],
+  };
+  return form(fw, fh, 'wave_escort', 7, () => T.wedge(sprName ? { spr: sprName } : {}), G);
+}
+/** Column that splits into two ranks around the centre row, then re-merges and leaves. */
+function splitGroup(fw, fh, fy, n = 8, sprName = 'scout_drone', fire = false) {
+  const y = fh * fy;
+  const G = {
+    sp: 42, exitV: 170,
+    path: [B([fw + 80, y], [fw * 0.8, y], [fw * 0.7, y], [fw * 0.55, y], 2.4), B([fw * 0.55, y], [fw * 0.45, y], [fw * 0.4, y], [fw * 0.3, y], 2.4)],
+    shapes: [{ t: 0, s: 'col' }, { t: 1.6, s: 'split', gap: Math.min(fh * 0.3, 100) }, { t: 3.6, s: 'split', gap: Math.min(fh * 0.3, 100) }, { t: 4.6, s: 'row' }],
+  };
+  return form(fw, fh, 'wave_saucer', n, (i) => T.dart({ spr: sprName, face: false, hp: 3, noFire: !(fire && i % 3 === 0), fire: fire && i % 3 === 0 ? aimed(2.2, 140) : null }), G);
+}
+/** 5×5-cage of wedges around a red-core ship: box cage that rotates into a ring and back. */
+function gridCore(fw, fh, fy, fromTop = null) {
+  // Video (0:56–1:50, top field, measured frame by frame): THREE upright columns of small white/red
+  // fighters slide in from the right edge together (≈2.5 s, 0.9 → parked), then stand dead still at
+  // 61.7 / 70.8 / 79.3 % across (8.7 % of the width apart) — no sway — for ~50 s, thinning only as
+  // units are shot. 10 fighters per column, 8.7 % of the height apart, spanning ≈17–96 % of the pane
+  // height (centre ≈56 %). The core ship sits mid-height in the middle column.
+  const cy = fh * 0.565, rdy = fh * 0.087;
+  const hx = fw * 0.708, cdx = fw * 0.087;
+  const lead = mk('wave_grid_core', fw, fh, fw + 150, cy, {
+    mv: 'plan', noFire: false,
+    fire: { type: 'fan3', spd: 155, cd: 1.5 },
+    plan: [B([fw + 150, cy], [fw * 0.95, cy], [fw * 0.78, cy], [hx, cy], 2.5),
+      { k: 'hold', d: 45, bob: 0, bw: 0.5, sway: 0 },
+      B([hx, cy], [fw * 0.55, cy], [fw * 0.35, cy], [-160, cy], 6)],
+  });
+  // Motion (video 1:00–1:12 kymograph of each column): the fighters are NOT still — every column
+  // is two interleaved streams sliding up and down through each other at ≈0.2 pane-heights/s and
+  // turning back at the column ends (an X-lattice in the time plot). Front / middle columns keep to
+  // the bands above and below the core row (the lane to the core stays open); the back column
+  // runs the full height.
+  const pts = [], v = fh * 0.19;
+  // 10-04: no guard behind the core — the old back column is now a second front column; every column
+  // keeps to the bands above / below the core row (lane to the core stays open), same unit count.
+  for (let k = 0; k < 10; k++) for (const c of [-1, 0, 1]) {
+    const dy = (k - 4.5) * rdy;
+    if (c <= 0 && Math.abs(dy) < rdy) continue; // core ship takes the middle column's centre slots; the front column leaves the core row open (units are tough now)
+    const lo = dy < 0 ? -4.5 * rdy : 1.5 * rdy, hi = dy < 0 ? -1.5 * rdy : 4.5 * rdy;
+    const L = hi - lo, u = Math.max(0, Math.min(L, dy - lo));
+    pts.push([c === 1 ? -2 * cdx : c * cdx, lo, hi, k % 2 ? u : 2 * L - u]); // alternate units start moving the other way
+  }
+  const G = { lead, sp: 40, wob: 0, shapes: [{ t: 0, s: 'bounce', pts, v }] };
+  let _gi = 0;
+  const cage = form(fw, fh, 'wave_escort', pts.length, () => {
+    const i = _gi++;
+    return T.wedge({ _chainOf: lead, hp: GUARD_HP.cage, w: 22, h: 15,
+      fire: i % 4 === 1 ? aimed(4, 140) : null, noFire: i % 4 !== 1 });
+  }, G);
+  lead.w = 44; lead.h = 36; if (lead.core) lead.core.ox = -lead.w * 0.3;
+  return [lead, ...cage];
+}
+
+// ---------- swoopers / behind entries ----------
+/** Swoopers drop in from an edge, hover, blink (0.6 s) and dive at the player's row, then peel away. */
+function swoopers(fw, fh, fromTop, n = 3, sprName = 'fighter_mk2') {
+  const out = [], s = fromTop ? 1 : -1, ey = fromTop ? -40 : fh + 40;
+  for (let i = 0; i < n; i++) {
+    const hx = fw * (0.62 + i * 0.1), hy = fh * (fromTop ? 0.22 + i * 0.08 : 0.78 - i * 0.08);
+    out.push(mk('wave_looper', fw, fh, hx + 40, ey, T.swooper({
+      spr: sprName, mv: 'plan', dly: i * 0.45, tele: 0.8,
+      plan: [B([hx + 60, ey], [hx + 80, hy - s * 40], [hx + 30, hy], [hx, hy], 1.2),
+        { k: 'hold', d: 0.9 + i * 0.35, bob: 5, warn: 0.6 },
+        { k: 'dive' }],
+      fire: sprName === 'plasma_bomber' ? { type: 'dashfan', n: 3, sp: 0.17, spd: 215, cd: 2.2 } : aimed(2.6, 140), noFire: false,
+    })));
+  }
+  return out;
+}
+/** Wedges come from behind (bottom/top edge ahead of the ship), arc right across the pane and return. */
+function behindArc(fw, fh, fromBottom, n = 5) {
+  const out = [], ey = fromBottom ? fh + 40 : -40, s = fromBottom ? -1 : 1;
+  for (let i = 0; i < n; i++) {
+    const d = rnd(4.6, 5.2);
+    out.push(mk('wave_escort', fw, fh, fw * 0.32, ey, T.wedge({
+      spr: 'stealth_corvette', face: true, mv: 'plan', dly: i * 0.3, tele: 0.9,
+      plan: [B([fw * 0.34, ey], [fw * 0.36, fh * 0.5 + s * 40], [fw * 0.8, fh * 0.5 + s * (60 - i * 8)], [fw * 0.85, fh * 0.5 - s * 20], d * 0.55),
+        B([fw * 0.85, fh * 0.5 - s * 20], [fw * 0.9, fh * 0.5 - s * 90], [fw * 0.4, fh * 0.5 - s * 110], [-80, fh * 0.5 - s * (40 + i * 18)], d * 0.6)],
+    })));
+  }
+  return out;
+}
+
+// ---------- W3 ----------
+function spiders(fw, fh, fy, n = 5, amp = 0.16) {
+  const out = [], fromTop = fy < 0.5, ey = fromTop ? -50 : fh + 50;
+  for (let i = 0; i < n; i++) {
+    const y = fh * fy, sp = vx(fw, 6) * rnd(0.85, 1.2);
+    out.push(mk('wave_spider', fw, fh, fw * 0.9, ey, T.spider({
+      mv: 'plan', dly: i * 0.55, tele: 0.7,
+      plan: [B([fw * (0.95 - i * 0.02), ey], [fw * 0.95, y], [fw * 0.85, y], [fw * 0.78, y], 1.3),
+        { k: 'line', vx: sp, amp: fh * amp, wf: rnd(1.9, 2.6), ph: -i * 0.8, surge: 0.35 }],
+      fire: aimed(2.0, 150, 0.35),
+    })));
+  }
+  return out;
+}
+
+// ---------- W4 ----------
+function ring(fw, fh, fy) {
+  // Video (1:36–2:17, bottom field, measured frame by frame, pane fractions):
+  //  96–99 s  ~15 red crabs slide in from the right edge as a COMPACT ring (≈14 % wide × 43 % high)
+  //           centred ≈(0.80, 0.78); it parks there ~7.5 s
+  //  107.5–109 the ring stretches into a tall OVAL (≈24 % × 72 %), centre rising to ≈0.65
+  //  109–124  the oval hangs, barely moving (centre x 0.79–0.81)
+  //  124–126  it pulls in vertically to ≈52 % high and stays that way (the dash-wall phase)
+  //  then it leaves / breaks up to the left
+  const RX = fw * 0.12, RY = fh * 0.35, RX0 = fw * 0.07, RY0 = fh * 0.2;
+  const low = fy >= 0.5, yc = (f) => (low ? f : 1 - f) * fh;
+  const y1 = Math.max(RY0 + 8, Math.min(fh - RY0 - 8, yc(0.78)));
+  const y2 = Math.max(RY + 6, Math.min(fh - RY - 6, yc(0.65)));
+  const e = mk('wave_ring_core', fw, fh, fw + RX0 + 30, y1, {
+    mv: 'plan', tele: 0, noFire: false,
+    fire: { type: 'ringcore', spd: 125, cd: 1.35 },
+    plan: [B([fw + RX0 + 30, y1], [fw * 0.95, y1], [fw * 0.86, y1], [fw * 0.8, y1], 3.0),
+      { k: 'hold', d: 7.5, bob: 2, bw: 0.5, sway: 2 },
+      B([fw * 0.8, y1], [fw * 0.8, y1 + (y2 - y1) * 0.4], [fw * 0.8, y2], [fw * 0.8, y2], 1.5),
+      { k: 'hold', d: 26, bob: 3, bw: 0.4, sway: 3 },
+      B([fw * 0.8, y2], [fw * 0.62, y2], [fw * 0.3, y2], [-140, y2], 7)],
+  });
+  e.w = RX * 2 + 20; e.h = RY * 2 + 16;
+  // shape timeline (seconds since spawn) → pod ellipse radii
+  e._rs = { t: 0, RX, RY, RX0, RY0, key: [[0, RX0, RY0], [10.5, RX0, RY0], [12, RX, RY], [27, RX, RY], [29, RX, RY * 0.72]] };
+  const n = 15;
+  e.drones = [];
+  // tough pods (uniform attached HP) → the loop keeps a small mouth on the core row facing the ship
+  // (±40°), so the core stays shootable; the loop doesn't turn (video: it hardly moves)
+  const gap = 40 * Math.PI / 180;
+  for (let i = 0; i < n; i++) {
+    const ang = Math.PI + gap + (Math.PI * 2 - 2 * gap) * (i / (n - 1));
+    e.drones.push({ ang, dist: RX0, d0: RX, ky: RY0 / RX0, r: 7.5, hp: GUARD_HP.pod, maxHp: GUARD_HP.pod, pod: true });
+  }
+  return [e];
+}
+
+// ---------- tethered striker ("snake") ----------
+/*
+ * Rebuilt from the reference videos (user_ref 4:43–5:01, ref3 5:00–5:18, ref2 2:15–2:36). Not a travelling snake:
+ *  - 異次元 PORTAL (dark red void) alone ≈1.5 s, then a big grey rock SPHERE (pivot) comes out with the HEAD.
+ *  - BODY: 7 grey elements pivot → tip (red ball 3rd from the tip); the head (red ring + yellow centre) sits
+ *    just past the tip link. The body STRETCHES and CONTRACTS like an accordion (gaps open / close):
+ *      out (stretch to full) → head comes off → chase 3 s (body held stretched, slow drift) → head flies back to the
+ *      stretched tip → slides in, body contracts onto the sphere → passes over the sphere and back (wait 1 s)
+ *      → stretches out again … (numbers: SNAKE_BODY below armMove).
+ *  Stays 36 s (leaves only with the head home). CORE = the head AND the orange ball, one shared core HP (user 10-06):
+ *  core break → the chain blows up from the broken core outward, link by link, head and sphere included.
+ */
+export function snake(fw, fh, fy, segs = 7, tone = 'silver') {
+  // Measured from user_ref.mp4 4:44–5:01 (ship 14 px ↔ game 28 px, ×2): sphere Ø ≈28 → 56, link ≈11 → 22 drawn,
+  // 7 elements pivot→tip with the RED BALL 3rd from the tip, pitch ≈12.5 → 25 at full stretch (SNAKE_BODY).
+  segs = SNAKE_BODY.LINKS; // 10-06b: the video chain always has 7 elements (was 12: links overlapped, no visible stretch)
+  const y0 = Math.max(52, Math.min(fh - 52, fh * fy));
+  const SH = 28; // reference ship draw height
+  const SEG = 18;                      // drawn ×1.35 ≈ 24 px box (video link ≈11–12 px, links nearly touch at full stretch)
+  const PIV = Math.round(SH * 2.0);    // ~56
+  const HEAD = Math.round(SH * 1.14);  // ~32 (video head_d)
+  const BALL = 16;                     // drawn ×1.5 ≈ 24 px (video red ball ≈12 px)
+  const head = mk('wave_snake_head', fw, fh, fw + 200, y0, {
+    mv: 'arm', dly: 0, stay: 36, segs, fire: { type: 'armhead' }, // 10-06: 20→36 s so the head chase loop repeats several times
+    w: HEAD, h: HEAD, hp: GUARD_HP.seg,
+  });
+  head._tx = fw * 0.7; head._ty = y0;
+  head._portalOnly = 1; head._portalOpen = 1; head._portalA = 0; // starts as the 異次元 portal alone (armMove 'portal'), fading in
+  const out = [];
+  out.push(mk('wave_snake_seg', fw, fh, fw + 60, y0, {
+    w: PIV, h: PIV, hp: GUARD_HP.seg, score: 60, mv: 'armseg', _chainOf: head, chainIdx: segs + 1,
+    noFire: true, noDrop: true, passShots: true, tone: 'anchor',
+  }));
+  for (let i = segs; i >= 1; i--) {
+    const red = i === SNAKE_BODY.RED; // video: red ball = 3rd element from the tip
+    // links are uniform in the video; only the one against the sphere's bell neck is a little fuller
+    const sw = red ? BALL : (i === segs ? SEG + 3 : SEG);
+    const o = mk('wave_snake_seg', fw, fh, fw + 60, y0, {
+      w: sw, h: sw, hp: GUARD_HP.seg, score: red ? 30 : 20, mv: 'armseg', _chainOf: head, chainIdx: i,
+      noFire: true, noDrop: true, passShots: !red, tone: red ? 'red' : tone,
+    });
+    // User 10-06: the orange ball (the one odd-coloured element) is a snake CORE (the head is the other one, same HP) — it takes the shots;
+    // the head owns the shared core HP (entities.js coreOwnerOf / coreWorld), the other links still let shots through.
+    if (red) { o._coreBall = true; head._coreSeg = o; }
+    out.push(o);
+  }
+  out.push(head);
+  return out;
+}
+function caterpillar(fw, fh, fy) {
+  const out = [];
+  const P = { v: vx(fw, 7.5), amp: fh * 0.2, wf: 2.8, k2: 0.25, sk: 0.4, sw: 1.3 };
+  for (let i = 0; i < 5; i++) {
+    out.push(mk('wave_cater', fw, fh, fw + 40, fh * fy, {
+      w: 30, h: 30, hp: 4, score: 10, mv: 'snake', ...P, x0: fw + 40,
+      dly: i * 0.22, noFire: i % 2 !== 0, fire: i % 2 === 0 ? aimed(2.2, 140) : null, tone: 'green',
+    }));
+  }
+  for (const e of out) e.y0 = fh * fy;
+  return out;
+}
+function mines(fw, fh, rowsF) {
+  return rowsF.map((fy, i) => mk('wave_mine', fw, fh, fw + 30 + i * rnd(70, 110), fh * fy, {
+    w: 34, h: 34, hp: 8, score: 10, mv: 'drift', vx: SCROLL * rnd(0.9, 1.15), bob: rnd(8, 16), bf: rnd(0.9, 1.6), ph: rnd(0, 6), noFire: true,
+  }));
+}
+
+// 10-04: translucent bubble wall — 5×5 grid, no vertical movement, slow leftward crawl (mid-match)
+// 10-05 rebuilt from the clearer reference video (a6faf877, ROUND 2 ゴールドラッシュゾーン, 2:59-4:07):
+// User 10-05: clearly tough — 10 normal shots (dmg 2) per unit.
+export const BUBBLE_HP = 18;
+// about 0.043 field widths per second (10-11 px/s on the 246 px video field), straight to the left
+export const bubbleVx = (fw) => fw * 0.043;
+// 10-05: user finished the movement check → 透明戦隊 back to its mid-match slot (127 s), once per match.
+export const BUBBLE_T_ORIGINAL = 127;
+export const BUBBLE_T = BUBBLE_T_ORIGINAL;
+export const BUBBLE_ROWS = 5, BUBBLE_COLS = 24;
+function bubbleWall(fw, fh) {
+  // Video: 5 rows edge to edge (top row touches the top edge, bottom row the bottom edge), ring 19 px on a
+  // 21 px row pitch (D ≈ 0.9 × pitch), column pitch 28 px of a 246 px field (0.114 × fw), one long block
+  // that keeps streaming in from the right for about 68 s (24 columns), no vertical motion, no shots.
+  // Edge rows block the ship's off-edge overhang.
+  const R = BUBBLE_ROWS, C = BUBBLE_COLS, D = Math.max(24, Math.round(fh * 0.9 / (R - 1 + 0.9))), out = [];
+  const dy = (fh - D) / (R - 1), px = Math.max(D + 2, Math.round(fw * 28 / 246)), v = bubbleVx(fw);
+  for (let c = 0; c < C; c++) for (let r = 0; r < R; r++) {
+    out.push(mk('wave_bubble', fw, fh, fw + D / 2 + 4 + c * px, D / 2 + r * dy, {
+      w: D, h: D, hp: BUBBLE_HP, score: 12, mv: 'drift', vx: v, bob: 0, bf: 0, ph: (c * R + r) * 0.7, noFire: true, _edge: r === 0 ? -1 : r === R - 1 ? 1 : 0,
+    }));
+  }
+  return out;
+}
+
+// ---------- round 2 ----------
+function loopers(fw, fh, fy, n = 4) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    out.push(mk('wave_looper', fw, fh, fw + 30 + i * 56, fh * fy, {
+      spr: 'light_destroyer', w: 44, h: 40, hp: 4, score: 15, mv: 'loop', vx: vx(fw, 4.2) * rnd(0.9, 1.12),
+      loopX: fw * rnd(0.45, 0.62), R: Math.min(fh * 0.22, 70) * rnd(0.8, 1.1), loopDur: rnd(1.4, 1.8),
+      loopDir: i % 2 ? -1 : 1,
+      fire: straight(2.2, 160), noFire: false,
+    }));
+  }
+  return out;
+}
+function saucerCircle(fw, fh, fy, n = 8) {
+  const y = fh * fy;
+  const G = {
+    sp: 36, exitV: 200,
+    path: [B([fw + 120, y], [fw * 0.8, y - 60], [fw * 0.7, y + 60], [fw * 0.55, y], 3), B([fw * 0.55, y], [fw * 0.45, y - 50], [fw * 0.4, y + 50], [fw * 0.3, y], 2.6)],
+    shapes: [{ t: 0, s: 'circle', R: 58, w: 2.4 }, { t: 3.0, s: 'row' }, { t: 4.4, s: 'circle', R: 70, w: -2.4 }],
+  };
+  return form(fw, fh, 'wave_saucer', n, (i) => ({ spr: 'swarm', w: 34, h: 30, hp: 3, score: 8, noFire: i % 4 !== 0, fire: i % 4 === 0 ? aimed(2.6, 140) : null }), G);
+}
+function saucers(fw, fh, fy, n = 8, wavy = false) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    out.push(mk('wave_saucer', fw, fh, fw + 30 + i * 40, fh * fy, {
+      spr: 'swarm', w: 34, h: 30, hp: 3, score: 8, mv: 'plan', noFire: i % 3 !== 0,
+      plan: [{ k: 'line', vx: vx(fw, 4.4) * rnd(0.9, 1.1), amp: wavy ? fh * 0.14 : fh * 0.03, wf: 3, ph: -i * 0.55, surge: 0.25 }],
+      fire: i % 3 === 0 ? straight(2.4, 150) : null,
+    }));
+  }
+  return out;
+}
+
+// ---------- bosses ----------
+/** Escorts fire together in volleys (every other fighter, synced), like the original pack. */
+function volley(esc, cd = 2.8, spd = 140) {
+  esc.forEach((s, i) => { if (i % 2 === 0) Object.assign(s, { noFire: false, fire: { type: 'aimed', spd, cd, noise: 0.12, sync: true }, _fcd: 1.6 }); });
+  return esc;
+}
+
+function coreBossPack(fw, fh, fy) {
+  const e = spawnEnemy(fw, fh, 'wave_core_boss');
+  // Video (1:26–2:40, top field): a mid-size grey arrowhead with a red rear, not a screen-filling
+  // boss; it hangs around the middle of the pane (≈45–58 % across), roaming slowly between rows
+  e.w = 66; e.h = 44; // video: ≈64×33 px arrowhead on a 360-wide pane
+  if (e.core) { e.core.ox = -e.w * 0.3; e.core.orbit = 5; }
+  e.y = Math.max(e.h * 0.5 + 6, Math.min(fh - e.h * 0.5 - 6, fh * fy));
+  // User 09-29: a core never flies alone — the arrowhead carries a docked pack that moves rigidly
+  // with it (a 3×3 block of small fighters behind the red rear + 2 pairs riding its upper / lower
+  // rear edges) and all of it goes up in the chain when the core breaks. The core row in front of
+  // the nose stays clear.
+  e.x = fw + e.w * 0.5 + 30; e._entryX = null;
+  const pts = [];
+  // 10-04: guards SURROUND the arrowhead (none behind its rear): two ranks above, two below, plus a
+  // front pair framing the open lane to the core at the nose. Same 13 units.
+  for (const sg of [-1, 1]) for (let r = 0; r < 2; r++) for (let c = 0; c < 3; c++) pts.push([-30 + c * 30, sg * (e.h * 0.5 + 17 + r * 24)]);
+  for (const sg of [-1, 1]) pts.push([-e.w * 0.5 - 34, sg * 30]);
+  pts.length = 13;
+  e._bandH = e.h * 0.5 + 41 + 9; // keep the docked riders on screen at the ends of the sweep
+  const G = { lead: e, sp: 40, wob: 2.5, shapes: [{ t: 0, s: 'slots', pts }] };
+  let gi = 0;
+  const esc = form(fw, fh, 'wave_escort', pts.length, () => {
+    const i = gi++;
+    return T.wedge({ _chainOf: e, hp: GUARD_HP.cage, w: 22, h: 15,
+      fire: i % 4 === 1 ? aimed(4.5, 140) : null, noFire: i % 4 !== 1 });
+  }, G);
+  Object.assign(e, { mv: 'boss', boss: 'tri', hx: fw * 0.515, y0: e.y, stay: 40, mvT: 0,
+    fire: { type: 'boss' } });
+  return [e, ...esc];
+}
+function eyeBoss(fw, fh) {
+  const e = spawnEnemy(fw, fh, 'wave_eye_boss');
+  e.y = fh * 0.5;
+  const esc = volley(spawnCoreEscorts(e, fw, fh), 3.2);
+  e._entryX = null;
+  Object.assign(e, { mv: 'boss', boss: 'eye', hx: fw * 0.66, y0: fh * 0.5, stay: 36, mvT: 0, fire: { type: 'boss' } });
+  return [e, ...esc];
+}
+function jetBoss(fw, fh) {
+  const e = mk('wave_core_boss', fw, fh, fw + 110, fh * 0.5, {
+    mv: 'boss', boss: 'jet', hx: fw * 0.7, stay: 32, fire: { type: 'boss' },
+  });
+  e.hx = Math.min(fw * 0.72, fw - e.w * 0.5 - 6);
+  Object.assign(e, {
+  });
+  const esc = volley(spawnCoreEscorts(e, fw, fh), 3.4);
+  e._entryX = null;
+  return [e, ...esc];
+}
+
+// User 10-06: the snake appears exactly twice per match — never again when the script replays (延長戦).
+const firstRunOnly = (f) => { f._firstRunOnly = true; return f; };
+/** [time s, builder(fw, fh) → enemies, optional tag] — waves overlap a little on purpose. */
+export const WAVE_SCRIPT = [
+  // W1
+  [2, (w, h) => mechArc(w, h, true, 4, false)],
+  [4.2, (w, h) => mechArc(w, h, false, 4, true)],
+  [6.8, (w, h) => stopShoot(w, h, [0.3, 0.7])],
+  [7.8, (w, h) => zig(w, h, 0.22, 5)], // fodder (kills → drops → sends)
+  [9.2, (w, h) => zig(w, h, 0.5, 6)],
+  [11.5, (w, h) => splitGroup(w, h, 0.5, 8, 'scout_drone', true)],
+  // W2
+  [14.5, (w, h) => morphWedges(w, h, 0.4)],
+  [17.5, (w, h) => swoopers(w, h, true, 3)],
+  [19.5, (w, h) => behindArc(w, h, true, 5)],
+  [21.8, (w, h) => splitGroup(w, h, 0.5, 8, 'drone')],
+  [24.5, (w, h) => gridCore(w, h, 0.45, true)],
+  [27, (w, h) => zig(w, h, 0.25, 5)],
+  [29, (w, h) => swoopers(w, h, false, 2)],
+  [32, (w, h) => mechArc(w, h, true, 3, true)],
+  [34, (w, h) => zig(w, h, 0.8, 4, 0.1)],
+  [37, (w, h) => splitGroup(w, h, 0.5, 6, 'scout_drone')], // fodder (kills → drops → sends)
+  [40, (w, h) => coreBossPack(w, h, 0.5)],
+  // W3 (light while the tri boss is up)
+  [45, (w, h) => zig(w, h, 0.2, 4)],
+  [47, (w, h) => spiders(w, h, 0.25, 4)],
+  [50, (w, h) => zig(w, h, 0.5, 5)], // fodder (kills → drops → sends)
+  [52, (w, h) => zig(w, h, 0.85, 4)],
+  [55, (w, h) => stopShoot(w, h, [0.22, 0.78], null, 'wave_spider')],
+  [60, (w, h) => swoopers(w, h, true, 2)],
+  [60, firstRunOnly((w, h) => snake(w, h, 0.31, 7))], // user 10-06 19:28: snake 1st time = 1:00, 1 snake
+  [62, (w, h) => zig(w, h, 0.75, 4, 0.1)],
+  // W4 rings
+  [66, (w, h) => zig(w, h, 0.3, 5)], // fodder (kills → drops → sends)
+  [70, (w, h) => ring(w, h, 0.4)],
+  [73, (w, h) => zig(w, h, 0.75, 5)],
+  [75, (w, h) => swoopers(w, h, true, 2)],
+  [80, (w, h) => stopShoot(w, h, [0.35, 0.65])],
+  [83, (w, h) => zig(w, h, 0.8, 5)], // fodder (kills → drops → sends)
+  [86, (w, h) => ring(w, h, 0.6)],
+  [90, (w, h) => zig(w, h, 0.25, 5)],
+  [92, (w, h) => swoopers(w, h, false, 2)],
+  // midboss eye (~36 s)
+  [97, (w, h) => splitGroup(w, h, 0.35, 6, 'drone')], // fodder (kills → drops → sends)
+  [104, (w, h) => eyeBoss(w, h)],
+  [109, (w, h) => zig(w, h, 0.75, 4)], // fodder (kills → drops → sends)
+  [112, (w, h) => zig(w, h, 0.2, 4)],
+  [118, (w, h) => swoopers(w, h, true, 2)],
+  [124, (w, h) => zig(w, h, 0.8, 4)],
+  [BUBBLE_T, bubbleWall], // 透明戦隊 (mid-match, once per match)
+  [130, (w, h) => swoopers(w, h, false, 2)],
+  // boss snake (slow crossing)
+  [137, (w, h) => zig(w, h, 0.4, 5)], // fodder (kills → drops → sends)
+  [141, (w, h) => splitGroup(w, h, 0.6, 6, 'scout_drone')], // fodder (kills → drops → sends)
+  [150, (w, h) => zig(w, h, 0.2, 4)],
+  [150, firstRunOnly((w, h) => [...snake(w, h, 0.27, 7), ...snake(w, h, 0.73, 7)])], // 2nd time = 2:30, 2 snakes (upper + lower)
+  [154, (w, h) => behindArc(w, h, false, 4)],
+  [160, (w, h) => zig(w, h, 0.3, 5)],
+  // trap zone
+  [163, (w, h) => zig(w, h, 0.7, 5)], // fodder (kills → drops → sends)
+  [166, (w, h) => mines(w, h, [0.2, 0.55, 0.85])],
+  [170, (w, h) => caterpillar(w, h, 0.35)],
+  [174, (w, h) => gridCore(w, h, 0.5, false)],
+  [178, (w, h) => zig(w, h, 0.75, 4)],
+  [180, (w, h) => mines(w, h, [0.3, 0.8])],
+  [184, (w, h) => zig(w, h, 0.45, 5)], // fodder (kills → drops → sends)
+  [186, (w, h) => swoopers(w, h, true, 2)],
+  [192, (w, h) => mines(w, h, [0.15, 0.5, 0.85])],
+  [196, (w, h) => ring(w, h, 0.55)],
+  [200, (w, h) => caterpillar(w, h, 0.7)],
+  [203, (w, h) => zig(w, h, 0.25, 5)], // fodder (kills → drops → sends)
+  [206, (w, h) => mines(w, h, [0.35, 0.7])],
+  [212, (w, h) => stopShoot(w, h, [0.3, 0.7])],
+  // round 2
+  [216, (w, h) => zig(w, h, 0.6, 5)], // fodder (kills → drops → sends)
+  [220, () => [], 'round2'],
+  [222, (w, h) => loopers(w, h, 0.35)],
+  [226, (w, h) => loopers(w, h, 0.65)],
+  [230, (w, h) => swoopers(w, h, true, 3, 'plasma_bomber')],
+  [234, (w, h) => zig(w, h, 0.5, 5)],
+  [238, (w, h) => jetBoss(w, h)],
+  [240, firstRunOnly((w, h) => [...snake(w, h, 0.2, 7), ...snake(w, h, 0.5, 7), ...snake(w, h, 0.8, 7)])], // 3rd time = 4:00, 3 snakes
+  [244, (w, h) => zig(w, h, 0.8, 4)], // fodder (kills → drops → sends)
+  [248, (w, h) => zig(w, h, 0.25, 4)],
+  [252, (w, h) => loopers(w, h, 0.5, 3)],
+  [258, (w, h) => stopShoot(w, h, [0.3, 0.7])],
+  [264, (w, h) => saucerCircle(w, h, 0.35)],
+  [269, (w, h) => splitGroup(w, h, 0.5, 6, 'drone')], // fodder (kills → drops → sends)
+  [274, (w, h) => gridCore(w, h, 0.45, true)],
+  [278, (w, h) => zig(w, h, 0.2, 5)], // fodder (kills → drops → sends)
+  [282, (w, h) => saucerCircle(w, h, 0.7)],
+  [289, (w, h) => zig(w, h, 0.3, 5)],
+  [294, (w, h) => zig(w, h, 0.65, 5)], // fodder
+];
+
+/**
+ * Spawn every script entry whose time has come on this field. `st` holds the per-field cursor.
+ * Returns the tags of fired entries (e.g. 'round2') for UI.
+ */
+/**
+ * User 10-04: attached units on the core's BACK side (farther from the player than the core) guard it:
+ * they patrol around the back, slide toward the core's row while the player is lined up with it
+ * (covering it from behind — the front lane stays open), and fire telegraphed aimed shots.
+ * Shared by both fields (call before the formation / escort step). Returns nothing.
+ */
+export const REAR_FIRE_CD = [3.0, 4.5]; // s per unit
+export const REAR_PACK_GAP = 0.7;       // s between shots of one pack (no floods)
+export const REAR_TELE = 0.4;           // s red-ring warning before each shot
+
+/** User 10-12: no core guard may stay parked behind the core (the side away from the player). Every guard /
+ *  pod on the core's back side SORTIES at staggered random moments: 0.3 s blink tell → 0.6 s arc round the hull
+ *  to the player-facing side (off the core row) → 0.4 s red-ring aim → 2 aimed shots 0.18 s apart → 0.4 s hold →
+ *  0.7 s arc back to its slot. Each rear unit every 2.5–5 s, at most 2 out per core at once. Both fields. */
+export const SORTIE_CD = [2.5, 5.0];
+const SORTIE_MAX = 2;
+const S_TELL = 0.3, S_OUT = 0.6, S_AIM = 0.4, S_GAP = 0.18, S_HOLD = 0.4, S_BACK = 0.7;
+const ease = (u) => u * u * (3 - 2 * u);
+const sortieCd = () => SORTIE_CD[0] + Math.random() * (SORTIE_CD[1] - SORTIE_CD[0]);
+function sortieShot(sx, sy, px, py, bullets) {
+  const a = Math.atan2(py - sy, px - sx), spd = 150;
+  const rb = spawnBullet(sx, sy, Math.cos(a) * spd, Math.sin(a) * spd, 'enemy', false, 2, { life: 5 }); rb.rg = 1; bullets.push(rb);
+}
+/** Advance one unit's sortie (state on `u`); returns the path weight w (0 at slot, 1 at the front point) or -1 if idle. */
+function stepSortie(u, L, dt, rear, fire, stay) {
+  if (u._so == null) { if (u._soCd == null) u._soCd = 0.4 + Math.random() * 2.2; if (rear) u._soCd -= dt; else u._soCd = Math.max(u._soCd, 0.8);
+    if (u._soCd <= 0 && (L._soOut || 0) < SORTIE_MAX && (L._soNext == null || L._soT >= L._soNext)) {
+      u._so = 0; u._soT = 0; u._soShots = 0; L._soOut = (L._soOut || 0) + 1; L._soNext = (L._soT || 0) + 0.9; // stagger: ≥0.9 s between launches
+    } else return -1; }
+  u._soT += dt; const t = u._soT;
+  const T1 = S_TELL, T2 = T1 + S_OUT, T3 = T2 + S_AIM, T4 = T3 + S_GAP + S_HOLD, T5 = T4 + S_BACK;
+  u._soWarn = 0;
+  if (t < T1) { u._soBlink = Math.floor(t / 0.06) % 2; return 0; }
+  u._soBlink = 0;
+  if (t < T2) return ease((t - T1) / S_OUT);
+  if (t < T3) { u._soWarn = 1; return 1; }
+  if (u._soShots < 1) { u._soShots = 1; fire(); }
+  if (t >= T3 + S_GAP && u._soShots < 2) { u._soShots = 2; fire(); }
+  if (t < T4) return 1;
+  if (stay) { u._so = null; u._soCd = sortieCd(); u._soStay = 1; L._soOut = Math.max(0, (L._soOut || 1) - 1); return 1; } // keeps station in front
+  if (t < T5) return 1 - ease((t - T4) / S_BACK);
+  u._so = null; u._soCd = sortieCd(); L._soOut = Math.max(0, (L._soOut || 1) - 1); return 0;
+}
+/** Ring / swarm cores: their guards are drawn pods (drones). Rear-side pods patrol along the loop,
+ *  lean toward the core row when the player lines up, and fire the same telegraphed aimed shots. */
+function tickPodGuards(e, dt, px, py, bullets, fw) {
+  const ring = e.kind === 'wave_ring_core';
+  e._rgT = (e._rgT || 0) + dt; e._soT = (e._soT || 0) + dt;
+  const cy = e.y + (e.core.oy || 0);
+  const cover = Math.abs(py - cy) < 46;
+  const live = e.hp > 0 && e.core.hp > 0 && e.x < fw - 10 && e.x > 0;
+  let k = 0;
+  for (const d of e.drones) {
+    k++;
+    if (d.hp <= 0) { d.w = 0; continue; }
+    if (ring && d.a0 != null && Math.cos(d.a0) > 0.2) {
+      d._cv = (d._cv || 0) + ((cover ? -Math.sin(d.a0) * 0.22 : 0) - (d._cv || 0)) * Math.min(1, dt * 3);
+      d.ang += Math.sin(e._rgT * 1.1) * 0.17 + Math.sin(e._rgT * 2.3 + k * 2.3) * 0.03 + d._cv; // patrol along the back of the loop in step (pods keep their spacing)
+    }
+    { // sortie: a pod parked on the back of the loop swings round to the front, aims, fires, swings back
+      const prev = d._saAp || 0; d.ang -= ring ? 0 : prev; // remove last frame's offset (ring resets ang itself)
+      const rear = live && !d._soStay && Math.cos(d.ang) > 0.3;
+      if (d._so == null && d._sTo != null && !d._soStay) d._sTo = null;
+      const w = live ? stepSortie(d, e, dt, rear, () => { const sx = e.x + Math.cos(d.ang + d._sa) * d.dist, sy = e.y + Math.sin(d.ang + d._sa) * d.dist * (d.ky || 1); sortieShot(sx - d.r, sy, px, py, bullets); }, ring) : -1;
+      if (w >= 0) {
+        if (d._sTo == null) { const side = Math.sin(d.ang) >= 0 ? 1 : -1; const tgt = Math.PI - side * (0.55 + Math.random() * 0.4); let dd = tgt - d.ang; dd = Math.atan2(Math.sin(dd), Math.cos(dd)); d._sTo = dd; }
+        d._sa = d._sTo * w;
+      } else if (d._soStay) d._sa = d._sTo; else { d._sa = 0; if (!live && d._so != null) { d._so = null; e._soOut = Math.max(0, (e._soOut || 1) - 1); } }
+      d.ang += d._sa; d._saAp = d._sa;
+      if (d._so != null) { d.w = d._soWarn || d._soBlink ? 1 : 0; continue; } // own sortie shots only while out
+    }
+    const ox = Math.cos(d.ang) * d.dist, oy = Math.sin(d.ang) * d.dist * (d.ky || 1);
+    if (!live) { d.w = 0; if (d._tele > 0) d._tele = 0; continue; } // every surrounding pod may fire (same caps)
+    if (d._cd == null) d._cd = REAR_FIRE_CD[0] + Math.random() * (REAR_FIRE_CD[1] - REAR_FIRE_CD[0]);
+    if (d._tele > 0) {
+      d._tele -= dt; d.w = 1;
+      if (d._tele <= 0) {
+        d.w = 0;
+        const sx = e.x + ox, sy = e.y + oy, a = Math.atan2(py - sy, px - sx), spd = 150;
+        const rb = spawnBullet(sx - d.r, sy, Math.cos(a) * spd, Math.sin(a) * spd, 'enemy', false, 2, { life: 5 }); rb.rg = 1; bullets.push(rb);
+        d._cd = REAR_FIRE_CD[0] + Math.random() * (REAR_FIRE_CD[1] - REAR_FIRE_CD[0]);
+      }
+      continue;
+    }
+    d._cd -= dt;
+    if (d._cd <= 0 && (e._rgNext == null || performance.now() / 1000 >= e._rgNext)) {
+      e._rgNext = performance.now() / 1000 + REAR_PACK_GAP;
+      d._tele = REAR_TELE;
+    }
+  }
+}
+export function tickRearGuard(e, dt, px, py, bullets, fw, fh) {
+  if (e.drones && e.core && (e.kind === 'wave_ring_core' || e.kind === 'wave_swarm_core' || e.kind === 'wave_eye_boss')) { tickPodGuards(e, dt, px, py, bullets, fw); return; }
+  const L = e._chainOf || e._lead;
+  if (!L) return; // free enemies (e.g. bubble wall) are never touched
+  if (e._so != null && (e.hp <= 0 || e._chainT != null || L.hp <= 0)) { e._so = null; L._soOut = Math.max(0, (L._soOut || 1) - 1); }
+  if (e.hp <= 0 || e._chainT != null || e.mv === 'armseg' || e.passShots) { e._gOx = 0; e._gOy = 0; return; }
+  if (L.hp <= 0) return;
+  if (tickSquad(e, L, dt, px, py, bullets, fw, fh)) return true; // 10-15: squad sortie / core guard drives this unit
+  // 10-04: guards surround / shield the core (no 'rear' slot any more). Every guard patrols a little,
+  // never past the core's back edge, never into the lane in front of the core; all fire telegraphed shots.
+  const cx = L.x + (L.core ? L.core.ox : 0), cy = L.y + (L.core ? L.core.oy : 0);
+  e._rgT = (e._rgT || 0) + dt;
+  const ph = (e._uid || 1) * 1.7;
+  let tx = Math.sin(e._rgT * 1.3 + ph) * 7, ty = Math.sin(e._rgT * 0.9 + ph * 0.6) * 6;
+  const bx = e.x - (e._gOx || 0), by = e.y - (e._gOy || 0);
+  const hw = (L.w || 40) / 2, hh = (L.h || 30) / 2, ew = (e.w || 20) / 2, eh = (e.h || 16) / 2;
+  const back = L.x + hw - ew; // guard's centre may not pass the core's back edge
+  if (bx + tx > back) tx = Math.min(tx, back - bx);
+  if (Math.abs(bx - L.x) < hw + ew) { // beside the hull: never slide over it
+    const clr = hh + eh + 3, ny = by + ty - L.y;
+    if (Math.abs(ny) < clr) ty = Math.sign(by - L.y || 1) * clr - (by - L.y);
+  }
+  if (bx + tx < cx && Math.abs(by + ty - cy) < eh + 12) ty = Math.sign(by - cy || 1) * (eh + 12) - (by - cy); // lane to the core stays open
+  // sortie (user 10-12): guards behind the core's centre fly round the hull to the player side, aim, fire, return
+  L._soT = (L._soT || 0) + (L._soTick === e ? dt : 0); if (L._soTick == null || L._soTick.hp <= 0) L._soTick = e;
+  const rearG = !e._soStay && bx > cx + 6 && e.x < fw - 10 && e.x > 0;
+  const sw = stepSortie(e, L, dt, rearG, () => sortieShot(e.x - ew * 0.8, e.y, px, py, bullets), true);
+  if (sw >= 0) {
+    if (e._soP == null) {
+      const side = (by - L.y) >= 0 ? 1 : -1, ox0 = e._gOx || 0, oy0 = e._gOy || 0;
+      const fx = Math.min(cx, L.x - hw) - ew - 14 - Math.random() * 46, fy = cy + side * (eh + 16 + Math.random() * 48);
+      const ctx_ = L.x + hw * 0.2, cty = L.y + side * (hh + eh + 22);
+      e._soP = [ox0, oy0, ctx_ - bx, cty - by, fx - bx, fy - by];
+    }
+    const [x0, y0, x1, y1, x2, y2] = e._soP, u = sw, v = 1 - u;
+    e._gOx = v * v * x0 + 2 * v * u * x1 + u * u * x2; e._gOy = v * v * y0 + 2 * v * u * y1 + u * u * y2;
+    e._warn = e._soWarn || e._soBlink ? 1 : 0;
+    return;
+  }
+  if (e._soStay && e._soP) { tx = e._soP[4] + Math.sin(e._rgT * 1.3 + ph) * 6; ty = e._soP[5] + Math.sin(e._rgT * 0.9 + ph * 0.6) * 5; } // station in front of the core (off its row)
+  else e._soP = null;
+  const k = Math.min(1, dt * 3);
+  e._gOx = (e._gOx || 0) + (tx - (e._gOx || 0)) * k;
+  e._gOy = (e._gOy || 0) + (ty - (e._gOy || 0)) * k;
+  if (e.x > fw - 10 || e.x < 0 || (e.fire && !e.noFire)) { if (!(e.fire && !e.noFire)) e._warn = 0; return; } // own gun: keep its pattern only
+  if (e._rgCd == null) e._rgCd = REAR_FIRE_CD[0] + Math.random() * (REAR_FIRE_CD[1] - REAR_FIRE_CD[0]);
+  if (e._rgTele > 0) {
+    e._rgTele -= dt; e._warn = 1;
+    if (e._rgTele <= 0) {
+      e._warn = 0;
+      const a = Math.atan2(py - e.y, px - e.x), spd = 150;
+      const rb = spawnBullet(e.x - (e.w || 20) * 0.4, e.y, Math.cos(a) * spd, Math.sin(a) * spd, 'enemy', false, 2, { life: 5 }); rb.rg = 1; bullets.push(rb);
+      e._rgCd = REAR_FIRE_CD[0] + Math.random() * (REAR_FIRE_CD[1] - REAR_FIRE_CD[0]);
+    }
+    return;
+  }
+  e._rgCd -= dt;
+  if (e._rgCd <= 0 && (L._rgNext == null || performance.now() / 1000 >= L._rgNext)) { // pack gate
+    L._rgNext = performance.now() / 1000 + REAR_PACK_GAP;
+    e._rgTele = REAR_TELE;
+  }
+}
+
+/* ------------------------------------------------------------------ 10-15 squads (user: 配下が動かない)
+ * Every core pack (grid core cage, tri / jet / eye boss escorts — NOT the snake, NOT ring pods) splits at random:
+ *  - 2–4 GUARDS orbit near the core (above / behind / below it — never parked in the lane in front of the core);
+ *  - everyone else goes out in small SQUADS (2–4) in a V or a line: short charge glow at its slot → flies in
+ *    formation toward the ship's side → each member glows and fires 2 visible aimed shots (muzzle flash) →
+ *    flies back to its own slot. At most 2 squads out per core, a new one every 2.2–3.6 s.
+ * Units keep _lead / _chainOf → a core break still blows the whole pack, squads out on a sortie included.
+ * Same code for both fields (player + COM). No lane / line warnings (user 10-15): only the unit's own glow + flash. */
+export const SQUAD = { FIRST: 1.6, GAP: [2.2, 3.6], MAX_OUT: 2, SIZE: [2, 4], TELL: 0.45, OUT_SPD: 165, FOLLOW: 260, ATK: 2.4,
+  SHOTS: 2, SHOT_T0: 0.35, SHOT_GAP: 0.8, SHOT_STAGGER: 0.16, SHOT_TELL: 0.3, SHOT_SPD: 150, BACK_SPD: 210, GUARD_W: 0.7 };
+const sqRnd = (a, b) => a + Math.random() * (b - a);
+/** Where this unit's slot is right now (formation slot / docked escort slot), without patrol offsets. */
+function squadHome(e, L) {
+  if (e.mv === 'form' && e.G) return formPos(e, e.mvT || 0);
+  return [L.x + (e.fdx || 0), L.y + (e.fdy || 0)];
+}
+function squadSlotAhead(e, L, dt) { // keep the slot clock running while the unit is driven by the squad
+  if (e.mv === 'form') e.mvT = (e.mvT || 0) + dt;
+  else if (e._lead) e.phase = (e.phase || 0) + dt * 2.2;
+}
+function moveToward(e, x, y, spd, dt) {
+  const dx = x - e.x, dy = y - e.y, d = Math.hypot(dx, dy);
+  if (d <= spd * dt || d < 0.5) { e.x = x; e.y = y; return true; }
+  e.x += (dx / d) * spd * dt; e.y += (dy / d) * spd * dt; return false;
+}
+function squadShot(e, px, py, bullets) {
+  const ox = e.x - (e.w || 22) * 0.45, oy = e.y, a = Math.atan2(py - oy, px - ox), spd = SQUAD.SHOT_SPD;
+  const b = spawnBullet(ox, oy, Math.cos(a) * spd, Math.sin(a) * spd, 'enemy', false, 2, { life: 5 });
+  b.r = 5; b.orb = true; bullets.push(b);
+  e._ff = 0.3; e._fk = 'snipe'; e._sqg = 0; // muzzle flash on the unit itself
+}
+function squadRelease(e) {
+  e._sqId = null; e._sqg = 0; e._gOx = 0; e._gOy = 0; e._soStay = 0; e._soP = null; e._so = null; e._warn = 0;
+  e._soCd = sortieCd() + 1.5;
+}
+function squadLive(u, L) { return u && u.hp > 0 && u._chainT == null && (u._lead === L || u._chainOf === L); }
+/** Lead-level scheduler (runs once per frame, from one member). */
+function squadPlan(L, Q, dt, px, py, fw, fh) {
+  Q.t += dt;
+  Q.mem = Q.mem.filter((u) => squadLive(u, L));
+  const onField = L.x < fw - (L.w || 40) * 0.25 && L.x > fw * 0.42 && L._ph !== 'leave' && L._entryX == null && L.core && L.core.hp > 0;
+  if (!onField) { for (const S of Q.out) if (S.st !== 'back') { S.st = 'back'; S.t = 0; } }
+  if (onField && Q.t > SQUAD.FIRST && !Q.gd) { // pick the core guards once (random)
+    Q.gd = true;
+    const pool = Q.mem.slice().sort(() => Math.random() - 0.5);
+    const n = pool.length, g = Math.min(n, Math.max(2, Math.min(4, Math.round(n / 5))));
+    pool.slice(0, g).forEach((u, i) => { u._sqGuard = { i, n: g, ph: Math.random() * 6 }; u._so = null; u._soStay = 0; u._soP = null; u._gOx = 0; u._gOy = 0; });
+    Q.next = Q.t + sqRnd(0.3, 1.2);
+  }
+  // advance squads
+  for (const S of Q.out) {
+    S.m = S.m.filter((u) => squadLive(u, L));
+    S.t += dt;
+    if (S.st === 'tell' && S.t >= SQUAD.TELL) { S.st = 'out'; S.t = 0; }
+    else if (S.st === 'out') {
+      if (moveToward(S.a, S.tx, S.ty, SQUAD.OUT_SPD, dt) || S.t > 4) { S.st = 'atk'; S.t = 0; }
+    } else if (S.st === 'atk') {
+      // slow, readable drift toward the ship's row
+      const wy = Math.max(30, Math.min(fh - 30, py));
+      S.a.y += Math.max(-32 * dt, Math.min(32 * dt, wy - S.a.y));
+      S.a.x = S.tx + Math.sin(S.t * 1.6) * 10;
+      if (S.t >= SQUAD.ATK) { S.st = 'back'; S.t = 0; }
+    }
+    if (!S.m.length || (S.st === 'back' && S.m.every((u) => u._sqHome))) {
+      for (const u of S.m) squadRelease(u);
+      S.done = true;
+    }
+  }
+  Q.out = Q.out.filter((S) => !S.done);
+  // launch a new squad
+  if (onField && Q.gd && Q.t >= (Q.next || 0) && Q.out.length < SQUAD.MAX_OUT) {
+    const idle = Q.mem.filter((u) => !u._sqGuard && !u._sqId && u._so == null && u.x < fw - 12 && u.x > 0 && u.y > 6 && u.y < fh - 6)
+      .sort(() => Math.random() - 0.5).sort((p, q) => (p._sqN || 0) - (q._sqN || 0)); // random, but units not out yet go first
+    if (idle.length) {
+      // a squad = one unit + its nearest idle neighbours (looks like a group breaking off, not random units)
+      const k = Math.min(idle.length, Math.round(sqRnd(SQUAD.SIZE[0], SQUAD.SIZE[1] + 0.49)));
+      const u0 = idle[0];
+      const m = idle.sort((p, q) => Math.hypot(p.x - u0.x, p.y - u0.y) - Math.hypot(q.x - u0.x, q.y - u0.y)).slice(0, k);
+      const ax = m.reduce((s, u) => s + u.x, 0) / m.length, ay = m.reduce((s, u) => s + u.y, 0) / m.length;
+      const tx = Math.max(fw * 0.32, Math.min(fw * 0.66, Math.min(L.x - (L.w || 40) * 0.5 - fw * 0.12, px + fw * 0.26))); // well clear of the core, ≈¼ pane ahead of the ship
+      const ty = Math.max(30, Math.min(fh - 30, py + sqRnd(-50, 50)));
+      const S = { id: ++Q.seq, m, st: 'tell', t: 0, a: { x: ax, y: ay }, tx, ty, shape: Math.random() < 0.5 ? 'vee' : 'line' };
+      m.sort((p, q) => p.y - q.y).forEach((u, i) => { u._sqId = S; u._sqI = i; u._sqN = (u._sqN || 0) + 1; u._sqHome = false; u._sqShots = 0; u._so = null; u._soStay = 0; u._soP = null; });
+      Q.out.push(S);
+    }
+    Q.next = Q.t + sqRnd(SQUAD.GAP[0], SQUAD.GAP[1]);
+  }
+}
+/** Per-unit squad / guard driver. Returns true when it moved this unit (caller skips slot flight + own gun). */
+function tickSquad(e, L, dt, px, py, bullets, fw, fh) {
+  if (L.kind === 'wave_snake_head' || !L.core) return false; // the snake keeps its own body chain
+  const Q = L._sq || (L._sq = { mem: [], out: [], t: 0, seq: 0, tick: null });
+  if (!e._sqReg) { e._sqReg = true; Q.mem.push(e); }
+  if (!Q.tick || !squadLive(Q.tick, L)) Q.tick = e;
+  if (Q.tick === e) squadPlan(L, Q, dt, px, py, fw, fh);
+  if (e._ff > 0) { e._ff -= dt; if (e._ff <= 0) { e._ff = 0; e._fk = undefined; } }
+  const S = e._sqId;
+  if (S && !S.done) {
+    squadSlotAhead(e, L, dt); e._warn = 0; e._gOx = 0; e._gOy = 0;
+    const [hx, hy] = squadHome(e, L);
+    if (S.st === 'tell') { // charge glow at its slot (the only warning: on the unit itself)
+      e._sqg = Math.min(1, S.t / SQUAD.TELL) * 0.7;
+      moveToward(e, hx, hy, SQUAD.FOLLOW, dt);
+      return true;
+    }
+    if (S.st === 'back') {
+      e._sqg = 0;
+      e._sqHome = moveToward(e, hx, hy, SQUAD.BACK_SPD, dt) || e._sqHome && Math.hypot(hx - e.x, hy - e.y) < 2;
+      if (e._sqHome) { e.x = hx; e.y = hy; }
+      if (e.face || (e.G && e.G.face)) e.rot = 0;
+      return true;
+    }
+    // out / atk: hold the V or line around the moving anchor
+    const n = S.m.length, k = e._sqI - (n - 1) / 2;
+    const off = S.shape === 'vee' ? [Math.abs(k) * 26, k * 26] : [0, k * 30];
+    const gx = S.a.x + off[0], gy = Math.max(12, Math.min(fh - 12, S.a.y + off[1]));
+    moveToward(e, gx, gy, SQUAD.FOLLOW, dt);
+    e._sqg = 0;
+    if (S.st === 'atk') {
+      for (let j = e._sqShots; j < SQUAD.SHOTS; j++) {
+        const at = SQUAD.SHOT_T0 + e._sqI * SQUAD.SHOT_STAGGER + j * SQUAD.SHOT_GAP;
+        if (S.t >= at) { squadShot(e, px, py, bullets); e._sqShots = j + 1; }
+        else { if (S.t >= at - SQUAD.SHOT_TELL) e._sqg = (S.t - (at - SQUAD.SHOT_TELL)) / SQUAD.SHOT_TELL; break; }
+      }
+    }
+    return true;
+  }
+  if (e._sqGuard) { // orbit near the core (behind / above / below — sweeps, never parks in front of the core)
+    squadSlotAhead(e, L, dt); e._warn = 0; e._gOx = 0; e._gOy = 0; e._sqg = 0;
+    const G = e._sqGuard, c = { x: L.x + (L.core.ox || 0), y: L.y + (L.core.oy || 0) };
+    const R = Math.max(L.w || 40, L.h || 30) * 0.5 + 22;
+    const base = G.n > 1 ? -1.6 + 3.2 * (G.i / (G.n - 1)) : 0;
+    const a = base + Math.sin(Q.t * SQUAD.GUARD_W + G.ph) * 0.9;
+    const gx = c.x + Math.cos(a) * R, gy = Math.max(12, Math.min(fh - 12, c.y + Math.sin(a) * R * 0.85));
+    moveToward(e, gx, gy, 170, dt);
+    return true;
+  }
+  return false;
+}
+
+const bubblesAlive = (list) => list.some((e) => e.kind === 'wave_bubble' && e.hp > 0 && e.x > -40);
+const LOOP_FROM = Math.max(0, WAVE_SCRIPT.findIndex((w) => w[0] >= 14.5));
+export function runWaveScript(st, time, list, fw, fh) {
+  const tags = [];
+  st._waveI = st._waveI || 0;
+  const off = st._waveOff || 0;
+  while (st._waveI < WAVE_SCRIPT.length && WAVE_SCRIPT[st._waveI][0] + off <= time) {
+    const [, build, tag] = WAVE_SCRIPT[st._waveI++];
+    if (off && build._firstRunOnly) continue; // snake: twice per match only
+    if (build === bubbleWall) { if (!st._bubDone) { st._bubDone = true; st._bubPend = time; } continue; } // once per match (not on replay), spawned below, away from cores
+    const es = build(fw, fh);
+    if (!es.some((e) => e.core || e._chainOf || e._lead) && es.length) { st._seenB = st._seenB || []; if (!st._seenB.includes(build)) st._seenB.push(build); } // 10-15: sudden-death pool
+    if (es.some((e) => e.core) && bubblesAlive(list)) (st._coreHeld = st._coreHeld || []).push(...es); // no core joins a bubble wall
+    else for (const e of es) list.push(e);
+    if (tag && !off) tags.push(tag);
+  }
+  // 10-04: the bubble wall is a plain group of normal enemies — never next to a core (looks like its escort).
+  // It waits until no core is on the field (max 30 s); cores due meanwhile wait until the wall is gone.
+  if (st._bubPend != null && (!list.some((e) => e.core && e.hp > 0) || time - st._bubPend > 30)) {
+    st._bubPend = null;
+    for (const e of bubbleWall(fw, fh)) list.push(e);
+  }
+  if (st._coreHeld && st._coreHeld.length && !bubblesAlive(list)) { for (const e of st._coreHeld) list.push(e); st._coreHeld = null; }
+  // User 10-04d: enemies ran out late in the match / in 延長戦 (script ended at 294 s).
+  // Once used up, replay it from W2 (cores + guards included), same on both fields.
+  if (st._waveI >= WAVE_SCRIPT.length) {
+    const last = WAVE_SCRIPT[WAVE_SCRIPT.length - 1][0] + off;
+    if (time >= last + 3) { st._waveI = LOOP_FROM; st._waveOff = time - WAVE_SCRIPT[LOOP_FROM][0]; }
+  }
+  return tags;
+}
+
+/**
+ * User 10-15: 延長戦 (sudden death) can last any length → never let a field run dry. While it lasts, whenever fewer
+ * than SD_MIN regular enemies are alive on this field, a random group of the regular field enemies that already
+ * appeared in this match (normal waves only: no cores / packs / snake / bubble wall) is placed — at most one group
+ * per SD_GAP s, groups capped at SD_GROUP units, never above SD_CAP enemies in total. Same rule for both fields.
+ * They are ordinary enemies (normal kill score / coins / drops).
+ */
+export const SUDDEN = { MIN: 4, GAP: 1.4, GROUP: 5, CAP: 22 };
+const SD_DEFAULT = WAVE_SCRIPT.filter((w) => w[0] < 14).map((w) => w[1]); // W1 = normal stage pool
+export function suddenDeathSpawn(st, list, dt, fw, fh) {
+  st._sdAcc = (st._sdAcc || 0) + dt;
+  if (st._sdAcc < SUDDEN.GAP) return 0;
+  const alive = list.filter((e) => e.hp > 0 && !e.sent && e._chainT == null && e.x > -40 && e.x < fw + 260).length;
+  if (alive >= SUDDEN.MIN || list.length >= SUDDEN.CAP) return 0;
+  st._sdAcc = 0;
+  const pool = st._seenB && st._seenB.length ? st._seenB : SD_DEFAULT;
+  const build = pool[Math.floor(Math.random() * pool.length)];
+  let es = build(fw, fh).filter((e) => !e.core && !e._chainOf && !e._lead);
+  if (es.length > SUDDEN.GROUP) es = es.slice(0, SUDDEN.GROUP);
+  for (const e of es) list.push(e);
+  return es.length;
+}
+
+// ---------- movers ----------
+function stepPlan(e, dt, fw, fh, py) {
+  const st = e.plan[e._pi || 0];
+  if (!st) { // plan finished: keep last velocity
+    e.x += (e._vx || -150) * dt; e.y += (e._vy || 0) * dt;
+    return;
+  }
+  if (!st._on) {
+    st._on = true; st._t = 0; st._sx = e.x; st._sy = e.y;
+    if (st.k === 'dive') {
+      // Commit to the player's row as seen now (visible info), dive in front of the ship, peel away
+      const ty = Math.max(20, Math.min(fh - 20, py)), tx = fw * 0.34, sg = ty < fh * 0.5 ? 1 : -1;
+      const dive = B([e.x, e.y], [e.x - 60, e.y], [tx + 140, ty], [tx, ty], 1.0);
+      const peel = B([tx, ty], [tx - 50, ty + sg * 30], [tx - 70, ty + sg * 170], [tx - 170, ty + sg * 330], 1.2);
+      e.plan.splice(e._pi, 1, dive, peel);
+      e._diving = true;
+      return stepPlan(e, dt, fw, fh, py);
+    }
+  }
+  st._t += dt;
+  const u = Math.min(1, st._t / (st.d || 1));
+  let nx = e.x, ny = e.y;
+  if (st.k === 'bez') {
+    const p = st.rel ? st.p.map((q) => [st._sx + q[0], st._sy + q[1]]) : st.p;
+    [nx, ny] = bz(p, u);
+  } else if (st.k === 'hold') {
+    const tt = st._t;
+    nx = st._sx + (st.sway ? Math.sin(tt * 0.9) * st.sway : 0);
+    ny = st._sy + (st.bob ? Math.sin(tt * (st.bw || 3)) * st.bob : 0);
+    e._holding = true;
+    e._warn = st.warn && st.d - tt < st.warn ? 1 : 0;
+  } else if (st.k === 'line') {
+    const tt = st._t;
+    const v = (st.vx || 140) * (1 + (st.surge || 0) * Math.sin(tt * 1.7 + (st.ph || 0)));
+    nx = e.x - v * dt;
+    ny = st._sy + (st.amp || 0) * Math.sin((st.wf || 2) * tt + (st.ph || 0)) - (st.amp || 0) * Math.sin(st.ph || 0);
+    e._vx = -v; e._vy = 0;
+  }
+  if (dt > 0 && st.k !== 'line') { e._vx = (nx - e.x) / dt; e._vy = (ny - e.y) / dt; }
+  e.x = nx; e.y = ny;
+  if (st.k !== 'line' && u >= 1) {
+    e._pi = (e._pi || 0) + 1;
+    if (st.k === 'hold') { e._holding = false; e._warn = 0; }
+  }
+}
+
+function bossMove(e, dt, fw, fh, py) {
+  const t = e.mvT, half = Math.min(fh * 0.5 - 4, Math.max(e.h * 0.5 + 6, e._bandH || 0));
+  const clampY = (y) => Math.max(half, Math.min(fh - half, y));
+  if (e._bt == null) { // entry
+    e.x -= 150 * dt;
+    e.y += (clampY(e.y0 ?? fh * 0.5) - e.y) * Math.min(1, dt * 2);
+    if (e.x <= e.hx) { e._bt = 0; e._ph = 'a'; e._pt = 0; e._ax = e.x; e._ay = e.y; }
+    return;
+  }
+  e._bt += dt; e._pt += dt;
+  if (e._bt > (e.stay || 18)) { // leave
+    e._ph = 'leave'; e.x -= 70 * dt; e._escV = 190; return;
+  }
+  if (e.boss === 'eye') {
+    // Figure-8 drift round its station
+    const ax = fw * 0.1, ay = Math.max(0, fh * 0.5 - half), w = 0.55;
+    const tt = e._bt;
+    const ease = Math.min(1, tt / 1.5);
+    e.x = e.hx + Math.sin(tt * w) * ax * ease;
+    e.y = clampY(fh * 0.5 + Math.sin(tt * w * 2) * ay * ease);
+    return;
+  }
+  if (e.boss === 'tri') {
+    // Video (1:14–1:52, top field, tracked at 10 fps): x stays locked at 51.5 % across; it ping-pongs
+    // vertically between 9 % and 90 % of the pane height — 2.1 s per traverse (≈0.4 pane/s, eased at
+    // the ends), then ~1.2 s parked at the edge. Period ≈ 6.6 s.
+    e._ph = 'b';
+    const ease = Math.min(1, e._bt / 1.2);
+    const top = Math.max(e._bandH || e.h * 0.3, fh * 0.09), bot = Math.min(fh - (e._bandH || e.h * 0.3), fh * 0.9); // video: it pokes half out at the edges
+    const s6 = (e._bt + 1.05) % 6.6; // start mid-way down
+    let u;
+    if (s6 < 2.1) u = s6 / 2.1; else if (s6 < 3.3) u = 1; else if (s6 < 5.4) u = 1 - (s6 - 3.3) / 2.1; else u = 0;
+    const ue = u * 0.5 + u * u * (3 - 2 * u) * 0.5;
+    const yT = top + (bot - top) * ue;
+    e.y = e._ay + (yT - e._ay) * ease;
+    e.x = e.hx;
+    return;
+  }
+  if (e.boss === 'jet') {
+    // Round 2 jet: slow vertical sweep (straight shots + short bolts) ↔ spiral at centre. No lunges.
+    const PH = ['sweep', 'spiral'];
+    const D = { sweep: 6.5, spiral: 4.5 };
+    if (!e._jph) { e._jph = 'sweep'; e._pt = 0; }
+    if (e._pt > D[e._jph]) { e._jph = PH[(PH.indexOf(e._jph) + 1) % PH.length]; e._pt = 0; }
+    const p = e._jph;
+    e._ph = p; e._warn = 0; e._dashWarn = 0;
+    if (p === 'sweep') {
+      const ay = Math.max(0, fh * 0.5 - half) * 0.85;
+      e._swT = (e._swT || 0) + dt;
+      e.y += (clampY(fh * 0.5 + Math.sin(e._swT * 0.9) * ay) - e.y) * Math.min(1, dt * 3);
+      e.x += (e.hx - e.x) * Math.min(1, dt * 2);
+    } else {
+      e.x += (e.hx + 10 - e.x) * Math.min(1, dt * 1.5);
+      e.y += (clampY(fh * 0.5) - e.y) * Math.min(1, dt * 1.5);
+    }
+  }
+}
+
+/** Tethered striker tip (core): 異次元 portal → emerge → [stretch out → detach → chase → return → contract → wait] loop → leave. */
+export function armReach(fw) { return Math.min(fw * 0.42, 170); } // video lunge ≈5.5×shipH ≈155
+// User 10-06: 異次元 entry was 1.15 s total (too short). user_ref.mp4 4:43.3–4:45.6: the dark-red portal sits alone
+// ≈1.5 s, then the sphere + chain come out. Portal: the video shows it at full size from its first frame
+// (user_ref 4:43.36, ref2 2:15.29 — no growth); per the user (10-06b) it now fades in with alpha over portalFade s.
+const ARM = { portal: 1.5, portalFade: 0.45, enter: 1.25 };
+// User 10-06: once the head has come off it loops for as long as the snake lives:
+//   chase the ship for CHASE s → fly back to its own slot (chain tip) → slide in → sit WAIT s → stretch out → off again.
+export const SNAKE_HEAD = { CHASE: 3, WAIT: 1, RET_SPD: 330, RET_NEAR: 60, CHASE_SPD: 240, CHASE_SLOW: 140, TURN: 2.1 };
+/*
+ * 10-06b body motion — measured frame by frame (user_ref.mp4 4:44.8–5:01, 27.96 fps; ref3 5:00–5:18; ref2 2:15–2:36).
+ * Video px ×2 = game px (video ship 14 px ↔ game 28 px). Body length is measured pivot centre → red ball
+ * (3rd link from the tip, robust to blur) and converted to the tip link (red ball sits at 5/7 of the tip distance).
+ *   emerge   : sphere + head appear with the head ≈19 px (game 38) from the pivot, chain pays out to full in ≈0.6 s
+ *              (ease-out: red ball 1.0 → 2.5 → 4.4 ships at +0 / +0.4 / +0.6 s), holds ≈0.4 s, head comes off.
+ *   away     : chain stays fully stretched (red ball 4.4–4.85 ships ⇒ tip link ≈ 88 video px = 176 game px),
+ *              length drifts only ±4 %, angle drifts ≤ 7°/s (162° → 177° over 2–3 s; 180° = straight at the ship side).
+ *   return   : head flies back to the stretched tip, then SLIDES IN along the chain at ≈112 px/s (game 224):
+ *              the chain contracts behind it (red ball 4.8 → 0.64 ships in ≈0.9 s), links bunch on the sphere.
+ *   turn     : head passes over the front of the sphere to +35..39 px on its far side, slightly below (game +74, +12..40)
+ *              and back in ≈0.55 s.
+ *   out      : (after the turn the head eases back out to ≈80 px within the 1 s wait, red ball ≈1.7 ships — video 1.5–3)
+ *              head goes back out at the same ≈224 px/s, chain stretching behind it (red ball 0.9 → 4.4 in ≈0.6 s), and comes
+ *              off at full stretch. Reattach → detach in the video ≈2.2 s (here slide 0.85 + WAIT 1 + out 0.65 s).
+ *   7 elements pivot→tip at full stretch: −13 −25 −37 −49 (links) −63 (RED BALL) −77 −88 (tip link), head centre ≈7 px past it.
+ *   Links are uniform (≈11 px thick, game 22); only the sphere's bell-shaped neck flares (thicker at the pivot).
+ */
+export const SNAKE_BODY = { LINKS: 7, RED: 3, LMAX: 176, LMIN: 30, HEAD_OFF: 14, OUT_SPD: 224, IN_SPD: 224, TURN_T: 0.55, TURN_X: 74, TURN_Y: 26, SLOT_S: 80, AWAY_WOB: 0.04, AWAY_WOB_T: 2.6, AIM_W: 0.9, DRIFT_W: 0.12, AIM_SPAN: 0.45, EMERGE_S: 38, IN_LAG: 0.25 };
+const B_ = SNAKE_BODY;
+const wrapA = (a) => ((a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+const clampAim = (a) => Math.PI + Math.max(-B_.AIM_SPAN, Math.min(B_.AIM_SPAN, wrapA(a - Math.PI))); // chain points at the ship side (left)
+/** Video (user_ref 4:49.66): the portal behind the sphere vanishes as the head goes out for the 2nd time; it fades out here. */
+function snakePortalOut(e, dt) { if (e._portalGo) e._portalOut = Math.max(0, (e._portalOut ?? 1) - dt / 0.25); }
+/** Turn the chain angle toward `want` (clamped to the ship side) at most `w` rad/s. */
+function snakeAimA(e, want, w, dt) {
+  const d = wrapA(clampAim(want) - (e._A ?? Math.PI)), st = w * dt;
+  const a0 = e._A ?? Math.PI;
+  e._A = a0 + Math.max(-st, Math.min(st, d));
+  e._Aw = (e._A - a0) / Math.max(dt, 1e-3); // angular speed → slight rope bend in the links
+}
+/** The head's slot at the stretched chain tip (where it re-attaches after a chase). */
+function snakeTipPos(e, fh) {
+  const A = e._A ?? Math.PI, s = (e._Lc || B_.LMAX) + B_.HEAD_OFF;
+  return [e._tx + Math.cos(A) * s, Math.max(8, Math.min(fh - 8, e._ty + Math.sin(A) * s))];
+}
+/** Head comes off the chain: aims straight at the ship and starts the CHASE timer. */
+function snakeDetach(e, px, py) {
+  e._detached = true; e._hc = 'chase'; e._hcT = 0; e._awayT = 0;
+  e._ph = 'away'; e._pt = 0;
+  e.mv = 'snakechase';
+  const a = Math.atan2(py - e.y, px - e.x);
+  e._vx = Math.cos(a) * 220; e._vy = Math.sin(a) * 220;
+}
+/** Detached head (mv 'snakechase'): chase CHASE s → fly back to the stretched chain tip → (armMove 'retract'). */
+function snakeHeadAway(e, dt, fw, fh, px, py) {
+  e._bt = (e._bt || 0) + dt; e._pt = (e._pt || 0) + dt; e._hcT = (e._hcT || 0) + dt; e._awayT = (e._awayT || 0) + dt;
+  snakePortalOut(e, dt);
+  // body (video): stays fully stretched while the head is away, length breathing only ±4 %, angle drifting slowly
+  e._Lc = B_.LMAX * (1 - B_.AWAY_WOB * 0.5 + B_.AWAY_WOB * 0.5 * Math.cos(2 * Math.PI * e._awayT / B_.AWAY_WOB_T));
+  snakeAimA(e, Math.atan2(e.y - e._ty, e.x - e._tx), B_.DRIFT_W, dt);
+  e._pivWind = 0;
+  if (e._hc === 'chase') {
+    // homes on the ship with limited turn (dodgeable)
+    const dist = Math.hypot(px - e.x, py - e.y);
+    const spd = dist < 70 ? SNAKE_HEAD.CHASE_SLOW : SNAKE_HEAD.CHASE_SPD; // slow near the ship so it can be dodged / shot
+    const want = Math.atan2(py - e.y, px - e.x);
+    let ang = Math.atan2(e._vy || 0, e._vx || -1);
+    const d = wrapA(want - ang), turn = SNAKE_HEAD.TURN * dt;
+    ang += Math.max(-turn, Math.min(turn, d));
+    e._vx = Math.cos(ang) * spd; e._vy = Math.sin(ang) * spd;
+    e.x += e._vx * dt; e.y += e._vy * dt;
+    e.x = Math.max(24, Math.min(fw - 24, e.x)); // stay on-field while chasing (core must remain targetable)
+    e.y = Math.max(10, Math.min(fh - 10, e.y));
+    e.rot = ang; e.tone = 'chase';
+    if (e._hcT >= SNAKE_HEAD.CHASE) { e._hc = 'ret'; e._hcT = 0; }
+    return;
+  }
+  // return: fly straight back to the stretched chain tip (eases in over the last RET_NEAR px)
+  const [hx, hy] = snakeTipPos(e, fh);
+  const dx = hx - e.x, dy = hy - e.y, dist = Math.hypot(dx, dy);
+  const spd = SNAKE_HEAD.RET_SPD * Math.max(0.35, Math.min(1, dist / SNAKE_HEAD.RET_NEAR));
+  const step = spd * dt;
+  e.tone = 'ret';
+  if (dist <= Math.max(2, step)) {
+    // reattached at the tip: now slide in along the chain to the slot by the sphere (armMove 'retract')
+    e.x = hx; e.y = hy; e._vx = 0; e._vy = 0;
+    e._detached = false; e._hc = null; e.mv = 'arm'; e._ph = 'retract'; e._pt = 0; e.tone = undefined;
+    e._s = (e._Lc || B_.LMAX) + B_.HEAD_OFF;
+    e.rot = (e._A ?? Math.PI) - Math.PI;
+    return;
+  }
+  e._vx = dx / dist * spd; e._vy = dy / dist * spd;
+  e.x += e._vx * dt; e.y += e._vy * dt;
+  const want = Math.atan2(dy, dx);
+  e.rot = (e.rot || 0) + wrapA(want - (e.rot || 0)) * Math.min(1, dt * 8);
+}
+function armMove(e, dt, fw, fh, px, py) {
+  if (e._detached || e.mv === 'snakechase') return; // head already flying free
+  const pivX = fw * 0.70; // video 2:30–2:43: sphere parked at ≈70 % across
+  const Smax = B_.LMAX + B_.HEAD_OFF;
+  e._reach = Smax; // COM: the head's reach along its own line
+  e._bt = (e._bt || 0) + dt; e._fw = fw;
+  if (e._ph == null) { e._ph = 'portal'; e._pt = 0; e._A = Math.PI; e._s = B_.EMERGE_S; e._Lc = B_.LMIN; e._wob = Math.random() * 6; e._tx = pivX; }
+  e._pt += dt;
+  snakePortalOut(e, dt);
+  e.tone = undefined; e._pivWind = 0; e._Aw = 0; e._hy = 0;
+  const shipA = Math.atan2(Math.max(12, Math.min(fh - 12, py)) - e._ty, px - e._tx);
+  switch (e._ph) {
+    case 'portal': { // 異次元 portal on its own (sphere / chain / head not out yet: parked off-field); fades in
+      const u = Math.min(1, e._pt / ARM.portalFade);
+      e._tx = pivX; e._s = B_.EMERGE_S; e._A = Math.PI;
+      e._portal = 1; e._portalOnly = 1; e._portalOpen = 1;
+      e._portalA = u * u * (3 - 2 * u); // smoothstep 0 → 1 (transparent → solid), no size change
+      if (e._pt >= ARM.portal) { e._ph = 'enter'; e._pt = 0; e._portalOnly = 0; e._portalA = 1; }
+      break;
+    }
+    case 'enter': {
+      // video 4:44.8: sphere + head pop out of the portal (head ≈38 px out), hold 0.25 s, chain pays out to full
+      // stretch in ≈0.6 s (ease-out), holds ≈0.4 s aimed at the ship, then the head comes off
+      e._tx = pivX; e._portal = 1;
+      const t = e._pt;
+      e._pivWind = Math.max(0, 1 - t / 0.5);
+      if (t < 0.25) e._s = B_.EMERGE_S;
+      else { const u = Math.min(1, (t - 0.25) / 0.6), k = 1 - (1 - u) * (1 - u); e._s = B_.EMERGE_S + (Smax - B_.EMERGE_S) * k; }
+      if (t > 0.25) snakeAimA(e, shipA, B_.AIM_W * 0.6, dt);
+      if (t >= ARM.enter) { snakeDetach(e, px, py); break; }
+      break;
+    }
+    case 'away': // fallback if still on arm mv briefly
+      e.mv = 'snakechase';
+      break;
+    case 'retract': // head re-attached at the stretched tip slides in along the chain; the chain contracts behind it
+      e._s = Math.max(0, (e._s ?? Smax) - B_.IN_SPD * dt);
+      if (e._s <= 0) { e._ph = 'headWait'; e._pt = 0; }
+      break;
+    case 'headWait': { // the slot: head passes over the front of the sphere and back (video ≈0.55 s), sits by the sphere, WAIT s
+      const t = e._pt;
+      if (t < B_.TURN_T) { const v = Math.sin(Math.PI * t / B_.TURN_T); e._s = -B_.TURN_X * v; e._hy = B_.TURN_Y * v; }
+      else { const u = Math.min(1, (t - B_.TURN_T) / (SNAKE_HEAD.WAIT - B_.TURN_T)); e._s = B_.SLOT_S * u * u * (3 - 2 * u); }
+      snakeAimA(e, shipA, B_.AIM_W * 0.5, dt);
+      if (t >= SNAKE_HEAD.WAIT) {
+        if (e._bt > (e.stay || 20)) { e._ph = 'leave'; e._pt = 0; } // timed exit only with the head home
+        else { e._ph = 'strike'; e._pt = 0; e._portalGo = 1; } // first stretch-out after a return: portal goes (video)
+      }
+      break;
+    }
+    case 'strike': // head goes back out at ≈224 px/s aimed at the ship, the chain stretching behind it; off at full stretch
+      e._s = Math.min(Smax, (e._s ?? B_.SLOT_S) + B_.OUT_SPD * dt);
+      snakeAimA(e, shipA, B_.AIM_W, dt);
+      if (e._s >= Smax - 0.5) { e._s = Smax; snakeDetach(e, px, py); }
+      break;
+    case 'leave':
+      e._tx += 70 * dt; e._s = B_.SLOT_S;
+      if (e._tx > fw + B_.LMAX + 60) e.x = -999;
+      break;
+  }
+  if (e._detached) { e.mv = 'snakechase'; return; }
+  if (e._ph === 'portal') { e.x = fw + 300; e.y = e._ty; e._vx = 0; e._vy = 0; e.rot = 0; return; } // hidden until it emerges
+  // attached: chain tip link sits HEAD_OFF behind the head, never shorter than LMIN (links bunch on the sphere).
+  // While the head slides in, the chain contracts with a lag (video 4:52.9–4:53.4: the red ball / tip links are still
+  // out past the head as it slides over them; red ball bottoms out ≈1.0 s after re-attaching, head at the pivot at 0.85 s).
+  const Lt = Math.max(B_.LMIN, e._s - B_.HEAD_OFF);
+  if ((e._ph === 'retract' || e._ph === 'headWait') && e._Lc > Lt) e._Lc += (Lt - e._Lc) * Math.min(1, dt / B_.IN_LAG);
+  else e._Lc = Lt;
+  if (e._ph !== 'leave' || e._tx <= fw + B_.LMAX + 60) {
+    const ox = e.x, oy = e.y, A = e._A ?? Math.PI;
+    e.x = e._tx + Math.cos(A) * e._s - Math.sin(A) * e._hy;
+    e.y = Math.max(8, Math.min(fh - 8, e._ty + Math.sin(A) * e._s + Math.cos(A) * e._hy * -1));
+    e._vx = (e.x - ox) / Math.max(dt, 1e-3); e._vy = (e.y - oy) / Math.max(dt, 1e-3);
+  }
+  e.rot = (e._A ?? Math.PI) - Math.PI; // attached head drawn as cut from the video (chain pointing left = no rotation)
+}
+
+/** Scripted movement. Returns true when handled (skip the default drift). `py` = target ship row. */
+export function moveScripted(e, dt, fw, fh, py = fh * 0.5, px = 40) {
+  if (!e.mv) return false;
+  e.mvT = (e.mvT || 0) + dt;
+  e._fh = fh;
+  const t = e.mvT;
+  if (e.mv === 'plan') {
+    const tt = t - (e.dly || 0);
+    if (tt < 0) {
+      const p0 = e.plan[0].p ? e.plan[0].p[0] : [e.x, e.y];
+      e.x = p0[0]; e.y = p0[1];
+      e._edgeWarn = e.tele && -tt < e.tele && (e.y < 0 || e.y > fh) ? 1 : 0;
+      return true;
+    }
+    e._edgeWarn = 0;
+    stepPlan(e, dt, fw, fh, py);
+  } else if (e.mv === 'form') {
+    const p = formPos(e, t);
+    p[0] += e._gOx || 0; p[1] += e._gOy || 0; // rear-guard patrol / cover offset (tickRearGuard)
+    if (e.face || e.G.face) { e._vx = (p[0] - e.x) / Math.max(dt, 1e-3); e._vy = (p[1] - e.y) / Math.max(dt, 1e-3); }
+    e.x = p[0]; e.y = p[1];
+    if (e.G.lead && (e.G.lead.hp <= 0 || e.G.lead.x < -100)) { // leader gone: scatter left
+      e.mv = 'plan'; e.plan = [{ k: 'line', vx: 170, amp: 0 }]; e._pi = 0;
+    }
+  } else if (e.mv === 'zig') {
+    e.x -= (e.vx || 150) * dt;
+    const ph = ((t * (e.zf || 1) + (e.ph || 0)) % 1 + 1) % 1;
+    const tri = ph < 0.5 ? ph * 4 - 1 : 3 - ph * 4; // −1…1 triangle
+    const ny = e.y0 + (e.amp || 50) * tri;
+    e._vx = -(e.vx || 150); e._vy = (ny - e.y) / Math.max(dt, 1e-3);
+    e.y = ny;
+  } else if (e.mv === 'drift') {
+    e.x -= (e.vx || SCROLL) * dt;
+    e.y = e.y0 + (e.bob ?? 10) * Math.sin((e.bf || 1.2) * t + (e.ph || 0)); // bob 0 = no vertical motion (bubble wall)
+    e.rot = Math.sin(t * 0.7 + (e.ph || 0)) * 0.25;
+  } else if (e.mv === 'arm') {
+    armMove(e, dt, fw, fh, px, py);
+  } else if (e.mv === 'armseg') {
+    // 10-06b: link j (1 = next to the pivot … LINKS = tip link) sits at j/LINKS of the chain length H._Lc along the
+    // chain angle (accordion: the gaps open on the stretch and close on the contract — measured in the video).
+    // When the head is close in / passing over the sphere, the tip links trail toward it like a rope.
+    const H = e._chainOf;
+    if (!H || H.x < -500) { e.x = -999; return true; }
+    const n = (H.segs || B_.LINKS) + 1;
+    if (e.chainIdx === n) { e.x = H._tx; e.y = H._ty; e.tone = H._portalOnly ? 'portal' : H._pivWind ? 'anchorWind' : 'anchor'; e.rot = (H._A ?? Math.PI) - Math.PI; return true; }
+    if (H._portalOnly) { e.x = H.x; e.y = H.y; e._vx = 0; e._vy = 0; return true; } // links still inside the portal (off-field with the head)
+    const j = n - e.chainIdx, f = j / (n - 1); // pivot side 0 … tip 1
+    const A = H._A ?? Math.PI, Lc = H._Lc || B_.LMIN, ux = Math.cos(A), uy = Math.sin(A);
+    let x = H._tx + ux * Lc * f, y = H._ty + uy * Lc * f;
+    if (!H._detached) { // rope: pull the tip links toward where the head actually is (over / past the sphere)
+      // (only the part of the head offset that is past the pivot / off the chain line: at s ≥ 0 the links keep
+      //  their even accordion spacing; video: contracted red ball ≈0.6–0.9 ships from the pivot)
+      const qx = H.x - H._tx, qy = H.y - H._ty, sAl = qx * ux + qy * uy, sPerp = -qx * uy + qy * ux;
+      const ea = Math.min(0, sAl), w = f * f * f;
+      x += (ux * ea - uy * sPerp) * w; y += (uy * ea + ux * sPerp) * w;
+    }
+    // slight bend while the chain swings (links lag the angle), plus the small link wobble
+    const bend = Math.max(-0.35, Math.min(0.35, -(H._Aw || 0) * 0.3)) * Lc * Math.sin(Math.PI * f) * 0.5;
+    const wob = Math.sin(t * 2 + f * 5 + (H._wob || 0)) * 1.2 * Math.sin(Math.PI * f);
+    const ox = e.x, oy = e.y;
+    e.x = x - uy * (bend + wob); e.y = y + ux * (bend + wob);
+    e.rot = A - Math.PI; // link faces along the chain
+    e._vx = (e.x - ox) / Math.max(dt, 1e-3); e._vy = (e.y - oy) / Math.max(dt, 1e-3);
+    return true;
+  } else if (e.mv === 'snake') {
+    // Sharp weave (2nd harmonic) + speed surges; every segment replays the head's path (delay dly)
+    const tt = t - (e.dly || 0);
+    const v = e.v || 90, sk = e.sk || 0, sw = e.sw || 1;
+    const X = (s) => e.x0 - v * (s + (sk / sw) * Math.sin(sw * s));
+    if (tt < 0) { e.x = e.x0 + v * -tt; e.y = e.y0; }
+    else {
+      const amp = e.amp || 60, wf = e.wf || 1.5;
+      e.x = X(tt);
+      e.y = e.y0 + amp * (Math.sin(wf * tt) + (e.k2 || 0) * Math.sin(2.7 * wf * tt));
+      e.y = Math.max(20, Math.min((e._fh || 300) - 20, e.y));
+    }
+  } else if (e.mv === 'loop') {
+    const dir = e.loopDir || 1;
+    if (e._loopA == null) {
+      e.x -= (e.vx || 150) * dt;
+      if (e.x <= (e.loopX || fw * 0.55)) { e._loopA = 0; e._lcx = e.x; e._lcy = e.y - dir * (e.R || 60); }
+    } else if (e._loopA < Math.PI * 2) {
+      e._loopA = Math.min(Math.PI * 2, e._loopA + (Math.PI * 2 / (e.loopDur || 1.6)) * dt);
+      const a = e._loopA, R = e.R || 60;
+      e.x = e._lcx - R * Math.sin(a);
+      e.y = e._lcy + dir * R * Math.cos(a);
+      e.rot = -a * dir; // nose follows the loop
+    } else {
+      e.rot = 0;
+      e.x -= (e.vx || 150) * 1.25 * dt; // exits faster
+    }
+  } else if (e.mv === 'boss') {
+    bossMove(e, dt, fw, fh, py);
+  } else if (e.mv === 'snakechase') {
+    // Detached snake head: chase SNAKE_HEAD.CHASE s → back to its slot → reattach → wait → again
+    snakeHeadAway(e, dt, fw, fh, px, py);
+    return true;
+  } else return false;
+  // Facing (sprites point left): nose along travel
+  if (e.face && e.mv !== 'loop' && (Math.abs(e._vx || 0) + Math.abs(e._vy || 0)) > 5) {
+    const want = Math.atan2(e._vy || 0, e._vx || -1) - Math.PI;
+    let d = ((want - (e.rot || 0) + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    e.rot = (e.rot || 0) + d * Math.min(1, dt * 10);
+  }
+  // Left the stage (any edge) after having been on it → cull
+  const inside = e.x > -30 && e.x < fw + 30 && e.y > -30 && e.y < fh + 30;
+  if (inside) e._seen = true;
+  else if (e._seen && (e.x < -60 || e.y < -70 || e.y > fh + 70 || e.x > fw + 200)) e.x = -999;
+  return true;
+}
+
+/** Scripted fire (round red shots). Returns true when this unit uses scripted fire. */
+export function fireScripted(e, bullets, tx, ty, dt, canFire) {
+  const f = e.fire;
+  if (!f) return false;
+  const fh = e._fh || 1e9;
+  if (e.y < 8 || e.y > fh - 8 || e._diving || e._chainT != null) canFire = false;
+  const ox = e.x - (e.w || 30) * 0.4, oy = e.y;
+  const shot = (a, spd, dmg = 2) => {
+    const b = spawnBullet(ox, oy, Math.cos(a) * spd, Math.sin(a) * spd, 'enemy', false, dmg, { life: 5 });
+    b.r = 5; b.orb = true;
+    bullets.push(b);
+  };
+  const dash = (x, y, a, spd = 230) => {
+    const b = spawnBullet(x, y, Math.cos(a) * spd, Math.sin(a) * spd, 'enemy', false, 2, { life: 3.2 });
+    b.k = 'dash'; b.r = 2.5; b.hb = 1;
+    bullets.push(b);
+  };
+  // Short laser bolt (never a row-covering beam): a ~44 px bright segment flying left at a dodgeable speed
+  const laser = (dy = 0, spd = 260) => {
+    const b = spawnBullet(ox, oy + dy, -Math.min(300, Math.abs(spd)), 0, 'enemy', false, 2, { life: 3.6 });
+    b.k = 'bolt'; b.r = 3; b.hb = 1.5;
+    bullets.push(b);
+  };
+  const aim = Math.atan2(ty - oy, tx - ox);
+  // In-progress laser telegraph (field-only warning line, then the beam)
+  if (e._laserTele > 0) {
+    e._laserTele -= dt;
+    e.laserTeleT = Math.max(0, e._laserTele);
+    if (e._laserTele <= 0) {
+      e.laserTeleT = 0; e.laserAimX = undefined; e.laserAimY = undefined; e.laserTeleOffs = undefined;
+      if (e._dashWall) {
+        // Dash wall: every telegraphed row fires 3 short white dashes in quick succession
+        e._dwRows = e._laserOffs.slice(); e._dwN = 3; e._dwT = 0; e._dashWall = false;
+      } else for (const dy of (e._laserOffs || [0])) laser(dy, e._laserSpd || 260);
+    }
+    return true;
+  }
+  if (e._dwN > 0) {
+    e._dwT -= dt;
+    if (e._dwT <= 0) {
+      e._dwN--; e._dwT = 0.13;
+      for (const dy of e._dwRows) dash(e.x - 20, e.y + dy, Math.PI, 235);
+    }
+    return true;
+  }
+  if (f.type === 'boss') { bossFire(e, dt, canFire, shot, laser, aim, ox, oy); return true; }
+  if (f.type === 'armhead') {
+    // Saw: red spiked ring from the sphere's mouth (flies out, comes back) + 5 diamonds each side
+    if (e._armFire === 'saw') {
+      e._armFire = false;
+      if (e._tx < (e._fw || 1e9) - 10) {
+        const a = e._sawAim, cx = e._tx - 18 * Math.cos(0), cy = e._ty, nx = -Math.sin(a), ny = Math.cos(a);
+        // video 2:35–2:40 (tracked): out at ≈105 px/s for ≈2.2 s, straight back at ≈120 px/s, docks ~1.1 s
+        const sw = spawnBullet(cx, cy, Math.cos(a) * 105, Math.sin(a) * 105, 'enemy', false, 3, { life: 5 });
+        sw.k = 'saw'; sw.r = 9; sw.hb = 6; sw.st = 0; sw.hx = cx; sw.hy = cy; sw.out = 2.2; sw.back = 120;
+        bullets.push(sw);
+        for (const side of [-1, 1]) for (let i = 0; i < 5; i++) {
+          // video: 2 rows of 5 diamonds ±18 px either side, trailing 12–64 px BEHIND the saw at the same
+          // speed; they don't come back (fly on off the pane)
+          const x = cx + nx * 18 * side - Math.cos(a) * (12 + i * 13), y = cy + ny * 18 * side - Math.sin(a) * (12 + i * 13);
+          const b = spawnBullet(x, y, Math.cos(a) * 105, Math.sin(a) * 105, 'enemy', false, 2, { life: 6 });
+          b.k = 'dia'; b.r = 3; b.hb = 1.5;
+          bullets.push(b);
+        }
+      }
+    }
+    return true;
+  }
+  if (e._burstN > 0 && canFire) {
+    e._burstT -= dt;
+    if (e._burstT <= 0) { e._burstN--; e._burstT = f.gap || 0.14; shot(e._burstA + (Math.random() - 0.5) * 0.12, f.spd || 160, 2); }
+    return true;
+  }
+  e._fcd = (e._fcd ?? (0.4 + Math.random() * (f.cd || 2) * FIRE_CD_MUL)) - dt;
+  if (!canFire || e.noFireLeave || e._fcd > 0) return true;
+  if (f.holdOnly && !e._holding) return true;
+  if (f.holdOnly && e._warn) return true;
+  // Armour shut: cores with a shutter hold fire while plates are closed
+  if (e._sh && e._sh.st === 2 && (f.type === 'fan3' || f.type === 'ringcore' || f.type === 'laser')) return true;
+  e._fcd = f.sync ? f.cd : (f.cd || 2) * FIRE_CD_MUL * (0.8 + Math.random() * 0.4);
+  if (f.type === 'straight') shot(Math.PI, f.spd || 150, 2);
+  else if (f.type === 'aimed') shot(aim + (Math.random() - 0.5) * 2 * (f.noise || 0.3), f.spd || 150, 2);
+  else if (f.type === 'burst') { e._burstN = f.n || 3; e._burstT = 0; e._burstA = aim; }
+  else if (f.type === 'fan') { const n = f.n || 5; for (let i = 0; i < n; i++) shot(aim + (i - (n - 1) / 2) * (f.sp || 0.2), f.spd || 140, 2); }
+  else if (f.type === 'snakehead') {
+    // Head spits a twin pair of white dashes straight ahead, then an aimed 3-shot burst
+    e._sk = (e._sk || 0) + 1;
+    if (e._sk % 2) { dash(ox, oy - 7, aim, 240); dash(ox, oy + 7, aim, 240); }
+    else { e._burstN = 3; e._burstT = 0; e._burstA = aim; }
+  } else if (f.type === 'dashfan') {
+    // Round-2 style: a slanted fan of white dashes toward the player
+    const n = f.n || 3;
+    for (let i = 0; i < n; i++) dash(ox, oy, aim + (i - (n - 1) / 2) * (f.sp || 0.16), f.spd || 220);
+  }
+  else if (f.type === 'fan3') { for (let i = -1; i <= 1; i++) shot(aim + i * 0.22, f.spd || 155, 2); }
+  else if (f.type === 'ring') {
+    const n = f.n || 8; e._ringA = (e._ringA || 0) + (f.spin || 0.35);
+    for (let i = 0; i < n; i++) shot(e._ringA + (Math.PI * 2 * i) / n, f.spd || 120, 2);
+  } else if (f.type === 'ringcore') {
+    // Cycle (as in the original ring): pods fire aimed orbs → core aimed 3-way → DASH WALL
+    // (0.6 s warning lines on every pod row, then 3 waves of short white dashes; gaps between rows)
+    e._rk = (e._rk || 0) + 1;
+    if (e._rk % 3 === 2) {
+      const pods = (e.drones || []).filter((d) => d.hp > 0);
+      const rows = [];
+      for (const d of pods) {
+        const dy = Math.round(Math.sin(d.ang) * d.dist * (d.ky || 1));
+        if (!rows.some((r) => Math.abs(r - dy) < 16)) rows.push(dy);
+      }
+      if (!rows.length) rows.push(-30, 30);
+      // keep lanes open: rows at least 46 px apart (a ship needs ~34 px to slip between)
+      rows.sort((p, q) => p - q);
+      const kept = [];
+      for (const r of rows) if (!kept.length || r - kept[kept.length - 1] >= 46) kept.push(r);
+      rows.length = 0; rows.push(...kept);
+      e._dashWall = true;
+      beginLaser(e, rows, 0.5, 0);
+      e._fcd += 0.8;
+    } else if (e._rk % 3 === 0) {
+      // Aimed volley from the glowing core
+      for (let i = -1; i <= 1; i++) shot(aim + i * 0.2, (f.spd || 125) + 30, 2);
+    } else {
+      const n = 8; e._ringA = (e._ringA || 0) + 0.4;
+      const pods = (e.drones || []).filter((d) => d.hp > 0);
+      if (pods.length) {
+        for (const d of pods) {
+          const px = e.x + Math.cos(d.ang) * d.dist, py = e.y + Math.sin(d.ang) * d.dist * (d.ky || 1);
+          const a = Math.atan2(ty - py, tx - px);
+          const b = spawnBullet(px, py, Math.cos(a) * 140, Math.sin(a) * 140, 'enemy', false, 2, { life: 4 });
+          b.r = 4.5; b.orb = true; bullets.push(b);
+        }
+      } else {
+        for (let i = 0; i < n; i++) shot(e._ringA + (Math.PI * 2 * i) / n, f.spd || 120, 2);
+      }
+    }
+  } else if (f.type === 'laser') {
+    beginLaser(e, f.offs || [0], f.tele || 0.55, f.spd || 500);
+  }
+  return true;
+}
+
+function beginLaser(e, offs, tele, spd) {
+  e._laserTele = tele; e._laserOffs = offs; e._laserSpd = spd;
+  e.laserTeleT = tele; e.laserTeleMax = tele;
+  e.laserAimX = e.x; e.laserAimY = e.y; // aimX == x → muzzle glow only (no warning beam across the row)
+  e.laserTeleOffs = offs.length === 1 && offs[0] === 0 ? undefined : offs;
+}
+
+function bossFire(e, dt, canFire, shot, laser, aim, ox, oy) {
+  if (!canFire || e._bt == null || e._ph === 'leave') return;
+  // Finish any laser telegraph first
+  if (e._laserTele > 0) {
+    e._laserTele -= dt;
+    e.laserTeleT = Math.max(0, e._laserTele);
+    if (e._laserTele <= 0) {
+      e.laserTeleT = 0; e.laserAimX = undefined; e.laserAimY = undefined; e.laserTeleOffs = undefined;
+      for (const dy of (e._laserOffs || [0])) laser(dy, e._laserSpd || 260);
+    }
+    return;
+  }
+  e._fcd = (e._fcd ?? 0.8) - dt;
+  if (e._fcd > 0) return;
+  const open = !(e._sh && e._sh.st === 2);
+  if (e.boss === 'tri') {
+    // Cycle: 5-way fan → aimed 3-burst → telegraphed twin laser (while parked)
+    e._atkI = (e._atkI || 0) + 1;
+    if (e._ph === 'b' && e._pt > 0.5) {
+      const step = e._atkI % 3;
+      if (step === 1) { e._fcd = 1.6; for (let i = -2; i <= 2; i++) shot(aim + i * 0.2, 145, 2); }
+      else if (step === 2) { e._fcd = 1.4; for (let i = 0; i < 3; i++) shot(aim + (Math.random() - 0.5) * 0.15, 165, 2); }
+      else { e._fcd = 2.2; beginLaser(e, [-10, 10], 0.45, 250); }
+    } else { e._fcd = 0.8; }
+  } else if (e.boss === 'eye') {
+    // When armour open: telegraphed core laser; otherwise aimed 3-way. Faster as core HP drops.
+    const hurt = 1 - (e.core ? e.core.hp / e.core.maxHp : 1);
+    e._atkI = (e._atkI || 0) + 1;
+    if (open && e._atkI % 2 === 0) {
+      e._fcd = 2.4 - 0.5 * hurt;
+      beginLaser(e, [-8, 8], 0.45, 240);
+    } else {
+      e._fcd = 1.8 - 0.4 * hurt;
+      for (let i = -1; i <= 1; i++) shot(aim + i * 0.22, 140, 2);
+    }
+  } else if (e.boss === 'jet') {
+    if (e._ph === 'sweep') {
+      // Sweep phase: telegraphed laser every ~2 s, plus a straight orb between
+      e._atkI = (e._atkI || 0) + 1;
+      if (e._atkI % 3 === 0) { e._fcd = 1.8; beginLaser(e, [0], 0.4, 270); }
+      else { e._fcd = 0.55; shot(Math.PI, 175, 2); }
+    } else if (e._ph === 'spiral') {
+      e._fcd = 0.24;
+      e._spA = (e._spA || 0) + 0.38;
+      for (let k = 0; k < 3; k++) shot(e._spA + (Math.PI * 2 * k) / 3, 118, 2);
+    } else if (e._ph === 'back') {
+      e._fcd = 0.55;
+      for (let i = -1; i <= 1; i++) shot(aim + i * 0.25, 155, 2);
+    } else { e._fcd = 0.6; }
+  }
+}
+

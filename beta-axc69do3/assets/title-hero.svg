@@ -1,0 +1,221 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 220" fill="none" role="img" aria-label="スペーストリックバトル">
+  <defs>
+    <radialGradient id="nebL" cx="18%" cy="35%" r="45%">
+      <stop offset="0%" stop-color="#6a3cff" stop-opacity="0.55"/>
+      <stop offset="55%" stop-color="#3a1a80" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="nebR" cx="82%" cy="28%" r="42%">
+      <stop offset="0%" stop-color="#1a8cff" stop-opacity="0.5"/>
+      <stop offset="55%" stop-color="#0a3a80" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="nebB" cx="50%" cy="95%" r="50%">
+      <stop offset="0%" stop-color="#c03080" stop-opacity="0.35"/>
+      <stop offset="60%" stop-color="#401040" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="beam" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#7cf0ff" stop-opacity="0.95"/>
+      <stop offset="40%" stop-color="#4aa8ff" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#4aa8ff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="beamPink" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ff6ec7" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#ff6ec7" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="shipBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e8f4ff"/>
+      <stop offset="55%" stop-color="#8ec8ff"/>
+      <stop offset="100%" stop-color="#3a7cff"/>
+    </linearGradient>
+    <linearGradient id="enemyBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffb0d0"/>
+      <stop offset="50%" stop-color="#e04080"/>
+      <stop offset="100%" stop-color="#801040"/>
+    </linearGradient>
+    <linearGradient id="enemyAlt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d0b0ff"/>
+      <stop offset="55%" stop-color="#8040e0"/>
+      <stop offset="100%" stop-color="#401080"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2.2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="ringGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- transparent base so sky shows through -->
+  <rect width="480" height="220" fill="url(#nebL)"/>
+  <rect width="480" height="220" fill="url(#nebR)"/>
+  <rect width="480" height="220" fill="url(#nebB)"/>
+
+  <!-- distant stars -->
+  <g fill="#fff" opacity="0.9">
+    <circle cx="36" cy="28" r="1.2"/>
+    <circle cx="78" cy="62" r="0.9"/>
+    <circle cx="118" cy="22" r="1.4"/>
+    <circle cx="162" cy="48" r="0.8"/>
+    <circle cx="210" cy="18" r="1.1"/>
+    <circle cx="268" cy="40" r="0.9"/>
+    <circle cx="312" cy="16" r="1.3"/>
+    <circle cx="358" cy="54" r="0.8"/>
+    <circle cx="402" cy="24" r="1.2"/>
+    <circle cx="442" cy="48" r="1"/>
+    <circle cx="54" cy="110" r="0.8"/>
+    <circle cx="148" cy="96" r="1"/>
+    <circle cx="240" cy="72" r="0.7"/>
+    <circle cx="330" cy="100" r="1.1"/>
+    <circle cx="420" cy="88" r="0.8"/>
+    <circle cx="96" cy="150" r="0.7"/>
+    <circle cx="190" cy="130" r="0.9"/>
+    <circle cx="280" cy="148" r="0.7"/>
+    <circle cx="380" cy="128" r="1"/>
+    <circle cx="460" cy="150" r="0.8"/>
+  </g>
+  <g fill="#a8d8ff" opacity="0.75">
+    <circle cx="48" cy="80" r="1.6"/>
+    <circle cx="220" cy="52" r="1.8"/>
+    <circle cx="390" cy="70" r="1.5"/>
+    <circle cx="130" cy="170" r="1.3"/>
+  </g>
+
+  <!-- holographic portal / energy ring behind action -->
+  <g filter="url(#ringGlow)" opacity="0.85">
+    <ellipse cx="240" cy="108" rx="118" ry="42" stroke="#6ac8ff" stroke-width="1.5" fill="none" opacity="0.55"/>
+    <ellipse cx="240" cy="108" rx="96" ry="34" stroke="#b080ff" stroke-width="1.2" fill="none" opacity="0.45"/>
+    <ellipse cx="240" cy="108" rx="72" ry="26" stroke="#7cf0ff" stroke-width="1" fill="rgba(80,160,255,0.06)"/>
+  </g>
+
+  <!-- enemy lasers downward -->
+  <g opacity="0.75">
+    <rect x="148" y="78" width="2" height="48" fill="url(#beamPink)" rx="1"/>
+    <rect x="318" y="72" width="2" height="52" fill="url(#beamPink)" rx="1"/>
+    <rect x="198" y="70" width="1.5" height="40" fill="url(#beamPink)" rx="1" opacity="0.7"/>
+  </g>
+
+  <!-- enemy ships (top row) -->
+  <g filter="url(#glow)">
+    <!-- left marauder -->
+    <g transform="translate(132,52)">
+      <polygon points="0,0 22,10 0,20 -6,10" fill="url(#enemyBody)"/>
+      <polygon points="0,6 10,10 0,14" fill="#ffd0e8" opacity="0.85"/>
+      <circle cx="-4" cy="10" r="2.2" fill="#ff66aa"/>
+    </g>
+    <!-- center boss-ish -->
+    <g transform="translate(220,38)">
+      <ellipse cx="20" cy="16" rx="28" ry="14" fill="url(#enemyAlt)"/>
+      <ellipse cx="20" cy="14" rx="14" ry="8" fill="#c090ff" opacity="0.7"/>
+      <circle cx="20" cy="14" r="4" fill="#ffe066"/>
+      <rect x="6" y="26" width="4" height="8" rx="1" fill="#a060e0"/>
+      <rect x="30" y="26" width="4" height="8" rx="1" fill="#a060e0"/>
+      <polygon points="-4,12 4,8 4,20" fill="#6020a0"/>
+      <polygon points="44,12 36,8 36,20" fill="#6020a0"/>
+    </g>
+    <!-- right marauder mirrored -->
+    <g transform="translate(348,50) scale(-1,1)">
+      <polygon points="0,0 22,10 0,20 -6,10" fill="url(#enemyBody)"/>
+      <polygon points="0,6 10,10 0,14" fill="#ffd0e8" opacity="0.85"/>
+      <circle cx="-4" cy="10" r="2.2" fill="#ff66aa"/>
+    </g>
+    <!-- small drone left -->
+    <g transform="translate(88,78)">
+      <circle cx="8" cy="8" r="7" fill="url(#enemyAlt)"/>
+      <circle cx="8" cy="8" r="3" fill="#ffe0ff"/>
+      <rect x="1" y="6" width="4" height="2" fill="#ff80c0"/>
+      <rect x="11" y="6" width="4" height="2" fill="#ff80c0"/>
+    </g>
+    <!-- small drone right -->
+    <g transform="translate(378,74)">
+      <circle cx="8" cy="8" r="7" fill="url(#enemyAlt)"/>
+      <circle cx="8" cy="8" r="3" fill="#ffe0ff"/>
+      <rect x="1" y="6" width="4" height="2" fill="#ff80c0"/>
+      <rect x="11" y="6" width="4" height="2" fill="#ff80c0"/>
+    </g>
+  </g>
+
+  <!-- player lasers upward -->
+  <g filter="url(#softGlow)">
+    <rect x="232" y="118" width="3.5" height="58" fill="url(#beam)" rx="1.5"/>
+    <rect x="244" y="112" width="3.5" height="64" fill="url(#beam)" rx="1.5"/>
+    <rect x="210" y="130" width="2" height="42" fill="url(#beam)" rx="1" opacity="0.7"/>
+    <rect x="266" y="128" width="2" height="44" fill="url(#beam)" rx="1" opacity="0.7"/>
+  </g>
+
+  <!-- muzzle flashes / sparks -->
+  <g fill="#c8f8ff" filter="url(#glow)">
+    <circle cx="234" cy="118" r="3" opacity="0.9"/>
+    <circle cx="246" cy="112" r="3.2" opacity="0.95"/>
+    <circle cx="211" cy="130" r="2" opacity="0.7"/>
+    <circle cx="267" cy="128" r="2" opacity="0.7"/>
+  </g>
+
+  <!-- explosion burst near enemy -->
+  <g transform="translate(178,68)" filter="url(#glow)" opacity="0.9">
+    <circle r="8" fill="#ffe080" opacity="0.85"/>
+    <circle r="4.5" fill="#fff"/>
+    <g stroke="#ffb040" stroke-width="1.5" stroke-linecap="round">
+      <line x1="0" y1="-12" x2="0" y2="-7"/>
+      <line x1="0" y1="12" x2="0" y2="7"/>
+      <line x1="-12" y1="0" x2="-7" y2="0"/>
+      <line x1="12" y1="0" x2="7" y2="0"/>
+      <line x1="-8" y1="-8" x2="-5" y2="-5"/>
+      <line x1="8" y1="8" x2="5" y2="5"/>
+    </g>
+  </g>
+
+  <!-- player ship (bottom center, pointing up) -->
+  <g transform="translate(240,176)" filter="url(#glow)">
+    <!-- engine glow -->
+    <ellipse cx="0" cy="18" rx="10" ry="6" fill="#4af0ff" opacity="0.55"/>
+    <ellipse cx="0" cy="20" rx="5" ry="8" fill="#a8ffff" opacity="0.7"/>
+    <!-- wings -->
+    <polygon points="-28,10 -8,2 -6,12 -22,16" fill="#4a90e0"/>
+    <polygon points="28,10 8,2 6,12 22,16" fill="#4a90e0"/>
+    <!-- body -->
+    <polygon points="0,-22 14,14 0,8 -14,14" fill="url(#shipBody)"/>
+    <!-- cockpit -->
+    <ellipse cx="0" cy="-2" rx="5" ry="7" fill="#7cf0ff" opacity="0.95"/>
+    <ellipse cx="0" cy="-4" rx="2.5" ry="3.5" fill="#e8ffff"/>
+    <!-- wing accents -->
+    <polygon points="-22,8 -10,4 -10,8" fill="#7cf0ff" opacity="0.7"/>
+    <polygon points="22,8 10,4 10,8" fill="#7cf0ff" opacity="0.7"/>
+  </g>
+
+  <!-- side wingmen / option pods -->
+  <g filter="url(#glow)" opacity="0.95">
+    <g transform="translate(168,168)">
+      <polygon points="0,-10 8,8 0,4 -8,8" fill="#8ec8ff"/>
+      <ellipse cx="0" cy="-2" rx="2.5" ry="3.5" fill="#c8f0ff"/>
+    </g>
+    <g transform="translate(312,168)">
+      <polygon points="0,-10 8,8 0,4 -8,8" fill="#8ec8ff"/>
+      <ellipse cx="0" cy="-2" rx="2.5" ry="3.5" fill="#c8f0ff"/>
+    </g>
+  </g>
+
+  <!-- floating sparkles / powerups -->
+  <g filter="url(#glow)">
+    <circle cx="60" cy="160" r="3" fill="#ffe066" opacity="0.85"/>
+    <circle cx="420" cy="155" r="2.5" fill="#7cf0ff" opacity="0.8"/>
+    <circle cx="100" cy="40" r="2" fill="#ff80c0" opacity="0.7"/>
+    <circle cx="380" cy="36" r="2.2" fill="#b080ff" opacity="0.75"/>
+  </g>
+
+  <!-- soft vignette fade at bottom so it blends into menu -->
+  <defs>
+    <linearGradient id="fadeOut" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="70%" stop-color="#030208" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#030208" stop-opacity="0.35"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="220" fill="url(#fadeOut)"/>
+</svg>

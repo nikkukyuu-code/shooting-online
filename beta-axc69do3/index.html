@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta name="robots" content="noindex,nofollow" />
+<script>
+/* β版: localStorage isolation — every key gets the 'beta_' prefix so production saves (same origin) are never read or written. */
+(function(){try{var P='beta_',S=Storage.prototype,L=window.localStorage,g=S.getItem,st=S.setItem,r=S.removeItem;
+S.getItem=function(k){return g.call(this,this===L?P+k:k);};
+S.setItem=function(k,v){return st.call(this,this===L?P+k:k,v);};
+S.removeItem=function(k){return r.call(this,this===L?P+k:k);};
+S.clear=function(){if(this!==L)return;var ks=[];for(var i=0;i<L.length;i++){var k=L.key(i);if(k&&k.indexOf(P)===0)ks.push(k);}ks.forEach(function(k){r.call(L,k);});};
+window.__STB_BETA=true;}catch(e){}})();
+</script>
+<script>
+/* 人らしい訪問 (nikkukyuu/shooting-online-human): 1タブ1回だけ・記録のみ（表示なし）。ボット除外、表示中に5秒滞在 or 操作で記録。 */
+(function () {
+  try {
+    if (navigator.webdriver || /bot|crawl|spider|slurp|headless|lighthouse|pagespeed|preview|facebookexternalhit|bingpreview|phantom|puppeteer|playwright|selenium/i.test(navigator.userAgent || '')) return;
+    var SK = 'nkHuman:shooting-online';
+    if (sessionStorage.getItem(SK)) return;
+    var done = false, t = null, EV = ['pointerdown', 'touchstart', 'keydown', 'scroll', 'wheel'];
+    function hit(k) { fetch('https://abacus.jasoncameron.dev/hit/nikkukyuu/stbbeta-' + k + '?_=' + Date.now(), { cache: 'no-store', mode: 'cors' }).catch(function () {}); }
+    function fire() {
+      if (done || document.visibilityState !== 'visible') return;
+      done = true; clearTimeout(t);
+      EV.forEach(function (e) { removeEventListener(e, onAct, true); });
+      try { if (sessionStorage.getItem(SK)) return; sessionStorage.setItem(SK, '1'); } catch (e) { return; }
+      hit('shooting-online-human');
+      if (sessionStorage.getItem('nkSrcYt') === '1') hit('shooting-online-yt-human');
+    }
+    function onAct(e) { if (e.isTrusted !== false) fire(); }
+    function arm() { clearTimeout(t); if (!done && document.visibilityState === 'visible') t = setTimeout(fire, 5000); }
+    EV.forEach(function (e) { addEventListener(e, onAct, { capture: true, passive: true }); });
+    document.addEventListener('visibilitychange', arm);
+    arm();
+  } catch (e) {}
+})();
+</script>
+<script>
+/* YouTube流入の目印 (?src=yt): 別キー nikkukyuu/shooting-online-yt に1タブ1回だけ記録。表示なし。通常カウンタは変更なし。 */
+(function () {
+  try {
+    var sp = new URLSearchParams(location.search);
+    if (sp.get('src') === 'yt') {
+      sessionStorage.setItem('nkSrcYt', '1');
+      sp.delete('src');
+      var qs = sp.toString();
+      history.replaceState(history.state, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
+    }
+    if (sessionStorage.getItem('nkSrcYt') !== '1' || navigator.webdriver) return;
+    var HK = 'nkYtHit:shooting-online-yt';
+    if (sessionStorage.getItem(HK)) return;
+    sessionStorage.setItem(HK, '1');
+    fetch('https://abacus.jasoncameron.dev/hit/nikkukyuu/stbbeta-shooting-online-yt?_=' + Date.now(), { cache: 'no-store', mode: 'cors' }).catch(function () {});
+  } catch (e) {}
+})();
+</script>
+  <meta charset="UTF-8" />
+  <script>window.NK_I18N_CFG={v:"20261102191200",fitSel:"#screen-menu .menu-btn-sub",anchors:[[".game-title","prepend"]],css:"@media (max-width:899px){.menu-brand .game-title{font-size:min(1.45rem,calc((100vw - 150px) / 12.8));letter-spacing:0.02em;margin-top:16px}}.menu-brand .game-title{display:block;position:relative;text-align:center;white-space:nowrap;box-sizing:border-box;width:auto;max-width:none;left:auto;transform:none;padding-left:0;padding-right:0;overflow:visible}.menu-brand .game-title>.nk-lang-wrap{position:absolute;top:50%;left:0;margin:0;transform:translateY(-50%)}html:not([lang=ja]) .hub-row{flex-wrap:wrap;justify-content:center;row-gap:4px}html:not([lang=ja]) #screen-menu .first-bonus-note{white-space:normal;border-radius:10px}"};</script>
+  <script src="js/i18n.js?v=20261102191200"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta name="theme-color" content="#1a0a08" />
+  <script>
+  (function () {
+    var PAGE_LABEL = '2026-11-02 19:12:00';
+    var busy = false;
+    function check() {
+      if (busy || window.__stbScreen === 'game' || document.visibilityState === 'hidden') return;
+      busy = true;
+      fetch('js/version.js?_=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (t) {
+        busy = false;
+        var m = /VERSION_LABEL\s*=\s*'([^']+)'/.exec(t || '');
+        if (!m || m[1] === PAGE_LABEL || window.__stbScreen === 'game') return;
+        try { if (sessionStorage.getItem('stbReloadFor') === m[1]) return; sessionStorage.setItem('stbReloadFor', m[1]); } catch (e) { return; }
+        location.replace(location.pathname + '?r=' + m[1].replace(/[^0-9]/g, ''));
+      }).catch(function () { busy = false; });
+    }
+    window.__stbCheckUpdate = check;
+    check();
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') check(); });
+  })();
+  </script>
+  <title>【β版】スペーストリックバトル｜無料ブラウザ対戦シューティング</title>
+  <meta name="description" content="スペーストリックバトル（Space Trick Battle）は無料のブラウザゲーム。オンライン対戦シューティングで敵を倒しアイテムを集め、対戦相手と勝負しよう。インストール不要。" />
+      <!-- Search-engine site verification (add tokens here when the owner gets them):
+       Bing Webmaster Tools:  <meta name="msvalidate.01" content="TOKEN" /> -->
+  <meta name="keywords" content="スペーストリックバトル,Space Trick Battle,スペトリ,ブラウザゲーム,無料,オンライン対戦,シューティング" />
+  <meta property="og:title" content="スペーストリックバトル｜無料ブラウザ対戦シューティング" />
+  <meta property="og:description" content="スペーストリックバトル（Space Trick Battle）— 無料のブラウザオンライン対戦シューティング。敵を倒してアイテムを取得し、対戦相手と勝負しよう。" />
+  <meta property="og:url" content="https://nikkukyuu-code.github.io/shooting-online/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="ja_JP" />
+  <meta property="og:site_name" content="スペーストリックバトル" />
+  <meta property="og:image" content="https://nikkukyuu-code.github.io/shooting-online/assets/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="スペーストリックバトル（Space Trick Battle）のタイトル画面" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="スペーストリックバトル｜無料ブラウザ対戦シューティング" />
+  <meta name="twitter:description" content="無料のブラウザオンライン対戦シューティング。Space Trick Battle。" />
+  <meta name="twitter:image" content="https://nikkukyuu-code.github.io/shooting-online/assets/og-image.png" />
+  <meta name="twitter:image:alt" content="スペーストリックバトル（Space Trick Battle）のタイトル画面" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "VideoGame",
+    "name": "スペーストリックバトル",
+    "alternateName": "Space Trick Battle",
+    "url": "https://nikkukyuu-code.github.io/shooting-online/",
+    "description": "スペーストリックバトルは、インストール不要・無料で遊べるブラウザのオンライン対戦シューティング。敵を倒してアイテムを使い、デッキの敵キャラを相手側へ転送して勝負します。コンピューターと対戦にも対応。",
+    "inLanguage": "ja",
+    "isAccessibleForFree": true,
+    "genre": ["シューティング", "Shooter", "オンライン対戦"],
+    "playMode": ["SinglePlayer", "MultiPlayer"],
+    "gamePlatform": "Web browser",
+    "applicationCategory": "Game",
+    "operatingSystem": "Web browser",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "JPY", "availability": "https://schema.org/InStock" },
+    "image": "https://nikkukyuu-code.github.io/shooting-online/assets/og-image.png",
+    "author": {
+      "@type": "Person",
+      "name": "nikkukyuu-code",
+      "url": "https://nikkukyuu-code.github.io/"
+    }
+  }
+  </script>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="css/style.css?v=20261102191200" />
+<link rel="apple-touch-icon" href="/shooting-online/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-title" content="スペトリ" />
+<script>
+/* 訪問ログ (nikkukyuu-visitlog): 1タブ1回 + 人らしい訪問/対戦開始の印。IPや個人情報は送らない。失敗しても何もしない。 */
+(function () {
+  try {
+    var EP = 'https://nikkukyuu-visitlog-test.nikkukyuu.workers.dev/v', P = 'shooting-online';
+    var sid = sessionStorage.getItem('nkVisitSid');
+    if (!sid) { sid = (Math.random().toString(36).slice(2) + Date.now().toString(36)).replace(/[^a-z0-9]/g, '').slice(0, 24); sessionStorage.setItem('nkVisitSid', sid); }
+    function send(o) {
+      try {
+        o.p = P; o.sid = sid; var b = JSON.stringify(o);
+        if (navigator.sendBeacon && navigator.sendBeacon(EP, new Blob([b], { type: 'text/plain' }))) return;
+        fetch(EP, { method: 'POST', body: b, keepalive: true, mode: 'cors', headers: { 'Content-Type': 'text/plain' } }).catch(function () {});
+      } catch (e) {}
+    }
+    function once(k, o) { try { if (sessionStorage.getItem(k)) return; sessionStorage.setItem(k, '1'); } catch (e) { return; } send(o); }
+    var ref = ''; try { if (document.referrer) { var u = new URL(document.referrer); ref = u.origin + u.pathname; } } catch (e) {}
+    var yt = ''; try { yt = sessionStorage.getItem('nkSrcYt') === '1' || /[?&]src=yt(&|$)/.test(location.search) ? 'yt' : ''; } catch (e) {}
+    /* 入口の目印 (?ref=android → app:android / ?ref=itch → itch)。タブ内ではsessionStorageで保持 */
+    var src = yt; try {
+      var rf = new URLSearchParams(location.search).get('ref');
+      var RM = { android: 'app:android', itch: 'itch' };
+      if (RM[rf]) sessionStorage.setItem('nkSrcRef', RM[rf]);
+      src = sessionStorage.getItem('nkSrcRef') || yt;
+    } catch (e) {}
+    setTimeout(function () { once('nkVL:' + P, { ev: 'load', s: src, r: ref, wd: navigator.webdriver ? 1 : 0 }); }, 0);
+    window.__nkVisitBattle = function () { send({ ev: 'battle' }) /* 対戦ごと */; };
+    window.__nkVisitShare = function () { send({ ev: 'share' }); }; /* 共有ボタンを押した回数（毎回） */
+    window.__nkVisitRank = function () { send({ ev: 'rank' }); }; /* ランキングを押した回数（毎回・待たない） */
+    var done = false, t = null, EV = ['pointerdown', 'touchstart', 'keydown', 'scroll', 'wheel'];
+    function fire() {
+      if (done || document.visibilityState !== 'visible') return;
+      done = true; clearTimeout(t);
+      EV.forEach(function (e) { removeEventListener(e, onAct, true); });
+      once('nkVLh:' + P, { ev: 'human' });
+    }
+    function onAct(e) { if (e.isTrusted !== false) fire(); }
+    function arm() { clearTimeout(t); if (!done && document.visibilityState === 'visible') t = setTimeout(fire, 5000); }
+    if (sessionStorage.getItem('nkVLh:' + P)) return;
+    EV.forEach(function (e) { addEventListener(e, onAct, { capture: true, passive: true }); });
+    document.addEventListener('visibilitychange', arm);
+    arm();
+  } catch (e) {}
+})();
+</script>
+</head>
+<body>
+  <noscript>
+    <div style="padding:16px;color:#fff;background:#07061a;font-family:sans-serif;line-height:1.6">
+      <h1>スペーストリックバトル（Space Trick Battle）</h1>
+      <p>スペーストリックバトルは、スマホやPCのブラウザで無料で遊べるオンライン対戦シューティングゲームです。インストール不要。画面が上下に分かれて相手と撃ち合い、敵を倒してアイテムを使い、デッキの敵キャラを相手側へ転送して攻めます。コンピューターと対戦（普通・強い）、ランキング、メダルにも対応しています。</p>
+      <p>遊ぶにはJavaScriptを有効にしてください。</p>
+    </div>
+  </noscript>
+  <div id="app">
+    <section id="screen-menu" class="screen active">
+      <div class="sky sky-space" aria-hidden="true"></div>
+      <div class="sumaho-corner" id="sumaho-corner">
+        <span class="sumaho-badge" id="sumaho-badge"><span class="sb-l1">📱スマホ</span><span class="sb-l2">推奨</span></span>
+        <figure class="sumaho-qr"><img src="assets/site-qr.svg?v=20261102191200" alt="スマホで開くQRコード https://nikkukyuu-code.github.io/shooting-online/" width="104" height="104" decoding="async" /><figcaption>スマホで読み取って遊ぼう</figcaption></figure>
+      </div>
+      <div class="menu-pt" id="menu-pt" aria-live="polite">いまの持ちPT 0</div>
+      <div class="menu-hero">
+        <img class="menu-hero-art" src="assets/title-hero.svg?v=20261102191200" alt="スペーストリックバトル" width="480" height="220" decoding="async" />
+        <header class="menu-brand">
+          <h1 class="game-title">スペーストリックバトル</h1>
+          <p class="game-subtitle">オンライン対戦</p>
+          <p class="game-esports">（eスポーツ採用を本気で目指します）</p>
+          <p class="game-intro">無料のブラウザゲーム。オンライン対戦シューティング（Space Trick Battle）で敵を倒し、アイテムを使って勝負しよう。</p>
+        </header>
+      </div>
+      <div class="com-rank-panel" id="com-rank-panel" aria-label="コンピューターと対戦の勝率と敵レベル">
+        <div class="cr-row" id="cr-normal"><span class="cr-diff">普通</span><span class="cr-rate">勝率 ―</span><span class="cr-rec">（0勝0敗）</span><span class="cr-lv">敵Lv <b class="cr-lv-n">1</b></span></div>
+        <div class="cr-row" id="cr-strong"><span class="cr-diff cr-strong">強い</span><span class="cr-rate">勝率 ―</span><span class="cr-rec">（0勝0敗）</span><span class="cr-lv">敵Lv <b class="cr-lv-n">30</b></span></div>
+        <p class="cr-note">勝率が上がるほど、敵が強くなります（敵Lv 最高<span id="cr-max">100</span>）</p>
+      </div>
+      <div class="menu-medals" id="menu-medals">
+        <button type="button" class="mm-who" id="btn-nick-edit" aria-label="ニックネームを変更"><span class="mm-nick" id="mm-nick">名無し</span><span class="mm-edit">✎</span></button>
+        <div class="mm-mid"><span class="mm-rank" id="mm-rank">今週 ―</span><div class="mm-shelf" id="mm-shelf"></div></div>
+      </div>
+      <div class="menu-center">
+      <div class="menu-panel">
+        <div class="cpu-diff-block">
+          <p class="cpu-diff-title"><span class="com-title-main">🎮 コンピューターと対戦</span><span class="com-title-sub">はじめての人はここから！</span></p>
+          <p id="first-bonus-note" class="first-bonus-note" hidden>🎁 初回特典：コンピューターと対戦すると<b>1000PT</b>もらえるよ！</p>
+          <div class="menu-row cpu-diff-row">
+            <button type="button" id="btn-cpu-normal" class="menu-btn menu-btn-sub"><span class="cpu-diff-name">普通<span class="cpu-diff-suf">（練習用）</span></span><span class="cpu-pt-tag">ライフPT×3</span><span class="cpu-lv-tag" id="cpu-lv-normal">敵Lv1</span></button>
+            <button type="button" id="btn-cpu-strong" class="menu-btn primary"><span class="cpu-diff-name">強い<span class="cpu-diff-suf">（ランキング）</span></span><span class="cpu-pt-tag">ライフPT×10</span><span class="cpu-lv-tag" id="cpu-lv-strong">敵Lv30</span></button>
+          </div>
+        </div>
+        <button type="button" id="btn-find" class="menu-btn">対戦相手を探す</button>
+        <input type="text" id="field-find-status" class="menu-field menu-field-auto" readonly placeholder=" " />
+        <button type="button" id="btn-create" class="menu-btn">部屋を作る</button>
+        <input type="text" id="field-room-code" class="menu-field menu-field-auto" readonly placeholder=" " />
+        <button type="button" id="btn-start" class="menu-btn">入室</button>
+        <input type="text" id="input-room-name" class="menu-field room-name" maxlength="12" autocomplete="off" enterkeyhint="go" placeholder="部屋名" />
+        <div class="menu-row">
+          <button type="button" id="btn-deck" class="menu-btn menu-btn-sub">デッキ</button>
+          <button type="button" id="btn-shop" class="menu-btn menu-btn-sub">ショップ</button>
+          <button type="button" id="btn-ranking" class="menu-btn menu-btn-sub menu-btn-rank">🏆ランキング</button>
+        </div>
+        <div class="menu-row">
+          <button type="button" id="btn-zukan" class="menu-btn menu-btn-sub">図鑑</button>
+          <button type="button" id="btn-tutorial" class="menu-btn menu-btn-sub">チュートリアル</button>
+        </div>
+        <a id="btn-transfer" class="menu-btn transfer-btn" href="/transfer/?from=/shooting-online/"><span class="tr-main">🔄 引き継ぎ</span><span class="tr-sub">（機種変更・データ移行）</span></a>
+        <p class="transfer-note dl-note"><a href="/transfer/?from=/shooting-online/"><b class="dl-h">⚠ 記録が消えることがあります：</b><span class="dl-li">・iPhoneのSafariで7日くらい遊ばなかったとき</span><span class="dl-li">・ブラウザの履歴やデータを消したとき</span><span class="dl-li">・プライベートモードで遊んだとき</span><span class="dl-p dl-home">📱 iPhoneは「ホーム画面に追加」して遊ぶと消えにくくなります</span><span class="dl-p">スマホを買い替える前に「引き継ぎ」ボタンで引き継ぎIDを発行してメモしてください（IDと数字だけで戻せます）。<span class="transfer-easy">かんたんな方法はこちら ›</span></span></a></p>
+      </div>
+      </div>
+      <div class="menu-footer">
+        <p class="menu-hint">部屋名→入室（ゲスト）／部屋を作る（ホスト）</p>
+        <div class="hub-row"><a class="hub-link" href="https://nikkukyuu-code.github.io/">トップページへ</a><a class="hub-link mugen-link" href="https://freegame-mugen.jp/cms/mt-cp.cgi?__mode=view&amp;blog_id=1&amp;id=13413" target="_blank" rel="noopener">フリーゲーム夢現</a><button type="button" class="hub-link share-btn" data-share-btn data-share-title="スペーストリックバトル" data-share-text="ブラウザゲーム「スペーストリックバトル」 ほかのゲームもこちらから遊べます">共有</button></div>
+        <div id="app-meta" class="app-meta">
+          <span class="ver-pre" style="white-space:nowrap">バージョン <span id="app-version">2026-11-02 19:12:00</span></span>
+          <span class="meta-sep">·</span>
+          <span id="app-visits">アクセス …</span>
+          <span class="meta-sep" hidden>·</span>
+          <span id="app-battles" hidden></span>
+          <span id="app-pagetime" class="app-pagetime" style="display:block;white-space:nowrap;font-size:0.88em;line-height:1.1;opacity:0.85">ページ表示 <span id="app-pagetime-v">…</span></span>
+        </div>
+        <script>(function(){try{var p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).formatToParts(new Date());var g=function(t){return((p.filter(function(x){return x.type===t})[0])||{}).value||'00'};var h=g('hour');if(h==='24')h='00';document.getElementById('app-pagetime-v').textContent=g('year')+'-'+g('month')+'-'+g('day')+' '+h+':'+g('minute')+':'+g('second');}catch(e){}})();</script>
+      </div>
+    </section>
+
+    <section id="screen-deck" class="screen sub-screen space-sub">
+      <div class="sky sky-space"></div>
+      <div class="sub-panel">
+        <header class="sub-head">
+          <button type="button" class="sub-back" data-back="btn-deck-back" aria-label="メニューへ戻る">◀ 戻る</button>
+          <h2>デッキ編集</h2>
+          <p class="sub-desc">送信する敵を<strong>5体・重複なし</strong>で装備</p>
+          <div class="sub-head-glow" aria-hidden="true"></div>
+        </header>
+        <div class="deck-pinned">
+          <h3 class="sub-section-title deck-equipped-heading">装備中デッキ</h3>
+          <div id="deck-slots" class="deck-slots" aria-label="装備中デッキ"></div>
+          <div id="deck-detail" class="unit-detail deck-detail-compact" aria-live="polite"></div>
+          <p id="deck-hint" class="sub-hint">スロットを選んでから、下の所持ユニットをタップして入れ替え</p>
+        </div>
+        <div class="deck-scroll" id="deck-scroll">
+          <button type="button" id="btn-deck-reset" class="deck-reset-btn">初期デッキに戻す</button>
+          <h3 class="sub-section-title">所持ユニット</h3>
+          <div id="deck-owned" class="unit-grid"></div>
+          <details class="intro-panel" id="deck-items-intro">
+            <summary>アイテム紹介</summary>
+            <div id="deck-items-list" class="items-intro-list"></div>
+          </details>
+        </div>
+        <div class="sub-footer"><button type="button" id="btn-deck-back" class="menu-btn">メニューへ</button></div>
+      </div>
+        <div id="deck-reset-dialog" class="deck-reset-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="deck-reset-msg">
+          <div class="deck-reset-box">
+            <p id="deck-reset-msg" class="deck-reset-msg">装備中デッキを初期装備に戻しますか<br><small>持っているキャラやPTは消えません</small></p>
+            <div class="deck-reset-row">
+              <button type="button" id="btn-deck-reset-cancel" class="deck-reset-cancel">やめる</button>
+              <button type="button" id="btn-deck-reset-ok" class="deck-reset-ok">戻す</button>
+            </div>
+          </div>
+        </div>
+    </section>
+
+    <section id="screen-shop" class="screen sub-screen space-sub">
+      <div class="sky sky-space"></div>
+      <div class="sub-panel">
+        <header class="sub-head">
+          <button type="button" class="sub-back" data-back="btn-shop-back" aria-label="メニューへ戻る">◀ 戻る</button>
+          <h2>ショップ</h2>
+          <p class="sub-desc">PTで送信ユニットを解放（勝利時のライフPTは普通×3・強い×10・価格もそれに合わせて調整）</p>
+          <div class="shop-pt-pill" id="shop-pt" aria-live="polite">いまの持ちPT 0</div>
+        </header>
+        <div id="shop-detail" class="unit-detail" aria-live="polite"></div>
+        <div class="shop-buy-row">
+          <button type="button" id="btn-shop-buy" class="menu-btn primary shop-buy-btn">購入</button>
+          <p id="shop-msg" class="shop-msg" role="status" aria-live="polite" hidden></p>
+        </div>
+        <div class="pane-scroll" id="shop-scroll">
+          <div id="shop-list" class="unit-grid shop-grid"></div>
+          <details class="intro-panel" id="shop-items-intro">
+            <summary>アイテム紹介</summary>
+            <div id="shop-items-list" class="items-intro-list"></div>
+          </details>
+        </div>
+        <div class="sub-footer"><button type="button" id="btn-shop-back" class="menu-btn">メニューへ</button></div>
+      </div>
+    </section>
+
+    <section id="screen-zukan" class="screen sub-screen space-sub">
+      <div class="sky sky-space"></div>
+      <div class="sub-panel">
+        <header class="sub-head">
+          <button type="button" class="sub-back" data-back="btn-zukan-back" aria-label="メニューへ戻る">◀ 戻る</button>
+          <h2>図鑑</h2>
+          <p class="sub-desc">ユニットの攻撃パターンとバトルアイテム</p>
+        </header>
+        <div class="zukan-tabs" role="tablist">
+          <button type="button" class="zukan-tab active" data-tab="units" id="zukan-tab-units">ユニット</button>
+          <button type="button" class="zukan-tab" data-tab="items" id="zukan-tab-items">アイテム</button>
+        </div>
+        <div id="zukan-unit-detail" class="unit-detail"></div>
+        <div class="pane-scroll" id="zukan-scroll">
+          <div id="zukan-units" class="unit-grid shop-grid"></div>
+          <div id="zukan-items" class="items-intro-list hidden"></div>
+        </div>
+        <div class="sub-footer"><button type="button" id="btn-zukan-back" class="menu-btn">メニューへ</button></div>
+      </div>
+    </section>
+
+    <section id="screen-ranking" class="screen sub-screen space-sub">
+      <div class="sky sky-space"></div>
+      <div class="sub-panel">
+        <header class="sub-head">
+          <button type="button" class="sub-back" data-back="btn-ranking-back" aria-label="メニューへ戻る">◀ 戻る</button>
+          <h2>🏆 ランキング（強い）</h2>
+          <p class="sub-desc">コンピューターと対戦「強い」の勝利PTだけが記録されます（対人戦・普通は対象外）</p>
+        </header>
+        <p id="rk-pending-msg" class="rk-pending-msg" role="status" aria-live="polite" hidden></p>
+        <div class="rk-nick">
+          <label for="rk-nick-input">ニックネーム</label>
+          <div class="rk-nick-row">
+            <input type="text" id="rk-nick-input" maxlength="12" autocomplete="off" enterkeyhint="done" placeholder="名無し" />
+            <button type="button" id="btn-rk-nick-save" class="rk-save">変更</button>
+          </div>
+          <p id="rk-nick-msg" class="rk-nick-msg" role="status" aria-live="polite"></p>
+        </div>
+        <div class="rk-tabs rk-period" role="tablist">
+          <button type="button" class="rk-tab" data-period="day">日間</button>
+          <button type="button" class="rk-tab active" data-period="week">週間</button>
+          <button type="button" class="rk-tab" data-period="month">月間</button>
+          <button type="button" class="rk-tab" data-period="year">年間</button>
+        </div>
+        <div class="rk-tabs rk-board" role="tablist">
+          <button type="button" class="rk-tab active" data-board="top3">ベスト3合計</button>
+          <button type="button" class="rk-tab" data-board="best">1試合最高</button>
+        </div>
+        <div class="rk-nav">
+          <button type="button" id="btn-rk-prev" class="rk-arrow" aria-label="前の期間">◀</button>
+          <div class="rk-when"><b id="rk-label">―</b><small id="rk-sub">集計中</small></div>
+          <button type="button" id="btn-rk-next" class="rk-arrow" aria-label="次の期間">▶</button>
+        </div>
+        <div id="rk-me" class="rk-me">―</div>
+        <div id="rk-scroll" class="rk-scroll">
+        <ol id="rk-list" class="rk-list"></ol>
+        <details class="intro-panel rk-help">
+          <summary>メダルとルール</summary>
+          <div class="rk-help-body">
+            <p>各期間（日間・週間・月間・年間）の「ベスト3合計」と「1試合最高」で、期間が終わった時点の1〜3位に金・銀・銅メダルが贈られ、ずっと残ります。</p>
+            <p>週間は日曜0:00〜次の日曜0:00（日本時間）。長い期間ほど豪華なメダルです。</p>
+            <div id="rk-medal-sample" class="rk-medal-sample"></div>
+            <p class="rk-medal-legend">数字＝順位（金1・銀2・銅3）、下の札＝期間（日・週・月・年）。右の小さな印：Σ＝ベスト3合計、★＝1試合最高。</p>
+          </div>
+        </details>
+        </div>
+        <div class="sub-footer"><button type="button" id="btn-ranking-back" class="menu-btn">メニューへ</button></div>
+      </div>
+    </section>
+
+    <section id="screen-game" class="screen">
+      <canvas id="game" width="390" height="700"></canvas>
+      <div id="ui-overlay">
+        <button type="button" id="btn-stop" class="stop-btn">対戦終了</button>
+        <div id="match-timer" class="match-timer" hidden aria-live="polite"><span class="mt-main"></span><span class="mt-sub" hidden></span></div>
+        <div id="game-version" class="game-version">2026-11-02 19:12:00</div>
+        <div id="status-bar" class="status-bar">対戦相手を待っています</div>
+        <div id="vs-medals" class="vs-medals hidden" aria-live="polite"></div>
+      </div>
+      <div id="end-overlay" class="end-overlay hidden">
+        <p id="end-message"></p>
+        <p id="end-rank-msg" class="end-rank-msg" hidden></p>
+        <button type="button" id="btn-again" class="menu-btn">メニューへ</button>
+        <a class="hub-link hub-link-end" href="https://nikkukyuu-code.github.io/">トップページへ</a>
+      </div>
+    </section>
+    <div id="nick-dialog" class="nick-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="nick-dialog-title">
+      <div class="nick-box">
+        <p id="nick-dialog-title" class="nick-title">ニックネーム</p>
+        <input type="text" id="nick-dialog-input" maxlength="12" autocomplete="off" enterkeyhint="done" placeholder="名無し" />
+        <p class="nick-note">ランキングと対戦相手に表示されます（12文字まで）</p>
+        <p id="nick-dialog-msg" class="rk-nick-msg" role="status" aria-live="polite"></p>
+        <div class="nick-row"><button type="button" id="btn-nick-cancel" class="deck-reset-cancel">閉じる</button><button type="button" id="btn-nick-save" class="deck-reset-ok">決定</button></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script>
+  /* 「いまの持ちPT」 badge must never cover the title / language button / 「Language」: grow the title band until they clear it. */
+  (function () {
+    var busy = false;
+    function hit(a, b) { return a.right > b.left && a.left < b.right && a.bottom > b.top && a.top < b.bottom; }
+    function run() {
+      if (busy) return; busy = true;
+      try {
+        var pt = document.getElementById('menu-pt'), hero = document.querySelector('#screen-menu .menu-hero');
+        if (!pt || !hero) return;
+        hero.style.height = ''; hero.style.minHeight = '';
+        if (!pt.offsetParent || !hero.offsetParent) return;
+        var sel = ['.menu-brand .game-title', '.menu-brand .nk-lang-btn', '.menu-brand .nk-lang-lbl'];
+        for (var n = 0; n < 30; n++) {
+          var need = 0;
+          [pt, document.querySelector('#screen-menu .sumaho-badge')].forEach(function (o) {
+            if (!o || !o.offsetParent) return;
+            var p = o.getBoundingClientRect(), g = { left: p.left - 2, right: p.right + 2, top: p.top - 2, bottom: p.bottom + 3 };
+            sel.forEach(function (s) { var e = document.querySelector(s); if (!e) return; var r = e.getBoundingClientRect(); if (r.width && hit(g, r)) need = Math.max(need, g.bottom - r.top); });
+          });
+          if (need <= 0) break;
+          var h = hero.getBoundingClientRect().height + Math.ceil(need);
+          hero.style.height = h + 'px'; hero.style.minHeight = h + 'px';
+        }
+      } finally { busy = false; }
+    }
+    window.__stbPtClear = run;
+    function sched() { requestAnimationFrame(run); }
+    window.addEventListener('resize', sched); window.addEventListener('load', sched);
+    [0, 120, 500, 1300, 2500].forEach(function (t) { setTimeout(run, t); });
+    try { document.fonts && document.fonts.ready.then(sched); } catch (e) {}
+    try { var t = document.querySelector('.menu-brand .game-title'); if (t && window.ResizeObserver) new ResizeObserver(sched).observe(t); } catch (e) {}
+    try { new MutationObserver(sched).observe(document.getElementById('menu-pt'), { childList: true, characterData: true, subtree: true }); } catch (e) {}
+  })();
+  </script>
+  <script type="module" src="js/main.js?v=20261102191200"></script>
+<script>
+/* 共有ボタン: navigator.share → fallback copy + toast (X / LINE) */
+(function () {
+  var URL_TOP = 'https://nikkukyuu-code.github.io/';
+  function toast(msg, title, text) {
+    var old = document.getElementById('share-toast'); if (old) old.remove();
+    var t = document.createElement('div'); t.id = 'share-toast'; t.setAttribute('role', 'status');
+    t.style.cssText = 'position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:2147483000;max-width:min(92vw,360px);padding:10px 14px;border-radius:12px;background:rgba(10,12,24,.94);color:#fff;font:700 14px/1.5 system-ui,sans-serif;text-align:center;box-shadow:0 4px 18px rgba(0,0,0,.5)';
+    var q = encodeURIComponent(text + ' ' + URL_TOP);
+    t.innerHTML = '<div></div><div style="margin-top:6px;display:flex;gap:10px;justify-content:center;font-size:13px">' +
+      '<a target="_blank" rel="noopener" style="color:#9ad4ff" href="https://twitter.com/intent/tweet?text=' + q + '">Xで共有</a>' +
+      '<a target="_blank" rel="noopener" style="color:#7be08f" href="https://social-plugins.line.me/lineit/share?url=' + encodeURIComponent(URL_TOP) + '">LINEで共有</a></div>';
+    t.firstChild.textContent = msg;
+    t.addEventListener('click', function (e) { try { if (e.target.closest && e.target.closest('a') && window.__nkVisitShare) window.__nkVisitShare(); } catch (_) {} });
+    document.body.appendChild(t);
+    setTimeout(function () { if (t.parentNode) t.remove(); }, 4500);
+  }
+  function copy(s) {
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(s);
+    return new Promise(function (ok, ng) {
+      try { var a = document.createElement('textarea'); a.value = s; a.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(a); a.select(); var r = document.execCommand('copy'); a.remove(); r ? ok() : ng(); } catch (e) { ng(e); }
+    });
+  }
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('[data-share-btn]'); if (!b) return;
+    ev.preventDefault();
+    try { if (window.__nkVisitShare) window.__nkVisitShare(); } catch (e) {}
+    var title = b.getAttribute('data-share-title') || document.title;
+    var text = b.getAttribute('data-share-text') || title;
+    var fb = function () { copy(URL_TOP).then(function () { toast('リンクをコピーしました', title, text); }, function () { toast(URL_TOP, title, text); }); };
+    if (navigator.share) navigator.share({ title: title, text: text, url: URL_TOP }).catch(function (e) { if (!e || e.name !== 'AbortError') fb(); });
+    else fb();
+  });
+})();
+</script>
+<div id="beta-badge" style="position:fixed;bottom:max(4px,env(safe-area-inset-bottom));left:4px;opacity:.92;z-index:2147483000;pointer-events:none;background:#ff2d55;color:#fff;font:bold 12px/1 sans-serif;padding:4px 7px;border-radius:9px;box-shadow:0 0 0 2px #fff8;letter-spacing:0" translate="no" class="notranslate">β版</div>
+<style>#btn-transfer,.transfer-note{display:none!important}</style>
+</body>
+</html>
