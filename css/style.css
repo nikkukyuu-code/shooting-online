@@ -2807,3 +2807,16 @@ html, body {
 /* 11-02: COM難易度ボタン 2行表記（普通レベル／（練習用）, ランカーレベル／（ランキング）） */
 #screen-menu .cpu-diff-row .cpu-diff-name { display: block; white-space: nowrap; min-width: 0; max-width: 100%; }
 #screen-menu .cpu-diff-row .cpu-diff-suf { display: block; line-height: 1.1; }
+
+/* 11-02: 見切れ防止 — ランキング見出し（ランカーレベル・各言語）は折り返し可、結果画面は縦に収まらなければスクロール（記録カード等を潰さない） */
+#screen-ranking .sub-head > h2 { white-space: normal; line-height: 1.15; overflow-wrap: anywhere; display: flex; align-items: center; justify-content: center; text-align: center; }
+.end-overlay { overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; justify-content: safe center; }
+.end-overlay > * { flex-shrink: 0; }
+@media (max-height: 700px) { .end-overlay { gap: 12px; padding: 14px 16px; } }
+/* 11-02: 記録更新カード — 長い言語の見出し（例 Nouveau record !）＋NEW RECORD を折り返して収める */
+.rec-new .rec-title { flex-wrap: wrap; row-gap: 2px; min-width: 0; }
+.rec-new .rec-jp { white-space: normal; overflow-wrap: anywhere; min-width: 0; }
+/* 11-02: 見切れ防止 — 記録更新演出のPT（桁が多い時）は折り返し、勝率パネルの敵Lvは狭い画面で次行へ */
+.rec2-num { flex-wrap: wrap; justify-content: center; max-width: 100%; row-gap: 0; }
+.rec2-num > * { white-space: nowrap; }
+.cr-row { flex-wrap: wrap; row-gap: 2px; }

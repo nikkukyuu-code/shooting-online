@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-11-02 21:29:57';
+export const VERSION_LABEL = '2026-11-02 23:42:05';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1793622597000;
-export const BUILD_NOTE = 'COM難易度表記変更（普通レベル／ランカーレベル）';
+export const BUILD_TIME = 1793630525000;
+export const BUILD_NOTE = 'COM難易度表記の説明文更新・見切れ修正';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {
