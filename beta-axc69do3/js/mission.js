@@ -5,9 +5,9 @@
  * - MissionRun: in-match tutorial guide (DOM HUD over the info pane / control pane — never labels on enemies),
  *   core-kill counting, clear on N core kills regardless of the match result.
  */
-import { loadMeta, saveMeta } from './meta.js?v=20261103020454';
-import { hasCore, coreWorld, coreShutState } from './entities.js?v=20261103020454';
-import { OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js?v=20261103020454';
+import { loadMeta, saveMeta } from './meta.js?v=20261103024249';
+import { hasCore, coreWorld, coreShutState } from './entities.js?v=20261103024249';
+import { OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js?v=20261103024249';
 
 export const MISSION_KEY = 'shootingOnline_missions';
 export const MISSION_SLOTS = 10;
@@ -261,12 +261,13 @@ export function missionResultBox(res) {
   box.className = 'mission-result ' + (res.cleared ? 'mr-clear' : 'mr-fail');
   const k = Math.min(res.kills, res.need);
   const rw = res.cleared
-    ? (res.reward && res.reward.first ? `<div class="mr-line mr-reward">報酬 <b>+${res.def.reward} PT</b></div>` : '<div class="mr-line mr-reward">報酬は受け取り済み</div>')
+    ? (res.reward && res.reward.first ? `<div class="mr-line mr-reward">クリア報酬 <b>+${res.def.reward} PT</b></div>` : '<div class="mr-line mr-reward">報酬は受け取り済み</div>')
     : '<div class="mr-line mr-sub">コア敵を2体倒すとクリア。もう一度挑戦しよう！</div>';
   box.innerHTML = `<div class="mr-head">${res.cleared ? 'ミッションクリア！' : 'ミッション失敗…'}</div>`
     + `<div class="mr-line mr-name">ミッション${res.def.id}「${res.def.name}」</div>`
     + `<div class="mr-line mr-goal">${res.def.goal}</div>`
     + `<div class="mr-line mr-count">コア敵 <b>${k}/${res.need}</b></div>`
+    + `<div class="mr-line mr-battle">対戦PT <b>+${res.battlePt || 0} PT</b></div>`
     + rw
     + `<div class="mr-line mr-total">いまの持ちPT　<b>${res.total}</b></div>`
     + '<div class="mr-btns"><button type="button" class="menu-btn mr-retry">もう一度挑戦</button><button type="button" class="menu-btn mr-select">ミッション選択へ</button></div>';
