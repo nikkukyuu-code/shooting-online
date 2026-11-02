@@ -12,7 +12,7 @@ import { OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js?v=20261103020454';
 export const MISSION_KEY = 'shootingOnline_missions';
 export const MISSION_SLOTS = 10;
 export const MISSIONS = [
-  { id: 1, name: '初陣', goal: 'コア敵キャラを3体倒せ', need: 3, reward: 1000, comLevel: 1, comDifficulty: 'normal', tutorial: 'core' },
+  { id: 1, name: '初陣', goal: 'コア敵キャラを2体倒せ', need: 2, reward: 1000, comLevel: 15, comDifficulty: 'normal', tutorial: 'core' },
 ];
 export function missionById(id) { return MISSIONS.find((m) => m.id === Number(id)) || null; }
 
@@ -81,7 +81,7 @@ export class MissionRun {
     const chip = document.createElement('div');
     chip.className = 'mission-chip';
     chip.setAttribute('aria-live', 'polite');
-    chip.innerHTML = '<span class="mc-ico" aria-hidden="true">🎯</span><span class="mc-lbl">コア敵</span><b class="mc-n">0/3</b>';
+    chip.innerHTML = '<span class="mc-ico" aria-hidden="true">🎯</span><span class="mc-lbl">コア敵</span><b class="mc-n">0/2</b>';
     const hud = document.createElement('div');
     hud.className = 'mission-hud';
     hud.setAttribute('role', 'status');
@@ -262,7 +262,7 @@ export function missionResultBox(res) {
   const k = Math.min(res.kills, res.need);
   const rw = res.cleared
     ? (res.reward && res.reward.first ? `<div class="mr-line mr-reward">報酬 <b>+${res.def.reward} PT</b></div>` : '<div class="mr-line mr-reward">報酬は受け取り済み</div>')
-    : '<div class="mr-line mr-sub">コア敵を3体倒すとクリア。もう一度挑戦しよう！</div>';
+    : '<div class="mr-line mr-sub">コア敵を2体倒すとクリア。もう一度挑戦しよう！</div>';
   box.innerHTML = `<div class="mr-head">${res.cleared ? 'ミッションクリア！' : 'ミッション失敗…'}</div>`
     + `<div class="mr-line mr-name">ミッション${res.def.id}「${res.def.name}」</div>`
     + `<div class="mr-line mr-goal">${res.def.goal}</div>`
