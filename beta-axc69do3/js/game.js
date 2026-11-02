@@ -2429,7 +2429,6 @@ export class Game {
       this.finish(false);
       return;
     }
-    if (this._mrun && !this._mrun.cleared && this._bot && this._bot.hp < 1) { this._bot.hp = 1; this.state.botHp = 1; }
     const oppHp = this.useBot ? this.state.botHp : (this.remoteSnap ? this.remoteSnap.php : null);
     if (oppHp != null && oppHp <= 0) {
       this.finish(true);
@@ -3352,7 +3351,6 @@ export class Game {
     };
 
     if (DEBUG_UNIT_PARADE) { this.state.player.hp = this.state.player.maxHp; B.hp = B.maxHp || PLAYER_MAX_HP; }
-    if (this._mrun && !this._mrun.cleared && B.hp < 1) { B.hp = 1; this.state.botHp = 1; } // mission: COM holds on until the objective is met
     if (B.hp <= 0) this.finish(true);
     if (this.state.player.hp <= 0) this.finish(false);
   }
