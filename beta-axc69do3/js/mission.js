@@ -5,14 +5,14 @@
  * - MissionRun: in-match tutorial guide (DOM HUD over the info pane / control pane — never labels on enemies),
  *   core-kill counting, clear on N core kills regardless of the match result.
  */
-import { loadMeta, saveMeta } from './meta.js?v=20261103024127';
-import { hasCore, coreWorld, coreShutState } from './entities.js?v=20261103024127';
-import { OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js?v=20261103024127';
+import { loadMeta, saveMeta } from './meta.js?v=20261103020454';
+import { hasCore, coreWorld, coreShutState } from './entities.js?v=20261103020454';
+import { OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js?v=20261103020454';
 
 export const MISSION_KEY = 'shootingOnline_missions';
 export const MISSION_SLOTS = 10;
 export const MISSIONS = [
-  { id: 1, name: '初陣', goal: 'コア敵キャラを2体倒せ', need: 2, reward: 1000, winBonus: 1000, comLevel: 15, comDifficulty: 'normal', tutorial: 'core' },
+  { id: 1, name: '初陣', goal: 'コア敵キャラを2体倒せ', need: 2, reward: 1000, comLevel: 15, comDifficulty: 'normal', tutorial: 'core' },
 ];
 export function missionById(id) { return MISSIONS.find((m) => m.id === Number(id)) || null; }
 
@@ -22,20 +22,6 @@ export function loadMissionState() {
     if (o && typeof o === 'object') { if (!o.cleared || typeof o.cleared !== 'object') o.cleared = {}; return o; }
   } catch (_) { /* ignore */ }
   return { cleared: {} };
-}
-export function isMissionWinBonusDone(id) { const s = loadMissionState(); return !!(s.winBonus && s.winBonus[String(id)]); }
-/** Win bonus (clear + match win): once per mission, independent of the clear reward. Returns { first, gain }. */
-export function grantMissionWinBonus(def) {
-  const s = loadMissionState();
-  if (!s.winBonus || typeof s.winBonus !== 'object') s.winBonus = {};
-  const k = String(def.id);
-  if (!def.winBonus || s.winBonus[k]) return { first: false, gain: 0 };
-  s.winBonus[k] = Date.now();
-  saveMissionState(s);
-  const m = loadMeta();
-  const next = saveMeta({ ...m, pt: m.pt + def.winBonus });
-  try { window.dispatchEvent(new CustomEvent('shooting-meta-updated', { detail: next })); } catch (_) { /* ignore */ }
-  return { first: true, gain: def.winBonus };
 }
 export function isMissionCleared(id) { return !!loadMissionState().cleared[String(id)]; }
 function saveMissionState(s) { try { localStorage.setItem(MISSION_KEY, JSON.stringify(s)); } catch (_) { /* ignore */ } }
@@ -265,10 +251,7 @@ export class MissionRun {
   }
 
   result(won) {
-    if (this._res) return this._res;
-    const bonus = this.cleared && won ? grantMissionWinBonus(this.def) : null;
-    return this._res = {
-      bonus, bonusDone: isMissionWinBonusDone(this.def.id), def: this.def, won: !!won, kills: this.kills, need: this.def.need, cleared: this.cleared, reward: this.reward, total: loadMeta().pt };
+    return { def: this.def, won: !!won, kills: this.kills, need: this.def.need, cleared: this.cleared, reward: this.reward, total: loadMeta().pt };
   }
 }
 
@@ -280,16 +263,11 @@ export function missionResultBox(res) {
   const rw = res.cleared
     ? (res.reward && res.reward.first ? `<div class="mr-line mr-reward">報酬 <b>+${res.def.reward} PT</b></div>` : '<div class="mr-line mr-reward">報酬は受け取り済み</div>')
     : '<div class="mr-line mr-sub">コア敵を2体倒すとクリア。もう一度挑戦しよう！</div>';
-  const wb = res.def.winBonus || 0;
-  const bl = !wb ? '' : res.bonus && res.bonus.first ? `<div class="mr-line mr-reward mr-bonus">勝利ボーナス <b>+${wb} PT</b></div>`
-    : res.bonusDone ? '<div class="mr-line mr-sub">勝利ボーナスは受け取り済み</div>'
-    : `<div class="mr-line mr-sub">勝って2体倒すと勝利ボーナス +${wb} PT</div>`;
   box.innerHTML = `<div class="mr-head">${res.cleared ? 'ミッションクリア！' : 'ミッション失敗…'}</div>`
     + `<div class="mr-line mr-name">ミッション${res.def.id}「${res.def.name}」</div>`
     + `<div class="mr-line mr-goal">${res.def.goal}</div>`
     + `<div class="mr-line mr-count">コア敵 <b>${k}/${res.need}</b></div>`
     + rw
-    + bl
     + `<div class="mr-line mr-total">いまの持ちPT　<b>${res.total}</b></div>`
     + '<div class="mr-btns"><button type="button" class="menu-btn mr-retry">もう一度挑戦</button><button type="button" class="menu-btn mr-select">ミッション選択へ</button></div>';
   box.querySelector('.mr-retry').addEventListener('click', () => { try { window.__stbMissionRetry && window.__stbMissionRetry(res.def.id); } catch (_) { /* ignore */ } });
