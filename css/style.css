@@ -2803,3 +2803,7 @@ html, body {
 .rk-tab { white-space: normal; line-height: 1.15; overflow-wrap: anywhere; }
 #screen-deck .deck-detail-compact .dc-chip { white-space: normal; overflow-wrap: anywhere; }
 @media (min-width: 900px) { .menu-brand .game-title { width: max-content; max-width: none; position: relative; left: 50%; transform: translateX(-50%); } }
+
+/* 11-02: COM難易度ボタン 2行表記（普通レベル／（練習用）, ランカーレベル／（ランキング）） */
+#screen-menu .cpu-diff-row .cpu-diff-name { display: block; white-space: nowrap; min-width: 0; max-width: 100%; }
+#screen-menu .cpu-diff-row .cpu-diff-suf { display: block; line-height: 1.1; }

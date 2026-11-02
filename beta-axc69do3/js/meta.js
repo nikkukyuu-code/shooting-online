@@ -2,7 +2,7 @@
  * localStorage key: shootingOnline_meta (NEVER rename — would wipe player PT).
  * Backup key: shootingOnline_meta_bak. On every update, preserve pt; never clear storage.
  */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20261102191200';
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20261102212957';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;
@@ -515,13 +515,13 @@ export function grantCoinPt(meta, coinPt) {
 export const COM_DIFFICULTY = {
   normal: {
     id: 'normal',
-    label: '普通',
+    label: '普通レベル',
     ptMult: 3,
     note: 'やや弱いCOM・勝利時のライフPTは3倍',
   },
   strong: {
     id: 'strong',
-    label: '強い',
+    label: 'ランカーレベル',
     ptMult: 10,
     note: 'これまでの強さ・勝利時のライフPTは10倍',
   },

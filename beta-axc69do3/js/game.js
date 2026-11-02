@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261102191200';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261102212957';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, setGuardShip, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,14 +6,14 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261102191200';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261102191200';
-import { sfx } from './audio.js?v=20261102191200';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261102191200';
-import { fxRate } from './entities.js?v=20261102191200';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261102191200';
-import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261102191200';
-import { hitBattleCounter } from './stats.js?v=20261102191200';
+} from './entities.js?v=20261102212957';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261102212957';
+import { sfx } from './audio.js?v=20261102212957';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261102212957';
+import { fxRate } from './entities.js?v=20261102212957';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261102212957';
+import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261102212957';
+import { hitBattleCounter } from './stats.js?v=20261102212957';
 // ===== DEBUG (temporary): 弾の雨 visual check — set to false to remove. While true, ranking submit is disabled. =====
 const DEBUG_RAIN_AT_START = false;
 // ===== DEBUG (temporary): 転送敵キャラ確認パレード — set to false to remove. =====
@@ -23,11 +23,11 @@ const DEBUG_UNIT_PARADE = false;
 const PARADE_SEC = 12; // per unit: ~3s glide in → body glow → signature attack → normal volleys
 /** 自機の攻撃力倍率 (10-18: ×1.3 → 10-18 夜: 2割減 ×1.04). Applies to the ship's own shots (normal / rapid / homing / spread), player and COM alike. */
 const SHIP_ATK_MUL = 1.04;
-import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261102191200';
-import { recordStrongBest, strongBestBase } from './record.js?v=20261102191200';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult, firstBonusPending, grantFirstBonus } from './meta.js?v=20261102191200';
-import { tickPersona, personaIntangible, personaShieldBlocks, PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261102191200';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261102191200';
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261102212957';
+import { recordStrongBest, strongBestBase } from './record.js?v=20261102212957';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult, firstBonusPending, grantFirstBonus } from './meta.js?v=20261102212957';
+import { tickPersona, personaIntangible, personaShieldBlocks, PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261102212957';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261102212957';
 
 const PT_MILESTONE = 500; // 10-15: 突破演出 every 500 PT earned in the match
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
@@ -3391,7 +3391,7 @@ export class Game {
         };
       } catch (e) {
         console.warn('PT grant failed', e);
-        this._ptReward = { gain: hp, total: hp, remainingHp: hp, mult: 1, label: '普通', base: hp };
+        this._ptReward = { gain: hp, total: hp, remainingHp: hp, mult: 1, label: '普通レベル', base: hp };
       }
     }
 
@@ -3658,7 +3658,7 @@ export class Game {
     card.className = 'rec-new' + (r.first ? ' rec-first' : '');
     card.setAttribute('role', 'status');
     card.innerHTML = `<div class="rec-card-emb">${STAR}</div><div class="rec-card-body"><div class="rec-title"><span class="rec-jp">${title}</span><span class="rec-en">NEW RECORD</span></div>`
-      + `<div class="rec-vals">強い・1試合最高 ${r.first ? '' : `<s class="rec-old">${fmt(r.prev)}</s><span class="rec-arrow">→</span>`}<b class="rec-pt">${fmt(r.pt)}</b> PT${diff ? ` <span class="rec-diff">+${fmt(diff)}PT</span>` : ''}</div></div>`;
+      + `<div class="rec-vals">ランカーレベル・1試合最高 ${r.first ? '' : `<s class="rec-old">${fmt(r.prev)}</s><span class="rec-arrow">→</span>`}<b class="rec-pt">${fmt(r.pt)}</b> PT${diff ? ` <span class="rec-diff">+${fmt(diff)}PT</span>` : ''}</div></div>`;
     const placeCard = () => {
       if (card.isConnected) return;
       if (anchor && anchor.parentNode === ov) ov.insertBefore(card, anchor); else ov.insertBefore(card, ov.querySelector('#btn-again'));
@@ -3673,7 +3673,7 @@ export class Game {
       + `<div class="rec2-emb">${STAR}</div>`
       + `<div class="rec2-en" data-t="NEW RECORD">NEW RECORD</div>`
       + `<div class="rec2-jp">${title}</div>`
-      + `<div class="rec2-sub">強い・1試合最高</div>`
+      + `<div class="rec2-sub">ランカーレベル・1試合最高</div>`
       + `<div class="rec2-num"><span class="rec2-old">${r.first ? '' : fmt(r.prev) + ' →'}</span><b class="rec2-val">0</b><span class="rec2-u">PT</span></div>`
       + `<div class="rec2-diff">${diff ? `+${fmt(diff)}PT` : 'FIRST RECORD'}</div>`
       + `</div><div class="rec2-skip">タップでスキップ</div>`;
@@ -3782,7 +3782,7 @@ export class Game {
     const rc = this.useBot && !this.isOnline() ? this._comRankChange : null;
     if (rc && rc.after) {
       const a = rc.after, b = rc.before || a;
-      const diffLabel = this.comDifficulty === 'normal' ? '普通' : '強い';
+      const diffLabel = this.comDifficulty === 'normal' ? '普通レベル' : 'ランカーレベル';
       const arrow = a.level > b.level ? 'up' : a.level < b.level ? 'down' : 'same';
       const r = document.createElement('div');
       r.className = 'com-rank';

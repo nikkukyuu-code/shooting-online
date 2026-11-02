@@ -33,8 +33,8 @@ function parseValue(d) {
 /** Per-mode breakdown counters (separate abacus keys; total key above unchanged). */
 export const BATTLE_MODES = [
   { id: 'pvp', label: '対人' },
-  { id: 'normal', label: '普通' },
-  { id: 'strong', label: '強い' },
+  { id: 'normal', label: '普通レベル' },
+  { id: 'strong', label: 'ランカーレベル' },
 ];
 const modeKey = (id) => `${NS_KEY}-${id}`;
 const modeLastKey = (id) => `${BATTLE_LAST_KEY}_${id}`;

@@ -1,16 +1,16 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261031212724';
-import { Net } from './net.js?v=20261031212724';
-import { Game } from './game.js?v=20261031212724';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261031212724';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261031212724';
-import { resetDeckToDefault } from './meta.js?v=20261031212724';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261031212724';
-import { loadBattleCount } from './stats.js?v=20261031212724';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261031212724';
-import { ALL_KIND_IDS } from './catalog.js?v=20261031212724';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261031212724';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261031212724';
-import { seedStrongBest } from './record.js?v=20261031212724';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261102212957';
+import { Net } from './net.js?v=20261102212957';
+import { Game } from './game.js?v=20261102212957';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261102212957';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261102212957';
+import { resetDeckToDefault } from './meta.js?v=20261102212957';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261102212957';
+import { loadBattleCount } from './stats.js?v=20261102212957';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261102212957';
+import { ALL_KIND_IDS } from './catalog.js?v=20261102212957';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261102212957';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261102212957';
+import { seedStrongBest } from './record.js?v=20261102212957';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -157,7 +157,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261031212724`;
+  return `assets/enemies/${id}/0.png?v=20261102212957`;
 }
 
 function unitName(id) {
@@ -638,7 +638,7 @@ function startCpuMatchNow(comDifficulty) {
   cleanupGame();
   net = new Net();
   net.usingBot = true;
-  const label = comDifficulty === 'normal' ? 'コンピューターと対戦（普通・ライフPT×3）' : 'コンピューターと対戦（強い・ライフPT×10）';
+  const label = comDifficulty === 'normal' ? 'コンピューターと対戦（普通レベル・ライフPT×3）' : 'コンピューターと対戦（ランカーレベル・ライフPT×10）';
   els.fieldFind.value = label;
   try {
     // World ranking: only COM「強い」 gets a single-use server match token (best-effort, never blocks)
@@ -1043,7 +1043,7 @@ function refreshMenuMedals() {
     rkEl.textContent = cur || '今週 ―';
     rkEl.classList.toggle('in', !!(cur && c.inRank));
   }
-  if (!me.id) { shelf.replaceChildren(Object.assign(document.createElement('span'), { className: 'medal-none', textContent: 'COM「強い」でランキング参加' })); return; }
+  if (!me.id) { shelf.replaceChildren(Object.assign(document.createElement('span'), { className: 'medal-none', textContent: 'COM「ランカーレベル」でランキング参加' })); return; }
   if (!valid || c.medals === undefined) { shelf.replaceChildren(Object.assign(document.createElement('span'), { className: 'medal-none', textContent: 'メダルはランキングで確認' })); return; }
   if (_myMedalCache === undefined) _myMedalCache = c.medals || null;
   shelf.replaceChildren(medalShelf(c.medals, { compact: true, max: 8, scale: 0.64 }));
@@ -1097,7 +1097,7 @@ async function renderRanking() {
   if (r.me) {
     meBox.innerHTML = `あなたは <b class="rk-me-rank">${r.total}人中${r.me.rank}位</b><b class="rk-me-pt">${r.me.score.toLocaleString('ja-JP')}PT</b>`;
   } else {
-    meBox.innerHTML = `<b class="rk-me-rank">未参加（${r.total}人参加中）</b><span class="rk-me-of">COM「強い」で勝つと参加</span>`;
+    meBox.innerHTML = `<b class="rk-me-rank">未参加（${r.total}人参加中）</b><span class="rk-me-of">COM「ランカーレベル」で勝つと参加</span>`;
   }
   if (!r.top.length) {
     list.replaceChildren(Object.assign(document.createElement('li'), { className: 'rk-empty', textContent: 'まだ記録がありません' }));
@@ -1346,4 +1346,32 @@ document.querySelectorAll('.sub-back[data-back]').forEach((b) => b.addEventListe
     document.getElementById(id)?.addEventListener('click', finish, { once: true });
   });
   place();
+})();
+
+/* ---- COM難易度ボタン: 1行目（普通レベル / ランカーレベル・各言語）を1行に収める（見切れ防止の自動縮小） ---- */
+(() => {
+  const names = () => document.querySelectorAll('#screen-menu .cpu-diff-row .cpu-diff-name');
+  const fit = () => {
+    names().forEach((el) => {
+      const t = [...el.childNodes].find((x) => x.nodeType === 3 && x.nodeValue.trim());
+      if (!t) return;
+      el.style.fontSize = '';
+      const avail = el.clientWidth;
+      if (!avail) return;
+      const rg = document.createRange(); rg.selectNodeContents(t);
+      const w = rg.getBoundingClientRect().width;
+      if (w > avail) {
+        const base = parseFloat(getComputedStyle(el).fontSize) || 16;
+        el.style.fontSize = Math.max(8, Math.floor(base * (avail - 1) / w * 10) / 10) + 'px';
+      }
+    });
+  };
+  let raf = 0;
+  const sched = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; fit(); }); };
+  window.addEventListener('resize', sched);
+  window.addEventListener('load', sched);
+  try { names().forEach((el) => new MutationObserver(sched).observe(el, { characterData: true, childList: true, subtree: true })); } catch (_) {}
+  const menu = document.getElementById('screen-menu');
+  if (menu) try { new MutationObserver(sched).observe(menu, { attributes: true, attributeFilter: ['class'] }); } catch (_) {}
+  sched(); setTimeout(sched, 300); setTimeout(sched, 1200);
 })();
