@@ -1,16 +1,17 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261102234205';
-import { Net } from './net.js?v=20261102234205';
-import { Game } from './game.js?v=20261102234205';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261102234205';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261102234205';
-import { resetDeckToDefault } from './meta.js?v=20261102234205';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261102234205';
-import { loadBattleCount } from './stats.js?v=20261102234205';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261102234205';
-import { ALL_KIND_IDS } from './catalog.js?v=20261102234205';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261102234205';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261102234205';
-import { seedStrongBest } from './record.js?v=20261102234205';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261103020454';
+import { Net } from './net.js?v=20261103020454';
+import { Game } from './game.js?v=20261103020454';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261103020454';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261103020454';
+import { resetDeckToDefault } from './meta.js?v=20261103020454';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261103020454';
+import { loadBattleCount } from './stats.js?v=20261103020454';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261103020454';
+import { ALL_KIND_IDS } from './catalog.js?v=20261103020454';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261103020454';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261103020454';
+import { seedStrongBest } from './record.js?v=20261103020454';
+import { MISSIONS, MISSION_SLOTS, missionById, isMissionCleared } from './mission.js?v=20261103020454';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -27,6 +28,7 @@ const screens = {
   shop: $('#screen-shop'),
   zukan: $('#screen-zukan'),
   ranking: $('#screen-ranking'),
+  mission: $('#screen-mission'),
 };
 
 const els = {
@@ -157,7 +159,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261102234205`;
+  return `assets/enemies/${id}/0.png?v=20261103020454`;
 }
 
 function unitName(id) {
@@ -561,7 +563,7 @@ function goMenu() {
   show('menu');
 }
 
-function startGameSession({ bot = false, comDifficulty = 'strong' } = {}) {
+function startGameSession({ bot = false, comDifficulty = 'strong', mission = null } = {}) {
   show('game');
   els.endOverlay.classList.add('hidden');
   { const m = document.getElementById('end-rank-msg'); if (m) { m.hidden = true; m.textContent = ''; } }
@@ -571,7 +573,8 @@ function startGameSession({ bot = false, comDifficulty = 'strong' } = {}) {
     endOverlay: els.endOverlay,
     endMessage: els.endMessage,
   });
-  game.start({ net, bot, comDifficulty });
+  document.querySelectorAll('#ui-overlay .mission-hud, #ui-overlay .mission-chip').forEach((n) => n.remove());
+  game.start({ net, bot, comDifficulty, mission });
 }
 
 /**
@@ -656,6 +659,66 @@ function startCpuMatchNow(comDifficulty) {
 }
 
 els.btnCpuNormal?.addEventListener('click', () => startCpuMatch('normal'));
+
+/* ---- β ミッションモード ---- */
+function renderMissionList() {
+  const list = document.getElementById('mission-list');
+  if (!list) return;
+  list.replaceChildren();
+  for (let i = 1; i <= MISSION_SLOTS; i++) {
+    const m = missionById(i);
+    const card = document.createElement(m ? 'button' : 'div');
+    if (m) {
+      const done = isMissionCleared(m.id);
+      card.type = 'button';
+      card.className = 'ms-card ms-open' + (done ? ' ms-cleared' : '');
+      card.dataset.mission = String(m.id);
+      card.innerHTML = `<span class="ms-no">${m.id}</span><span class="ms-main"><span class="ms-name">${m.name}</span><span class="ms-goal">${m.goal}</span>`
+        + `<span class="ms-meta"><span class="ms-reward">報酬 ${m.reward} PT</span><span class="ms-lv">敵Lv${m.comLevel}</span></span></span>`
+        + `<span class="ms-side"><span class="ms-state">${done ? 'クリア済み' : '未クリア'}</span><span class="ms-go">出撃 ▶</span></span>`;
+      card.addEventListener('click', () => startMission(m.id));
+    } else {
+      card.className = 'ms-card ms-locked';
+      card.setAttribute('aria-disabled', 'true');
+      card.innerHTML = `<span class="ms-no">${i}</span><span class="ms-main"><span class="ms-name">🔒 準備中</span><span class="ms-goal">近日公開</span></span>`;
+    }
+    list.appendChild(card);
+  }
+}
+function openMissionSelect() {
+  if (busy) return;
+  cleanupGame();
+  setBusy(false);
+  refreshPtDisplay();
+  renderMissionList();
+  show('mission');
+}
+function startMission(id) {
+  const m = missionById(id);
+  if (!m || busy) return;
+  withMatchPrep(() => {
+    if (busy) return;
+    setBusy(true);
+    cleanupGame();
+    net = new Net();
+    net.usingBot = true;
+    try {
+      startGameSession({ bot: true, comDifficulty: m.comDifficulty || 'normal', mission: m });
+      game.beginMatch();
+    } catch (e) {
+      console.error(e);
+      cleanupGame();
+      show('menu');
+    } finally {
+      setBusy(false);
+    }
+  });
+}
+window.__stbMissionRetry = (id) => startMission(id);
+window.__stbMissionSelect = () => openMissionSelect();
+window.__stbGameRef = () => game;
+document.getElementById('btn-mission')?.addEventListener('click', () => openMissionSelect());
+document.getElementById('btn-mission-back')?.addEventListener('click', () => goMenu());
 els.btnCpuStrong?.addEventListener('click', () => startCpuMatch('strong'));
 
 

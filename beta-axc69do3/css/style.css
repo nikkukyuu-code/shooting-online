@@ -2820,3 +2820,67 @@ html, body {
 .rec2-num { flex-wrap: wrap; justify-content: center; max-width: 100%; row-gap: 0; }
 .rec2-num > * { white-space: nowrap; }
 .cr-row { flex-wrap: wrap; row-gap: 2px; }
+
+/* ===== β ミッションモード ===== */
+.mode-block { margin: 2px 0 4px; }
+.mode-row { gap: 8px; }
+#screen-menu .menu-panel .mode-btn { display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0;
+  background: linear-gradient(180deg, #2a1f5c, #17103a); border: 1.5px solid #b48cff; color: #f1e8ff;
+  box-shadow: 0 0 12px rgba(160, 110, 255, 0.35), inset 0 1px 0 rgba(255,255,255,0.18); font-weight: 900; letter-spacing: 0.06em; }
+.mode-btn .mode-ico { font-size: 1.1em; }
+.mode-btn .mode-name { white-space: nowrap; overflow: visible; }
+.mission-list { display: flex; flex-direction: column; gap: 8px; }
+.ms-card { display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box; padding: 10px 10px; border-radius: 12px;
+  text-align: left; color: #eaf2ff; font: inherit; background: linear-gradient(160deg, rgba(40, 54, 110, 0.9), rgba(16, 20, 46, 0.92));
+  border: 1.5px solid rgba(120, 180, 255, 0.55); box-shadow: 0 0 14px rgba(70, 130, 255, 0.18); }
+.ms-card.ms-open { cursor: pointer; border-color: #ffcf4a; box-shadow: 0 0 16px rgba(255, 200, 60, 0.3); }
+.ms-card.ms-open:active { transform: scale(0.98); }
+.ms-card.ms-cleared { border-color: #5ef0a0; box-shadow: 0 0 14px rgba(80, 240, 160, 0.28); }
+.ms-card.ms-locked { opacity: 0.5; filter: saturate(0.4); border-style: dashed; padding: 7px 10px; }
+.ms-no { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-weight: 900; font-size: 1.05rem; background: rgba(255,255,255,0.1); border: 1.5px solid rgba(255,255,255,0.4); }
+.ms-open .ms-no { background: #ffcf4a; color: #2a1800; border-color: #fff2b0; }
+.ms-cleared .ms-no { background: #5ef0a0; color: #052a14; }
+.ms-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ms-name { font-weight: 900; font-size: 1.05rem; overflow-wrap: anywhere; }
+.ms-goal { font-size: 0.86rem; color: #cfe2ff; overflow-wrap: anywhere; }
+.ms-meta { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 0.78rem; }
+.ms-reward { color: #ffe27a; font-weight: 800; }
+.ms-lv { color: #9fd0ff; }
+.ms-side { flex: 0 1 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 38%; text-align: right; }
+.ms-state { font-size: 0.72rem; color: #c6d4ee; overflow-wrap: anywhere; }
+.ms-cleared .ms-state { color: #7cffb5; font-weight: 800; }
+.ms-cleared .ms-state::before { content: '✓ '; }
+.ms-go { padding: 4px 10px; border-radius: 999px; background: linear-gradient(180deg, #ffd85a, #f0a020); color: #2a1600; font-weight: 900; font-size: 0.85rem; white-space: nowrap; }
+html[dir=rtl] .ms-card { text-align: right; }
+
+/* in-match HUD (never on enemies): chip at the control pane top-left, guide card over the info pane message box */
+.mission-chip { position: absolute; z-index: 6; pointer-events: none; display: flex; align-items: center; gap: 4px; padding: 2px 8px;
+  border-radius: 999px; background: rgba(20, 10, 46, 0.82); border: 1.5px solid #ffcf4a; color: #fff; font-weight: 900; font-size: 13px; line-height: 1.25; white-space: nowrap; }
+.mission-chip .mc-n { color: #ffe27a; }
+.mission-chip.done { border-color: #5ef0a0; }
+.mission-chip.done .mc-n { color: #7cffb5; }
+.mission-chip.off, .mission-hud.off { display: none; }
+.mission-hud { position: absolute; z-index: 6; pointer-events: none; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 3px 8px;
+  border-radius: 8px; background: #24104a; border: 2px solid #ffcf4a; box-shadow: 0 0 12px rgba(255, 200, 60, 0.35); color: #fff; overflow: hidden; }
+.mission-hud .mh-arrow { flex: 0 0 auto; font-size: 26px; line-height: 1; min-width: 30px; text-align: center; animation: mh-bob 0.8s ease-in-out infinite alternate; }
+.mission-hud .mh-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 1px; }
+.mission-hud .mh-title { font-weight: 900; font-size: 14px; color: #ffe27a; line-height: 1.15; }
+.mission-hud .mh-body { font-weight: 700; font-size: 12px; line-height: 1.2; overflow-wrap: anywhere; }
+.mission-hud[data-step=boom], .mission-hud[data-step=done], .mission-hud[data-step=doneAgain] { border-color: #5ef0a0; }
+.mission-hud[data-step=boom] .mh-title, .mission-hud[data-step=done] .mh-title, .mission-hud[data-step=doneAgain] .mh-title { color: #7cffb5; }
+@keyframes mh-bob { from { transform: translateY(-2px); } to { transform: translateY(2px); } }
+@media (min-height: 780px) { .mission-hud .mh-title { font-size: 16px; } .mission-hud .mh-body { font-size: 14px; } .mission-chip { font-size: 15px; } }
+
+/* result */
+.mission-result { z-index: 2; min-width: min(86vw, 300px); max-width: 92vw; box-sizing: border-box; padding: 12px 14px; text-align: center; border-radius: 12px;
+  background: rgba(24, 14, 52, 0.92); border: 2px solid #ffcf4a; box-shadow: 0 0 24px rgba(255, 190, 50, 0.35); animation: vic-pop 0.5s 0.2s both; }
+.mission-result.mr-fail { border-color: #8aa0c8; box-shadow: none; }
+.mr-head { font-size: 1.35rem; font-weight: 900; color: #ffe27a; text-shadow: 0 0 10px rgba(255, 200, 60, 0.8); margin-bottom: 4px; }
+.mr-fail .mr-head { color: #d6e2ff; text-shadow: none; }
+.mr-line { color: #eef2ff; font-weight: 700; font-size: 0.95rem; margin: 2px 0; overflow-wrap: anywhere; }
+.mr-goal, .mr-sub { font-size: 0.85rem; color: #c8d6f2; }
+.mr-count b, .mr-reward b, .mr-total b { color: #ffe27a; font-size: 1.1em; }
+.mr-btns { display: flex; gap: 8px; margin-top: 8px; }
+.end-overlay .mr-btns .menu-btn { flex: 1 1 0; min-width: 0; width: auto; margin: 0; padding: 8px 4px; font-size: clamp(0.72rem, 3.5vw, 0.92rem); white-space: normal; line-height: 1.2; }
+.end-overlay.mission-end .end-rank-msg { display: none; }
