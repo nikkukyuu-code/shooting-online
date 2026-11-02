@@ -2884,3 +2884,5 @@ html[dir=rtl] .ms-card { text-align: right; }
 .mr-btns { display: flex; gap: 8px; margin-top: 8px; }
 .end-overlay .mr-btns .menu-btn { flex: 1 1 0; min-width: 0; width: auto; margin: 0; padding: 8px 4px; font-size: clamp(0.72rem, 3.5vw, 0.92rem); white-space: normal; line-height: 1.2; }
 .end-overlay.mission-end .end-rank-msg { display: none; }
+.ms-bonus { color: #ffb36a; }
+.ms-bonus.ms-got::before { content: '✓ '; color: #7cffb5; }
