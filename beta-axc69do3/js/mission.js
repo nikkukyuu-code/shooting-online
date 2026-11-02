@@ -5,9 +5,9 @@
  * - MissionRun: in-match tutorial guide (DOM HUD over the info pane / control pane — never labels on enemies),
  *   core-kill counting, clear on N core kills regardless of the match result.
  */
-import { loadMeta, saveMeta } from './meta.js?v=20261103024249';
-import { hasCore, coreWorld, coreShutState } from './entities.js?v=20261103024249';
-import { OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js?v=20261103024249';
+import { loadMeta, saveMeta } from './meta.js?v=20261103030129';
+import { hasCore, coreWorld, coreShutState } from './entities.js?v=20261103030129';
+import { OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js?v=20261103030129';
 
 export const MISSION_KEY = 'shootingOnline_missions';
 export const MISSION_SLOTS = 10;
