@@ -5,9 +5,10 @@
  * - MissionRun: in-match tutorial guide (DOM HUD over the info pane / control pane — never labels on enemies),
  *   core-kill counting, clear on N core kills regardless of the match result.
  */
-import { loadMeta, saveMeta } from './meta.js?v=20261103130500';
-import { hasCore, coreWorld, coreShutState } from './entities.js?v=20261103130500';
-import { OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js?v=20261103130500';
+import { loadMeta, saveMeta } from './meta.js?v=20261103143100';
+import { sfx } from './audio.js?v=20261103143100';
+import { hasCore, coreWorld, coreShutState } from './entities.js?v=20261103143100';
+import { OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js?v=20261103143100';
 
 export const MISSION_KEY = 'shootingOnline_missions';
 export const MISSION_SLOTS = 10;
@@ -77,7 +78,7 @@ export class MissionRun {
 
   _mount() {
     const host = document.getElementById('ui-overlay') || document.body;
-    host.querySelectorAll('.mission-hud, .mission-chip').forEach((n) => n.remove());
+    host.querySelectorAll('.mission-hud, .mission-chip, .mission-fx').forEach((n) => n.remove());
     const chip = document.createElement('div');
     chip.className = 'mission-chip';
     chip.setAttribute('aria-live', 'polite');
@@ -92,7 +93,7 @@ export class MissionRun {
     this._render();
   }
 
-  destroy() { this.chip?.remove(); this.hud?.remove(); this.chip = this.hud = null; }
+  destroy() { this.chip?.remove(); this.hud?.remove(); this.fx?.remove(); this.chip = this.hud = this.fx = null; }
 
   _setStep(s, extra) {
     if (this.step !== s) this.log.push(s);
@@ -244,10 +245,61 @@ export class MissionRun {
       this.reward = grantMissionClear(this.def);
       this._render();
       this._setStep(this.reward.first ? 'done' : 'doneAgain');
+      this._celebrate();
       return;
     }
     if (this.kills === 1) this._setStep('boom');
     else if (!this.cleared) this._setStep('boom');
+  }
+
+  /** 「ミッション達成！」 burst — once per run, at the moment the goal is reached (non-blocking, ~2.2s). */
+  _celebrate() {
+    if (this.fxShown) return;
+    this.fxShown = true;
+    this.fxCount = (this.fxCount || 0) + 1;
+    try { sfx.missionClear(); } catch (_) { /* ignore */ }
+    const g = this.game, cv = g.canvas;
+    const host = document.getElementById('ui-overlay') || document.body;
+    if (!cv) return;
+    const r = cv.getBoundingClientRect(), pr = (host === document.body ? document.body : host).getBoundingClientRect();
+    const H = r.height, W = r.width;
+    const oppH = Math.floor(H * OPP_RATIO), ownH = Math.floor(H * OWN_RATIO);
+    const fx = document.createElement('div');
+    fx.className = 'mission-fx';
+    Object.assign(fx.style, { left: `${r.left - pr.left}px`, top: `${r.top - pr.top + oppH}px`, width: `${W}px`, height: `${ownH}px` });
+    const raw = 'ミッション達成！';
+    const txt = (window.NKI18N && window.NKI18N.t) ? window.NKI18N.t(raw) : raw;
+    fx.innerHTML = '<div class="mfx-flash"></div><div class="mfx-ring"></div><div class="mfx-burst"></div><div class="mfx-banner"><div class="mfx-text"></div></div>';
+    fx.querySelector('.mfx-text').textContent = txt;
+    const burst = fx.querySelector('.mfx-burst');
+    const cols = ['#ffe27a', '#7cffb5', '#7ad7ff', '#ff8ad8', '#ffffff', '#ffb347'];
+    for (let i = 0; i < 34; i++) {
+      const d = document.createElement('i');
+      const a = (i / 34) * Math.PI * 2 + Math.random() * 0.3, dist = Math.min(W, ownH * 1.6) * (0.28 + Math.random() * 0.3);
+      d.className = i % 3 === 0 ? 'mfx-star' : 'mfx-bit';
+      if (i % 3 === 0) d.textContent = '★';
+      d.style.setProperty('--dx', `${Math.cos(a) * dist}px`);
+      d.style.setProperty('--dy', `${Math.sin(a) * dist * 0.75}px`);
+      d.style.setProperty('--rot', `${Math.round(Math.random() * 720 - 360)}deg`);
+      d.style.color = d.style.background = cols[i % cols.length];
+      if (i % 3 === 0) d.style.background = 'none';
+      d.style.animationDelay = `${0.12 + Math.random() * 0.12}s`;
+      burst.appendChild(d);
+    }
+    host.appendChild(fx);
+    this.fx = fx;
+    // fit the banner text into the field width (long translations / small phones)
+    const tx = fx.querySelector('.mfx-text');
+    const fit = () => {
+      let fs = Math.max(20, Math.min(46, W * 0.11, ownH * 0.2));
+      for (let i = 0; i < 30; i++) {
+        tx.style.fontSize = fs + 'px';
+        if (tx.scrollWidth <= tx.clientWidth + 0.5 && tx.scrollWidth <= W * 0.82 && tx.scrollHeight <= ownH * 0.6) break;
+        fs = Math.max(12, fs * 0.93);
+      }
+    };
+    fit(); requestAnimationFrame(fit);
+    setTimeout(() => { fx.remove(); if (this.fx === fx) this.fx = null; }, 2300);
   }
 
   result(won) {

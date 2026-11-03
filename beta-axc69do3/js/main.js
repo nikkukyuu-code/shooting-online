@@ -1,17 +1,17 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261103130500';
-import { Net } from './net.js?v=20261103130500';
-import { Game } from './game.js?v=20261103130500';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261103130500';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261103130500';
-import { resetDeckToDefault } from './meta.js?v=20261103130500';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261103130500';
-import { loadBattleCount } from './stats.js?v=20261103130500';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261103130500';
-import { ALL_KIND_IDS } from './catalog.js?v=20261103130500';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261103130500';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261103130500';
-import { seedStrongBest } from './record.js?v=20261103130500';
-import { MISSIONS, MISSION_SLOTS, missionById, isMissionCleared } from './mission.js?v=20261103130500';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261103143100';
+import { Net } from './net.js?v=20261103143100';
+import { Game } from './game.js?v=20261103143100';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261103143100';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261103143100';
+import { resetDeckToDefault } from './meta.js?v=20261103143100';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261103143100';
+import { loadBattleCount } from './stats.js?v=20261103143100';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261103143100';
+import { ALL_KIND_IDS } from './catalog.js?v=20261103143100';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261103143100';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261103143100';
+import { seedStrongBest } from './record.js?v=20261103143100';
+import { MISSIONS, MISSION_SLOTS, missionById, isMissionCleared } from './mission.js?v=20261103143100';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -159,7 +159,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261103130500`;
+  return `assets/enemies/${id}/0.png?v=20261103143100`;
 }
 
 function unitName(id) {

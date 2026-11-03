@@ -2884,3 +2884,20 @@ html[dir=rtl] .ms-card { text-align: right; }
 .mr-btns { display: flex; gap: 8px; margin-top: 8px; }
 .end-overlay .mr-btns .menu-btn { flex: 1 1 0; min-width: 0; width: auto; margin: 0; padding: 8px 4px; font-size: clamp(0.72rem, 3.5vw, 0.92rem); white-space: normal; line-height: 1.2; }
 .end-overlay.mission-end .end-rank-msg { display: none; }
+/* β ミッション達成！ effect (over the player's field, non-blocking) */
+.mission-fx { position: absolute; z-index: 7; pointer-events: none; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.mission-fx .mfx-flash { position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(255,255,230,0.85), rgba(255,226,122,0.35) 45%, rgba(255,226,122,0) 75%); animation: mfx-flash 0.6s ease-out forwards; }
+.mission-fx .mfx-ring { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; border: 4px solid #ffe27a; box-shadow: 0 0 18px #ffe27a, inset 0 0 12px #fff6c0; animation: mfx-ring 0.9s ease-out forwards; }
+.mission-fx .mfx-burst { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+.mission-fx .mfx-bit, .mission-fx .mfx-star { position: absolute; left: 0; top: 0; opacity: 0; font-style: normal; animation: mfx-fly 1.5s cubic-bezier(.15,.7,.3,1) forwards; }
+.mission-fx .mfx-bit { width: 7px; height: 4px; margin: -2px 0 0 -3px; border-radius: 1px; }
+.mission-fx .mfx-star { font-size: 16px; line-height: 1; margin: -8px 0 0 -8px; text-shadow: 0 0 6px currentColor; }
+.mission-fx .mfx-banner { position: relative; max-width: 92%; padding: 6px 4%; box-sizing: border-box; text-align: center; background: linear-gradient(90deg, rgba(20,10,60,0), rgba(20,10,60,0.72) 18%, rgba(20,10,60,0.72) 82%, rgba(20,10,60,0)); animation: mfx-banner 2.2s cubic-bezier(.2,1.4,.4,1) forwards; }
+.mission-fx .mfx-text { display: inline-block; max-width: 100%; white-space: nowrap; font-weight: 900; line-height: 1.2; letter-spacing: 0.02em; color: #fff7c8;
+  background: linear-gradient(180deg, #ffffff 0%, #ffe27a 45%, #ffb347 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 6px rgba(255,210,80,0.9)) drop-shadow(0 2px 0 #7a3b00); animation: mfx-glow 0.5s ease-in-out 0.4s 3 alternate; }
+@keyframes mfx-flash { 0% { opacity: 0; } 12% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes mfx-ring { 0% { transform: scale(0.2); opacity: 1; } 100% { transform: scale(9); opacity: 0; } }
+@keyframes mfx-fly { 0% { opacity: 1; transform: translate(0,0) rotate(0) scale(0.6); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--dx), calc(var(--dy) + 24px)) rotate(var(--rot)) scale(1); } }
+@keyframes mfx-banner { 0% { opacity: 0; transform: translateX(-60%) scale(0.6); } 14% { opacity: 1; transform: translateX(0) scale(1.18); } 24% { transform: scale(1); } 78% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.35); } }
+@keyframes mfx-glow { from { filter: drop-shadow(0 0 4px rgba(255,210,80,0.7)) drop-shadow(0 2px 0 #7a3b00); } to { filter: drop-shadow(0 0 16px rgba(255,240,160,1)) drop-shadow(0 2px 0 #7a3b00); } }

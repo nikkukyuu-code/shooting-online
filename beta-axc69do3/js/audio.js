@@ -51,5 +51,7 @@ export const sfx = {
   recImpact: () => { beep({ f: 110, t: 0.5, g: 0.09, type: 'sawtooth', slide: -70 }); beep({ f: 55, t: 0.6, g: 0.08, type: 'sine', slide: -20 }); noise({ t: 0.45, g: 0.09, f: 1800, sweep: -1500 }); setTimeout(() => beep({ f: 880, t: 0.35, g: 0.025, type: 'square', slide: 880 }), 120); },
   recTick: () => beep({ f: 1400, t: 0.025, g: 0.018, type: 'square' }),
   recLand: () => { noise({ t: 0.3, g: 0.06, f: 3000, sweep: -2400 }); [523, 659, 784, 1047].forEach((f) => beep({ f, t: 0.7, g: 0.028, type: 'triangle' })); setTimeout(() => [1047, 1319, 1568].forEach((f, i) => setTimeout(() => beep({ f, t: i === 2 ? 0.6 : 0.14, g: 0.035, type: 'triangle' }), i * 110)), 180); setTimeout(() => beep({ f: 2093, t: 0.5, g: 0.02, type: 'square', slide: 300 }), 560); },
+  // ミッション達成！ fanfare: sparkle sweep + rising arpeggio + held major chord
+  missionClear: () => { noise({ t: 0.35, g: 0.05, f: 2600, sweep: 2400 }); [392, 523, 659, 784].forEach((f, i) => setTimeout(() => beep({ f, t: 0.12, g: 0.05, type: 'triangle' }), i * 90)); setTimeout(() => { [523, 659, 784, 1047].forEach((f) => beep({ f, t: 0.75, g: 0.03, type: 'triangle' })); beep({ f: 1568, t: 0.5, g: 0.015, type: 'sine' }); }, 380); },
   ui: () => beep({ f: 480, t: 0.05, g: 0.03, type: 'triangle' }),
 };
