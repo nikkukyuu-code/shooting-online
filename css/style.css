@@ -2976,3 +2976,22 @@ html[dir=rtl] .ms-card { text-align: right; }
 .news-head{margin:0 0 8px;font-weight:bold;font-size:1.02rem;line-height:1.4;overflow-wrap:anywhere}
 .news-body{margin:0 0 14px;font-size:.92rem;line-height:1.5;overflow-wrap:anywhere}
 .news-close{min-width:140px;margin:0 auto;display:block}
+
+/* 11-04: 記録更新！ の文字を明るく（暗く見える問題）— 金白グラデ＋明るい縁取り＋強いグロー（全言語共通クラス） */
+.rec-new .rec-jp {
+  background: linear-gradient(180deg, #ffffff 0%, #fff8c8 40%, #ffe45a 75%, #ffc93a 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  -webkit-text-stroke: 0.6px rgba(255, 250, 220, 0.9);
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 9px rgba(255, 215, 60, 1)) drop-shadow(0 1px 1px rgba(60, 20, 0, 0.9));
+}
+.rec-new .rec-en { color: #fffbe0; text-shadow: 0 0 6px rgba(255, 220, 80, 0.95), 0 1px 2px #000; }
+.rec-new .rec-pt { color: #fff1a0; }
+.rec2-en {
+  background: linear-gradient(100deg, #ffd24a 0%, #fff3b0 22%, #ffffff 30%, #ffe066 38%, #ffcf3a 55%, #fff3b0 75%, #ffffff 82%, #ffd24a 100%); background-size: 250% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  -webkit-text-stroke: 0.8px rgba(255, 250, 225, 0.85);
+}
+.rec2-jp { color: #fffef0; text-shadow: 0 0 6px #fff, 0 0 16px rgba(255, 215, 60, 1), 0 0 28px rgba(127, 232, 255, 0.8), 0 2px 0 #5a2a00, 0 4px 12px #000; }
+.rec2-sub { color: #e6fbff; }
+.rec2-skip { color: rgba(255, 255, 255, 0.8); }
+.rec2-skip { left: 10px; right: 10px; overflow-wrap: anywhere; } /* 11-04: 揺れ演出中も画面端で見切れない */

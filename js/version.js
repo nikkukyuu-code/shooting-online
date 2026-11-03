@@ -1,8 +1,8 @@
 /** Visible build id: Asia/Tokyo publish datetime (YYYY-MM-DD HH:mm:ss). */
-export const VERSION_LABEL = '2026-11-03 22:07:15';
+export const VERSION_LABEL = '2026-11-04 01:07:00';
 /** Epoch ms of this publish (also drives the 「最新」 badge window). */
-export const BUILD_TIME = 1793711235000;
-export const BUILD_NOTE = 'ミッションモード追加';
+export const BUILD_TIME = 1793722020000;
+export const BUILD_NOTE = '記録更新の文字を明るく・ミッション5/6の敵Lv変更';
 
 export function formatVersionTime(ms = BUILD_TIME) {
   try {

@@ -5,10 +5,10 @@
  * - MissionRun: in-match tutorial guide (DOM HUD over the info pane / control pane — never labels on enemies),
  *   core-kill counting, clear on N core kills regardless of the match result.
  */
-import { loadMeta, saveMeta } from './meta.js?v=20261103220715';
-import { sfx } from './audio.js?v=20261103220715';
-import { hasCore, coreWorld, coreShutState, isLargeEnemy } from './entities.js?v=20261103220715';
-import { OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js?v=20261103220715';
+import { loadMeta, saveMeta } from './meta.js?v=20261104010700';
+import { sfx } from './audio.js?v=20261104010700';
+import { hasCore, coreWorld, coreShutState, isLargeEnemy } from './entities.js?v=20261104010700';
+import { OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js?v=20261104010700';
 
 export const MISSION_KEY = 'shootingOnline_missions';
 export const MISSION_SLOTS = 10;
@@ -41,12 +41,12 @@ export const MISSIONS = [
     howto: '発射アイテム（ミサイル・レーザー・ボムなど）は出ない。通常弾で戦い、回復・バリア・送信・直接攻撃のアイテムは使える',
     text: { intro: ['ミッション開始！', '発射アイテムなしで勝つと報酬 {0} PT（初回クリアのみ）'], introAgain: ['ミッション開始！', '発射アイテムなしで勝とう（報酬は受け取り済み）'],
       wait: ['ノーマル武器で勝て！', '発射アイテムは出ない。通常弾と回復・送信・直接攻撃で勝とう'] } },
-  { id: 5, name: 'ライフ80%で勝利', goal: 'ライフ80%以上で勝利せよ', need: 1, reward: 30000, comLevel: 30, comDifficulty: 'normal', type: 'win', minHpPct: 80,
+  { id: 5, name: 'ライフ80%で勝利', goal: 'ライフ80%以上で勝利せよ', need: 1, reward: 30000, comLevel: 40, comDifficulty: 'normal', type: 'win', minHpPct: 80,
     art: ['__ship', '__heart'], chip: 'ライフ', fail: 'ライフ80%以上で勝つとクリア。もう一度挑戦しよう！',
     howto: '勝った瞬間の自分のライフが80%以上なら達成。下回っても回復アイテムで戻せば間に合う',
     text: { intro: ['ミッション開始！', 'ライフ80%以上で勝つと報酬 {0} PT（初回クリアのみ）'], introAgain: ['ミッション開始！', 'ライフ80%以上で勝とう（報酬は受け取り済み）'],
       wait: ['ライフ80%以上をキープ！', '勝った瞬間のライフが80%以上なら達成'], low: ['ライフが80%を下回った！', 'このまま勝っても達成できない。回復して80%以上に戻そう'] } },
-  { id: 6, name: 'ライフ90%で勝利', goal: 'ライフ90%以上で勝利せよ', need: 1, reward: 100000, comLevel: 50, comDifficulty: 'normal', type: 'win', minHpPct: 90,
+  { id: 6, name: 'ライフ90%で勝利', goal: 'ライフ90%以上で勝利せよ', need: 1, reward: 100000, comLevel: 60, comDifficulty: 'normal', type: 'win', minHpPct: 90,
     art: ['__ship', '__heart'], chip: 'ライフ', fail: 'ライフ90%以上で勝つとクリア。もう一度挑戦しよう！',
     howto: '勝った瞬間の自分のライフが90%以上なら達成。下回っても回復アイテムで戻せば間に合う',
     text: { intro: ['ミッション開始！', 'ライフ90%以上で勝つと報酬 {0} PT（初回クリアのみ）'], introAgain: ['ミッション開始！', 'ライフ90%以上で勝とう（報酬は受け取り済み）'],

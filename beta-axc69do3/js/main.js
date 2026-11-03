@@ -1,17 +1,17 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261103220715';
-import { Net } from './net.js?v=20261103220715';
-import { Game } from './game.js?v=20261103220715';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261103220715';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261103220715';
-import { resetDeckToDefault } from './meta.js?v=20261103220715';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261103220715';
-import { loadBattleCount } from './stats.js?v=20261103220715';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261103220715';
-import { ALL_KIND_IDS } from './catalog.js?v=20261103220715';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261103220715';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261103220715';
-import { seedStrongBest } from './record.js?v=20261103220715';
-import { MISSIONS, MISSION_SLOTS, missionById, isMissionCleared, MISSION_ASSIST_NOTE, MISSION_WIN_NOTE } from './mission.js?v=20261103220715';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261104010700';
+import { Net } from './net.js?v=20261104010700';
+import { Game } from './game.js?v=20261104010700';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261104010700';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261104010700';
+import { resetDeckToDefault } from './meta.js?v=20261104010700';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261104010700';
+import { loadBattleCount } from './stats.js?v=20261104010700';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261104010700';
+import { ALL_KIND_IDS } from './catalog.js?v=20261104010700';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261104010700';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261104010700';
+import { seedStrongBest } from './record.js?v=20261104010700';
+import { MISSIONS, MISSION_SLOTS, missionById, isMissionCleared, MISSION_ASSIST_NOTE, MISSION_WIN_NOTE } from './mission.js?v=20261104010700';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -160,7 +160,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261103220715`;
+  return `assets/enemies/${id}/0.png?v=20261104010700`;
 }
 
 function unitName(id) {
@@ -306,6 +306,7 @@ function renderDeckChangeAction(meta, shownId) {
       const name = unitName(shownId);
       const prevName = unitName(meta.deck[slot]);
       const res = setDeckSlot(loadMeta(), slot, shownId);
+      if (res.ok && res.reason !== 'same') { try { window.__nkVisitUi && window.__nkVisitUi('deck_edit', `${shownId}@${slot + 1}`, 0); } catch (_) {} }
       if (res.ok && els.deckHint) {
         if (res.reason === 'swap') {
           els.deckHint.textContent = `${name}をスロット${slot + 1}に装備しました（${prevName}はスロット${(res.swappedFrom ?? 0) + 1}へ）`;
@@ -449,7 +450,9 @@ function buySelectedShopUnit() {
     showShopMsg(`ポイントが足りません（あと ${shopPrice(u) - cur.pt} PT）`);
     return;
   }
+  const paid = shopPrice(u);
   const res = buyUnit(cur, u.id);
+  if (res.ok) { try { window.__nkVisitUi && window.__nkVisitUi('shop_buy', u.id, paid); } catch (_) {} }
   clearShopMsg();
   if (res.ok) {
     refreshPtDisplay(res.meta);
@@ -704,7 +707,7 @@ function openMissionDetail(id) {
   box.dataset.mission = String(m.id);
   box.innerHTML = `<div class="md-card${done ? ' md-cleared' : ''}">`
     + `<div class="md-top"><span class="md-no">${m.id}</span><span class="md-name"></span><span class="md-state">${done ? 'クリア済み' : '未クリア'}</span></div>`
-    + (m.art && m.art.length ? `<div class="md-art md-art-${m.type}" aria-hidden="true">${m.art.map((k, i) => k === '__heart' ? `<span class="md-a md-a${i} md-heart">❤</span>` : k === '__ship' ? `<img class="md-a md-a${i} md-ship" alt="" src="assets/fx/mission_ship.png?v=20261103220715" draggable="false">` : `<img class="md-a md-a${i}" alt="" src="assets/enemies/${k}/0.png?v=20261103220715" draggable="false">`).join('')}</div>` : '')
+    + (m.art && m.art.length ? `<div class="md-art md-art-${m.type}" aria-hidden="true">${m.art.map((k, i) => k === '__heart' ? `<span class="md-a md-a${i} md-heart">❤</span>` : k === '__ship' ? `<img class="md-a md-a${i} md-ship" alt="" src="assets/fx/mission_ship.png?v=20261104010700" draggable="false">` : `<img class="md-a md-a${i}" alt="" src="assets/enemies/${k}/0.png?v=20261104010700" draggable="false">`).join('')}</div>` : '')
     + `<dl class="md-rows">`
     + `<div class="md-row"><dt>目標</dt><dd class="md-goal"></dd></div>`
     + `<div class="md-row"><dt>敵Lv</dt><dd>${m.comLevel}</dd></div>`
@@ -942,6 +945,7 @@ els.btnZukan?.addEventListener('click', () => {
   document.getElementById('btn-deck-reset-ok')?.addEventListener('click', () => {
     resetDeckToDefault(loadMeta());
     close();
+    try { window.__nkVisitUi && window.__nkVisitUi('deck_edit', 'reset', 0); } catch (_) {}
     selectedDeckSlot = 0;
     deckPreviewId = null;
     renderDeckScreen();
