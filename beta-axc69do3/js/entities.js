@@ -68,8 +68,14 @@ export const RAM_DROP_WEIGHT = 1.7;
 /** DEBUG TEMP: multiply non-boss item drop chance so ram appears early. Restore to 1. */
 export const RAM_DROP_CHANCE_MUL = 1;
 
+/** β mission 4: ids removed from the PLAYER's random drops while set (null = normal). */
+let _pickExclude = null;
+export function setPickExclude(set) { _pickExclude = set || null; }
+/** 発射・攻撃系アイテム (own-field firepower). Kept for mission 4: send*, meteor, direct, heal*, barrier. */
+export const WEAPON_ITEM_IDS = new Set(['homing', 'laser', 'spread', 'bomb', 'shock', 'rapid', 'pbeam', 'option', 'cluster', 'blackhole', 'freeze', 'reflect', 'ram']);
+
 export function pickPowerupId() {
-  const weighted = [
+  const weighted0 = [
     ['homing', 2], ['laser', 2], ['spread', 3], ['bomb', 2], ['shock', 3], ['rapid', 3],
     ['meteor', 2], ['send', 2.4], ['direct', 2.5],
     // 10-04: heal drops between (was 3.2 / 1.5, then 1.6 / 0.75)
@@ -80,6 +86,7 @@ export function pickPowerupId() {
     ['barrier', 1.8],
     ['ram', RAM_DROP_WEIGHT],
   ];
+  const weighted = _pickExclude ? weighted0.filter(([id]) => !_pickExclude.has(id)) : weighted0;
   let r = Math.random() * weighted.reduce((s, [, w]) => s + w, 0);
   for (const [id, w] of weighted) { r -= w; if (r <= 0) return id; }
   return 'homing';

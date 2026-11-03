@@ -1,8 +1,8 @@
 /** Canvas rendering for 4-pane portrait shmup
  *  TOP opp / MIDDLE own / BOTTOM-ish ctrl (操作) / BOTTOM info — info 20%, remaining 80% split equally
  */
-import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261102234205';
-import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261102234205';
+import { EX_ITEM_STYLE, drawExFx } from './attack_items.js?v=20261103202429';
+import { counterTele, COUNTER_PATTERNS } from './counter.js?v=20261103202429';
 
 export const INFO_RATIO = 0.2;
 export const OPP_RATIO = 0.8 / 3;
@@ -441,7 +441,7 @@ let enemySpritesLoading = false;
 
 function enemyAssetUrl(kind, frame) {
   // Relative to page (GitHub Pages root of this repo); ?v= busts CDN/browser cache
-  return `assets/enemies/${kind}/${frame}.png?v=20261102234205`;
+  return `assets/enemies/${kind}/${frame}.png?v=20261103202429`;
 }
 
 function loadKindSprite(kind) {
@@ -527,8 +527,8 @@ const BUBBLE_BOOM = { img: null, n: 17, fw: 240, fh: 216, cx: 16, cy: 18, vw: 40
 /** Hit ring = the video's own 1-px ring (180.47 s, 21×21 video px, centre 10.5, ×6 nearest). */
 const BUBBLE_RING = { img: null, n: 21, c: 10.5 };
 if (typeof Image !== 'undefined') {
-  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261102234205'; BUBBLE_BOOM.img = im;
-  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261102234205'; BUBBLE_RING.img = ri;
+  const im = new Image(); im.decoding = 'async'; im.src = 'assets/fx/bubble_boom.png?v=20261103202429'; BUBBLE_BOOM.img = im;
+  const ri = new Image(); ri.decoding = 'async'; ri.src = 'assets/fx/bubble_ring.png?v=20261103202429'; BUBBLE_RING.img = ri;
 }
 /** Scripted-wave units that borrow a catalog sprite (e.spr) — spider / looper / saucer / ring pods. */
 const SCRIPT_SPRITES = ['gunship_alpha', 'light_destroyer', 'swarm', 'fighter_mk2'];
@@ -2485,6 +2485,42 @@ function bombPaneFx(list, sc) {
   };
 }
 
+/** 11-03 bomb threads: glowing threads grow from the ship (f.x,f.y) to each target (f.t live positions)
+ *  over 0.2 s, shimmer while connected, then flash out after the 0.5 s detonation. */
+const THREAD_GROW = 0.2, THREAD_BOOM = 0.5;
+function drawBombThreads(ctx, f) {
+  const age = Math.max(0, f.max - f.life);
+  const g = Math.min(1, age / THREAD_GROW);
+  const out = age >= THREAD_BOOM ? Math.max(0, 1 - (age - THREAD_BOOM) / Math.max(0.01, f.max - THREAD_BOOM)) : 1;
+  const sc = Math.max(0.45, Math.min(1.3, f.sc || 1));
+  const cx = f.x, cy = f.y;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const pulse = 0.75 + 0.25 * Math.sin(age * 40);
+  for (const [tx, ty] of f.t || []) {
+    const ex = cx + (tx - cx) * g, ey = cy + (ty - cy) * g;
+    const mx = (cx + ex) / 2, my = (cy + ey) / 2 + Math.sin(age * 30 + tx * 0.05) * 6 * sc * (1 - g * 0.6);
+    const flash = age >= THREAD_BOOM ? 2.2 * out : 1;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = `rgba(255,120,40,${0.35 * out * pulse})`; ctx.lineWidth = 7 * sc * flash;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.quadraticCurveTo(mx, my, ex, ey); ctx.stroke();
+    ctx.strokeStyle = `rgba(255,220,120,${0.8 * out})`; ctx.lineWidth = 2.6 * sc * flash;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.quadraticCurveTo(mx, my, ex, ey); ctx.stroke();
+    ctx.strokeStyle = `rgba(255,255,240,${out})`; ctx.lineWidth = 1 * sc;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.quadraticCurveTo(mx, my, ex, ey); ctx.stroke();
+    // tip spark (growing) / lock ring (connected)
+    const rr = (g < 1 ? 4 : 7 + 3 * Math.sin(age * 25)) * sc;
+    const rg = ctx.createRadialGradient(ex, ey, 0, ex, ey, rr * 2.2);
+    rg.addColorStop(0, `rgba(255,255,230,${out})`); rg.addColorStop(0.5, `rgba(255,170,60,${0.6 * out})`); rg.addColorStop(1, 'rgba(255,120,40,0)');
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(ex, ey, rr * 2.2, 0, Math.PI * 2); ctx.fill();
+  }
+  // ship-side glow
+  const sg = ctx.createRadialGradient(cx, cy, 0, cx, cy, 26 * sc);
+  sg.addColorStop(0, `rgba(255,250,220,${0.9 * out})`); sg.addColorStop(1, 'rgba(255,140,40,0)');
+  ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(cx, cy, 26 * sc, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
 function drawBombFx(ctx, f) {
   const age = bombAge(f);
   const cx = f.x, cy = f.y;
@@ -3337,6 +3373,7 @@ function drawFx(ctx, f) {
   if (drawExFx(ctx, f)) return; // v1.5.67 extra attack items (attack_items.js)
   if (f.kind === 'shock') { drawShockFx(ctx, f); return; }
   if (f.kind === 'bomb') { drawBombFx(ctx, f); return; }
+  if (f.kind === 'bombthread') { drawBombThreads(ctx, f); return; }
   if (f.kind === 'heal') { drawHealFx(ctx, f); return; }
   if (f.kind === 'coin') { drawCoin(ctx, f); return; }
   if (f.kind === 'coinburst') { drawCoinBurst(ctx, f); return; }
