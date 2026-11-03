@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261103214714';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261103220715';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, setGuardShip, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,14 +6,16 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261103214714';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261103214714';
-import { sfx } from './audio.js?v=20261103214714';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261103214714';
-import { fxRate } from './entities.js?v=20261103214714';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261103214714';
-import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261103214714';
-import { hitBattleCounter } from './stats.js?v=20261103214714';
+} from './entities.js?v=20261103220715';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261103220715';
+import { sfx } from './audio.js?v=20261103220715';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261103220715';
+import { fxRate } from './entities.js?v=20261103220715';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261103220715';
+import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261103220715';
+import { hitBattleCounter } from './stats.js?v=20261103220715';
+import { setPickExclude, WEAPON_ITEM_IDS } from './entities.js?v=20261103220715';
+import { MissionRun, missionResultBox } from './mission.js?v=20261103220715';
 // ===== DEBUG (temporary): 弾の雨 visual check — set to false to remove. While true, ranking submit is disabled. =====
 const DEBUG_RAIN_AT_START = false;
 // ===== DEBUG (temporary): 転送敵キャラ確認パレード — set to false to remove. =====
@@ -23,11 +25,11 @@ const DEBUG_UNIT_PARADE = false;
 const PARADE_SEC = 12; // per unit: ~3s glide in → body glow → signature attack → normal volleys
 /** 自機の攻撃力倍率 (10-18: ×1.3 → 10-18 夜: 2割減 ×1.04). Applies to the ship's own shots (normal / rapid / homing / spread), player and COM alike. */
 const SHIP_ATK_MUL = 1.04;
-import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261103214714';
-import { recordStrongBest, strongBestBase } from './record.js?v=20261103214714';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult, firstBonusPending, grantFirstBonus } from './meta.js?v=20261103214714';
-import { tickPersona, personaIntangible, personaShieldBlocks, PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261103214714';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261103214714';
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261103220715';
+import { recordStrongBest, strongBestBase } from './record.js?v=20261103220715';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult, firstBonusPending, grantFirstBonus } from './meta.js?v=20261103220715';
+import { tickPersona, personaIntangible, personaShieldBlocks, PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261103220715';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261103220715';
 
 const PT_MILESTONE = 500; // 10-15: 突破演出 every 500 PT earned in the match
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
@@ -467,6 +469,7 @@ export class Game {
   /** Start in-battle tips (info pane only). force=true ignores localStorage. */
   maybeStartTutorial(force = false) {
     if (!this.state || this.ended) return;
+    if (this._mission) return; // mission has its own guide
     if (!force && this.isTutorialDone()) return;
     if (this.state.tutorial) return;
     this.state.tutorial = {
@@ -525,7 +528,7 @@ export class Game {
     return true;
   }
 
-  start({ net, bot = false, comDifficulty = 'strong' } = {}) {
+  start({ net, bot = false, comDifficulty = 'strong', mission = null } = {}) {
     this.stopLoop();
     this.net = net;
     this.useBot = bot;
@@ -536,8 +539,11 @@ export class Game {
     this._comRank = null;
     this._comRankChange = null;
     this._tutorialMatch = false;
-    try { this._comRank = bot ? comRankInfo(this.comDifficulty) : null; } catch (_) { this._comRank = null; }
-    this.comLevel = this._comRank ? this._comRank.level : null;
+    // β ミッション: fixed enemy level, no counters / win-rate / ranking / PT except the mission reward
+    this._mission = bot && mission ? mission : null;
+    if (this._mrun) { this._mrun.destroy(); this._mrun = null; }
+    try { this._comRank = bot && !this._mission ? comRankInfo(this.comDifficulty) : null; } catch (_) { this._comRank = null; }
+    this.comLevel = this._mission ? (this._mission.comLevel || 1) : this._comRank ? this._comRank.level : null;
     this._comProf = null;
     this.resetLocal();
     this.L = resizeCanvas(this.canvas);
@@ -548,9 +554,17 @@ export class Game {
       this.waiting = false;
       this._initBot();
       // Worldwide battle counter (bc): every CPU battle counts once (gameplay starts right here)
-      hitBattleCounter(this.comDifficulty === 'normal' ? 'normal' : 'strong');
+      if (!this._mission) hitBattleCounter(this.comDifficulty === 'normal' ? 'normal' : 'strong');
+      else {
+        this._mrun = new MissionRun(this._mission, this);
+        try { if (window.__nkVisitBattle) window.__nkVisitBattle('mission'); } catch (_) { /* ignore */ }
+      }
       // Rebuild again here so every COM match gets a new lineup even if reset ran early.
       this.rebuildComDeck();
+      if (this._mission && Array.isArray(this._mission.comDeck) && this._mission.comDeck.every((id) => CATALOG_BY_ID[id])) { // β mission: biased COM deck
+        this._comDeck = this._mission.comDeck.slice();
+        this._comDeckInfo = { ...(this._comDeckInfo || {}), deck: this._comDeck.slice() };
+      }
       const msg = this.comDeckStatusText();
       this.setStatus(msg);
       setTimeout(() => {
@@ -688,6 +702,7 @@ export class Game {
 
   destroy() {
     try { if (window.__nkVisitBattleEnd) window.__nkVisitBattleEnd('quit'); } catch (_) { /* ignore */ }
+    if (this._mrun) { try { this._mrun.destroy(); } catch (_) {} this._mrun = null; }
     this._destroyed = true; // 10-15 fix: late close / heartbeat events from this match must never show the overlay
     this.stopLoop();
     this._ko = null;
@@ -1188,6 +1203,27 @@ export class Game {
     F.ff = { n: ((prev && prev.n) || 0) + 1, k, t0: now };
   }
 
+  /** β mission: until the goal is achieved, a COM below 50% life gets a big heal orb dropped right in front
+   *  of its ship (its normal pickup → heal fx), so the match doesn't end before the player can finish the goal.
+   *  Stops for good once the mission is achieved (normal match from then on). */
+  _missionAssist() {
+    const r = this._mrun, B = this._bot;
+    if (!r || r.cleared || !B || this.ended || !this.L) return;
+    if (r.def.type === 'win') return; // win-goal missions (4–6): no enemy heal assist
+    const max = B.maxHp || PLAYER_MAX_HP;
+    if (B.hp <= 0 || B.hp >= max * 0.5) return;
+    if ((B.orbs || []).some((o) => o._assist && o.life > 0)) return;
+    if (r._assistT != null && B.time - r._assistT < 2.5) return;
+    const fw = this.L.own.w, fh = this.L.own.h;
+    const sx = B.x || 48, sy = (B.y || 0.5) * fh;
+    const orb = spawnItemWithId(Math.min(fw - 30, sx + fw * 0.22), Math.max(24, Math.min(fh - 24, sy)), 'heal_big');
+    orb._assist = true;
+    (B.orbs = B.orbs || []).push(orb);
+    r._assistT = B.time;
+    r.assistN = (r.assistN || 0) + 1;
+    (r.assistLog = r.assistLog || []).push({ t: Math.round(this.state.time), hp: Math.round(B.hp), max });
+  }
+
   /** Core destroyed: big chain explosion + score burst (the decisive shot). */
   onCoreBreak(e, fx, mine, list) {
     if (e && e._coreBall && e._chainOf) e = e._chainOf; // snake: the ball is the core, the head owns it
@@ -1210,6 +1246,7 @@ export class Game {
       const rest = (list || []).filter((o) => o._chainSrc === e && o._chainT != null && o.hp > 0).sort((p, q) => p._chainT - q._chainT);
       rest.forEach((o, i) => { o._chainT = CHAIN_FIRST + i * CHAIN_STEP; });
     }
+    if (mine && this._mrun) { try { this._mrun.onCoreBreak(e); } catch (_) {} }
     if (mine) {
       this.state.player.score += e.score; // burst on top of the normal kill score
       try { sfx.explode(); } catch (_) {}
@@ -1887,7 +1924,9 @@ export class Game {
 
       if (!this.waiting && !this.ended) {
         { const o = this.oppHpNow(); if (Number.isFinite(o) && o > 0) this._oppShown = o; } // last positive life shown
+        setPickExclude(this._mission && this._mission.noWeapons ? WEAPON_ITEM_IDS : null); // β mission 4: player drops only
         this.update(dt);
+        setPickExclude(null);
         if (this.useBot) this.updateBot(dt);
         if (!this.ended) this.tickMatchTimer(dt);
         this._syncAcc += dt;
@@ -2002,6 +2041,7 @@ export class Game {
       if (this.state.itemBanner.life <= 0) this.state.itemBanner = null;
     }
     this.tickTutorial(dt);
+    if (this._mrun) { this._mrun.tick(dt); this._missionAssist(); }
     if (S.incomingDirect > 0) {
       S.incomingDirect -= dt;
       if (S.incomingDirect < 0) S.incomingDirect = 0;
@@ -2071,7 +2111,7 @@ export class Game {
           if (Math.abs(e.y - ly) < e.h * 0.55 + 8 && e.x > P.x) {
             // 10-04b: up to 10 hits per tick by hull width, a small explosion at every hit
             const bh = applyLaserTick(e, ly, S.fx, P.x);
-            if (bh === 'core') this.onCoreBreak(e, S.fx, true, S.enemies); else if (bh === 'corehit') { this.fieldFlash(S, 'hit'); noteCoreHit(e, P.x, P.y * fh, fw, S.time); }
+            if (bh === 'core') this.onCoreBreak(e, S.fx, true, S.enemies); else if (bh === 'corehit') { this.fieldFlash(S, 'hit'); if (this._mrun) this._mrun.onCoreHit(e); noteCoreHit(e, P.x, P.y * fh, fw, S.time); }
           }
         }
       }
@@ -2238,7 +2278,7 @@ export class Game {
           const r = applyCoreAwareHit(e, b.dmg || 1, b.x, b.y, S.fx);
           if (r.hit === 'none') continue;
           if (r.hit === 'core') this.onCoreBreak(e, S.fx, true, S.enemies);
-          else if (r.hit === 'corehit') { this.fieldFlash(S, 'hit'); noteCoreHit(e, P.x, P.y * fh, fw, S.time); }
+          else if (r.hit === 'corehit') { this.fieldFlash(S, 'hit'); if (this._mrun) this._mrun.onCoreHit(e); noteCoreHit(e, P.x, P.y * fh, fw, S.time); }
           if (!b.pierce) b.life = 0;
           break;
         }
@@ -2273,6 +2313,7 @@ export class Game {
       if (((hasCore(e) && !e._coreBreak && !e._coreSeg) || coreOwnerOf(e)) && e.hp < 1) e.hp = 1; // snake core ball: only the core rules end it
       if (e.hp <= 0 && e._coreSeg && !e._coreBreak && !e._headDead && e._chainT == null && e.core && e.core.hp > 0) { // snake head shot down: normal kill
         pushKillBooms(S.fx, e, false, false); S.fx.push(spawnCoin(e.x, e.y, this.coinGold(e))); sfx.explode(); P.score += e.score;
+        if (this._mrun) { try { this._mrun.onSnakeHead(e); } catch (_) {} }
         snakeHeadDown(e); remain.push(e); continue;
       }
       if (e.hp <= 0) {
@@ -2284,6 +2325,7 @@ export class Game {
         S.fx.push(spawnCoin(e.x, e.y, this.coinGold(e)));
         sfx.explode();
         P.score += e.score;
+        if (this._mrun) { try { this._mrun.onKill(e); } catch (_) {} }
         if (e._coreBreak) {
           // コア撃破: 75%で回復(大型コアは大回復) + アイテム確定
           if (Math.random() < HEAL_GUARANTEE_P) S.items.push(spawnItemWithId(e.x, e.y, bigCoreKind(e.kind) ? 'heal_big' : 'heal'));
@@ -3363,8 +3405,10 @@ export class Game {
     // COM win-rate record → enemy level (COM matches only; online / room PvP never counted)
     this._comRankChange = null;
     this._firstBonus = null;
-    const firstBonusEligible = !DEBUG_UNIT_PARADE && this.useBot && !this.isOnline() && !this._tutorialMatch && firstBonusPending();
-    if (!DEBUG_UNIT_PARADE && this.useBot && !this.isOnline() && !this._tutorialMatch) {
+    const firstBonusEligible = !DEBUG_UNIT_PARADE && this.useBot && !this.isOnline() && !this._tutorialMatch && !this._mission && firstBonusPending();
+    this._missionRes = null;
+    if (this._mrun) { this._missionRes = this._mrun.result(won); this._mrun.hide(); }
+    if (!DEBUG_UNIT_PARADE && this.useBot && !this.isOnline() && !this._tutorialMatch && !this._mission) {
       try { this._comRankChange = recordComResult(this.comDifficulty, !!won); } catch (_) { this._comRankChange = null; }
     }
 
@@ -3372,7 +3416,7 @@ export class Game {
     this._ptReward = null; this._recordP = null; // 自己ベスト更新判定 (強い wins only)
     // Human-vs-human (online room / matchmaking) never grants PT — any end reason (KO, time-up,
     // 延長戦, disconnect / opponent left). COM matches only.
-    if (!DEBUG_UNIT_PARADE && won && this.useBot && !this.isOnline()) {
+    if (!DEBUG_UNIT_PARADE && won && this.useBot && !this.isOnline()) { // missions: same PT as a normal COM match (+ mission clear reward)
       const rawHp = Math.max(0, this.state.player?.hp ?? 0);
       // 10-29: use the real remaining life exactly as the HUD shows it (Math.round, same as 自分 HP);
       // the old 0–100 rescale (hp/150*100) showed e.g. ライフ 80 while the HUD said 120.
@@ -3402,7 +3446,7 @@ export class Game {
 
     // World ranking: COM「強い」 wins only (PvP / 普通 / tutorial never submitted). Best-effort, async.
     if ((DEBUG_RAIN_AT_START || DEBUG_UNIT_PARADE) && this.useBot && this.comDifficulty === 'strong') { try { cancelStrongMatch(); } catch (_) {} const el = document.getElementById('end-rank-msg'); if (el) { el.textContent = '確認用ビルドのためランキング送信は停止中です'; el.hidden = false; } }
-    else if (this.useBot && !this.isOnline() && !this._tutorialMatch && this.comDifficulty === 'strong') {
+    else if (this.useBot && !this.isOnline() && !this._tutorialMatch && !this._mission && this.comDifficulty === 'strong') {
 
       const pt = won && this._ptReward ? this._ptReward.gain : 0;
       if (!won) { try { cancelStrongMatch(); } catch (_) {} }
@@ -3800,6 +3844,14 @@ export class Game {
       const btnF = ov.querySelector('#btn-again');
       if (btnF) ov.insertBefore(fbEl, btnF); else ov.appendChild(fbEl);
     }
+    ov.querySelectorAll('.mission-result').forEach((el) => el.remove());
+    if (this._missionRes) {
+      if (this._mrun && this._mrun._pendingFx) { this._mrun._pendingFx = false; try { this._mrun._celebrate(true); } catch (_) {} }
+      const mb = missionResultBox({ ...this._missionRes, battlePt: won && this._ptReward ? this._ptReward.gain : 0, total: loadMeta().pt });
+      const btnM = ov.querySelector('#btn-again');
+      if (btnM) ov.insertBefore(mb, btnM); else ov.appendChild(mb);
+    }
+    ov.classList.toggle('mission-end', !!this._missionRes);
     ov.classList.remove('victory', 'defeat', 'pt-show', 'hidden');
     ov.classList.add(won ? 'victory' : 'defeat');
 

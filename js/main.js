@@ -1,16 +1,17 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261103214714';
-import { Net } from './net.js?v=20261103214714';
-import { Game } from './game.js?v=20261103214714';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261103214714';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261103214714';
-import { resetDeckToDefault } from './meta.js?v=20261103214714';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261103214714';
-import { loadBattleCount } from './stats.js?v=20261103214714';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261103214714';
-import { ALL_KIND_IDS } from './catalog.js?v=20261103214714';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261103214714';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261103214714';
-import { seedStrongBest } from './record.js?v=20261103214714';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261103220715';
+import { Net } from './net.js?v=20261103220715';
+import { Game } from './game.js?v=20261103220715';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261103220715';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261103220715';
+import { resetDeckToDefault } from './meta.js?v=20261103220715';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261103220715';
+import { loadBattleCount } from './stats.js?v=20261103220715';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261103220715';
+import { ALL_KIND_IDS } from './catalog.js?v=20261103220715';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261103220715';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261103220715';
+import { seedStrongBest } from './record.js?v=20261103220715';
+import { MISSIONS, MISSION_SLOTS, missionById, isMissionCleared, MISSION_ASSIST_NOTE, MISSION_WIN_NOTE } from './mission.js?v=20261103220715';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -27,6 +28,8 @@ const screens = {
   shop: $('#screen-shop'),
   zukan: $('#screen-zukan'),
   ranking: $('#screen-ranking'),
+  mission: $('#screen-mission'),
+  missionDetail: $('#screen-mission-detail'),
 };
 
 const els = {
@@ -157,7 +160,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261103214714`;
+  return `assets/enemies/${id}/0.png?v=20261103220715`;
 }
 
 function unitName(id) {
@@ -561,7 +564,7 @@ function goMenu() {
   show('menu');
 }
 
-function startGameSession({ bot = false, comDifficulty = 'strong' } = {}) {
+function startGameSession({ bot = false, comDifficulty = 'strong', mission = null } = {}) {
   show('game');
   els.endOverlay.classList.add('hidden');
   { const m = document.getElementById('end-rank-msg'); if (m) { m.hidden = true; m.textContent = ''; } }
@@ -571,7 +574,8 @@ function startGameSession({ bot = false, comDifficulty = 'strong' } = {}) {
     endOverlay: els.endOverlay,
     endMessage: els.endMessage,
   });
-  game.start({ net, bot, comDifficulty });
+  document.querySelectorAll('#ui-overlay .mission-hud, #ui-overlay .mission-chip').forEach((n) => n.remove());
+  game.start({ net, bot, comDifficulty, mission });
 }
 
 /**
@@ -656,6 +660,94 @@ function startCpuMatchNow(comDifficulty) {
 }
 
 els.btnCpuNormal?.addEventListener('click', () => startCpuMatch('normal'));
+
+/* ---- β ミッションモード ---- */
+function renderMissionList() {
+  const list = document.getElementById('mission-list');
+  if (!list) return;
+  list.replaceChildren();
+  for (let i = 1; i <= MISSION_SLOTS; i++) {
+    const m = missionById(i);
+    const card = document.createElement(m ? 'button' : 'div');
+    if (m) {
+      const done = isMissionCleared(m.id);
+      card.type = 'button';
+      card.className = 'ms-card ms-open' + (done ? ' ms-cleared' : '');
+      card.dataset.mission = String(m.id);
+      card.innerHTML = `<span class="ms-no">${m.id}</span><span class="ms-main"><span class="ms-name">${m.name}</span><span class="ms-goal">${m.goal}</span>`
+        + `<span class="ms-meta"><span class="ms-reward"><span class="ms-rw">報酬 ${m.reward} PT</span><span class="ms-once">（初回クリアのみ）</span></span><span class="ms-lv">敵Lv${m.comLevel}</span></span></span>`
+        + `<span class="ms-side"><span class="ms-state">${done ? 'クリア済み' : '未クリア'}</span><span class="ms-go">出撃 ▶</span></span>`;
+      card.addEventListener('click', () => openMissionDetail(m.id));
+    } else {
+      card.className = 'ms-card ms-locked';
+      card.setAttribute('aria-disabled', 'true');
+      card.innerHTML = `<span class="ms-no">${i}</span><span class="ms-main"><span class="ms-name">🔒 準備中</span><span class="ms-goal">近日公開</span></span>`;
+    }
+    list.appendChild(card);
+  }
+}
+function openMissionSelect() {
+  if (busy) return;
+  cleanupGame();
+  setBusy(false);
+  refreshPtDisplay();
+  renderMissionList();
+  show('mission');
+}
+function openMissionDetail(id) {
+  const m = missionById(id);
+  const box = document.getElementById('mission-detail');
+  if (!m || !box || busy) return;
+  const done = isMissionCleared(m.id);
+  const t = document.getElementById('md-title');
+  if (t) t.textContent = `ミッション${m.id}「${m.name}」`;
+  box.dataset.mission = String(m.id);
+  box.innerHTML = `<div class="md-card${done ? ' md-cleared' : ''}">`
+    + `<div class="md-top"><span class="md-no">${m.id}</span><span class="md-name"></span><span class="md-state">${done ? 'クリア済み' : '未クリア'}</span></div>`
+    + (m.art && m.art.length ? `<div class="md-art md-art-${m.type}" aria-hidden="true">${m.art.map((k, i) => k === '__heart' ? `<span class="md-a md-a${i} md-heart">❤</span>` : k === '__ship' ? `<img class="md-a md-a${i} md-ship" alt="" src="assets/fx/mission_ship.png?v=20261103220715" draggable="false">` : `<img class="md-a md-a${i}" alt="" src="assets/enemies/${k}/0.png?v=20261103220715" draggable="false">`).join('')}</div>` : '')
+    + `<dl class="md-rows">`
+    + `<div class="md-row"><dt>目標</dt><dd class="md-goal"></dd></div>`
+    + `<div class="md-row"><dt>敵Lv</dt><dd>${m.comLevel}</dd></div>`
+    + `<div class="md-row"><dt>報酬</dt><dd class="md-reward"><span class="md-rw">${m.reward} PT</span><span class="md-once">（初回クリアのみ）</span></dd></div>`
+    + `</dl>`
+    + `<div class="md-howto"><div class="md-h">遊び方</div><p class="md-p1"></p><p class="md-p2"></p></div>`
+    + `<button type="button" class="menu-btn md-start" id="btn-mission-start">スタート ▶</button>`
+    + `</div>`;
+  box.querySelector('.md-name').textContent = m.name;
+  box.querySelector('.md-goal').textContent = m.goal;
+  box.querySelector('.md-p1').textContent = m.howto || '';
+  box.querySelector('.md-p2').textContent = m.type === 'win' ? MISSION_WIN_NOTE : MISSION_ASSIST_NOTE;
+  box.querySelector('.md-start').addEventListener('click', () => startMission(m.id));
+  show('missionDetail');
+}
+window.__stbMissionDetail = (id) => openMissionDetail(id);
+document.getElementById('btn-mdetail-back')?.addEventListener('click', () => openMissionSelect());
+function startMission(id) {
+  const m = missionById(id);
+  if (!m || busy) return;
+  withMatchPrep(() => {
+    if (busy) return;
+    setBusy(true);
+    cleanupGame();
+    net = new Net();
+    net.usingBot = true;
+    try {
+      startGameSession({ bot: true, comDifficulty: m.comDifficulty || 'normal', mission: m });
+      game.beginMatch();
+    } catch (e) {
+      console.error(e);
+      cleanupGame();
+      show('menu');
+    } finally {
+      setBusy(false);
+    }
+  });
+}
+window.__stbMissionRetry = (id) => startMission(id);
+window.__stbMissionSelect = () => openMissionSelect();
+window.__stbGameRef = () => game;
+document.getElementById('btn-mission')?.addEventListener('click', () => openMissionSelect());
+document.getElementById('btn-mission-back')?.addEventListener('click', () => goMenu());
 els.btnCpuStrong?.addEventListener('click', () => startCpuMatch('strong'));
 
 
@@ -811,7 +903,6 @@ els.btnStop.addEventListener('click', () => {
   goMenu();
 });
 window.__stbGoMenu = () => goMenu();
-window.__stbGameRef = () => game;
 
 els.btnAgain.addEventListener('click', () => {
   goMenu();
@@ -1375,4 +1466,31 @@ document.querySelectorAll('.sub-back[data-back]').forEach((b) => b.addEventListe
   const menu = document.getElementById('screen-menu');
   if (menu) try { new MutationObserver(sched).observe(menu, { attributes: true, attributeFilter: ['class'] }); } catch (_) {}
   sched(); setTimeout(sched, 300); setTimeout(sched, 1200);
+})();
+
+/* ---- 11-03 更新情報（ミッションモード追加）: 初回だけ表示。「閉じる」で閉じたら二度と出さない（新しいキー・既存キーは変更しない） ---- */
+(() => {
+  const KEY = 'shootingOnline_news_20261103_mission';
+  try { if (localStorage.getItem(KEY)) return; } catch (_) { return; }
+  const show = () => {
+    if (document.getElementById('news-overlay')) return;
+    const ov = document.createElement('div');
+    ov.id = 'news-overlay'; ov.className = 'news-overlay'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true');
+    ov.innerHTML = '<div class="news-box"><h2 class="news-title">更新情報</h2>'
+      + '<p class="news-head">🎯 新モード「ミッション」を追加しました！</p>'
+      + '<p class="news-body">メニューの「ミッション」から挑戦できます。お題をクリアするとPTがもらえます（各ミッション初回クリアのみ）。</p>'
+      + '<button type="button" class="menu-btn news-close" id="btn-news-close">閉じる</button></div>';
+    document.body.appendChild(ov);
+    ov.querySelector('#btn-news-close').addEventListener('click', () => {
+      try { localStorage.setItem(KEY, '1'); } catch (_) { /* ignore */ }
+      ov.remove();
+    });
+  };
+  let n = 0;
+  const wait = () => {
+    const m = document.getElementById('screen-menu');
+    if (m && m.classList.contains('active')) { setTimeout(show, 500); return; }
+    if (++n < 240) setTimeout(wait, 500);
+  };
+  wait();
 })();
