@@ -5,10 +5,10 @@
  * - MissionRun: in-match tutorial guide (DOM HUD over the info pane / control pane — never labels on enemies),
  *   core-kill counting, clear on N core kills regardless of the match result.
  */
-import { loadMeta, saveMeta } from './meta.js?v=20261103143100';
-import { sfx } from './audio.js?v=20261103143100';
-import { hasCore, coreWorld, coreShutState } from './entities.js?v=20261103143100';
-import { OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js?v=20261103143100';
+import { loadMeta, saveMeta } from './meta.js?v=20261103163248';
+import { sfx } from './audio.js?v=20261103163248';
+import { hasCore, coreWorld, coreShutState } from './entities.js?v=20261103163248';
+import { OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js?v=20261103163248';
 
 export const MISSION_KEY = 'shootingOnline_missions';
 export const MISSION_SLOTS = 10;
@@ -46,6 +46,8 @@ export function grantMissionClear(def) {
 }
 
 const STEP_TEXT = {
+  intro: ['ミッション開始！', 'コア敵を2体倒すと報酬 {0} PT（初回クリアのみ）'],
+  introAgain: ['ミッション開始！', 'コア敵を2体倒そう（報酬は受け取り済み）'],
   wait: ['コア敵を待とう', 'コア敵が来るまで、ふつうの敵を倒して待とう'],
   spot: ['コア敵が来た！', '体のどこかで赤く光る点が「コア」。コアが弱点だ'],
   align: ['高さを合わせよう', '自機を上下に動かして、コアと同じ高さに合わせよう'],
@@ -73,7 +75,7 @@ export class MissionRun {
     this.seen = new WeakSet();
     this.log = [];
     this._mount();
-    this._setStep('wait');
+    this._setStep(isMissionCleared(def.id) ? 'introAgain' : 'intro');
   }
 
   _mount() {
@@ -176,6 +178,7 @@ export class MissionRun {
     const shut = e ? coreShutState(e) === 2 : false;
     const arrow = dy == null ? '▶' : aligned ? '◎' : dy < 0 ? '⬆' : '⬇';
     switch (this.step) {
+      case 'intro': case 'introAgain': this._arrow('🎯'); if (this.stepT > 3.2) this._setStep(e ? 'spot' : 'wait'); break;
       case 'wait': if (e) this._setStep('spot'); this._arrow('▶'); break;
       case 'spot': this._arrow('▶'); if (!e) this._setStep('wait'); else if (this.stepT > 2.6) this._setStep('align'); break;
       case 'align':
@@ -232,7 +235,7 @@ export class MissionRun {
   onCoreHit(e) {
     if (this.cleared && this.step !== 'next') return;
     if (!this.everHit) this.everHit = true;
-    if (['wait', 'spot', 'align', 'shoot', 'shut', 'block'].includes(this.step) && this.kills === 0) this._setStep('hit');
+    if (['intro', 'introAgain', 'wait', 'spot', 'align', 'shoot', 'shut', 'block'].includes(this.step) && this.kills === 0) this._setStep('hit');
   }
 
   onCoreBreak(e) {
@@ -271,6 +274,37 @@ export class MissionRun {
     const txt = (window.NKI18N && window.NKI18N.t) ? window.NKI18N.t(raw) : raw;
     fx.innerHTML = '<div class="mfx-flash"></div><div class="mfx-ring"></div><div class="mfx-burst"></div><div class="mfx-banner"><div class="mfx-text"></div></div>';
     fx.querySelector('.mfx-text').textContent = txt;
+    // first clear only: 「+3000 PT 獲得！」 gain burst (actual reward value; not on replays)
+    const rw = this.reward && this.reward.first ? Number(this.reward.gain || this.def.reward || 0) : 0;
+    let gain = null;
+    if (rw > 0) {
+      gain = document.createElement('div');
+      gain.className = 'mfx-gain';
+      const getRaw = '獲得！';
+      gain.innerHTML = '<span class="mfx-coin" aria-hidden="true"></span><span class="mfx-pt">+0 PT</span><span class="mfx-get"></span><span class="mfx-once"></span>';
+      gain.querySelector('.mfx-get').textContent = (window.NKI18N && window.NKI18N.t) ? window.NKI18N.t(getRaw) : getRaw;
+      const onceRaw = '（初回クリアのみ）';
+      gain.querySelector('.mfx-once').textContent = (window.NKI18N && window.NKI18N.t) ? window.NKI18N.t(onceRaw) : onceRaw;
+      fx.querySelector('.mfx-banner').after(gain);
+      const coins = document.createElement('div'); coins.className = 'mfx-coins';
+      for (let i = 0; i < 14; i++) {
+        const c = document.createElement('i'); c.className = 'mfx-c';
+        const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.4, d = Math.min(W, ownH * 1.4) * (0.22 + Math.random() * 0.25);
+        c.style.setProperty('--dx', `${Math.cos(a) * d}px`); c.style.setProperty('--dy', `${Math.sin(a) * d * 0.7}px`);
+        c.style.animationDelay = `${0.55 + Math.random() * 0.35}s`;
+        coins.appendChild(c);
+      }
+      gain.appendChild(coins);
+      const ptEl = gain.querySelector('.mfx-pt'), t0 = performance.now() + 550, dur = 700;
+      setTimeout(() => { try { sfx.coinGain(); } catch (_) { /* ignore */ } }, 550);
+      const step = (now) => {
+        if (!gain.isConnected) return;
+        const k = Math.max(0, Math.min(1, (now - t0) / dur)), v = Math.round(rw * (1 - Math.pow(1 - k, 3)));
+        ptEl.textContent = `+${v} PT`;
+        if (k < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }
     const burst = fx.querySelector('.mfx-burst');
     const cols = ['#ffe27a', '#7cffb5', '#7ad7ff', '#ff8ad8', '#ffffff', '#ffb347'];
     for (let i = 0; i < 34; i++) {
@@ -299,7 +333,22 @@ export class MissionRun {
       }
     };
     fit(); requestAnimationFrame(fit);
-    setTimeout(() => { fx.remove(); if (this.fx === fx) this.fx = null; }, 2300);
+    if (gain) {
+      const gp = gain.querySelector('.mfx-pt'), gg = gain.querySelector('.mfx-get');
+      const gfit = () => {
+        const save = gp.textContent; gp.textContent = `+${rw} PT`;
+        let fs = Math.max(16, Math.min(34, W * 0.085, ownH * 0.15));
+        for (let i = 0; i < 30; i++) {
+          gp.style.fontSize = fs + 'px'; gg.style.fontSize = (fs * 0.62) + 'px'; gain.querySelector('.mfx-once').style.fontSize = Math.max(10, Math.min(14, fs * 0.42)) + 'px';
+          const rowW = gp.getBoundingClientRect().width + gg.getBoundingClientRect().width + fs * 1.4; if (rowW <= W * 0.86 && gain.scrollWidth <= gain.clientWidth + 0.5) break;
+          fs = Math.max(10, fs * 0.93);
+        }
+        gp.style.minWidth = gp.getBoundingClientRect().width + 'px';
+        gp.textContent = save;
+      };
+      gfit(); requestAnimationFrame(gfit);
+    }
+    setTimeout(() => { fx.remove(); if (this.fx === fx) this.fx = null; }, gain ? 2900 : 2300);
   }
 
   result(won) {
