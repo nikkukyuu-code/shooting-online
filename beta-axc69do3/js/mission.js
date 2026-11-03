@@ -5,10 +5,10 @@
  * - MissionRun: in-match tutorial guide (DOM HUD over the info pane / control pane — never labels on enemies),
  *   core-kill counting, clear on N core kills regardless of the match result.
  */
-import { loadMeta, saveMeta } from './meta.js?v=20261103202429';
-import { sfx } from './audio.js?v=20261103202429';
-import { hasCore, coreWorld, coreShutState, isLargeEnemy } from './entities.js?v=20261103202429';
-import { OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js?v=20261103202429';
+import { loadMeta, saveMeta } from './meta.js?v=20261103214714';
+import { sfx } from './audio.js?v=20261103214714';
+import { hasCore, coreWorld, coreShutState, isLargeEnemy } from './entities.js?v=20261103214714';
+import { OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js?v=20261103214714';
 
 export const MISSION_KEY = 'shootingOnline_missions';
 export const MISSION_SLOTS = 10;
@@ -27,13 +27,13 @@ export const MISSIONS = [
     text: { intro: ['ミッション開始！', 'デカキャラを6体倒すと報酬 {0} PT（初回クリアのみ）'], introAgain: ['ミッション開始！', 'デカキャラを6体倒そう（報酬は受け取り済み）'],
       wait: ['デカキャラをねらえ！', '大きな敵キャラやコア敵を倒そう。コア敵はコアを撃つと倒せる'], boom: ['デカキャラ撃破！', 'あと {1} 体'] } },
   // フラワースネイク (蛇の頭): wave_snake_head (wave script: 1 snake at 1:00, 2 at 2:30, 3 at 4:00 → 6 per match). One credit per snake:
-  // its head shot down OR its core (orange ball) broken by the player.
+  // only when its core (orange ball) is broken by the player (head kills don't count).
   { id: 3, name: 'フラワースネイク退治', goal: 'フラワースネイクを2体倒せ', need: 2, reward: 10000, comLevel: 15, comDifficulty: 'normal', type: 'snake', art: ['snake_head_art', 'snake_seg', 'snake_seg', 'snake_redball', 'snake_seg', 'snake_seg'],
     chip: 'フラワースネイク', fail: 'フラワースネイクを2体倒すとクリア。もう一度挑戦しよう！',
-    howto: 'フラワースネイクが現れたら先頭の頭をねらおう。オレンジの玉（コア）を壊しても倒せる',
+    howto: 'フラワースネイクが現れたらオレンジの玉（コア）を壊して倒そう',
     text: { intro: ['ミッション開始！', 'フラワースネイクを2体倒すと報酬 {0} PT（初回クリアのみ）'], introAgain: ['ミッション開始！', 'フラワースネイクを2体倒そう（報酬は受け取り済み）'],
-      wait: ['フラワースネイクを待とう', 'フラワースネイクが来るまで、ふつうの敵を倒して待とう'], spot: ['フラワースネイクが来た！', '先頭の頭か、オレンジの玉（コア）をねらって撃とう'],
-      boom: ['フラワースネイク撃破！', 'あと {1} 体'], next: ['次のフラワースネイク！', '先頭の頭か、オレンジの玉（コア）をねらって撃とう'] } },
+      wait: ['フラワースネイクを待とう', 'フラワースネイクが来るまで、ふつうの敵を倒して待とう'], spot: ['フラワースネイクが来た！', 'オレンジの玉（コア）をねらって撃とう'],
+      boom: ['フラワースネイク撃破！', 'あと {1} 体'], next: ['次のフラワースネイク！', 'オレンジの玉（コア）をねらって撃とう'] } },
   // 4–6: goal = winning the match (no heal assist). 4: no weapon items for the player (WEAPON_ITEM_IDS).
   // 5/6: player life ≥ minHpPct % at the moment of victory (judged at victory; can recover with heals).
   { id: 4, name: 'ノーマル武器で勝利を目指せ', goal: '発射アイテムなしで勝利せよ', need: 1, reward: 20000, comLevel: 20, comDifficulty: 'normal', type: 'win', noWeapons: true,
@@ -304,7 +304,7 @@ export class MissionRun {
   }
 
   /** Snake head shot down by the player (normal kill of the head). */
-  onSnakeHead(e) { if (this.def.type === 'snake' && e && e.kind === 'wave_snake_head') this._credit(e); }
+  onSnakeHead(_e) { /* 11-03: head kills no longer count — core break only */ }
 
   _credit(e) {
     if (!e || this.seen.has(e)) return;

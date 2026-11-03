@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261103202429';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261103214714';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, setGuardShip, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,16 +6,16 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261103202429';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261103202429';
-import { sfx } from './audio.js?v=20261103202429';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261103202429';
-import { fxRate } from './entities.js?v=20261103202429';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261103202429';
-import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261103202429';
-import { hitBattleCounter } from './stats.js?v=20261103202429';
-import { setPickExclude, WEAPON_ITEM_IDS } from './entities.js?v=20261103202429';
-import { MissionRun, missionResultBox } from './mission.js?v=20261103202429';
+} from './entities.js?v=20261103214714';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261103214714';
+import { sfx } from './audio.js?v=20261103214714';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261103214714';
+import { fxRate } from './entities.js?v=20261103214714';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261103214714';
+import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261103214714';
+import { hitBattleCounter } from './stats.js?v=20261103214714';
+import { setPickExclude, WEAPON_ITEM_IDS } from './entities.js?v=20261103214714';
+import { MissionRun, missionResultBox } from './mission.js?v=20261103214714';
 // ===== DEBUG (temporary): 弾の雨 visual check — set to false to remove. While true, ranking submit is disabled. =====
 const DEBUG_RAIN_AT_START = false;
 // ===== DEBUG (temporary): 転送敵キャラ確認パレード — set to false to remove. =====
@@ -25,11 +25,11 @@ const DEBUG_UNIT_PARADE = false;
 const PARADE_SEC = 12; // per unit: ~3s glide in → body glow → signature attack → normal volleys
 /** 自機の攻撃力倍率 (10-18: ×1.3 → 10-18 夜: 2割減 ×1.04). Applies to the ship's own shots (normal / rapid / homing / spread), player and COM alike. */
 const SHIP_ATK_MUL = 1.04;
-import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261103202429';
-import { recordStrongBest, strongBestBase } from './record.js?v=20261103202429';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult, firstBonusPending, grantFirstBonus } from './meta.js?v=20261103202429';
-import { tickPersona, personaIntangible, personaShieldBlocks, PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261103202429';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261103202429';
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261103214714';
+import { recordStrongBest, strongBestBase } from './record.js?v=20261103214714';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult, firstBonusPending, grantFirstBonus } from './meta.js?v=20261103214714';
+import { tickPersona, personaIntangible, personaShieldBlocks, PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261103214714';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261103214714';
 
 const PT_MILESTONE = 500; // 10-15: 突破演出 every 500 PT earned in the match
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
@@ -90,10 +90,6 @@ const HEAL_GUARANTEE_P = 0.75;
 
 /** Match time limit (seconds). Hidden test override: globalThis.__shootingMatchSec (not exposed in UI). */
 const MATCH_TIME_SEC = 300;
-/** 11-03 bomb: threads grow 0→0.2 s, detonation at 0.5 s, thread flash-out until 0.62 s. */
-const BOMB_DELAY = 0.5;
-const BOMB_THREAD_LIFE = 0.62;
-const BOMB_CHARGE_SKIP = 0.22; // = render BOMB_CHARGE (implosion beat skipped: the threads are the charge)
 function matchTimeSec() {
   const o = Number(globalThis.__shootingMatchSec);
   return Number.isFinite(o) && o > 0 ? o : MATCH_TIME_SEC;
@@ -559,7 +555,10 @@ export class Game {
       this._initBot();
       // Worldwide battle counter (bc): every CPU battle counts once (gameplay starts right here)
       if (!this._mission) hitBattleCounter(this.comDifficulty === 'normal' ? 'normal' : 'strong');
-      else this._mrun = new MissionRun(this._mission, this);
+      else {
+        this._mrun = new MissionRun(this._mission, this);
+        try { if (window.__nkVisitBattle) window.__nkVisitBattle('mission'); } catch (_) { /* ignore */ }
+      }
       // Rebuild again here so every COM match gets a new lineup even if reset ran early.
       this.rebuildComDeck();
       if (this._mission && Array.isArray(this._mission.comDeck) && this._mission.comDeck.every((id) => CATALOG_BY_ID[id])) { // β mission: biased COM deck
@@ -702,6 +701,7 @@ export class Game {
   }
 
   destroy() {
+    try { if (window.__nkVisitBattleEnd) window.__nkVisitBattleEnd('quit'); } catch (_) { /* ignore */ }
     if (this._mrun) { try { this._mrun.destroy(); } catch (_) {} this._mrun = null; }
     this._destroyed = true; // 10-15 fix: late close / heartbeat events from this match must never show the overlay
     this.stopLoop();
@@ -1669,9 +1669,20 @@ export class Game {
       // (kept: a running timed weapon is NOT cancelled by instant items)
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1000);
     } else if (id === 'bomb') {
-      // Screen bomb (11-03): glowing threads grow from the ship to every target over 0.2 s, follow them,
-      // and at 0.5 s the bomb detonates (same targets / damage / bullet clear as before) — see tickBombs().
-      const hits = this.armBomb(this.state, p.x, p.y * this.L.own.h);
+      // Screen bomb: heavy damage to all enemies, clear nearby enemy bullets
+      let hits = 0;
+      const targets = [];
+      for (const e of this.state.enemies) {
+        if (warping(e)) continue;
+        if (hasCore(e)) applyCoreAwareArea(e, 28, null, null, null); else
+        e.hp -= 28;
+        this.state.fx.push(spawnExplosion(e.x, e.y, resolveEnemyTier(e.kind) === 'boss'));
+        targets.push([e.x, e.y]);
+        hits++;
+      }
+      this.state.bullets = this.state.bullets.filter((b) => b.owner === 'player');
+      // Stage-wide bomb FX from the ship (front of list so it survives net snapshot slice)
+      this.state.fx.unshift(spawnBombFx(p.x, p.y * this.L.own.h, this.L.own.w, this.L.own.h, targets));
       this.showItemBanner(meta, `（敵${hits}体）`);
       // (kept: a running timed weapon is NOT cancelled by instant items)
       setTimeout(() => { if (!this.ended && !this.waiting) this.setStatus(HINT); }, 1200);
@@ -2030,7 +2041,6 @@ export class Game {
       if (this.state.itemBanner.life <= 0) this.state.itemBanner = null;
     }
     this.tickTutorial(dt);
-    this.tickBombs(this.state, this.state.player.x, this.state.player.y * this.L.own.h, dt);
     if (this._mrun) { this._mrun.tick(dt); this._missionAssist(); }
     if (S.incomingDirect > 0) {
       S.incomingDirect -= dt;
@@ -2459,48 +2469,6 @@ export class Game {
     }
   }
 
-  /** Bomb use: lock targets now (every non-warping enemy), spawn the thread FX; damage lands at BOMB_DELAY. */
-  armBomb(F, sx, sy, com = false) {
-    const targets = (F.enemies || []).filter((e) => !warping(e));
-    const fx = { kind: 'bombthread', x: Math.round(sx), y: Math.round(sy), life: BOMB_THREAD_LIFE, max: BOMB_THREAD_LIFE,
-      t: targets.slice(0, 24).map((e) => [Math.round(e.x), Math.round(e.y)]) };
-    F.fx.unshift(fx); // front of list so it survives the net snapshot slice
-    (F._bombs = F._bombs || []).push({ age: 0, targets, fx, com });
-    return targets.length;
-  }
-
-  /** Threads follow ship + targets every frame; at BOMB_DELAY the bomb detonates. Targets that died / left
-   *  meanwhile simply lose their thread (no damage, no explosion for them). */
-  tickBombs(F, sx, sy, dt, com = false) {
-    if (!F || !F._bombs || !F._bombs.length) return;
-    const fw = this.L.own.w, fh = this.L.own.h;
-    const keep = [];
-    for (const bm of F._bombs) {
-      bm.age += dt;
-      bm.targets = bm.targets.filter((e) => e.hp > 0 && F.enemies.includes(e));
-      bm.fx.x = Math.round(sx); bm.fx.y = Math.round(sy);
-      if (bm.age < BOMB_DELAY) {
-        bm.fx.t = bm.targets.slice(0, 24).map((e) => [Math.round(e.x), Math.round(e.y)]);
-        keep.push(bm); continue;
-      }
-      const pts = [];
-      for (const e of bm.targets) {
-        if (hasCore(e)) applyCoreAwareArea(e, 28, null, null, null); else
-        e.hp -= 28;
-        F.fx.push(spawnExplosion(e.x, e.y, com ? true : resolveEnemyTier(e.kind) === 'boss'));
-        pts.push([e.x, e.y]);
-      }
-      bm.fx.t = pts.slice(0, 24).map(([x, y]) => [Math.round(x), Math.round(y)]);
-      bm.fx.life = Math.min(bm.fx.life, BOMB_THREAD_LIFE - BOMB_DELAY); // thread flash-out phase
-      F.bullets = F.bullets.filter((b) => b.owner === 'player');
-      const bf = spawnBombFx(sx, sy, fw, fh, pts);
-      bf.life = bf.max - BOMB_CHARGE_SKIP; // already charged by the threads → detonation frame now
-      F.fx.unshift(bf);
-      try { sfx.explode(); } catch (_) {}
-    }
-    F._bombs = keep;
-  }
-
   updateBot(dt) {
     const _cp = this.comProfile();
     const B = this._bot;
@@ -2509,7 +2477,6 @@ export class Game {
     const fh = this.L.own.h;
     let shipX = B.x || 48;
     B.time += dt;
-    this.tickBombs(B, shipX, (B.y ?? 0.5) * fh, dt, true);
     B.scroll += 55 * dt;
     if (B.invuln == null) B.invuln = 0;
     if (B.invuln > 0) B.invuln -= dt;
@@ -3272,7 +3239,16 @@ export class Game {
         }
         B.fx.push(spawnExplosion(shipX + 30, by, false));
       } else if (id === 'bomb') {
-        this.armBomb(B, B.x || 48, B.y * fh, true);
+        const targets = [];
+        for (const e of B.enemies) {
+          if (warping(e)) continue;
+          if (hasCore(e)) applyCoreAwareArea(e, 28, null, null, null); else
+          e.hp -= 28;
+          B.fx.push(spawnExplosion(e.x, e.y, true));
+          targets.push([e.x, e.y]);
+        }
+        B.bullets = B.bullets.filter((b) => b.owner === 'player');
+        B.fx.unshift(spawnBombFx(B.x || 48, B.y * fh, fw, fh, targets));
       } else if (id === 'shock') {
         const by = B.y * fh;
         const cx = B.x || 48; // centre on COM ship's actual position (it moves horizontally)
@@ -3416,6 +3392,7 @@ export class Game {
   finish(won, info = null) {
     if (this.ended) return;
     this.ended = true;
+    try { if (window.__nkVisitBattleEnd) window.__nkVisitBattleEnd(won ? 'win' : 'lose'); } catch (_) { /* ignore */ }
     this._endInfo = info;
     this.renderMatchTimer(true);
     this.state.alive = won ? this.state.alive : false;

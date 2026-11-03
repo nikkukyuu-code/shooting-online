@@ -98,7 +98,7 @@ export function hitBattleCounter(mode) {
     // YouTube visitors (?src=yt, this tab): separate key, no display, not for bots
     if (sessionStorage.getItem('nkSrcYt') === '1' && !navigator.webdriver) hitOnce(NS_KEY.replace('-battles', '-yt-battles'), '');
   } catch (_) { /* ignore */ }
-  try { if (window.__nkVisitBattle) window.__nkVisitBattle(); } catch (_) { /* ignore */ }
+  try { if (window.__nkVisitBattle) window.__nkVisitBattle(mode); } catch (_) { /* ignore */ }
 }
 
 async function getCount(key) {
