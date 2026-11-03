@@ -1,17 +1,17 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261103163248';
-import { Net } from './net.js?v=20261103163248';
-import { Game } from './game.js?v=20261103163248';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261103163248';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261103163248';
-import { resetDeckToDefault } from './meta.js?v=20261103163248';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261103163248';
-import { loadBattleCount } from './stats.js?v=20261103163248';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261103163248';
-import { ALL_KIND_IDS } from './catalog.js?v=20261103163248';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261103163248';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261103163248';
-import { seedStrongBest } from './record.js?v=20261103163248';
-import { MISSIONS, MISSION_SLOTS, missionById, isMissionCleared } from './mission.js?v=20261103163248';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261103171655';
+import { Net } from './net.js?v=20261103171655';
+import { Game } from './game.js?v=20261103171655';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261103171655';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261103171655';
+import { resetDeckToDefault } from './meta.js?v=20261103171655';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261103171655';
+import { loadBattleCount } from './stats.js?v=20261103171655';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261103171655';
+import { ALL_KIND_IDS } from './catalog.js?v=20261103171655';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261103171655';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261103171655';
+import { seedStrongBest } from './record.js?v=20261103171655';
+import { MISSIONS, MISSION_SLOTS, missionById, isMissionCleared, MISSION_ASSIST_NOTE } from './mission.js?v=20261103171655';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -29,6 +29,7 @@ const screens = {
   zukan: $('#screen-zukan'),
   ranking: $('#screen-ranking'),
   mission: $('#screen-mission'),
+  missionDetail: $('#screen-mission-detail'),
 };
 
 const els = {
@@ -159,7 +160,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261103163248`;
+  return `assets/enemies/${id}/0.png?v=20261103171655`;
 }
 
 function unitName(id) {
@@ -676,7 +677,7 @@ function renderMissionList() {
       card.innerHTML = `<span class="ms-no">${m.id}</span><span class="ms-main"><span class="ms-name">${m.name}</span><span class="ms-goal">${m.goal}</span>`
         + `<span class="ms-meta"><span class="ms-reward"><span class="ms-rw">報酬 ${m.reward} PT</span><span class="ms-once">（初回クリアのみ）</span></span><span class="ms-lv">敵Lv${m.comLevel}</span></span></span>`
         + `<span class="ms-side"><span class="ms-state">${done ? 'クリア済み' : '未クリア'}</span><span class="ms-go">出撃 ▶</span></span>`;
-      card.addEventListener('click', () => startMission(m.id));
+      card.addEventListener('click', () => openMissionDetail(m.id));
     } else {
       card.className = 'ms-card ms-locked';
       card.setAttribute('aria-disabled', 'true');
@@ -693,6 +694,33 @@ function openMissionSelect() {
   renderMissionList();
   show('mission');
 }
+function openMissionDetail(id) {
+  const m = missionById(id);
+  const box = document.getElementById('mission-detail');
+  if (!m || !box || busy) return;
+  const done = isMissionCleared(m.id);
+  const t = document.getElementById('md-title');
+  if (t) t.textContent = `ミッション${m.id}「${m.name}」`;
+  box.dataset.mission = String(m.id);
+  box.innerHTML = `<div class="md-card${done ? ' md-cleared' : ''}">`
+    + `<div class="md-top"><span class="md-no">${m.id}</span><span class="md-name"></span><span class="md-state">${done ? 'クリア済み' : '未クリア'}</span></div>`
+    + `<dl class="md-rows">`
+    + `<div class="md-row"><dt>目標</dt><dd class="md-goal"></dd></div>`
+    + `<div class="md-row"><dt>敵Lv</dt><dd>${m.comLevel}</dd></div>`
+    + `<div class="md-row"><dt>報酬</dt><dd class="md-reward"><span class="md-rw">${m.reward} PT</span><span class="md-once">（初回クリアのみ）</span></dd></div>`
+    + `</dl>`
+    + `<div class="md-howto"><div class="md-h">遊び方</div><p class="md-p1"></p><p class="md-p2"></p></div>`
+    + `<button type="button" class="menu-btn md-start" id="btn-mission-start">スタート ▶</button>`
+    + `</div>`;
+  box.querySelector('.md-name').textContent = m.name;
+  box.querySelector('.md-goal').textContent = m.goal;
+  box.querySelector('.md-p1').textContent = m.howto || '';
+  box.querySelector('.md-p2').textContent = MISSION_ASSIST_NOTE;
+  box.querySelector('.md-start').addEventListener('click', () => startMission(m.id));
+  show('missionDetail');
+}
+window.__stbMissionDetail = (id) => openMissionDetail(id);
+document.getElementById('btn-mdetail-back')?.addEventListener('click', () => openMissionSelect());
 function startMission(id) {
   const m = missionById(id);
   if (!m || busy) return;

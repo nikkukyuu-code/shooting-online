@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261103163248';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261103171655';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, setGuardShip, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,15 +6,15 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261103163248';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261103163248';
-import { sfx } from './audio.js?v=20261103163248';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261103163248';
-import { fxRate } from './entities.js?v=20261103163248';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261103163248';
-import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261103163248';
-import { hitBattleCounter } from './stats.js?v=20261103163248';
-import { MissionRun, missionResultBox } from './mission.js?v=20261103163248';
+} from './entities.js?v=20261103171655';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261103171655';
+import { sfx } from './audio.js?v=20261103171655';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261103171655';
+import { fxRate } from './entities.js?v=20261103171655';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261103171655';
+import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261103171655';
+import { hitBattleCounter } from './stats.js?v=20261103171655';
+import { MissionRun, missionResultBox } from './mission.js?v=20261103171655';
 // ===== DEBUG (temporary): 弾の雨 visual check — set to false to remove. While true, ranking submit is disabled. =====
 const DEBUG_RAIN_AT_START = false;
 // ===== DEBUG (temporary): 転送敵キャラ確認パレード — set to false to remove. =====
@@ -24,11 +24,11 @@ const DEBUG_UNIT_PARADE = false;
 const PARADE_SEC = 12; // per unit: ~3s glide in → body glow → signature attack → normal volleys
 /** 自機の攻撃力倍率 (10-18: ×1.3 → 10-18 夜: 2割減 ×1.04). Applies to the ship's own shots (normal / rapid / homing / spread), player and COM alike. */
 const SHIP_ATK_MUL = 1.04;
-import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261103163248';
-import { recordStrongBest, strongBestBase } from './record.js?v=20261103163248';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult, firstBonusPending, grantFirstBonus } from './meta.js?v=20261103163248';
-import { tickPersona, personaIntangible, personaShieldBlocks, PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261103163248';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261103163248';
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261103171655';
+import { recordStrongBest, strongBestBase } from './record.js?v=20261103171655';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult, firstBonusPending, grantFirstBonus } from './meta.js?v=20261103171655';
+import { tickPersona, personaIntangible, personaShieldBlocks, PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261103171655';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261103171655';
 
 const PT_MILESTONE = 500; // 10-15: 突破演出 every 500 PT earned in the match
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
@@ -557,6 +557,10 @@ export class Game {
       else this._mrun = new MissionRun(this._mission, this);
       // Rebuild again here so every COM match gets a new lineup even if reset ran early.
       this.rebuildComDeck();
+      if (this._mission && Array.isArray(this._mission.comDeck) && this._mission.comDeck.every((id) => CATALOG_BY_ID[id])) { // β mission: biased COM deck
+        this._comDeck = this._mission.comDeck.slice();
+        this._comDeckInfo = { ...(this._comDeckInfo || {}), deck: this._comDeck.slice() };
+      }
       const msg = this.comDeckStatusText();
       this.setStatus(msg);
       setTimeout(() => {
@@ -1192,6 +1196,26 @@ export class Game {
     if (kind !== 'break' && !strong && prev && prev.t0 != null) { F.ff = { ...prev, n: (prev.n || 0) + 1, b0: now }; return; }
     const k = kind === 'break' ? 'b' : strong ? 'h' : 'w';
     F.ff = { n: ((prev && prev.n) || 0) + 1, k, t0: now };
+  }
+
+  /** β mission: until the goal is achieved, a COM below 50% life gets a big heal orb dropped right in front
+   *  of its ship (its normal pickup → heal fx), so the match doesn't end before the player can finish the goal.
+   *  Stops for good once the mission is achieved (normal match from then on). */
+  _missionAssist() {
+    const r = this._mrun, B = this._bot;
+    if (!r || r.cleared || !B || this.ended || !this.L) return;
+    const max = B.maxHp || PLAYER_MAX_HP;
+    if (B.hp <= 0 || B.hp >= max * 0.5) return;
+    if ((B.orbs || []).some((o) => o._assist && o.life > 0)) return;
+    if (r._assistT != null && B.time - r._assistT < 2.5) return;
+    const fw = this.L.own.w, fh = this.L.own.h;
+    const sx = B.x || 48, sy = (B.y || 0.5) * fh;
+    const orb = spawnItemWithId(Math.min(fw - 30, sx + fw * 0.22), Math.max(24, Math.min(fh - 24, sy)), 'heal_big');
+    orb._assist = true;
+    (B.orbs = B.orbs || []).push(orb);
+    r._assistT = B.time;
+    r.assistN = (r.assistN || 0) + 1;
+    (r.assistLog = r.assistLog || []).push({ t: Math.round(this.state.time), hp: Math.round(B.hp), max });
   }
 
   /** Core destroyed: big chain explosion + score burst (the decisive shot). */
@@ -2009,7 +2033,7 @@ export class Game {
       if (this.state.itemBanner.life <= 0) this.state.itemBanner = null;
     }
     this.tickTutorial(dt);
-    if (this._mrun) this._mrun.tick(dt);
+    if (this._mrun) { this._mrun.tick(dt); this._missionAssist(); }
     if (S.incomingDirect > 0) {
       S.incomingDirect -= dt;
       if (S.incomingDirect < 0) S.incomingDirect = 0;
@@ -2281,6 +2305,7 @@ export class Game {
       if (((hasCore(e) && !e._coreBreak && !e._coreSeg) || coreOwnerOf(e)) && e.hp < 1) e.hp = 1; // snake core ball: only the core rules end it
       if (e.hp <= 0 && e._coreSeg && !e._coreBreak && !e._headDead && e._chainT == null && e.core && e.core.hp > 0) { // snake head shot down: normal kill
         pushKillBooms(S.fx, e, false, false); S.fx.push(spawnCoin(e.x, e.y, this.coinGold(e))); sfx.explode(); P.score += e.score;
+        if (this._mrun) { try { this._mrun.onSnakeHead(e); } catch (_) {} }
         snakeHeadDown(e); remain.push(e); continue;
       }
       if (e.hp <= 0) {
@@ -2292,6 +2317,7 @@ export class Game {
         S.fx.push(spawnCoin(e.x, e.y, this.coinGold(e)));
         sfx.explode();
         P.score += e.score;
+        if (this._mrun) { try { this._mrun.onKill(e); } catch (_) {} }
         if (e._coreBreak) {
           // コア撃破: 75%で回復(大型コアは大回復) + アイテム確定
           if (Math.random() < HEAL_GUARANTEE_P) S.items.push(spawnItemWithId(e.x, e.y, bigCoreKind(e.kind) ? 'heal_big' : 'heal'));

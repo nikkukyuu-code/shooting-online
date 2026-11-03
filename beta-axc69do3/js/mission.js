@@ -5,16 +5,38 @@
  * - MissionRun: in-match tutorial guide (DOM HUD over the info pane / control pane — never labels on enemies),
  *   core-kill counting, clear on N core kills regardless of the match result.
  */
-import { loadMeta, saveMeta } from './meta.js?v=20261103163248';
-import { sfx } from './audio.js?v=20261103163248';
-import { hasCore, coreWorld, coreShutState } from './entities.js?v=20261103163248';
-import { OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js?v=20261103163248';
+import { loadMeta, saveMeta } from './meta.js?v=20261103171655';
+import { sfx } from './audio.js?v=20261103171655';
+import { hasCore, coreWorld, coreShutState, isLargeEnemy } from './entities.js?v=20261103171655';
+import { OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js?v=20261103171655';
 
 export const MISSION_KEY = 'shootingOnline_missions';
 export const MISSION_SLOTS = 10;
 export const MISSIONS = [
-  { id: 1, name: '初陣', goal: 'コア敵キャラを2体倒せ', need: 2, reward: 3000, comLevel: 15, comDifficulty: 'normal', tutorial: 'core' },
+  { id: 1, name: '初陣', goal: 'コア敵キャラを2体倒せ', need: 2, reward: 3000, comLevel: 15, comDifficulty: 'normal', type: 'core', tutorial: 'core',
+    chip: 'コア敵', fail: 'コア敵を2体倒すとクリア。もう一度挑戦しよう！',
+    howto: 'コア敵の赤く光るコアをねらって撃とう。コアを壊すとまわりの敵も連鎖で倒せる',
+    text: { intro: ['ミッション開始！', 'コア敵を2体倒すと報酬 {0} PT（初回クリアのみ）'], introAgain: ['ミッション開始！', 'コア敵を2体倒そう（報酬は受け取り済み）'] } },
+  // 「デカキャラ」 = isLargeEnemy(): tiers boss / golem / tank / mech, catalog.large, w≥150 / h≥100 or maxHp≥40 —
+  // plus every core enemy broken by the player (core break = 1). Core-chain pops / escorts / snake body links don't count.
+  // COM deck biased to large send units so plenty of big enemies arrive.
+  { id: 2, name: 'デカキャラ討伐', goal: 'デカキャラを6体倒せ', need: 6, reward: 5000, comLevel: 15, comDifficulty: 'normal', type: 'big',
+    comDeck: ['mech', 'golem', 'missile_destroyer', 'siege_mech', 'cruiser_gun'],
+    chip: 'デカキャラ', fail: 'デカキャラを6体倒すとクリア。もう一度挑戦しよう！',
+    howto: 'コア敵や大きな敵キャラ（戦艦級・要塞級など）を倒すとカウント。コア敵はコアをねらおう',
+    text: { intro: ['ミッション開始！', 'デカキャラを6体倒すと報酬 {0} PT（初回クリアのみ）'], introAgain: ['ミッション開始！', 'デカキャラを6体倒そう（報酬は受け取り済み）'],
+      wait: ['デカキャラをねらえ！', '大きな敵キャラやコア敵を倒そう。コア敵はコアを撃つと倒せる'], boom: ['デカキャラ撃破！', 'あと {1} 体'] } },
+  // 蛇の頭: wave_snake_head (wave script: 1 snake at 1:00, 2 at 2:30, 3 at 4:00 → 6 per match). One credit per snake:
+  // its head shot down OR its core (orange ball) broken by the player.
+  { id: 3, name: '大蛇退治', goal: '蛇の頭を2体倒せ', need: 2, reward: 10000, comLevel: 15, comDifficulty: 'normal', type: 'snake',
+    chip: '蛇の頭', fail: '蛇の頭を2体倒すとクリア。もう一度挑戦しよう！',
+    howto: '大蛇が現れたら先頭の頭をねらおう。オレンジの玉（コア）を壊しても倒せる',
+    text: { intro: ['ミッション開始！', '蛇の頭を2体倒すと報酬 {0} PT（初回クリアのみ）'], introAgain: ['ミッション開始！', '蛇の頭を2体倒そう（報酬は受け取り済み）'],
+      wait: ['大蛇を待とう', '大蛇が来るまで、ふつうの敵を倒して待とう'], spot: ['大蛇が来た！', '先頭の頭か、オレンジの玉（コア）をねらって撃とう'],
+      boom: ['蛇の頭を撃破！', 'あと {1} 体'], next: ['次の大蛇！', '先頭の頭か、オレンジの玉（コア）をねらって撃とう'] } },
 ];
+/** Shown on the detail screen for every mission. */
+export const MISSION_ASSIST_NOTE = 'ミッション達成までは、敵のライフが半分を切ると敵が回復します。達成後はふつうの対戦になります';
 export function missionById(id) { return MISSIONS.find((m) => m.id === Number(id)) || null; }
 
 export function loadMissionState() {
@@ -46,8 +68,6 @@ export function grantMissionClear(def) {
 }
 
 const STEP_TEXT = {
-  intro: ['ミッション開始！', 'コア敵を2体倒すと報酬 {0} PT（初回クリアのみ）'],
-  introAgain: ['ミッション開始！', 'コア敵を2体倒そう（報酬は受け取り済み）'],
   wait: ['コア敵を待とう', 'コア敵が来るまで、ふつうの敵を倒して待とう'],
   spot: ['コア敵が来た！', '体のどこかで赤く光る点が「コア」。コアが弱点だ'],
   align: ['高さを合わせよう', '自機を上下に動かして、コアと同じ高さに合わせよう'],
@@ -84,7 +104,8 @@ export class MissionRun {
     const chip = document.createElement('div');
     chip.className = 'mission-chip';
     chip.setAttribute('aria-live', 'polite');
-    chip.innerHTML = '<span class="mc-ico" aria-hidden="true">🎯</span><span class="mc-lbl">コア敵</span><b class="mc-n">0/2</b>';
+    chip.innerHTML = '<span class="mc-ico" aria-hidden="true">🎯</span><span class="mc-lbl"></span><b class="mc-n">0/2</b>';
+    chip.querySelector('.mc-lbl').textContent = this.def.chip || 'コア敵';
     const hud = document.createElement('div');
     hud.className = 'mission-hud';
     hud.setAttribute('role', 'status');
@@ -106,9 +127,9 @@ export class MissionRun {
 
   _text() {
     if (!this.hud) return;
-    const [t, b] = STEP_TEXT[this.step] || ['', ''];
+    const [t, b] = (this.def.text && this.def.text[this.step]) || STEP_TEXT[this.step] || ['', ''];
     const tt = this.hud.querySelector('.mh-title'), bb = this.hud.querySelector('.mh-body');
-    const body = b.replace('{0}', String(this.def.reward));
+    const body = b.replace('{0}', String(this.def.reward)).replace('{1}', String(Math.max(0, this.def.need - this.kills)));
     if (tt.textContent !== t) tt.textContent = t;
     if (bb.textContent !== body) bb.textContent = body;
     this.hud.dataset.step = this.step;
@@ -150,6 +171,8 @@ export class MissionRun {
     const fw = L.own.w;
     let best = null, bd = 1e9;
     for (const e of S.enemies || []) {
+      if (this.def.type === 'big') return null; // big-enemy mission: no single target to point at
+      if (this.def.type === 'snake' && e.kind !== 'wave_snake_head') continue;
       if (!hasCore(e) || !e.core || e.core.hp <= 0 || e._chainT != null || e._portalOnly) continue;
       const c = coreWorld(e);
       if (!c || c.x > fw - 4 || c.x < 0) continue;
@@ -179,7 +202,7 @@ export class MissionRun {
     const arrow = dy == null ? '▶' : aligned ? '◎' : dy < 0 ? '⬆' : '⬇';
     switch (this.step) {
       case 'intro': case 'introAgain': this._arrow('🎯'); if (this.stepT > 3.2) this._setStep(e ? 'spot' : 'wait'); break;
-      case 'wait': if (e) this._setStep('spot'); this._arrow('▶'); break;
+      case 'wait': if (this.def.type === 'big') { this._arrow('🎯'); break; } if (e) this._setStep('spot'); this._arrow('▶'); break;
       case 'spot': this._arrow('▶'); if (!e) this._setStep('wait'); else if (this.stepT > 2.6) this._setStep('align'); break;
       case 'align':
         if (!e) { this._setStep('wait'); break; }
@@ -199,7 +222,7 @@ export class MissionRun {
         if (!e) { this._setStep('wait'); break; }
         this._arrow(shut ? '⏳' : arrow);
         break;
-      case 'boom': this._arrow('💥'); if (this.stepT > 4.5) this._setStep(e ? 'next' : 'idle'); break;
+      case 'boom': this._arrow('💥'); if (this.stepT > (this.def.type === 'big' ? 3 : 4.5)) this._setStep(this.def.type === 'big' ? 'wait' : e ? 'next' : 'idle'); break;
       case 'idle': if (e) this._setStep('next'); break;
       case 'next': if (!e) this._setStep('idle'); else this._arrow(shut ? '⏳' : arrow); break;
       case 'done': case 'doneAgain': this._arrow('🏆'); if (this.stepT > 6) this._setStep('over'); break;
@@ -238,9 +261,28 @@ export class MissionRun {
     if (['intro', 'introAgain', 'wait', 'spot', 'align', 'shoot', 'shut', 'block'].includes(this.step) && this.kills === 0) this._setStep('hit');
   }
 
+  /** Player broke a core (snake: e = its head). */
   onCoreBreak(e) {
+    if (!e) return;
+    if (this.def.type === 'snake' && e.kind !== 'wave_snake_head') return;
+    this._credit(e);
+  }
+
+  /** Normal kill in the player's field (big-enemy mission). Core owners / chain pops / attached parts excluded. */
+  onKill(e) {
+    if (this.def.type !== 'big' || !e) return;
+    if (e._coreBreak || hasCore(e) || e._chainT != null || e._chainKill || e._chainOf || e._lead || e._coreBall) return;
+    if (!isLargeEnemy(e)) return;
+    this._credit(e);
+  }
+
+  /** Snake head shot down by the player (normal kill of the head). */
+  onSnakeHead(e) { if (this.def.type === 'snake' && e && e.kind === 'wave_snake_head') this._credit(e); }
+
+  _credit(e) {
     if (!e || this.seen.has(e)) return;
     this.seen.add(e);
+    (this.credits = this.credits || []).push(e.kind);
     this.kills += 1;
     this._render();
     if (this.kills >= this.def.need && !this.cleared) {
@@ -363,11 +405,11 @@ export function missionResultBox(res) {
   const k = Math.min(res.kills, res.need);
   const rw = res.cleared
     ? (res.reward && res.reward.first ? `<div class="mr-line mr-reward">クリア報酬 <b>+${res.def.reward} PT</b></div>` : '<div class="mr-line mr-reward">報酬は受け取り済み</div>')
-    : '<div class="mr-line mr-sub">コア敵を2体倒すとクリア。もう一度挑戦しよう！</div>';
+    : `<div class="mr-line mr-sub">${res.def.fail || ''}</div>`;
   box.innerHTML = `<div class="mr-head">${res.cleared ? 'ミッションクリア！' : 'ミッション失敗…'}</div>`
     + `<div class="mr-line mr-name">ミッション${res.def.id}「${res.def.name}」</div>`
     + `<div class="mr-line mr-goal">${res.def.goal}</div>`
-    + `<div class="mr-line mr-count">コア敵 <b>${k}/${res.need}</b></div>`
+    + `<div class="mr-line mr-count">${res.def.chip || 'コア敵'} <b>${k}/${res.need}</b></div>`
     + `<div class="mr-line mr-battle">対戦PT <b>+${res.battlePt || 0} PT</b></div>`
     + rw
     + `<div class="mr-line mr-total">いまの持ちPT　<b>${res.total}</b></div>`
