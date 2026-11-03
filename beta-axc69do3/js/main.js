@@ -1,17 +1,17 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261104020957';
-import { Net } from './net.js?v=20261104020957';
-import { Game } from './game.js?v=20261104020957';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261104020957';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261104020957';
-import { resetDeckToDefault } from './meta.js?v=20261104020957';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261104020957';
-import { loadBattleCount } from './stats.js?v=20261104020957';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261104020957';
-import { ALL_KIND_IDS } from './catalog.js?v=20261104020957';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261104020957';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261104020957';
-import { seedStrongBest } from './record.js?v=20261104020957';
-import { MISSIONS, MISSION_SLOTS, missionById, isMissionCleared, MISSION_ASSIST_NOTE, MISSION_WIN_NOTE } from './mission.js?v=20261104020957';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261104035955';
+import { Net } from './net.js?v=20261104035955';
+import { Game } from './game.js?v=20261104035955';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261104035955';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261104035955';
+import { resetDeckToDefault } from './meta.js?v=20261104035955';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261104035955';
+import { loadBattleCount } from './stats.js?v=20261104035955';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261104035955';
+import { ALL_KIND_IDS } from './catalog.js?v=20261104035955';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261104035955';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261104035955';
+import { seedStrongBest } from './record.js?v=20261104035955';
+import { MISSIONS, MISSION_SLOTS, missionById, isMissionCleared, MISSION_ASSIST_NOTE, MISSION_WIN_NOTE } from './mission.js?v=20261104035955';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -101,7 +101,7 @@ function restoreStartButton() {
 
 function setHostingWaitingUI(on) {
   if (on) {
-    els.btnStart.textContent = '相手の入室待ち';
+    els.btnStart.textContent = '待機中';
     els.btnStart.disabled = true;
   } else {
     restoreStartButton();
@@ -186,7 +186,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261104020957`;
+  return `assets/enemies/${id}/0.png?v=20261104035955`;
 }
 
 function unitName(id) {
@@ -733,7 +733,7 @@ function openMissionDetail(id) {
   box.dataset.mission = String(m.id);
   box.innerHTML = `<div class="md-card${done ? ' md-cleared' : ''}">`
     + `<div class="md-top"><span class="md-no">${m.id}</span><span class="md-name"></span><span class="md-state">${done ? 'クリア済み' : '未クリア'}</span></div>`
-    + (m.art && m.art.length ? `<div class="md-art md-art-${m.type}" aria-hidden="true">${m.art.map((k, i) => k === '__heart' ? `<span class="md-a md-a${i} md-heart">❤</span>` : k === '__ship' ? `<img class="md-a md-a${i} md-ship" alt="" src="assets/fx/mission_ship.png?v=20261104020957" draggable="false">` : `<img class="md-a md-a${i}" alt="" src="assets/enemies/${k}/0.png?v=20261104020957" draggable="false">`).join('')}</div>` : '')
+    + (m.art && m.art.length ? `<div class="md-art md-art-${m.type}" aria-hidden="true">${m.art.map((k, i) => k === '__heart' ? `<span class="md-a md-a${i} md-heart">❤</span>` : k === '__ship' ? `<img class="md-a md-a${i} md-ship" alt="" src="assets/fx/mission_ship.png?v=20261104035955" draggable="false">` : `<img class="md-a md-a${i}" alt="" src="assets/enemies/${k}/0.png?v=20261104035955" draggable="false">`).join('')}</div>` : '')
     + `<dl class="md-rows">`
     + `<div class="md-row"><dt>目標</dt><dd class="md-goal"></dd></div>`
     + `<div class="md-row"><dt>敵Lv</dt><dd>${m.comLevel}</dd></div>`
@@ -1526,4 +1526,21 @@ document.querySelectorAll('.sub-back[data-back]').forEach((b) => b.addEventListe
     if (++n < 240) setTimeout(wait, 500);
   };
   wait();
+})();
+
+/* 11-04: タイトル画面が画面に収まらない時だけ「▼ 下にスクロール」を表示（下端まで来たら消える） */
+(function menuScrollCue() {
+  const sc = document.getElementById('screen-menu');
+  if (!sc) return;
+  const cue = document.createElement('div');
+  cue.className = 'menu-scroll-cue'; cue.hidden = true; cue.setAttribute('aria-hidden', 'true');
+  cue.innerHTML = '<span>▼ 下にスクロール</span>';
+  sc.appendChild(cue);
+  cue.firstChild.addEventListener('click', () => sc.scrollBy({ top: sc.clientHeight * 0.8, behavior: 'smooth' }));
+  const upd = () => { const more = sc.classList.contains('active') && sc.scrollHeight - sc.clientHeight - sc.scrollTop > 8; if (cue.hidden === more) cue.hidden = !more; };
+  sc.addEventListener('scroll', upd, { passive: true });
+  addEventListener('resize', upd);
+  try { new ResizeObserver(upd).observe(sc); new MutationObserver(upd).observe(sc, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'hidden', 'value'] }); } catch (_) {}
+  setInterval(upd, 1000);
+  upd();
 })();
