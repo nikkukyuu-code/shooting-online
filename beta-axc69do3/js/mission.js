@@ -5,14 +5,14 @@
  * - MissionRun: in-match tutorial guide (DOM HUD over the info pane / control pane — never labels on enemies),
  *   core-kill counting, clear on N core kills regardless of the match result.
  */
-import { loadMeta, saveMeta } from './meta.js?v=20261103030129';
-import { hasCore, coreWorld, coreShutState } from './entities.js?v=20261103030129';
-import { OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js?v=20261103030129';
+import { loadMeta, saveMeta } from './meta.js?v=20261103130500';
+import { hasCore, coreWorld, coreShutState } from './entities.js?v=20261103130500';
+import { OPP_RATIO, OWN_RATIO, CTRL_RATIO } from './render.js?v=20261103130500';
 
 export const MISSION_KEY = 'shootingOnline_missions';
 export const MISSION_SLOTS = 10;
 export const MISSIONS = [
-  { id: 1, name: '初陣', goal: 'コア敵キャラを2体倒せ', need: 2, reward: 1000, comLevel: 15, comDifficulty: 'normal', tutorial: 'core' },
+  { id: 1, name: '初陣', goal: 'コア敵キャラを2体倒せ', need: 2, reward: 3000, comLevel: 15, comDifficulty: 'normal', tutorial: 'core' },
 ];
 export function missionById(id) { return MISSIONS.find((m) => m.id === Number(id)) || null; }
 
