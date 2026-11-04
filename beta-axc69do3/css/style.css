@@ -3129,3 +3129,32 @@ html[dir=rtl] .ms-card { text-align: right; }
 .story-replay { font-size: min(0.85rem, 7cqw) !important; }
 #screen-story.ended .story-sub-wrap { display: none; }
 #screen-story.ended .story-skip { display: none; }
+/* 11-05 β ストーリー: オートセーブ（はじめ画面・セーブ一覧） */
+#screen-story .story-stage[hidden], .story-home[hidden], .story-listv[hidden], #screen-story [hidden] { display: none !important; }
+.story-home { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 4px; max-width: 460px; margin: 0 auto; text-align: center; }
+.story-lead { margin: 0 0 4px; font-size: 0.85rem; font-weight: 700; color: #cfe4ff; overflow-wrap: anywhere; }
+.story-big { width: 100% !important; max-width: 360px; font-size: 1.15rem !important; padding: 14px 12px !important; white-space: normal; overflow-wrap: anywhere; }
+.story-big:disabled { opacity: 0.4; filter: grayscale(1); cursor: not-allowed; }
+.story-note { margin: -4px 0 4px; font-size: 0.72rem; color: #b8c8e8; overflow-wrap: anywhere; }
+.story-msg { margin: 0; padding: 6px 10px; border-radius: 8px; background: rgba(255, 60, 80, 0.2); border: 1px solid #ff6b7d; color: #ffd0d6; font-size: 0.78rem; font-weight: 700; overflow-wrap: anywhere; }
+.story-listv { max-width: 560px; margin: 0 auto; padding: 4px 0 10px; }
+.story-list-h { margin: 2px 0 8px; text-align: center; font-size: 0.85rem; font-weight: 800; color: #cfe4ff; overflow-wrap: anywhere; }
+.story-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.story-slot-li { display: flex; gap: 6px; align-items: stretch; min-width: 0; }
+.story-slot { flex: 1 1 auto; min-width: 0; appearance: none; text-align: start; font-family: inherit; color: #fff; cursor: pointer; padding: 8px 10px; border-radius: 10px;
+  border: 1px solid rgba(140, 200, 255, 0.55); background: rgba(20, 30, 80, 0.75); display: flex; flex-direction: column; gap: 3px; }
+.story-slot:active { background: rgba(50, 70, 150, 0.85); }
+.ss-top { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; font-weight: 900; font-size: 0.95rem; min-width: 0; }
+.ss-no { color: #8fd0ff; font-size: 0.78rem; }
+.ss-ch, .ss-prog { overflow-wrap: anywhere; min-width: 0; }
+.ss-prog { color: #ffe27a; font-variant-numeric: tabular-nums; }
+.ss-line { display: flex; flex-wrap: wrap; gap: 0 6px; font-size: 0.78rem; color: #dbe8ff; min-width: 0; }
+.ss-line .ss-k { font-weight: 700; color: #9fb6e0; overflow-wrap: anywhere; }
+.ss-line .ss-v { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; min-width: 0; }
+.ss-sub { font-size: 0.7rem; opacity: 0.85; }
+.ss-del { flex: 0 0 auto; appearance: none; font: 800 0.72rem/1.1 inherit; font-family: inherit; color: #fff; background: #b3192f; border: 1px solid #ff6b7d; border-radius: 10px;
+  padding: 4px 8px; cursor: pointer; max-width: 30%; overflow-wrap: anywhere; }
+.story-scroll { scrollbar-width: thin; scrollbar-color: rgba(160, 200, 255, 0.8) transparent; position: relative; }
+.story-scroll::-webkit-scrollbar { width: 6px; }
+.story-scroll::-webkit-scrollbar-thumb { background: rgba(160, 200, 255, 0.8); border-radius: 3px; }
+.story-scroll.more { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 34px), rgba(0,0,0,0.25)); mask-image: linear-gradient(to bottom, #000 calc(100% - 34px), rgba(0,0,0,0.25)); }

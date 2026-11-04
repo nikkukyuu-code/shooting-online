@@ -10,9 +10,9 @@
  * Render state lives in short fields (zk tell kind, zu 0..1 progress, zx/zy target, zc rows/columns,
  * za alpha, zs shield, zg angle) that go into the online snapshot as-is (entities.js serializeField).
  */
-import { spawnBullet, resolveEnemyTier } from './entities.js?v=20261104214658';
-import { attackCtx } from './attacks.js?v=20261104214658';
-import { unitAttackLoadout } from './catalog.js?v=20261104214658';
+import { spawnBullet, resolveEnemyTier } from './entities.js?v=20261105011734';
+import { attackCtx } from './attacks.js?v=20261105011734';
+import { unitAttackLoadout } from './catalog.js?v=20261105011734';
 
 const PI = Math.PI, TAU = PI * 2;
 const rnd = (a, b) => a + Math.random() * (b - a);

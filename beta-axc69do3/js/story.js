@@ -70,6 +70,31 @@ const CUES = [[0.3, 16.2, 0], [16.7, 31.2, 1]];
 const RESUME_KEY = 'stbStoryResume'; // 新規 sessionStorage キー（既存キーは変更しない）
 function uiLang() { return (window.NKI18N && window.NKI18N.lang) || document.documentElement.getAttribute('data-nk-lang') || 'ja'; }
 
+/* ===== オートセーブ（新規 localStorage キー。既存キーは変更しない） =====
+ * stbStorySaves = { v:1, slots:[ { id, no, created, updated, chapter, scene, t, dur, done, cleared, state:{} } ] }
+ * 「初めから」は必ず新しいスロットを作る（既存スロットは上書き・自動削除しない）。オートセーブは選択中スロットだけに書く。 */
+const SAVE_KEY = 'stbStorySaves';
+export const STORY_MAX_SLOTS = 10;
+/** 章・シーン定義（今後の章はここに追加。進行状況はスロットの chapter/scene/t/state で表す） */
+export const STORY_CHAPTERS = [{ id: 'prologue', title: 'プロローグ', scenes: [{ id: 'intro', type: 'video' }] }];
+function chapterOf(id) { return STORY_CHAPTERS.find((c) => c.id === id) || STORY_CHAPTERS[0]; }
+export function loadStorySaves() {
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (_) { d = null; }
+  if (!d || !Array.isArray(d.slots)) d = { v: 1, slots: [] };
+  d.slots = d.slots.filter((x) => x && x.id);
+  return d;
+}
+function storeSaves(d) { try { localStorage.setItem(SAVE_KEY, JSON.stringify(d)); return true; } catch (_) { return false; } }
+function T(s) { try { return window.NKI18N && window.NKI18N.lang !== 'ja' && window.NKI18N.t ? window.NKI18N.t(s) : s; } catch (_) { return s; } }
+function mmss(x) { x = Math.max(0, Math.floor(x || 0)); return Math.floor(x / 60) + ':' + String(x % 60).padStart(2, '0'); }
+function fmtTime(ms) {
+  const l = uiLang();
+  try {
+    return new Intl.DateTimeFormat(l === 'ja' ? 'ja-JP' : l, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(ms));
+  } catch (_) { return new Date(ms).toLocaleString(); }
+}
+
 export function initStory({ show, goMenu, canOpen }) {
   const scr = document.getElementById('screen-story');
   if (!scr) return;
@@ -79,8 +104,15 @@ export function initStory({ show, goMenu, canOpen }) {
   const skipBtn = document.getElementById('story-skip');
   const end = document.getElementById('story-end');
   const subWrap = document.getElementById('story-sub-wrap');
+  const homeV = document.getElementById('story-home');
+  const listV = document.getElementById('story-listv');
+  const list = document.getElementById('story-list');
+  const contBtn = document.getElementById('story-cont');
+  const scroller = scr.querySelector('.story-scroll');
   let lang = uiLang();
   let cur = -2;
+  let view = 'home';
+  let activeId = null;
   function setSub(i) {
     if (i === cur) return; cur = i;
     const lines = SUBS[lang];
@@ -96,9 +128,7 @@ export function initStory({ show, goMenu, canOpen }) {
     for (const c of CUES) if (t >= c[0] && t < c[1]) i = c[2];
     setSub(i);
   }
-  /** 言語が変わったら字幕を即差し替え（ページ再読込なしで呼べる / 再読込時も位置を復元） */
   const stage = scr.querySelector('.story-stage');
-  /** 字幕欄の高さ＝その言語の長い方の行に合わせる（動画はその分だけ縮む → 字幕が見切れない） */
   function fitSubH() {
     if (scr.classList.contains('ended')) { stage.style.setProperty('--sub-h', '0px'); return; }
     if (subWrap.hidden || !sub.clientWidth) { stage.style.setProperty('--sub-h', subWrap.hidden ? '0px' : ''); return; }
@@ -107,17 +137,118 @@ export function initStory({ show, goMenu, canOpen }) {
     sub.textContent = keep; sub.classList.toggle('on', on);
     stage.style.setProperty('--sub-h', Math.ceil(h) + 'px');
   }
-  /** 見出し: 左端の「◀ 戻る」と重ならない幅にタイトル（＋左隣の言語ボタン）を収める */
   const head = scr.querySelector('.story-title-box'), back = scr.querySelector('.sub-back');
   function fitHead() { const m = (back.offsetWidth || 64) + 6; head.style.marginLeft = m + 'px'; head.style.marginRight = m + 'px'; }
-  window.addEventListener('resize', () => { if (window.__stbScreen === 'story') { fitHead(); fitSubH(); } });
+  /** 長いリストは下に続きがあるとフェード＋スクロールバーで分かるように */
+  function markMore() { scroller.classList.toggle('more', scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight > 4); }
+  scroller.addEventListener('scroll', markMore, { passive: true });
+  window.addEventListener('resize', () => { if (window.__stbScreen === 'story') { fitHead(); fitSubH(); markMore(); } });
   function applyLang(l) { lang = l || uiLang(); cur = -2; subWrap.hidden = (lang === 'ja' || !SUBS[lang]); tick(); requestAnimationFrame(fitSubH); }
+
+  /* ---- セーブ ---- */
+  let lastT = -1;
+  function writeActive(force) {
+    if (!activeId || view !== 'play') return;
+    const d = loadStorySaves();
+    const s = d.slots.find((x) => x.id === activeId);
+    if (!s) return;
+    const t = v.currentTime || 0;
+    const done = !end.hidden;
+    const dur = isFinite(v.duration) && v.duration > 0 ? v.duration : (s.dur || 0);
+    if (!force && Math.abs(t - (s.t || 0)) < 0.25 && done === !!s.done && dur === s.dur) return;
+    s.t = Math.round(t * 100) / 100; s.dur = dur; s.done = done; if (done) s.cleared = true;
+    s.updated = Date.now();
+    storeSaves(d); lastT = t;
+  }
+  setInterval(() => { if (view === 'play' && !v.paused) writeActive(); }, 3000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') writeActive(); });
+  window.addEventListener('pagehide', () => writeActive());
+  window.addEventListener('beforeunload', () => writeActive());
+
+  function setView(nv) {
+    view = nv;
+    scr.dataset.view = nv;
+    homeV.hidden = nv !== 'home';
+    listV.hidden = nv !== 'list';
+    stage.hidden = nv !== 'play';
+    if (nv !== 'play') { try { v.pause(); } catch (_) {} scr.classList.remove('playing', 'ended'); }
+    scroller.scrollTop = 0;
+    requestAnimationFrame(markMore);
+  }
+  function refreshHome() {
+    const n = loadStorySaves().slots.length;
+    contBtn.disabled = n === 0;
+    document.getElementById('story-nosave').hidden = n > 0;
+    document.getElementById('story-full').hidden = true;
+  }
+  function openScreen() {
+    if (canOpen && !canOpen()) return false;
+    applyLang(); show('story'); fitHead();
+    try { window.dispatchEvent(new Event('resize')); } catch (_) {}
+    return true;
+  }
+  function goHome() { writeActive(true); activeId = null; refreshHome(); setView('home'); }
+  function renderList() {
+    const d = loadStorySaves();
+    const slots = d.slots.slice().sort((a, b) => (b.updated || 0) - (a.updated || 0));
+    list.textContent = '';
+    const mk = (tag, cls, txt, raw) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = raw ? txt : T(txt); e.setAttribute('data-nk-noi18n', ''); return e; };
+    for (const s of slots) {
+      const li = document.createElement('li'); li.className = 'story-slot-li';
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'story-slot';
+      const top = mk('span', 'ss-top');
+      top.append(mk('span', 'ss-no', 'No.' + s.no, true), mk('span', 'ss-ch', chapterOf(s.chapter).title));
+      if (s.done) top.append(mk('span', 'ss-prog ss-done', 'クリア済み'));
+      else top.append(mk('span', 'ss-prog', mmss(s.t) + ' / ' + mmss(s.dur || 31), true));
+      const r1 = mk('span', 'ss-line'); r1.append(mk('span', 'ss-k', '最終セーブ'), mk('span', 'ss-v', fmtTime(s.updated || s.created), true));
+      const r2 = mk('span', 'ss-line ss-sub'); r2.append(mk('span', 'ss-k', '開始'), mk('span', 'ss-v', fmtTime(s.created), true));
+      b.append(top, r1, r2);
+      b.addEventListener('click', () => startSlot(s.id));
+      const del = mk('button', 'ss-del', '削除'); del.type = 'button';
+      del.addEventListener('click', () => {
+        if (!window.confirm(T('このセーブデータを削除しますか？（元に戻せません）') + '\nNo.' + s.no + ' · ' + fmtTime(s.updated || s.created))) return;
+        const dd = loadStorySaves(); dd.slots = dd.slots.filter((x) => x.id !== s.id); storeSaves(dd);
+        if (!dd.slots.length) goHome(); else renderList();
+      });
+      li.append(b, del); list.append(li);
+    }
+    requestAnimationFrame(markMore);
+  }
+  function showList() { writeActive(true); activeId = null; setView('list'); renderList(); }
+  function seekTo(at, cb) {
+    const go = () => { try { v.currentTime = at || 0; } catch (_) {} tick(); if (cb) cb(); };
+    if (v.readyState >= 1) go(); else v.addEventListener('loadedmetadata', go, { once: true });
+    try { if (v.readyState < 1) v.load(); } catch (_) {}
+  }
+  function startSlot(id, at, autoplay) {
+    const s = loadStorySaves().slots.find((x) => x.id === id);
+    if (!s) { refreshHome(); setView('home'); return; }
+    activeId = id;
+    setView('play');
+    end.hidden = true; playBtn.hidden = false; scr.classList.remove('playing', 'ended');
+    applyLang(); fitHead(); fitSubH(); setTimeout(fitSubH, 300);
+    if (s.done && at == null) { seekTo(s.dur || 31.7, () => finish()); return; }
+    seekTo(at != null ? at : (s.t || 0), () => { if (autoplay !== false) play(); });
+  }
+  function newGame() {
+    const d = loadStorySaves();
+    if (d.slots.length >= STORY_MAX_SLOTS) { document.getElementById('story-full').hidden = false; return; }
+    const now = Date.now();
+    const no = d.slots.reduce((m, x) => Math.max(m, x.no || 0), 0) + 1;
+    const id = 's' + now.toString(36) + Math.random().toString(36).slice(2, 6);
+    d.slots.push({ id, no, created: now, updated: now, chapter: 'prologue', scene: 'intro', t: 0, dur: 0, done: false, cleared: false, state: {} });
+    if (!storeSaves(d)) return;
+    startSlot(id, 0, true);
+  }
+  document.getElementById('story-new').addEventListener('click', newGame);
+  contBtn.addEventListener('click', () => { if (!contBtn.disabled) showList(); });
+
   let raf = 0;
   function loop() { tick(); raf = v.paused || v.ended ? 0 : requestAnimationFrame(loop); }
   v.addEventListener('timeupdate', tick);
   v.addEventListener('seeked', tick);
   v.addEventListener('play', () => { if (scr.classList.contains('ended')) { scr.classList.remove('ended'); fitSubH(); } scr.classList.add('playing'); playBtn.hidden = true; end.hidden = true; if (!raf) raf = requestAnimationFrame(loop); });
-  v.addEventListener('pause', () => { if (!v.ended) playBtn.hidden = false; });
+  v.addEventListener('pause', () => { if (!v.ended && view === 'play') playBtn.hidden = false; writeActive(); });
   v.addEventListener('ended', finish);
   function finish() {
     try { v.pause(); } catch (_) {}
@@ -126,42 +257,41 @@ export function initStory({ show, goMenu, canOpen }) {
     playBtn.hidden = true;
     end.hidden = false;
     scr.classList.add('ended'); stage.style.setProperty('--sub-h', '0px');
+    writeActive(true);
   }
   function play() { const p = v.play(); if (p && p.catch) p.catch(() => { playBtn.hidden = false; }); }
   playBtn.addEventListener('click', () => { if (v.ended) v.currentTime = 0; play(); });
   v.addEventListener('click', () => { if (v.paused) play(); else v.pause(); });
   skipBtn.addEventListener('click', () => { try { v.currentTime = v.duration || 31.7; } catch (_) {} finish(); });
-  document.getElementById('story-replay').addEventListener('click', () => { end.hidden = true; v.currentTime = 0; play(); });
+  document.getElementById('story-replay').addEventListener('click', () => { end.hidden = true; v.currentTime = 0; writeActive(true); play(); });
+  // 上の「◀ 戻る」: 再生中・一覧 → ストーリーのはじめ画面 / はじめ画面 → メニュー
+  document.getElementById('story-hback').addEventListener('click', () => { if (view === 'home') { stop(); goMenu(); } else goHome(); });
   document.getElementById('btn-story-back').addEventListener('click', () => { stop(); goMenu(); });
-  function stop() { try { v.pause(); } catch (_) {} try { sessionStorage.removeItem(RESUME_KEY); } catch (_) {} }
-  function open(at, autoplay) {
-    if (canOpen && !canOpen()) return;
-    end.hidden = true; playBtn.hidden = false; scr.classList.remove('playing', 'ended');
-    applyLang();
-    show('story');
-    fitHead();
-    fitSubH(); setTimeout(fitSubH, 300);
-    try { window.dispatchEvent(new Event('resize')); } catch (_) {}
-    try { v.currentTime = at || 0; } catch (_) {}
-    if (autoplay !== false) play();
-  }
-  document.getElementById('btn-story')?.addEventListener('click', () => open(0, true));
-  // 言語ピッカーはページを再読込するので、ストーリー画面なら再生位置を保存して復元する
+  function stop() { writeActive(true); try { v.pause(); } catch (_) {} activeId = null; try { sessionStorage.removeItem(RESUME_KEY); } catch (_) {} }
+  document.getElementById('btn-story')?.addEventListener('click', () => { if (openScreen()) { activeId = null; refreshHome(); setView('home'); } });
+  // 言語ピッカーはページを再読込するので、ストーリー画面なら画面・スロット・再生位置を保存して復元する
   const cfg = window.NK_I18N_CFG || {};
   const prevHook = cfg.onBeforeReload;
   cfg.onBeforeReload = function () {
     if (prevHook) try { prevHook(); } catch (_) {}
     if (window.__stbScreen === 'story') {
-      try { sessionStorage.setItem(RESUME_KEY, JSON.stringify({ t: v.currentTime || 0, p: !v.paused && !v.ended, e: !end.hidden })); } catch (_) {}
+      writeActive(true);
+      try { sessionStorage.setItem(RESUME_KEY, JSON.stringify({ view, sid: activeId, t: v.currentTime || 0, p: !v.paused && !v.ended, e: !end.hidden })); } catch (_) {}
     }
   };
   window.__stbStoryLang = applyLang;
   let r = null;
   try { r = JSON.parse(sessionStorage.getItem(RESUME_KEY) || 'null'); sessionStorage.removeItem(RESUME_KEY); } catch (_) {}
-  if (r) { // 起動処理（load 時のメニュー表示）が終わってから復元
-    const go = () => setTimeout(() => { open(r.t, !!r.p); if (r.e) finish(); }, 0);
+  if (r) {
+    const go = () => setTimeout(() => {
+      if (!openScreen()) return;
+      if (r.view === 'play' && r.sid && loadStorySaves().slots.some((x) => x.id === r.sid)) {
+        if (r.e) startSlot(r.sid); else startSlot(r.sid, r.t, !!r.p);
+      } else if (r.view === 'list' && loadStorySaves().slots.length) showList();
+      else { refreshHome(); setView('home'); }
+    }, 0);
     if (document.readyState === 'complete') go(); else window.addEventListener('load', go, { once: true });
   }
-  // 他の画面へ移ったら動画を止める
-  new MutationObserver(() => { if (!scr.classList.contains('active') && !v.paused) try { v.pause(); } catch (_) {} }).observe(scr, { attributes: true, attributeFilter: ['class'] });
+  new MutationObserver(() => { if (!scr.classList.contains('active')) { writeActive(); if (!v.paused) try { v.pause(); } catch (_) {} } }).observe(scr, { attributes: true, attributeFilter: ['class'] });
+  setView('home'); refreshHome();
 }
