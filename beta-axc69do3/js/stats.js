@@ -101,6 +101,24 @@ export function hitBattleCounter(mode) {
   try { if (window.__nkVisitBattle) window.__nkVisitBattle(mode); } catch (_) { /* ignore */ }
 }
 
+/**
+ * Online PvP split (v2026-11-05): abacus counters only (total + mode), NO visit-log call.
+ * Call once per COMPLETED match (win/lose) on the host. The visit-log START (__nkVisitBattle)
+ * stays at match start via visitBattleStart().
+ */
+export function hitBattleCountOnly(mode) {
+  purgeLegacyPendingHits();
+  try {
+    hitOnce(NS_KEY, BATTLE_LAST_KEY);
+    if (BATTLE_MODES.some((m) => m.id === mode)) hitOnce(modeKey(mode), modeLastKey(mode));
+    if (sessionStorage.getItem('nkSrcYt') === '1' && !navigator.webdriver) hitOnce(NS_KEY.replace('-battles', '-yt-battles'), '');
+  } catch (_) { /* ignore */ }
+}
+/** Visit-log battle START only (no abacus). */
+export function visitBattleStart(mode) {
+  try { if (window.__nkVisitBattle) window.__nkVisitBattle(mode); } catch (_) { /* ignore */ }
+}
+
 async function getCount(key) {
   try {
     const r = await fetch(`${BASE}/get/${key}?_=${Date.now()}`, { cache: 'no-store' });
