@@ -1,17 +1,17 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261105013329';
-import { Net } from './net.js?v=20261105013329';
-import { Game } from './game.js?v=20261105013329';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261105013329';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261105013329';
-import { resetDeckToDefault } from './meta.js?v=20261105013329';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261105013329';
-import { loadBattleCount } from './stats.js?v=20261105013329';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261105013329';
-import { ALL_KIND_IDS } from './catalog.js?v=20261105013329';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261105013329';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261105013329';
-import { seedStrongBest } from './record.js?v=20261105013329';
-import { MISSIONS, MISSION_SLOTS, missionById, isMissionCleared, MISSION_ASSIST_NOTE, MISSION_WIN_NOTE } from './mission.js?v=20261105013329';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261106002830';
+import { Net } from './net.js?v=20261106002830';
+import { Game } from './game.js?v=20261106002830';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261106002830';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261106002830';
+import { resetDeckToDefault } from './meta.js?v=20261106002830';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261106002830';
+import { loadBattleCount } from './stats.js?v=20261106002830';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261106002830';
+import { ALL_KIND_IDS } from './catalog.js?v=20261106002830';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261106002830';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261106002830';
+import { seedStrongBest } from './record.js?v=20261106002830';
+import { MISSIONS, MISSION_SLOTS, missionById, isMissionCleared, MISSION_ASSIST_NOTE, MISSION_WIN_NOTE } from './mission.js?v=20261106002830';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -186,7 +186,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261105013329`;
+  return `assets/enemies/${id}/0.png?v=20261106002830`;
 }
 
 function unitName(id) {
@@ -733,7 +733,7 @@ function openMissionDetail(id) {
   box.dataset.mission = String(m.id);
   box.innerHTML = `<div class="md-card${done ? ' md-cleared' : ''}">`
     + `<div class="md-top"><span class="md-no">${m.id}</span><span class="md-name"></span><span class="md-state">${done ? 'クリア済み' : '未クリア'}</span></div>`
-    + (m.art && m.art.length ? `<div class="md-art md-art-${m.type}" aria-hidden="true">${m.art.map((k, i) => k === '__heart' ? `<span class="md-a md-a${i} md-heart">❤</span>` : k === '__ship' ? `<img class="md-a md-a${i} md-ship" alt="" src="assets/fx/mission_ship.png?v=20261105013329" draggable="false">` : `<img class="md-a md-a${i}" alt="" src="assets/enemies/${k}/0.png?v=20261105013329" draggable="false">`).join('')}</div>` : '')
+    + (m.art && m.art.length ? `<div class="md-art md-art-${m.type}" aria-hidden="true">${m.art.map((k, i) => k === '__heart' ? `<span class="md-a md-a${i} md-heart">❤</span>` : k === '__ship' ? `<img class="md-a md-a${i} md-ship" alt="" src="assets/fx/mission_ship.png?v=20261106002830" draggable="false">` : `<img class="md-a md-a${i}" alt="" src="assets/enemies/${k}/0.png?v=20261106002830" draggable="false">`).join('')}</div>` : '')
     + `<dl class="md-rows">`
     + `<div class="md-row"><dt>目標</dt><dd class="md-goal"></dd></div>`
     + `<div class="md-row"><dt>敵Lv</dt><dd>${m.comLevel}</dd></div>`
@@ -1526,6 +1526,30 @@ document.querySelectorAll('.sub-back[data-back]').forEach((b) => b.addEventListe
     if (++n < 240) setTimeout(wait, 500);
   };
   wait();
+})();
+
+/* ---- 11-06 更新情報（ランカーレベルの敵撃破PT×3）: 初回だけ表示（新しいキー）。他のお知らせが開いている間は待つ ---- */
+(() => {
+  const KEY = 'shootingOnline_news_20261106_rankerKillPt';
+  try { if (localStorage.getItem(KEY)) return; } catch (_) { return; }
+  const show = () => {
+    if (document.getElementById('news-overlay')) { setTimeout(show, 700); return; }
+    const m = document.getElementById('screen-menu');
+    if (!m || !m.classList.contains('active')) { setTimeout(show, 700); return; }
+    const ov = document.createElement('div');
+    ov.id = 'news-overlay'; ov.className = 'news-overlay'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true');
+    ov.innerHTML = '<div class="news-box"><h2 class="news-title">更新情報</h2>'
+      + '<p class="news-head">⭐ ランカーレベルの敵撃破PTが3倍に！</p>'
+      + '<p class="news-body">コンピューター対戦のランカーレベルで、敵を倒して集めたコインのPTが3倍になりました（銀3・金90）。ランキングのスコアにも反映されます。</p>'
+      + '<p class="news-body">普通レベル・ミッション・対人戦はこれまで通りです。</p>'
+      + '<button type="button" class="menu-btn news-close" id="btn-news-close">閉じる</button></div>';
+    document.body.appendChild(ov);
+    ov.querySelector('#btn-news-close').addEventListener('click', () => {
+      try { localStorage.setItem(KEY, '1'); } catch (_) { /* ignore */ }
+      ov.remove();
+    });
+  };
+  setTimeout(show, 1200);
 })();
 
 /* 11-04: タイトル画面が画面に収まらない時だけ「▼ 下にスクロール」を表示（下端まで来たら消える） */

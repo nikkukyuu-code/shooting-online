@@ -1,4 +1,4 @@
-import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261105013329';
+import { runWaveScript, moveScripted, fireScripted, tickRearGuard, suddenDeathSpawn } from './waves.js?v=20261106002830';
 import {
   POWERUPS, powerupMeta, pickPowerupId, DIRECT_DURATION, DIRECT_SHOT_DMG, DIRECT_SHOT_SPEED, spawnDirectShot, spawnDirectOutShot, createPlayer, setGuardShip, spawnEnemy, spawnBullet, spawnItem, spawnItemWithId, spawnExplosion, spawnHitSpark, spawnMeteor, serializeField, SHOCK_RADIUS, spawnShockFx, spawnBombFx, spawnHealFx,
   PLAYER_MAX_HP, ITEM_DROP_CHANCE, BOT_ITEM_DROP_CHANCE, RAM_DROP_CHANCE_MUL,
@@ -6,16 +6,16 @@ import {
   WAVE_KIND_TIERS, LARGE_ENEMY_TIERS,
   hasCore, isCoreTarget, coreOwnerOf, tickCoreExtras, applyCoreAwareHit, applyCoreAwareArea, applyCoreAwareBeam, coreWorld, magnetStep, ITEM_MAGNET_R,
   markCoreChain, snakeHeadDown, tickChain, CHAIN_FIRST, CHAIN_STEP, spawnChainBoom, spawnKillBoom, pushKillBooms, spawnEclipse, pushEclipse, applyLaserTick, LASER_IV, spawnCoin, tickCoins, trimFx, spawnCoreEscorts, tickEscort, CHAIN_R, isCoreBossKind, bigCoreKind,
-} from './entities.js?v=20261105013329';
-import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261105013329';
-import { sfx } from './audio.js?v=20261105013329';
-import { noteCoreHit, tickCounters } from './counter.js?v=20261105013329';
-import { fxRate } from './entities.js?v=20261105013329';
-import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261105013329';
-import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261105013329';
-import { hitBattleCounter, hitBattleCountOnly, visitBattleStart } from './stats.js?v=20261105013329';
-import { setPickExclude, WEAPON_ITEM_IDS } from './entities.js?v=20261105013329';
-import { MissionRun, missionResultBox } from './mission.js?v=20261105013329';
+} from './entities.js?v=20261106002830';
+import { resizeCanvas, renderFrame, layout, INFO_RATIO, OPP_RATIO, OWN_RATIO, CTRL_RATIO, itemSlotRects, hitItemSlot, MAX_ITEM_SLOTS, registerEnemyKinds } from './render.js?v=20261106002830';
+import { sfx } from './audio.js?v=20261106002830';
+import { noteCoreHit, tickCounters } from './counter.js?v=20261106002830';
+import { fxRate } from './entities.js?v=20261106002830';
+import { isExAttackItem, useExItem, tickExItems, hasBarrierFx } from './attack_items.js?v=20261106002830';
+import { UNIT_NAME_JA, ALL_KIND_IDS, CATALOG_BY_ID, unitStats, atkDamageMul, defHpMul, pickSendKinds, sentUnitHp } from './catalog.js?v=20261106002830';
+import { hitBattleCounter, hitBattleCountOnly, visitBattleStart } from './stats.js?v=20261106002830';
+import { setPickExclude, WEAPON_ITEM_IDS } from './entities.js?v=20261106002830';
+import { MissionRun, missionResultBox } from './mission.js?v=20261106002830';
 // ===== DEBUG (temporary): 弾の雨 visual check — set to false to remove. While true, ranking submit is disabled. =====
 const DEBUG_RAIN_AT_START = false;
 // ===== DEBUG (temporary): 転送敵キャラ確認パレード — set to false to remove. =====
@@ -25,11 +25,11 @@ const DEBUG_UNIT_PARADE = false;
 const PARADE_SEC = 12; // per unit: ~3s glide in → body glow → signature attack → normal volleys
 /** 自機の攻撃力倍率 (10-18: ×1.3 → 10-18 夜: 2割減 ×1.04). Applies to the ship's own shots (normal / rapid / homing / spread), player and COM alike. */
 const SHIP_ATK_MUL = 1.04;
-import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261105013329';
-import { recordStrongBest, strongBestBase } from './record.js?v=20261105013329';
-import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult, firstBonusPending, grantFirstBonus } from './meta.js?v=20261105013329';
-import { tickPersona, personaIntangible, personaShieldBlocks, PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261105013329';
-import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261105013329';
+import { submitStrongResult, cancelStrongMatch } from './ranking.js?v=20261106002830';
+import { recordStrongBest, strongBestBase } from './record.js?v=20261106002830';
+import { loadMeta, grantComVictoryPt, grantCoinPt, COM_DECK, DECK_SIZE, buildComDeck, COM_DIFFICULTY, COUNTER_LABEL, comAiForLevel, comRankInfo, recordComResult, firstBonusPending, grantFirstBonus } from './meta.js?v=20261106002830';
+import { tickPersona, personaIntangible, personaShieldBlocks, PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261106002830';
+import { usesLoadout, loadoutTelegraph, fireLoadoutVolley, loadoutReload, tickEnemyAttackQueue, updateEnemyBullet } from './attacks.js?v=20261106002830';
 
 const PT_MILESTONE = 500; // 10-15: 突破演出 every 500 PT earned in the match
 const HINT = '敵を倒してアイテム取得（デカ敵は回復が出やすい・所持最大3つ）';
@@ -684,6 +684,12 @@ export class Game {
    * COM AI + reward profile for the selected difficulty. Behaviour comes from the enemy level
    * (meta.js comAiForLevel: win-rate based, fixed for the whole match); PT from the difficulty.
    */
+  /** 11-06: 敵撃破PT（コイン）倍率 — COM「ランカーレベル」のみ×3。普通/ミッション/チュートリアル/対人は×1。 */
+  coinPtMult() {
+    if (!this.useBot || this.isOnline() || this._tutorialMatch || this._mission || this.comDifficulty !== 'strong') return 1;
+    return (COM_DIFFICULTY.strong && COM_DIFFICULTY.strong.coinMult) || 3;
+  }
+
   comProfile() {
     const d = this.comDifficulty === 'normal' ? 'normal' : 'strong';
     const meta = COM_DIFFICULTY[d] || COM_DIFFICULTY.strong;
@@ -2238,8 +2244,10 @@ export class Game {
     {
       const got = tickCoins(S.fx, P.x, P.y * fh, dt);
       if (got > 0) {
-        S.coinPt = (S.coinPt || 0) + got;
-        if (S.coinHud) { S.coinLastGold = got >= 30; S.coinPop = { n: got, t: performance.now() / 1000, gold: got >= 30 }; } // animated at the HUD counter (render.js drawCoinHud)
+        // 11-06: ランカーレベル (COM) only → 敵撃破PT ×3 (silver 3 / gold 90); HUD, 500PT milestones, 記録更新中 pace and the granted/ranked PT all use this value
+        const add = got * this.coinPtMult();
+        S.coinPt = (S.coinPt || 0) + add;
+        if (S.coinHud) { S.coinLastGold = got >= 30; S.coinPop = { n: add, t: performance.now() / 1000, gold: got >= 30 }; } // animated at the HUD counter (render.js drawCoinHud)
         // 10-15: 500PT突破 banner — every time this match's coin PT (the 今回のコイン counter) passes 500, 1000, 1500 …
         // (each milestone once; a big pickup that skips one shows only the highest). Visual + sound only.
         const mile = Math.floor(S.coinPt / PT_MILESTONE);
@@ -3432,11 +3440,12 @@ export class Game {
       try {
         const prof = this.comProfile();
         const result = grantComVictoryPt(loadMeta(), hp, { mult: prof.ptMult });
-        // 10-04b: coins collected this match (silver 1 / gold 30), win only, never level-scaled
+        // 10-04b: coins collected this match (silver 1 / gold 30), win only. 11-06: state.coinPt already includes the ランカー ×3 (coinPtMult)
         const coin = grantCoinPt(result.meta, this.state.coinPt || 0);
         this._ptReward = {
           gain: result.gain + coin.gain,
           coin: coin.gain,
+          coinMult: this.coinPtMult(),
           total: coin.total,
           remainingHp: hp,
           mult: result.mult || prof.ptMult,
@@ -3903,7 +3912,7 @@ export class Game {
         const diffLabel = this._ptReward.label || '';
         box.innerHTML = `
           <div class="pt-line pt-diff">${diffLabel}（ライフのPT ×${mult}）</div>
-          <div class="pt-line pt-coin">コインで　+${this._ptReward.coin || 0} PT</div>
+          ${(this._ptReward.coinMult || 1) > 1 ? `<div class="pt-line pt-coin pt-coin-x3">敵撃破PT ×3（ランカーレベル）　+${this._ptReward.coin || 0} PT</div>` : `<div class="pt-line pt-coin">コインで　+${this._ptReward.coin || 0} PT</div>`}
           <div class="pt-line pt-hp">残りライフで　+${Math.max(0, gain - (this._ptReward.coin || 0))} PT<span class="pt-hp-sub">（ライフ <strong class="pt-hp-n">0</strong>）</span></div>
           <div class="pt-line pt-gain">もらえるPT 合計　+<strong class="pt-gain-n">0</strong></div>
           <div class="pt-line pt-total">いまの持ちPT　<strong class="pt-total-n">0</strong></div>

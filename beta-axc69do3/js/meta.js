@@ -2,7 +2,7 @@
  * localStorage key: shootingOnline_meta (NEVER rename — would wipe player PT).
  * Backup key: shootingOnline_meta_bak. On every update, preserve pt; never clear storage.
  */
-import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20261105013330';
+import { CATALOG, CATALOG_BY_ID, STARTER_DECK, LEGACY_ID_MAP, SEND_GROUPS, unitStats, unitAttackLoadout } from './catalog.js?v=20261106002831';
 
 export const META_KEY = 'shootingOnline_meta';
 export const DECK_SIZE = 5;
@@ -517,13 +517,15 @@ export const COM_DIFFICULTY = {
     id: 'normal',
     label: '普通レベル',
     ptMult: 3,
+    coinMult: 1,
     note: 'やや弱いCOM・勝利時のライフPTは3倍',
   },
   strong: {
     id: 'strong',
     label: 'ランカーレベル',
     ptMult: 10,
-    note: 'これまでの強さ・勝利時のライフPTは10倍',
+    coinMult: 3, // 11-06: 敵撃破PT（コイン 銀1/金30）×3 — COM対戦のランカーレベルのみ（ミッション/対人は×1）
+    note: 'これまでの強さ・勝利時のライフPTは10倍・敵撃破PTは3倍',
   },
 };
 
