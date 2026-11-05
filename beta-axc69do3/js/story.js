@@ -1,72 +1,146 @@
-/* β ストーリーモード: 動画（日本語セリフ・字幕焼き込み）＋ 下に選択中の言語の字幕（日本語時は非表示） */
+/* β ストーリーモード: 動画（日本語音声・字幕焼き込みなし）＋ 下に選択中の言語の字幕（日本語時は日本語字幕） */
 const SUBS = {
+"ja": [
+"私たちはこの地に300年前、地球暦2326年に来ました。",
+"その頃はすでに火星にも移住が進んでおり、",
+"我々は秘密裏にこの月の地下へと参りました。",
+"その頃は異星人は来れないだろうと言うのが定説になっていたのですが、",
+"異星人の痕跡が火星で見つかり、",
+"私たちの組織は密かにこの計画を進めてきました。"
+],
 "en": [
-"We came to this place 300 years ago, in the Earth calendar year 2326. By then, the colonization of Mars was already well underway, and we secretly made our way beneath the surface of this Moon.",
-"Back then, it was widely accepted that aliens could never reach us. But when traces of aliens were discovered on Mars, our organization quietly set this plan in motion."
+"We came to this place 300 years ago, in the Earth calendar year 2326.",
+"By then, settlement on Mars was already well underway,",
+"and we secretly made our way beneath the surface of this Moon.",
+"Back then, it was the accepted view that aliens could never come here,",
+"but traces of aliens were found on Mars,",
+"and our organization has been quietly advancing this plan ever since."
 ],
 "zh-Hans": [
-"我们在300年前、地球历2326年来到这里。那时火星移民早已展开，而我们则秘密地进入了这颗月球的地下。",
-"当时人们普遍认为外星人不可能到来，然而火星上发现了外星人的踪迹，于是我们的组织一直在暗中推进这项计划。"
+"我们在300年前、地球历2326年来到这里。",
+"那时火星移民早已展开，",
+"而我们则秘密地来到了这颗月球的地下。",
+"当时人们普遍认为外星人不可能到来，",
+"然而火星上发现了外星人的踪迹，",
+"于是我们的组织一直在暗中推进这项计划。"
 ],
 "zh-Hant": [
-"我們在300年前、地球曆2326年來到這裡。那時火星移民早已展開，而我們則秘密地進入了這顆月球的地底。",
-"當時人們普遍認為外星人不可能到來，然而火星上發現了外星人的蹤跡，於是我們的組織一直在暗中推進這項計畫。"
+"我們在300年前、地球曆2326年來到這裡。",
+"那時火星移民早已展開，",
+"而我們則秘密地來到了這顆月球的地底。",
+"當時人們普遍認為外星人不可能到來，",
+"然而火星上發現了外星人的蹤跡，",
+"於是我們的組織一直在暗中推進這項計畫。"
 ],
 "ko": [
-"우리는 300년 전, 지구력 2326년에 이곳에 왔습니다. 그 무렵 이미 화성 이주도 진행되고 있었고, 우리는 비밀리에 이 달의 지하로 들어왔습니다.",
-"당시에는 외계인이 올 수 없을 것이라는 게 정설이었지만, 화성에서 외계인의 흔적이 발견되었고, 우리 조직은 은밀히 이 계획을 추진해 왔습니다."
+"우리는 300년 전, 지구력 2326년에 이곳에 왔습니다.",
+"그 무렵 이미 화성 이주도 진행되고 있었고,",
+"우리는 비밀리에 이 달의 지하로 들어왔습니다.",
+"당시에는 외계인이 올 수 없을 것이라는 게 정설이었지만,",
+"화성에서 외계인의 흔적이 발견되었고,",
+"우리 조직은 은밀히 이 계획을 추진해 왔습니다."
 ],
 "es": [
-"Llegamos a este lugar hace 300 años, en el año 2326 del calendario terrestre. Para entonces, la colonización de Marte ya estaba muy avanzada, y nosotros nos instalamos en secreto bajo la superficie de esta Luna.",
-"En aquella época se daba por hecho que los alienígenas jamás podrían llegar. Pero se hallaron rastros alienígenas en Marte, y nuestra organización ha llevado adelante este plan en secreto."
+"Llegamos a este lugar hace 300 años, en el año 2326 del calendario terrestre.",
+"Para entonces, la colonización de Marte ya estaba muy avanzada,",
+"y nosotros nos instalamos en secreto bajo la superficie de esta Luna.",
+"En aquella época se daba por hecho que los alienígenas jamás podrían llegar,",
+"pero se hallaron rastros alienígenas en Marte,",
+"y nuestra organización ha llevado adelante este plan en secreto."
 ],
 "pt": [
-"Chegamos a este lugar há 300 anos, no ano 2326 do calendário terrestre. Naquela época, a colonização de Marte já estava bem avançada, e nós nos instalamos secretamente no subsolo desta Lua.",
-"Na época, acreditava-se que alienígenas jamais conseguiriam chegar até nós. Mas vestígios alienígenas foram encontrados em Marte, e nossa organização vem conduzindo este plano em segredo."
+"Chegamos a este lugar há 300 anos, no ano 2326 do calendário terrestre.",
+"Naquela época, a colonização de Marte já estava bem avançada,",
+"e nós nos instalamos secretamente no subsolo desta Lua.",
+"Na época, acreditava-se que alienígenas jamais conseguiriam chegar,",
+"mas vestígios alienígenas foram encontrados em Marte,",
+"e nossa organização vem conduzindo este plano em segredo."
 ],
 "fr": [
-"Nous sommes arrivés ici il y a 300 ans, en l'an 2326 du calendrier terrestre. À cette époque, la colonisation de Mars était déjà bien engagée, et nous nous sommes secrètement installés sous la surface de cette Lune.",
-"On tenait alors pour acquis que les extraterrestres ne pourraient jamais venir. Mais des traces extraterrestres ont été découvertes sur Mars, et notre organisation a mené ce plan dans le plus grand secret."
+"Nous sommes arrivés ici il y a 300 ans, en l'an 2326 du calendrier terrestre.",
+"À cette époque, la colonisation de Mars était déjà bien engagée,",
+"et nous nous sommes secrètement installés sous la surface de cette Lune.",
+"On tenait alors pour acquis que les extraterrestres ne pourraient jamais venir,",
+"mais des traces extraterrestres ont été découvertes sur Mars,",
+"et notre organisation a mené ce plan dans le plus grand secret."
 ],
 "de": [
-"Wir kamen vor 300 Jahren hierher, im Jahr 2326 der Erdzeitrechnung. Damals war die Besiedlung des Mars bereits weit fortgeschritten, und wir zogen uns heimlich unter die Oberfläche dieses Mondes zurück.",
-"Damals galt es als ausgemacht, dass Außerirdische uns niemals erreichen könnten. Doch dann wurden auf dem Mars Spuren von Außerirdischen gefunden, und unsere Organisation hat diesen Plan im Verborgenen vorangetrieben."
+"Wir kamen vor 300 Jahren hierher, im Jahr 2326 der Erdzeitrechnung.",
+"Damals war die Besiedlung des Mars bereits weit fortgeschritten,",
+"und wir zogen heimlich unter die Oberfläche dieses Mondes.",
+"Damals galt es als ausgemacht, dass Außerirdische niemals kommen könnten,",
+"doch dann wurden auf dem Mars Spuren von Außerirdischen gefunden,",
+"und unsere Organisation hat diesen Plan im Verborgenen vorangetrieben."
 ],
 "it": [
-"Siamo giunti qui 300 anni fa, nell'anno 2326 del calendario terrestre. A quel tempo la colonizzazione di Marte era già ben avviata, e noi ci trasferimmo in segreto nel sottosuolo di questa Luna.",
-"All'epoca si dava per certo che gli alieni non sarebbero mai potuti arrivare. Ma su Marte furono trovate tracce aliene, e la nostra organizzazione ha portato avanti questo piano in segreto."
+"Siamo giunti qui 300 anni fa, nell'anno 2326 del calendario terrestre.",
+"A quel tempo la colonizzazione di Marte era già ben avviata,",
+"e noi ci trasferimmo in segreto nel sottosuolo di questa Luna.",
+"All'epoca si dava per certo che gli alieni non sarebbero mai potuti arrivare,",
+"ma su Marte furono trovate tracce aliene,",
+"e la nostra organizzazione ha portato avanti questo piano in segreto."
 ],
 "ru": [
-"Мы прибыли сюда 300 лет назад, в 2326 году по земному календарю. К тому времени колонизация Марса уже шла полным ходом, а мы тайно обосновались в недрах этой Луны.",
-"Тогда считалось общепризнанным, что пришельцы никогда не смогут до нас добраться. Но на Марсе обнаружили следы пришельцев, и наша организация втайне продвигала этот план."
+"Мы прибыли сюда 300 лет назад, в 2326 году по земному календарю.",
+"К тому времени переселение на Марс уже шло полным ходом,",
+"а мы тайно обосновались под поверхностью этой Луны.",
+"Тогда считалось общепризнанным, что пришельцы никогда не смогут сюда добраться,",
+"но на Марсе обнаружили следы пришельцев,",
+"и наша организация тайно продвигала этот план."
 ],
 "id": [
-"Kami tiba di tempat ini 300 tahun lalu, pada tahun 2326 kalender Bumi. Saat itu kolonisasi Mars sudah berjalan, dan kami diam-diam pindah ke bawah permukaan Bulan ini.",
-"Kala itu diyakini bahwa makhluk asing tidak mungkin datang. Namun jejak makhluk asing ditemukan di Mars, dan organisasi kami diam-diam menjalankan rencana ini."
+"Kami tiba di tempat ini 300 tahun lalu, pada tahun 2326 kalender Bumi.",
+"Saat itu perpindahan ke Mars sudah berjalan,",
+"dan kami diam-diam pindah ke bawah permukaan Bulan ini.",
+"Kala itu diyakini bahwa makhluk asing tidak mungkin datang,",
+"namun jejak makhluk asing ditemukan di Mars,",
+"dan organisasi kami diam-diam menjalankan rencana ini."
 ],
 "th": [
-"พวกเรามาถึงที่นี่เมื่อ 300 ปีก่อน ในปีปฏิทินโลก 2326 ตอนนั้นการอพยพไปดาวอังคารก็ดำเนินไปแล้ว และพวกเราได้ลงมาอยู่ใต้ดินของดวงจันทร์นี้อย่างลับ ๆ",
-"ในยุคนั้นเชื่อกันว่ามนุษย์ต่างดาวไม่มีทางมาถึงได้ แต่แล้วก็พบร่องรอยของมนุษย์ต่างดาวบนดาวอังคาร องค์กรของเราจึงเดินหน้าแผนการนี้อย่างลับ ๆ"
+"พวกเรามาถึงที่นี่เมื่อ 300 ปีก่อน ในปีปฏิทินโลก 2326",
+"ตอนนั้นการอพยพไปดาวอังคารก็ดำเนินไปแล้ว",
+"และพวกเราก็แอบลงมาอยู่ใต้ดินของดวงจันทร์นี้",
+"ในยุคนั้นเชื่อกันว่ามนุษย์ต่างดาวไม่มีทางมาถึงได้",
+"แต่แล้วก็พบร่องรอยของมนุษย์ต่างดาวบนดาวอังคาร",
+"องค์กรของเราจึงเดินหน้าแผนนี้อย่างลับ ๆ มาโดยตลอด"
 ],
 "vi": [
-"Chúng tôi đến nơi này 300 năm trước, vào năm 2326 theo lịch Trái Đất. Khi ấy việc di cư lên Sao Hỏa đã được tiến hành, còn chúng tôi thì bí mật tiến vào lòng đất của Mặt Trăng này.",
-"Thời đó, người ta tin chắc rằng người ngoài hành tinh không thể đến được. Nhưng dấu vết của người ngoài hành tinh đã được phát hiện trên Sao Hỏa, và tổ chức của chúng tôi đã âm thầm thúc đẩy kế hoạch này."
+"Chúng tôi đến nơi này 300 năm trước, vào năm 2326 theo lịch Trái Đất.",
+"Khi ấy việc di cư lên Sao Hỏa đã được tiến hành,",
+"còn chúng tôi thì bí mật tiến vào lòng đất của Mặt Trăng này.",
+"Thời đó, người ta tin chắc rằng người ngoài hành tinh không thể đến được,",
+"nhưng dấu vết của người ngoài hành tinh đã được phát hiện trên Sao Hỏa,",
+"và tổ chức của chúng tôi đã âm thầm thúc đẩy kế hoạch này."
 ],
 "tr": [
-"Buraya 300 yıl önce, Dünya takvimiyle 2326 yılında geldik. O zamanlar Mars'a göç çoktan başlamıştı ve biz de gizlice bu Ay'ın yeraltına yerleştik.",
-"O dönemde uzaylıların asla gelemeyeceği kesin kabul ediliyordu. Ancak Mars'ta uzaylı izleri bulundu ve örgütümüz bu planı gizlice yürüttü."
+"Buraya 300 yıl önce, Dünya takvimiyle 2326 yılında geldik.",
+"O zamanlar Mars'a göç çoktan başlamıştı,",
+"biz de gizlice bu Ay'ın yeraltına yerleştik.",
+"O dönemde uzaylıların asla gelemeyeceği kesin kabul ediliyordu,",
+"ancak Mars'ta uzaylı izleri bulundu,",
+"ve örgütümüz bu planı gizlice yürüttü."
 ],
 "ar": [
-"جئنا إلى هذا المكان قبل 300 عام، في عام 2326 بالتقويم الأرضي. كان استيطان المريخ قد بدأ بالفعل آنذاك، فنزلنا سرًّا إلى باطن هذا القمر.",
-"كان السائد آنذاك أن الكائنات الفضائية لن تتمكن أبدًا من الوصول إلينا، لكن آثارًا لكائنات فضائية اكتُشفت على المريخ، فمضت منظمتنا في هذه الخطة سرًّا."
+"جئنا إلى هذا المكان قبل 300 عام، في عام 2326 بالتقويم الأرضي.",
+"كان الاستيطان على المريخ قد بدأ بالفعل آنذاك،",
+"فنزلنا سرًّا إلى باطن هذا القمر.",
+"كان السائد آنذاك أن الكائنات الفضائية لن تتمكن أبدًا من القدوم،",
+"لكن آثارًا لكائنات فضائية اكتُشفت على المريخ،",
+"فمضت منظمتنا سرًّا في تنفيذ هذه الخطة."
 ],
 "hi": [
-"हम 300 साल पहले, पृथ्वी कैलेंडर के वर्ष 2326 में यहाँ आए थे। उस समय तक मंगल पर बसावट शुरू हो चुकी थी, और हम गुप्त रूप से इस चंद्रमा के भूगर्भ में आ बसे।",
-"उस दौर में यह माना जाता था कि एलियन कभी यहाँ नहीं पहुँच सकते, लेकिन मंगल पर एलियनों के निशान मिले, और तब से हमारा संगठन चुपचाप इस योजना को आगे बढ़ा रहा है।"
+"हम 300 साल पहले, पृथ्वी कैलेंडर के वर्ष 2326 में यहाँ आए थे।",
+"उस समय तक मंगल पर बसावट शुरू हो चुकी थी,",
+"और हम गुप्त रूप से इस चंद्रमा के भूमिगत हिस्से में आ गए।",
+"उस दौर में यह माना जाता था कि एलियन कभी यहाँ नहीं आ सकते,",
+"लेकिन मंगल पर एलियनों के निशान मिले,",
+"और हमारा संगठन चुपचाप इस योजना को आगे बढ़ाता रहा।"
 ]
 };
-// s.ass のタイミング（秒）: 1文目 0.30–16.20、2文目 16.70–31.20
-const CUES = [[0.3, 16.2, 0], [16.7, 31.2, 1]];
+// 11-06: 新しい動画（字幕焼き込みなし・音声あり 30.14秒）のセリフのタイミング（秒）
+const CUES = [[0.14, 5.86, 0], [6.76, 10.08, 1], [10.90, 14.02, 2], [15.06, 19.68, 3], [19.84, 22.30, 4], [22.60, 26.16, 5]];
+/** 動画の長さ（秒）。古いセーブ（旧動画 31.7秒）の位置はこの長さに丸める */
+const STORY_DUR = 30.14;
 const RESUME_KEY = 'stbStoryResume'; // 新規 sessionStorage キー（既存キーは変更しない）
 function uiLang() { return (window.NKI18N && window.NKI18N.lang) || document.documentElement.getAttribute('data-nk-lang') || 'ja'; }
 
@@ -143,7 +217,7 @@ export function initStory({ show, goMenu, canOpen }) {
   function markMore() { scroller.classList.toggle('more', scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight > 4); }
   scroller.addEventListener('scroll', markMore, { passive: true });
   window.addEventListener('resize', () => { if (window.__stbScreen === 'story') { fitHead(); fitSubH(); markMore(); } });
-  function applyLang(l) { lang = l || uiLang(); cur = -2; subWrap.hidden = (lang === 'ja' || !SUBS[lang]); tick(); requestAnimationFrame(fitSubH); }
+  function applyLang(l) { lang = l || uiLang(); cur = -2; subWrap.hidden = !SUBS[lang]; tick(); requestAnimationFrame(fitSubH); }
 
   /* ---- セーブ ---- */
   let lastT = -1;
@@ -199,7 +273,7 @@ export function initStory({ show, goMenu, canOpen }) {
       const top = mk('span', 'ss-top');
       top.append(mk('span', 'ss-no', 'No.' + s.no, true), mk('span', 'ss-ch', chapterOf(s.chapter).title));
       if (s.done) top.append(mk('span', 'ss-prog ss-done', 'クリア済み'));
-      else top.append(mk('span', 'ss-prog', mmss(s.t) + ' / ' + mmss(s.dur || 31), true));
+      else top.append(mk('span', 'ss-prog', mmss(Math.min(s.t || 0, STORY_DUR)) + ' / ' + mmss(STORY_DUR), true));
       const r1 = mk('span', 'ss-line'); r1.append(mk('span', 'ss-k', '最終セーブ'), mk('span', 'ss-v', fmtTime(s.updated || s.created), true));
       const r2 = mk('span', 'ss-line ss-sub'); r2.append(mk('span', 'ss-k', '開始'), mk('span', 'ss-v', fmtTime(s.created), true));
       b.append(top, r1, r2);
@@ -227,8 +301,8 @@ export function initStory({ show, goMenu, canOpen }) {
     setView('play');
     end.hidden = true; playBtn.hidden = false; scr.classList.remove('playing', 'ended');
     applyLang(); fitHead(); fitSubH(); setTimeout(fitSubH, 300);
-    if (s.done && at == null) { seekTo(s.dur || 31.7, () => finish()); return; }
-    seekTo(at != null ? at : (s.t || 0), () => { if (autoplay !== false) play(); });
+    if (s.done && at == null) { seekTo(STORY_DUR, () => finish()); return; }
+    seekTo(Math.min(Math.max(0, at != null ? at : (s.t || 0)), STORY_DUR - 0.2), () => { if (autoplay !== false) play(); });
   }
   function newGame() {
     const d = loadStorySaves();
@@ -262,7 +336,7 @@ export function initStory({ show, goMenu, canOpen }) {
   function play() { const p = v.play(); if (p && p.catch) p.catch(() => { playBtn.hidden = false; }); }
   playBtn.addEventListener('click', () => { if (v.ended) v.currentTime = 0; play(); });
   v.addEventListener('click', () => { if (v.paused) play(); else v.pause(); });
-  skipBtn.addEventListener('click', () => { try { v.currentTime = v.duration || 31.7; } catch (_) {} finish(); });
+  skipBtn.addEventListener('click', () => { try { v.currentTime = v.duration || STORY_DUR; } catch (_) {} finish(); });
   document.getElementById('story-replay').addEventListener('click', () => { end.hidden = true; v.currentTime = 0; writeActive(true); play(); });
   // 上の「◀ 戻る」: 再生中・一覧 → ストーリーのはじめ画面 / はじめ画面 → メニュー
   document.getElementById('story-hback').addEventListener('click', () => { if (view === 'home') { stop(); goMenu(); } else goHome(); });
