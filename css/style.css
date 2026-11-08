@@ -205,16 +205,6 @@ html, body {
   white-space: nowrap;
   text-shadow: 0 0 10px rgba(60, 180, 255, 0.6), 0 1px 3px #000;
 }
-.game-esports {
-  margin-top: 2px;
-  font-size: clamp(0.56rem, 2.9vw, 0.72rem);
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  line-height: 1.2;
-  color: #ffe08a;
-  white-space: nowrap;
-  text-shadow: 0 0 8px rgba(255, 190, 60, 0.55), 0 1px 3px #000;
-}
 .game-intro {
   /* SEO copy — keep in DOM, don't crowd the title art */
   position: absolute;
@@ -3080,3 +3070,11 @@ html[dir=rtl] .ms-card { text-align: right; }
 #screen-menu .net-row, #screen-menu .join-row { container-type: inline-size; }
 @supports (width: 1cqi) { #screen-menu .net-row .net-btn, #screen-menu .join-row .join-btn { font-size: min(0.92rem, 4.5cqi); letter-spacing: 0; } }
 @media (max-height: 700px) { #screen-menu .menu-footer { gap: 1px; padding-top: 1px; } #screen-menu .menu-footer .hub-row .hub-link { padding-top: 1px; padding-bottom: 1px; } #screen-menu .menu-panel { padding-top: 4px; padding-bottom: 4px; } }
+
+/* Keep translated card content within its grid track, including 320px phones. */
+.unit-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.shop-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.unit-card { min-width: 0; }
+.unit-card > * { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.unit-card .unit-attack-chip, .unit-card .st, .unit-card .rarity,
+.unit-card .unit-price { white-space: normal; overflow-wrap: anywhere; text-align: center; }

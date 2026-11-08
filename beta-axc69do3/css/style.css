@@ -205,16 +205,6 @@ html, body {
   white-space: nowrap;
   text-shadow: 0 0 10px rgba(60, 180, 255, 0.6), 0 1px 3px #000;
 }
-.game-esports {
-  margin-top: 2px;
-  font-size: clamp(0.56rem, 2.9vw, 0.72rem);
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  line-height: 1.2;
-  color: #ffe08a;
-  white-space: nowrap;
-  text-shadow: 0 0 8px rgba(255, 190, 60, 0.55), 0 1px 3px #000;
-}
 .game-intro {
   /* SEO copy — keep in DOM, don't crowd the title art */
   position: absolute;
@@ -3158,3 +3148,14 @@ html[dir=rtl] .ms-card { text-align: right; }
 .story-scroll::-webkit-scrollbar { width: 6px; }
 .story-scroll::-webkit-scrollbar-thumb { background: rgba(160, 200, 255, 0.8); border-radius: 3px; }
 .story-scroll.more { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 34px), rgba(0,0,0,0.25)); mask-image: linear-gradient(to bottom, #000 calc(100% - 34px), rgba(0,0,0,0.25)); }
+
+/* Keep translated card content within its grid track, including 320px phones. */
+.unit-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.shop-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.unit-card { min-width: 0; }
+.unit-card > * { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.unit-card .unit-attack-chip, .unit-card .st, .unit-card .rarity,
+.unit-card .unit-price { white-space: normal; overflow-wrap: anywhere; text-align: center; }
+
+/* The localized skip label must remain fully visible over the video. */
+#screen-story .story-skip { width: max-content; max-width: calc(100% - 12px); white-space: normal; overflow: visible; overflow-wrap: anywhere; }
