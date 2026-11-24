@@ -1,7 +1,8 @@
 # stb-ranking (Cloudflare Worker + D1)
 - Worker: https://stb-ranking.nikkukyuu.workers.dev  (script `stb-ranking`, D1 binding `DB` → database `stb-ranking`)
 - Source: `worker.js` (deployed as minified `worker.min.js`), schema: `schema.sql`, cron `5 15 * * *` (00:05 JST) closes periods / awards medals; also closed lazily on requests.
-- Endpoints: GET /health, POST /register, POST /nickname, POST /me, POST /match/start, POST /match/submit, GET /ranking?period=day|week|month|year&board=top3|best[&key][&id], GET /medals?ids=
+- Endpoints: GET /health, POST /register, POST /nickname, POST /me, POST /match/start, POST /match/submit, GET /ranking?period=day|week|month|year|alltime&board=top3|best[&key][&id], GET /medals?ids=
+- All-time (`period=alltime`): only scores with `created_at` ≥ 2027-01-01 00:00:00 Asia/Tokyo (`ALLTIME_START_MS`). No medals (the board never closes). Each row includes `years` (Gregorian year(s) of the counted record). Before the cutoff the API returns `open: false` and an empty list. Cutoff is enforced on the server (JST), not the client clock. The test Worker (`stb-ranking-test`) may honor `TEST_TIME_OVERRIDE=1` plus `X-Test-Now` / `?now=` / `?alltimeStart=` for boundary tests; production never does.
 - Anti-cheat: single-use token per COM強い match, min 20 s server-measured, score encrypted+HMAC-signed (no PT cap), 30 tokens/h/player & 60/h/IP, 10 registrations/h/IP, secret key (SHA-256 stored).
 
 ## ⚠️ PRODUCTION DATA SAFETY (read before touching anything)

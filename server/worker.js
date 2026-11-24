@@ -12,6 +12,8 @@ const REGISTER_PER_HOUR_IP = 10;
 const TYPES = ['day', 'week', 'month', 'year'];
 const BOARDS = ['top3', 'best'];
 const JST = 9 * 3600 * 1000;
+// All-time board starts at 2027-01-01 00:00:00 Asia/Tokyo (UTC+9, no DST).
+export const ALLTIME_START_MS = Date.UTC(2026, 11, 31, 15, 0, 0);
 
 // Score sealing: AES-GCM + HMAC-SHA256, keys derived from SEAL_SECRET and the single-use match token.
 const b64d = (s) => Uint8Array.from(atob(String(s)), (c) => c.charCodeAt(0));
@@ -65,6 +67,29 @@ export function periodKeys(ms) {
   };
 }
 
+/** Test Worker only: honor X-Test-Now / ?now= and ?alltimeStart= / env.ALLTIME_START. Production never does. */
+function isTestOverride(url, env) {
+  return env && env.TEST_TIME_OVERRIDE === '1' && /(?:^|\.)stb-ranking-test\./.test(url.hostname);
+}
+export function resolveNow(req, env, url, fallback = Date.now()) {
+  if (!isTestOverride(url, env)) return fallback;
+  const raw = url.searchParams.get('now') || req.headers.get('X-Test-Now');
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 && n < 1e15 ? n : fallback;
+}
+export function resolveAlltimeStart(req, env, url) {
+  if (isTestOverride(url, env)) {
+    const raw = url.searchParams.get('alltimeStart') || env.ALLTIME_START;
+    const n = Number(raw);
+    if (Number.isFinite(n) && n > 0 && n < 1e15) return n;
+  }
+  return ALLTIME_START_MS;
+}
+export function parseYears(y) {
+  const ys = String(y == null ? '' : y).split(',').map((s) => s.trim()).filter((s) => /^\d{4}$/.test(s)).sort();
+  return [...new Set(ys)];
+}
+
 async function sha256(s) {
   const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
   return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('');
@@ -103,6 +128,18 @@ const BOARD_SQL = {
     WHERE ${col} = ?1 GROUP BY s.player_id ORDER BY score DESC, at ASC, s.player_id ASC`,
 };
 // "at" tie-break for best uses first submit time (deterministic enough for casual play).
+
+// All-time boards: only scores at/after the cutoff. Year(s) of the counted record(s) are returned.
+export const ALLTIME_SQL = {
+  top3: `WITH r AS (SELECT player_id, pt, created_at, year, ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY pt DESC, id ASC) rn FROM scores WHERE created_at >= ?1)
+    SELECT r.player_id, SUM(r.pt) AS score, COUNT(*) AS n, MAX(r.created_at) AS at, p.nickname, GROUP_CONCAT(DISTINCT r.year) AS years
+    FROM r JOIN players p ON p.id = r.player_id WHERE rn <= 3
+    GROUP BY r.player_id ORDER BY score DESC, at ASC, r.player_id ASC`,
+  best: `WITH r AS (SELECT player_id, pt, created_at, year, ROW_NUMBER() OVER (PARTITION BY player_id ORDER BY pt DESC, id ASC) rn, COUNT(*) OVER (PARTITION BY player_id) AS n FROM scores WHERE created_at >= ?1)
+    SELECT r.player_id, r.pt AS score, r.n, r.created_at AS at, p.nickname, r.year AS years
+    FROM r JOIN players p ON p.id = r.player_id WHERE rn = 1
+    ORDER BY score DESC, at ASC, r.player_id ASC`,
+};
 
 async function closePeriods(env, now = Date.now()) {
   const cur = periodKeys(now);
@@ -145,9 +182,12 @@ export default {
     const url = new URL(req.url);
     const path = url.pathname.replace(/\/+$/, '') || '/';
     const ip = req.headers.get('CF-Connecting-IP') || '0';
-    const now = Date.now();
+    const now = resolveNow(req, env, url);
     try {
-      if (path === '/' || path === '/health') return json(req, { ok: true, service: 'stb-ranking', now, keys: periodKeys(now) });
+      if (path === '/' || path === '/health') {
+        const start = resolveAlltimeStart(req, env, url);
+        return json(req, { ok: true, service: 'stb-ranking', now, keys: periodKeys(now), alltimeStart: start, alltimeOpen: now >= start });
+      }
 
       if (path === '/register' && req.method === 'POST') {
         const b = await body(req);
@@ -210,17 +250,28 @@ export default {
       }
 
       if (path === '/ranking' && req.method === 'GET') {
-        const type = TYPES.includes(url.searchParams.get('period')) ? url.searchParams.get('period') : 'week';
         const board = BOARDS.includes(url.searchParams.get('board')) ? url.searchParams.get('board') : 'top3';
-        const cur = periodKeys(now)[type];
-        const key = /^[0-9-]{4,10}$/.test(url.searchParams.get('key') || '') ? url.searchParams.get('key') : cur;
         const me = url.searchParams.get('id') || '';
         ctx.waitUntil(closePeriods(env, now).catch(() => {}));
+        if (url.searchParams.get('period') === 'alltime') {
+          const start = resolveAlltimeStart(req, env, url);
+          const open = now >= start;
+          const out = { ok: true, period: 'alltime', board, key: 'alltime', current: true, open, startsAt: start, total: 0, top: [], me: null };
+          if (!open) return json(req, out);
+          const { results } = await env.DB.prepare(ALLTIME_SQL[board] + ' LIMIT 1000').bind(start).all();
+          const top = results.slice(0, 100).map((r, i) => ({ rank: i + 1, id: r.player_id, nickname: r.nickname, score: r.score, n: r.n, years: parseYears(r.years) }));
+          let mine = null;
+          if (me) { const i = results.findIndex((r) => r.player_id === me); if (i >= 0) mine = { rank: i + 1, score: results[i].score, n: results[i].n, years: parseYears(results[i].years) }; }
+          out.total = results.length; out.top = top; out.me = mine;
+          return json(req, out);
+        }
+        const type = TYPES.includes(url.searchParams.get('period')) ? url.searchParams.get('period') : 'week';
+        const cur = periodKeys(now)[type];
+        const key = /^[0-9-]{4,10}$/.test(url.searchParams.get('key') || '') ? url.searchParams.get('key') : cur;
         const { results } = await env.DB.prepare(BOARD_SQL[board](type) + ' LIMIT 1000').bind(key).all();
         let mine = null;
         const top = results.slice(0, 100).map((r, i) => ({ rank: i + 1, id: r.player_id, nickname: r.nickname, score: r.score, n: r.n }));
         if (me) { const i = results.findIndex((r) => r.player_id === me); if (i >= 0) mine = { rank: i + 1, score: results[i].score, n: results[i].n }; }
-        const ids = top.map((t) => t.id);
         return json(req, { ok: true, period: type, board, key, current: key === cur, total: results.length, top, me: mine });
       }
 

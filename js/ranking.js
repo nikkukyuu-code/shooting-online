@@ -10,7 +10,7 @@
  *                                      retried automatically when the ランキング screen is opened (server accepts
  *                                      `late` resubmits of an unused token for 48 h). Token is single-use → no double count.
  */
-import { sealScore } from './seal.js?v=20261108125934';
+import { sealScore } from './seal.js?v=20261125042802';
 export const RANK_API = 'https://stb-ranking.nikkukyuu.workers.dev';
 const K_ID = 'shootingOnline_rankId';
 const K_SECRET = 'shootingOnline_rankSecret';
@@ -194,6 +194,7 @@ export function periodKeys(ms = Date.now()) {
 }
 /** Shift a period key by n periods (n<0 = past). */
 export function shiftKey(type, key, n) {
+  if (type === 'alltime') return 'alltime';
   if (type === 'year') return String(Number(key) + n);
   if (type === 'month') { const [y, m] = key.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return `${d.getUTCFullYear()}-${p2(d.getUTCMonth() + 1)}`; }
   const [y, m, dd] = key.split('-').map(Number);
@@ -210,6 +211,7 @@ function wdName(date) {
   return WD[date.getUTCDay()];
 }
 export function periodLabel(type, key) {
+  if (type === 'alltime') return '2027年〜';
   if (type === 'year') return `${key}年`;
   if (type === 'month') { const [y, m] = key.split('-'); return `${y}年${Number(m)}月`; }
   const [y, m, d] = key.split('-').map(Number);
@@ -218,8 +220,15 @@ export function periodLabel(type, key) {
   const b = new Date(Date.UTC(y, m - 1, d + 6));
   return `${m}/${d}(${wdName(a)})〜${b.getUTCMonth() + 1}/${b.getUTCDate()}(${wdName(b)})`;
 }
-export const PERIOD_JA = { day: '日間', week: '週間', month: '月間', year: '年間' };
+export const PERIOD_JA = { day: '日間', week: '週間', month: '月間', year: '年間', alltime: '歴代' };
 export const BOARD_JA = { top3: 'ベスト3合計', best: '1試合最高' };
+export const ALLTIME_START_MS = Date.UTC(2026, 11, 31, 15, 0, 0); // 2027-01-01 00:00:00 JST (display only; server enforces)
+export function formatRecordYears(years) {
+  const ys = (Array.isArray(years) ? years : String(years || '').split(',')).map((s) => String(s).trim()).filter((s) => /^\d{4}$/.test(s));
+  ys.sort();
+  const uniq = [...new Set(ys)];
+  return uniq.map((y) => `${y}年`).join('・');
+}
 
 /* ---------- Medal art (canvas + light CSS animation) ----------
  * User 10-16 「めだるのちがいがわかりずらいので豪華に」: every medal shows its RANK as a big numeral on a clearly

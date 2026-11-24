@@ -3159,3 +3159,13 @@ html[dir=rtl] .ms-card { text-align: right; }
 
 /* The localized skip label must remain fully visible over the video. */
 #screen-story .story-skip { width: max-content; max-width: calc(100% - 12px); white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+
+/* 歴代タブと西暦年表示 */
+#screen-ranking .rk-period { gap: 4px; flex-wrap: wrap; }
+#screen-ranking .rk-period .rk-tab { flex: 1 1 auto; min-width: min-content; font-size: 0.8rem; overflow-wrap: normal; word-break: normal; }
+.rk-year { display: inline-block; align-self: flex-start; margin-top: 1px; padding: 0 6px; border-radius: 4px; font-size: 0.68rem; font-weight: 800; line-height: 1.35; color: #ffe27a; background: rgba(255, 200, 60, 0.16); border: 1px solid rgba(255, 210, 80, 0.5); max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
+.rk-row.top1 .rk-year { color: #fff6c2; border-color: rgba(255, 230, 140, 0.7); background: rgba(255, 210, 60, 0.22); }
+@media (max-width: 380px) {
+  #screen-ranking .rk-period { gap: 3px; }
+  #screen-ranking .rk-period .rk-tab { font-size: 0.75rem; padding: 6px 4px; }
+}

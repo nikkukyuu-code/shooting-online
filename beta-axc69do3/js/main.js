@@ -1,18 +1,18 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261108125934';
-import { Net } from './net.js?v=20261108125934';
-import { Game } from './game.js?v=20261108125934';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261108125934';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261108125934';
-import { resetDeckToDefault } from './meta.js?v=20261108125934';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261108125934';
-import { loadBattleCount } from './stats.js?v=20261108125934';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261108125934';
-import { ALL_KIND_IDS } from './catalog.js?v=20261108125934';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261108125934';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261108125934';
-import { seedStrongBest } from './record.js?v=20261108125934';
-import { initStory } from './story.js?v=20261108125934';
-import { MISSIONS, MISSION_SLOTS, missionById, isMissionCleared, MISSION_ASSIST_NOTE, MISSION_WIN_NOTE } from './mission.js?v=20261108125934';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261125042802';
+import { Net } from './net.js?v=20261125042802';
+import { Game } from './game.js?v=20261125042802';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261125042802';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261125042802';
+import { resetDeckToDefault } from './meta.js?v=20261125042802';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261125042802';
+import { loadBattleCount } from './stats.js?v=20261125042802';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261125042802';
+import { ALL_KIND_IDS } from './catalog.js?v=20261125042802';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, formatRecordYears, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261125042802';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261125042802';
+import { seedStrongBest } from './record.js?v=20261125042802';
+import { initStory } from './story.js?v=20261125042802';
+import { MISSIONS, MISSION_SLOTS, missionById, isMissionCleared, MISSION_ASSIST_NOTE, MISSION_WIN_NOTE } from './mission.js?v=20261125042802';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -188,7 +188,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261108125934`;
+  return `assets/enemies/${id}/0.png?v=20261125042802`;
 }
 
 function unitName(id) {
@@ -735,7 +735,7 @@ function openMissionDetail(id) {
   box.dataset.mission = String(m.id);
   box.innerHTML = `<div class="md-card${done ? ' md-cleared' : ''}">`
     + `<div class="md-top"><span class="md-no">${m.id}</span><span class="md-name"></span><span class="md-state">${done ? 'クリア済み' : '未クリア'}</span></div>`
-    + (m.art && m.art.length ? `<div class="md-art md-art-${m.type}" aria-hidden="true">${m.art.map((k, i) => k === '__heart' ? `<span class="md-a md-a${i} md-heart">❤</span>` : k === '__ship' ? `<img class="md-a md-a${i} md-ship" alt="" src="assets/fx/mission_ship.png?v=20261108125934" draggable="false">` : `<img class="md-a md-a${i}" alt="" src="assets/enemies/${k}/0.png?v=20261108125934" draggable="false">`).join('')}</div>` : '')
+    + (m.art && m.art.length ? `<div class="md-art md-art-${m.type}" aria-hidden="true">${m.art.map((k, i) => k === '__heart' ? `<span class="md-a md-a${i} md-heart">❤</span>` : k === '__ship' ? `<img class="md-a md-a${i} md-ship" alt="" src="assets/fx/mission_ship.png?v=20261125042802" draggable="false">` : `<img class="md-a md-a${i}" alt="" src="assets/enemies/${k}/0.png?v=20261125042802" draggable="false">`).join('')}</div>` : '')
     + `<dl class="md-rows">`
     + `<div class="md-row"><dt>目標</dt><dd class="md-goal"></dd></div>`
     + `<div class="md-row"><dt>敵Lv</dt><dd>${m.comLevel}</dd></div>`
@@ -1199,12 +1199,24 @@ function rkSetTabs() {
 
 async function renderRanking() {
   rkSetTabs();
-  const cur = periodKeys()[rk.period];
-  if (!rk.key || rk.key > cur) rk.key = cur;
+  const isAlltime = rk.period === 'alltime';
+  const cur = isAlltime ? 'alltime' : periodKeys()[rk.period];
+  if (isAlltime) rk.key = 'alltime';
+  else if (!rk.key || rk.key > cur) rk.key = cur;
   const isCur = rk.key === cur;
-  document.getElementById('rk-label').textContent = `${PERIOD_JA[rk.period]}・${periodLabel(rk.period, rk.key)}`;
-  document.getElementById('rk-sub').textContent = isCur ? `${BOARD_JA[rk.board]}・集計中（期間終了で1〜3位にメダル）` : `${BOARD_JA[rk.board]}・確定（1〜3位はメダル獲得）`;
-  document.getElementById('btn-rk-next').disabled = isCur;
+  {
+    const labelEl = document.getElementById('rk-label');
+    const lang = (window.NKI18N && NKI18N.lang) || document.documentElement.lang || 'ja';
+    const sep = (lang === 'ja' || String(lang).startsWith('zh')) ? '・' : ' · ';
+    const period = trUi(PERIOD_JA[rk.period]);
+    const when = '⁦' + trUi(periodLabel(rk.period, rk.key)) + '⁩';
+    labelEl.textContent = period + sep + when;
+  }
+  document.getElementById('rk-sub').textContent = isAlltime
+    ? `${BOARD_JA[rk.board]}・2027年〜`
+    : (isCur ? `${BOARD_JA[rk.board]}・集計中（期間終了で1〜3位にメダル）` : `${BOARD_JA[rk.board]}・確定（1〜3位はメダル獲得）`);
+  document.getElementById('btn-rk-prev').disabled = isAlltime;
+  document.getElementById('btn-rk-next').disabled = isAlltime || isCur;
   const list = document.getElementById('rk-list');
   const meBox = document.getElementById('rk-me');
   list.replaceChildren(Object.assign(document.createElement('li'), { className: 'rk-empty', textContent: '読み込み中…' }));
@@ -1227,6 +1239,14 @@ async function renderRanking() {
   } else {
     meBox.innerHTML = `<b class="rk-me-rank">未参加（${r.total}人参加中）</b><span class="rk-me-of">COM「ランカーレベル」で勝つと参加</span>`;
   }
+  // Treat a stale Worker (no alltime period) the same as "not yet open" so week scores never appear as 歴代.
+  if (isAlltime && (r.period !== 'alltime' || r.open === false)) {
+    const startMsg = '2027年1月1日から集計開始';
+    document.getElementById('rk-sub').textContent = startMsg;
+    meBox.replaceChildren(Object.assign(document.createElement('span'), { className: 'rk-me-of', textContent: startMsg }));
+    list.replaceChildren(Object.assign(document.createElement('li'), { className: 'rk-empty', textContent: startMsg }));
+    return;
+  }
   if (!r.top.length) {
     list.replaceChildren(Object.assign(document.createElement('li'), { className: 'rk-empty', textContent: 'まだ記録がありません' }));
     return;
@@ -1238,12 +1258,17 @@ async function renderRanking() {
     const li = document.createElement('li');
     li.className = 'rk-row' + (row.id === me.id ? ' me' : '') + (row.rank <= 3 ? ' top' + row.rank : row.rank <= 10 ? ' top10' : '');
     const rankEl = document.createElement('span'); rankEl.className = 'rk-rank';
-    if (row.rank <= 3) rankEl.appendChild(medalCanvas(rk.period, row.rank, 30, { board: rk.board })); else rankEl.textContent = row.rank;
+    if (row.rank <= 3 && !isAlltime) rankEl.appendChild(medalCanvas(rk.period, row.rank, 30, { board: rk.board })); else rankEl.textContent = row.rank;
     const nm = document.createElement('span'); nm.className = 'rk-name';
     const nt = document.createElement('span'); nt.className = 'rk-nm-t'; nt.textContent = row.nickname + (row.id === me.id ? '（あなた）' : '');
     if (row.rank === 1) nt.prepend(Object.assign(document.createElement('i'), { className: 'rk-crown', textContent: '👑', ariaHidden: 'true' }));
     const md = document.createElement('span'); md.className = 'rk-medals'; md.dataset.pid = row.id;
-    nm.append(nt, md);
+    nm.append(nt);
+    if (isAlltime) {
+      const ytxt = formatRecordYears(row.years);
+      if (ytxt) nm.append(Object.assign(document.createElement('span'), { className: 'rk-year', textContent: ytxt }));
+    }
+    nm.append(md);
     const sc = document.createElement('span'); sc.className = 'rk-score'; sc.textContent = row.score.toLocaleString('ja-JP') + 'PT';
     if (rk.board === 'top3') { const n = document.createElement('small'); n.textContent = `${Math.min(3, row.n)}試合`; sc.appendChild(n); }
     li.append(rankEl, nm, sc);
@@ -1257,7 +1282,12 @@ async function renderRanking() {
   if (r.me && !rows.some((row) => row.id === me.id)) {
     const li = document.createElement('li'); li.className = 'rk-row me rk-me-pin';
     const rankEl = document.createElement('span'); rankEl.className = 'rk-rank'; rankEl.textContent = r.me.rank;
-    const nm = document.createElement('span'); nm.className = 'rk-name'; nm.textContent = (me.nickname || DEFAULT_NICK) + '（あなた）';
+    const nm = document.createElement('span'); nm.className = 'rk-name';
+    nm.append(Object.assign(document.createElement('span'), { className: 'rk-nm-t', textContent: (me.nickname || DEFAULT_NICK) + '（あなた）' }));
+    if (isAlltime) {
+      const ytxt = formatRecordYears(r.me.years);
+      if (ytxt) nm.append(Object.assign(document.createElement('span'), { className: 'rk-year', textContent: ytxt }));
+    }
     const sc = document.createElement('span'); sc.className = 'rk-score'; sc.textContent = r.me.score.toLocaleString('ja-JP') + 'PT';
     if (rk.board === 'top3') { const n = document.createElement('small'); n.textContent = `${Math.min(3, r.me.n)}試合`; sc.appendChild(n); }
     li.append(rankEl, nm, sc);
@@ -1326,7 +1356,7 @@ function openRanking() {
   try { window.__nkVisitRank && window.__nkVisitRank(); } catch (_) {} // 訪問ログ: ランキングを押した（個人情報なし・待たない）
   rk.key = null;
   const curKeys = periodKeys();
-  for (const k of [...rkCache.keys()]) { const [p, , key] = k.split('|'); if (key >= curKeys[p]) rkCache.delete(k); } // 集計中の期間は開くたびに最新を取得
+  for (const k of [...rkCache.keys()]) { const [p, , key] = k.split('|'); if (p === 'alltime' || key >= curKeys[p]) rkCache.delete(k); } // 集計中の期間は開くたびに最新を取得
   show('ranking');
   const shown = renderRanking();
   rkRetryPending();
