@@ -1,18 +1,18 @@
-import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261125042802';
-import { Net } from './net.js?v=20261125042802';
-import { Game } from './game.js?v=20261125042802';
-import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261125042802';
-import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261125042802';
-import { resetDeckToDefault } from './meta.js?v=20261125042802';
-import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261125042802';
-import { loadBattleCount } from './stats.js?v=20261125042802';
-import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261125042802';
-import { ALL_KIND_IDS } from './catalog.js?v=20261125042802';
-import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, formatRecordYears, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261125042802';
-import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261125042802';
-import { seedStrongBest } from './record.js?v=20261125042802';
-import { initStory } from './story.js?v=20261125042802';
-import { MISSIONS, MISSION_SLOTS, missionById, isMissionCleared, MISSION_ASSIST_NOTE, MISSION_WIN_NOTE } from './mission.js?v=20261125042802';
+import { VERSION_LABEL, BUILD_NOTE, BUILD_TIME, formatVersionTime } from './version.js?v=20261126025157';
+import { Net } from './net.js?v=20261126025157';
+import { Game } from './game.js?v=20261126025157';
+import { PERSONA, MOVE_JA, SPECIAL_JA } from './sentai.js?v=20261126025157';
+import { CATALOG, CATALOG_BY_ID, unitIntro, RARITY_JA, unitStats, sentUnitHp } from './catalog.js?v=20261126025157';
+import { resetDeckToDefault } from './meta.js?v=20261126025157';
+import { loadMeta, saveMeta, buyUnit, setDeckSlot, DECK_SIZE, loadNewUnits, clearUnitNew, comRankInfo, COM_LEVEL_MAX, shopPrice, firstBonusPending } from './meta.js?v=20261126025157';
+import { loadBattleCount } from './stats.js?v=20261126025157';
+import { registerEnemyKinds, prepareMatchAssets, isMatchPrepDone } from './render.js?v=20261126025157';
+import { ALL_KIND_IDS } from './catalog.js?v=20261126025157';
+import { rankIdentity, ensurePlayer, setNickname, fetchRanking, rankText, fetchMedals, beginStrongMatch, medalShelf, medalCanvas, fitShelf, periodKeys, shiftKey, periodLabel, PERIOD_JA, BOARD_JA, formatRecordYears, DUP_MSG, DEFAULT_NICK, retryPending, pendingList, FAIL_MSG } from './ranking.js?v=20261126025157';
+import { setKindTier, POWERUPS, WAVE_KIND_TIERS } from './entities.js?v=20261126025157';
+import { seedStrongBest } from './record.js?v=20261126025157';
+import { initStory } from './story.js?v=20261126025157';
+import { MISSIONS, MISSION_SLOTS, missionById, isMissionCleared, MISSION_ASSIST_NOTE, MISSION_WIN_NOTE } from './mission.js?v=20261126025157';
 
 registerEnemyKinds(ALL_KIND_IDS);
 setKindTier({
@@ -188,7 +188,7 @@ function refreshComRank() {
 }
 
 function spriteUrl(id) {
-  return `assets/enemies/${id}/0.png?v=20261125042802`;
+  return `assets/enemies/${id}/0.png?v=20261126025157`;
 }
 
 function unitName(id) {
@@ -735,7 +735,7 @@ function openMissionDetail(id) {
   box.dataset.mission = String(m.id);
   box.innerHTML = `<div class="md-card${done ? ' md-cleared' : ''}">`
     + `<div class="md-top"><span class="md-no">${m.id}</span><span class="md-name"></span><span class="md-state">${done ? 'クリア済み' : '未クリア'}</span></div>`
-    + (m.art && m.art.length ? `<div class="md-art md-art-${m.type}" aria-hidden="true">${m.art.map((k, i) => k === '__heart' ? `<span class="md-a md-a${i} md-heart">❤</span>` : k === '__ship' ? `<img class="md-a md-a${i} md-ship" alt="" src="assets/fx/mission_ship.png?v=20261125042802" draggable="false">` : `<img class="md-a md-a${i}" alt="" src="assets/enemies/${k}/0.png?v=20261125042802" draggable="false">`).join('')}</div>` : '')
+    + (m.art && m.art.length ? `<div class="md-art md-art-${m.type}" aria-hidden="true">${m.art.map((k, i) => k === '__heart' ? `<span class="md-a md-a${i} md-heart">❤</span>` : k === '__ship' ? `<img class="md-a md-a${i} md-ship" alt="" src="assets/fx/mission_ship.png?v=20261126025157" draggable="false">` : `<img class="md-a md-a${i}" alt="" src="assets/enemies/${k}/0.png?v=20261126025157" draggable="false">`).join('')}</div>` : '')
     + `<dl class="md-rows">`
     + `<div class="md-row"><dt>目標</dt><dd class="md-goal"></dd></div>`
     + `<div class="md-row"><dt>敵Lv</dt><dd>${m.comLevel}</dd></div>`
@@ -1197,6 +1197,22 @@ function rkSetTabs() {
   document.querySelectorAll('#screen-ranking [data-board]').forEach((b) => b.classList.toggle('active', b.dataset.board === rk.board));
 }
 
+/** ニックネーム変更の直後: 画面メモリ上のランキング（全期間・全種類のキャッシュ）の自分の行を新しい名前に差し替える。
+ *  これをしないと、キャッシュ済みの期間は再描画しても古い名前のまま表示される（サーバーは変更済み）。 */
+function rkApplyNickname(nick) {
+  const me = rankIdentity();
+  if (!me.id || !nick) return;
+  for (const { r } of rkCache.values()) {
+    if (r && Array.isArray(r.top)) for (const row of r.top) if (row.id === me.id) row.nickname = nick;
+    if (r && r.me) r.me.nickname = nick;
+  }
+  document.querySelectorAll('#rk-list .rk-row.me .rk-nm-t').forEach((el) => {
+    const crown = el.querySelector('.rk-crown');
+    el.textContent = nick + '（あなた）';
+    if (crown) el.prepend(crown);
+  });
+}
+
 async function renderRanking() {
   rkSetTabs();
   const isAlltime = rk.period === 'alltime';
@@ -1260,7 +1276,7 @@ async function renderRanking() {
     const rankEl = document.createElement('span'); rankEl.className = 'rk-rank';
     if (row.rank <= 3 && !isAlltime) rankEl.appendChild(medalCanvas(rk.period, row.rank, 30, { board: rk.board })); else rankEl.textContent = row.rank;
     const nm = document.createElement('span'); nm.className = 'rk-name';
-    const nt = document.createElement('span'); nt.className = 'rk-nm-t'; nt.textContent = row.nickname + (row.id === me.id ? '（あなた）' : '');
+    const nt = document.createElement('span'); nt.className = 'rk-nm-t'; nt.textContent = (row.id === me.id && me.nickname ? me.nickname : row.nickname) + (row.id === me.id ? '（あなた）' : ''); // 自分の行は端末の（サーバー確定済み）最新名を使う: 変更前に飛んだ通信の古い応答が来ても戻らない
     if (row.rank === 1) nt.prepend(Object.assign(document.createElement('i'), { className: 'rk-crown', textContent: '👑', ariaHidden: 'true' }));
     const md = document.createElement('span'); md.className = 'rk-medals'; md.dataset.pid = row.id;
     nm.append(nt);
@@ -1393,7 +1409,7 @@ document.getElementById('btn-rk-nick-save')?.addEventListener('click', async (ev
   const r = await setNickname(inp.value);
   btn.disabled = false;
   nickMsg(msg, r);
-  if (r.ok) { inp.value = r.nickname; renderRanking(); }
+  if (r.ok) { inp.value = r.nickname; rkApplyNickname(r.nickname); renderRanking(); }
   refreshMenuMedals();
 });
 
@@ -1414,7 +1430,7 @@ document.getElementById('btn-rk-nick-save')?.addEventListener('click', async (ev
     const b = document.getElementById('btn-nick-save'); b.disabled = true; msg.textContent = '送信中…';
     const r = await setNickname(inp.value);
     b.disabled = false; nickMsg(msg, r);
-    if (r.ok) { inp.value = r.nickname; refreshMenuMedals(); if (!r.adjusted) setTimeout(close, 900); }
+    if (r.ok) { inp.value = r.nickname; rkApplyNickname(r.nickname); refreshMenuMedals(); if (!r.adjusted) setTimeout(close, 900); }
   };
   document.getElementById('btn-nick-save')?.addEventListener('click', save);
   inp?.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); });
